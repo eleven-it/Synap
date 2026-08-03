@@ -222,10 +222,7 @@
                         {% endif %}
                         {% endif %}
 
-                        <form method="post" action="{% url 'mpr:tablero_produccion_actualizar' %}"
-                              class="mpr-post-loading"
-                              data-mpr-loading-title="Actualizando vista"
-                              data-mpr-loading-subtitle="Recalculando demanda desde pedidos PED…">
+                        <form method="post" action="{% url 'mpr:tablero_produccion_actualizar' %}">
                             {% csrf_token %}
                             <input type="hidden" name="q" :value="busqueda">
                             <button type="submit"

@@ -583,6 +583,7 @@ def construir_grilla_parte_planilla(
         _filtrar_ids_por_marcas,
         _pivot_stock_por_tipo_mpr,
         _query_enviados_todos_componentes,
+        obtener_config_mpr,
     )
 
     resultado: Dict[str, Any] = {
@@ -659,6 +660,11 @@ def construir_grilla_parte_planilla(
     if not planilla.get("es_futuro"):
         dia_aprobado = fecha_planilla_tiene_parte_aprobado(base, fecha)
 
+    # Con bloqueo OFF (cutover/ajuste) se habilitan celdas aunque Fabricando = 0.
+    bloquear_fab = bool(
+        obtener_config_mpr(base).get("bloquear_parte_supera_fabricando", True)
+    )
+
     filas: List[Dict[str, Any]] = []
     for maq in maquinas_raw:
         mid = maq.get("id")
@@ -711,7 +717,9 @@ def construir_grilla_parte_planilla(
                 "fabricando": fab,
                 "ingresado": ingresado,
                 "tiene_precarga": ingresado > 0,
-                "inputs_habilitados": fab > 0 and not dia_bloqueado_cc,
+                "inputs_habilitados": (
+                    (fab > 0 or not bloquear_fab) and not dia_bloqueado_cc
+                ),
                 "turnos": turnos_payload,
                 "show_maquina": False,
                 "rowspan_maquina": 1,
@@ -1058,6 +1066,133 @@ def enriquecer_filas_tablero_indicadores_fabricando(
         fila["fabricando_detalle"] = fabricando_detalle
         fila["fabricando_detalle_json"] = json.dumps(fabricando_detalle, ensure_ascii=False)
 
+    return filas
+
+
+def enriquecer_filas_tablero_armado_maquina(
+    base_empresa: str,
+    filas: List[Dict[str, Any]],
+    *,
+    fecha: Optional[date] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Enriquece filas del tablero de Armado (pack) con nro. de máquina y reordena
+    como Control de calidad: máquina 1..N, luego sin máquina; dentro, id_articulo.
+
+    La máquina del pack se resuelve vía componentes BOM + asignación vigente
+    ``mpr_maquina_articulo`` (menor código numérico si hay varias).
+    """
+    if not filas:
+        return filas
+
+    base = (base_empresa or "").strip()
+    if not base:
+        for fila in filas:
+            fila.setdefault("id_mpr_maquina", 0)
+            fila.setdefault("maquina_nombre", "—")
+            fila.setdefault("tiene_maquina", False)
+            fila.setdefault("show_maquina", True)
+            fila.setdefault("rowspan_maquina", 1)
+            fila.setdefault("maquina_tint", 0)
+        return filas
+
+    from mpr.services import (
+        _anotar_rowspan_maquina_clasificacion,
+        _orden_maquina_clasificacion,
+        bulk_bom_detalle,
+        bulk_id_en_abm,
+    )
+
+    fecha_ref = fecha or date.today()
+    pack_ids: List[int] = []
+    for fila in filas:
+        aid = _to_int(fila.get("id_articulo"))
+        if aid is not None:
+            pack_ids.append(aid)
+
+    abm_map = bulk_id_en_abm(base, pack_ids) if pack_ids else {}
+    bom_map = (
+        bulk_bom_detalle(base, list(set(abm_map.values()))) if abm_map else {}
+    )
+
+    componentes_por_pack: Dict[int, List[int]] = {}
+    for pack_id, id_abm in abm_map.items():
+        bom = bom_map.get(id_abm) or {}
+        comps: List[int] = []
+        for comp in bom.get("componentes") or []:
+            cid = _to_int(comp.get("id_articulo"))
+            qty = to_int_or_none(comp.get("cantidad_articulo"))
+            if cid is not None and qty is not None and int(qty) > 0:
+                comps.append(cid)
+        componentes_por_pack[int(pack_id)] = comps
+
+    maquinas_raw = listar_maquinas(base, solo_activas=True)
+    maquina_por_id = {
+        int(m["id"]): m for m in maquinas_raw if _to_int(m.get("id")) is not None
+    }
+    articulos_por_maquina = listar_articulos_vigentes_todas_maquinas(base, fecha_ref)
+
+    maquinas_por_articulo: Dict[int, List[Dict[str, Any]]] = {}
+    for mid, articulos in (articulos_por_maquina or {}).items():
+        maq = maquina_por_id.get(int(mid))
+        if not maq:
+            continue
+        item = {
+            "id": int(mid),
+            "codigo": str(maq.get("codigo") or ""),
+            "nombre": str(maq.get("nombre") or ""),
+        }
+        for art in articulos or []:
+            aid = _to_int(art.get("id_articulo"))
+            if aid is None:
+                continue
+            maquinas_por_articulo.setdefault(aid, []).append(item)
+
+    for aid, asignadas in list(maquinas_por_articulo.items()):
+        vistos: set = set()
+        unicas: List[Dict[str, Any]] = []
+        for m in asignadas:
+            if m["id"] not in vistos:
+                vistos.add(m["id"])
+                unicas.append(m)
+        unicas.sort(key=_clave_orden_maquina_item)
+        maquinas_por_articulo[aid] = unicas
+
+    for fila in filas:
+        pack_id = _to_int(fila.get("id_articulo"))
+        candidatas: List[Dict[str, Any]] = []
+        vistos_m: set = set()
+        for cid in componentes_por_pack.get(pack_id or -1, []):
+            for m in maquinas_por_articulo.get(cid, []):
+                if m["id"] not in vistos_m:
+                    vistos_m.add(m["id"])
+                    candidatas.append(m)
+        candidatas.sort(key=_clave_orden_maquina_item)
+        if candidatas:
+            elegida = candidatas[0]
+            codigo = str(elegida.get("codigo") or "").strip()
+            nombre = str(elegida.get("nombre") or "").strip()
+            fila["id_mpr_maquina"] = int(elegida["id"])
+            fila["maquina_nombre"] = codigo or nombre or "—"
+            fila["tiene_maquina"] = True
+            fila["maquinas_asignadas"] = candidatas
+        else:
+            fila["id_mpr_maquina"] = 0
+            fila["maquina_nombre"] = "—"
+            fila["tiene_maquina"] = False
+            fila["maquinas_asignadas"] = []
+
+    filas.sort(
+        key=lambda f: (
+            _orden_maquina_clasificacion(
+                int(f.get("id_mpr_maquina") or 0),
+                str(f.get("maquina_nombre") or ""),
+            ),
+            int(f.get("id_articulo") or 0),
+            str(f.get("codigo_manual") or ""),
+        )
+    )
+    _anotar_rowspan_maquina_clasificacion(filas)
     return filas
 
 

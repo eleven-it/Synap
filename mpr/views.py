@@ -3817,6 +3817,17 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
             logger.warning("listar_tablero_armado: %s", e, exc_info=True)
             filas = []
 
+        try:
+            from mpr.services_maquina_linea import enriquecer_filas_tablero_armado_maquina
+
+            filas = enriquecer_filas_tablero_armado_maquina(
+                base_empresa,
+                filas,
+                fecha=fecha_realizado_obj,
+            )
+        except Exception as e:
+            logger.warning("enriquecer_filas_tablero_armado_maquina: %s", e, exc_info=True)
+
         armados_del_dia: List[Dict[str, Any]] = []
         try:
             armados_del_dia = listar_armados_realizados_por_fecha(
@@ -5187,10 +5198,6 @@ class TableroProduccionActualizarView(MprLoginRequiredMixin, MprTableroVerMixin,
             return _redirect_tablero_produccion(request, filtros_qs)
         request.session["tablero_produccion_ultima_actualizacion"] = (
             datetime.now().strftime("%d/%m/%Y %H:%M")
-        )
-        messages.success(
-            request,
-            "Vista actualizada. La demanda se calcula en vivo desde pedidos PED.",
         )
         return _redirect_tablero_produccion(request, filtros_qs)
 

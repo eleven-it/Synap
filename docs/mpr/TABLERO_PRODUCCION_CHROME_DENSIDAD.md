@@ -98,7 +98,7 @@ Los atajos de solo ícono usan tooltip Synap inmediato al hover/foco (`mpr/inclu
 | Parte de producción | `assignment` | Parte de producción (púrpura) |
 | Control de calidad | `verified` | Control de calidad (teal) |
 | Tablero KPI | `analytics` | Tablero KPI (ámbar) |
-| Actualizar vista | `refresh` | Actualizar vista (botón con label; `title` con última hora) |
+| Actualizar vista | `refresh` | Refresca timestamp/sesión y recarga (sin modal de espera ni toast; el POST es inmediato) |
 | Más acciones | `more_horiz` | Más acciones |
 | Ayuda | `help_outline` | Manual de la sección de cada pantalla (`#tablero-produccion`, `#parte-produccion`, `#control-calidad`, `#armado`, …) |
 

@@ -216,6 +216,10 @@ class ConstruirGrillaPartePlanillaTest(SimpleTestCase):
         self.assertEqual(len(errores), 1)
         self.assertIn("incremento editado", errores[0])
 
+    @patch(
+        "mpr.services.obtener_config_mpr",
+        return_value={"bloquear_parte_supera_fabricando": True},
+    )
     @patch("mpr.repositories.parte.precarga_planilla_por_fecha")
     @patch("mpr.services._fabricando_por_componentes")
     @patch("mpr.services._query_enviados_todos_componentes")
@@ -232,6 +236,7 @@ class ConstruirGrillaPartePlanillaTest(SimpleTestCase):
         mock_envios,
         mock_fabricando,
         mock_precarga,
+        _mock_cfg,
     ):
         datos = _planilla_maquinas_dos_filas()
         datos["maquinas"] = [datos["maquinas"][0]]
@@ -247,6 +252,44 @@ class ConstruirGrillaPartePlanillaTest(SimpleTestCase):
 
         self.assertEqual(out["filas"][0]["fabricando"], 0.0)
         self.assertFalse(out["filas"][0]["inputs_habilitados"])
+
+    @patch(
+        "mpr.services.obtener_config_mpr",
+        return_value={"bloquear_parte_supera_fabricando": False},
+    )
+    @patch("mpr.repositories.parte.precarga_planilla_por_fecha")
+    @patch("mpr.services._fabricando_por_componentes")
+    @patch("mpr.services._query_enviados_todos_componentes")
+    @patch("mpr.services._pivot_stock_por_tipo_mpr")
+    @patch("mpr.services_maquina_linea._operarios_roster_celda_por_linea")
+    @patch("mpr.services.listar_turnos")
+    @patch("mpr.services_maquina_linea.construir_datos_planilla_control_calidad")
+    def test_fila_fabricando_cero_habilitada_si_bloqueo_off(
+        self,
+        mock_planilla,
+        mock_turnos,
+        mock_operarios_celda,
+        mock_pivot,
+        mock_envios,
+        mock_fabricando,
+        mock_precarga,
+        _mock_cfg,
+    ):
+        """Con bloqueo OFF, Fabricando = 0 habilita inputs (cutover/ajuste)."""
+        datos = _planilla_maquinas_dos_filas()
+        datos["maquinas"] = [datos["maquinas"][0]]
+        mock_planilla.return_value = datos
+        mock_turnos.return_value = _turnos_mtn()
+        mock_operarios_celda.return_value = {1: {"manana": [], "tarde": [], "noche": []}}
+        mock_envios.return_value = {100: 0}
+        mock_pivot.return_value = ({}, {})
+        mock_fabricando.return_value = {100: 0.0}
+        mock_precarga.return_value = {}
+
+        out = construir_grilla_parte_planilla("emp", date(2026, 7, 21))
+
+        self.assertEqual(out["filas"][0]["fabricando"], 0.0)
+        self.assertTrue(out["filas"][0]["inputs_habilitados"])
 
     @patch("mpr.repositories.parte.fecha_planilla_tiene_parte_aprobado", return_value=True)
     @patch("mpr.repositories.parte.precarga_planilla_por_fecha")

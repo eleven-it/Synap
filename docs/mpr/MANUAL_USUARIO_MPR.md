@@ -451,6 +451,8 @@ Indique, para cada depósito, si **suma al stock** y su **tipo** en producción,
 
 Sin esta configuración el tablero y el flujo de etapas no muestran saldos correctos.
 
+**Bloquear parte que supera Fabricando:** interruptor que controla si al guardar o aprobar un parte se exige cupo Fabricando y respaldo de envíos del tablero. Con el bloqueo **activo**, las filas con Fabricando = 0 quedan sin carga. Con el bloqueo **inactivo**, esas celdas se habilitan y se puede aprobar aunque no haya envío (uso excepcional post-cutover). Dejarlo **activo** en operación normal y volver a activarlo cuando termine el ajuste.
+
 ### 8.4 Operarios
 
 Alta y mantenimiento de **operarios** (activos / inactivos) que figurarán en partes y planificación.

@@ -107,9 +107,9 @@ Si `MprParte.movimiento_fisico_ok = True`, el asiento **no se re-ejecuta**. Esta
 
 ---
 
-## Validaciones fuertes al guardar {#validaciones}
+## Validaciones al guardar {#validaciones}
 
-Antes de crear el parte o mover stock, `registrar_parte_produccion` ejecuta **siempre** (sin bypass por configuración) dos controles:
+Antes de crear el parte o mover stock, `registrar_parte_produccion` (y la aprobación de planilla / supervisor) ejecuta dos controles **cuando el bloqueo está activo** en `mpr_config.bloquear_parte_supera_fabricando` (default **activo**):
 
 | Control | Regla | Función |
 |---------|-------|---------|
@@ -118,6 +118,8 @@ Antes de crear el parte o mover stock, `registrar_parte_produccion` ejecuta **si
 
 Si cualquier control falla → `ValidationError` con mensaje en español; **no** se crea `mpr_parte` ni asiento físico.
 
+Con el bloqueo **inactivo** (`bloquear_parte_supera_fabricando = 0`), `validar_cupo_parte` y `_validar_cupo_planilla_qc` retornan lista vacía: se permite guardar/aprobar sin respaldo de Fabricando ni techo de envíos. Uso excepcional post-cutover; se recomienda volver a activar el interruptor en **Producción → Config. Depósitos**. El bypass puntual `forzar_cupo` en aprobación supervisor sigue aplicando solo cuando el bloqueo está activo.
+
 ### Caso típico evitado (artículo 1904 / ID 1275)
 
 1. Envío 12 pares → parte 12 → clasificación CC a Semi 12.
@@ -125,11 +127,16 @@ Si cualquier control falla → `ValidationError` con mensaje en español; **no**
 3. `clasificado_desde_Producción = 12` y `partes_acumulados = 12` → Fabricando = **0**.
 4. Un segundo parte de 12 pares se **rechaza** (cupo Fabricando y techo envíos).
 
-### Configuración legacy (`MprEmpresaConfig.bloquear_parte_supera_fabricando`)
+### Configuración (`mpr_config.bloquear_parte_supera_fabricando`)
 
-El interruptor en **Producción → Config. Depósitos** se conserva por compatibilidad de UI, pero **ya no desactiva** el bloqueo en backend: las validaciones fuertes están siempre activas.
+Interruptor en **Producción → Config. Depósitos** (MySQL `mpr_config`, default **activo**):
 
-La suma considera **todas las celdas operario** de la misma fila (componente). Ej.: Fabricando=6 → Juan 4 + Luis 2 = OK; Juan 4 + Luis 4 = exceso rechazado.
+| Estado | Comportamiento |
+|--------|----------------|
+| **Activo** | Bloquea guardar/aprobar si supera Fabricando o techo de envíos; en planilla, celdas con Fabricando = 0 quedan deshabilitadas |
+| **Inactivo** | Permite partes sin ese respaldo (cutover / ajuste excepcional), incluyendo carga con Fabricando = 0 (celdas habilitadas); reactivar después |
+
+La suma considera **todas las celdas operario** de la misma fila (componente). Ej.: Fabricando=6 → Juan 4 + Luis 2 = OK; Juan 4 + Luis 4 = exceso rechazado (con bloqueo activo).
 
 ### Captura por docenas y unidades (paridad OPP)
 
@@ -146,7 +153,7 @@ La columna **Fabricando** muestra el desglose «N docenas · M pares».
 
 ### Validación en cliente (JavaScript)
 
-Al enviar el formulario, la UI valida que la suma por fila no supere `data-fabricando` (mismo cupo que la grilla). El backend aplica además el techo de envíos ledger.
+Al enviar el formulario, la UI valida que la suma por fila no supere `data-fabricando` **solo si el bloqueo está activo** (`data-bloquear-fabricando="1"`). Con bloqueo inactivo, los avisos visuales de exceso pueden seguir mostrándose pero no impiden guardar ni aprobar. El backend aplica además el techo de envíos ledger cuando el bloqueo está activo.
 
 ---
 

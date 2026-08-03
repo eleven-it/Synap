@@ -65,7 +65,7 @@ La pantalla es la **única vista operativa** de armado: grilla densa (`?modo=1ra
 | 8 | **Input Armar sin precarga:** vacío al abrir; el analista completa solo las filas necesarias. Deshabilitado si `max_armable = 0`. Negativos no permitidos (UI + backend). |
 | 9 | **Sin operario** en cabecera (paridad decisión previa armado unificado). |
 | 10 | **Shell visual:** `slate-800` hero + acento **emerald** (1ra) / **amber** (2da), no `gray-*` legacy. |
-| 11 | **Columnas visibles (29/07/2026):** Artículo, Terminado, Máx. armable, Armar. Ocultas: fecha entrega, Pedido, Reserva, Resta urgente, Resta armar. |
+| 11 | **Columnas visibles (03/08/2026):** Máq., Artículo, Terminado, Máx. armable, Armar. Ocultas: fecha entrega, Pedido, Reserva, Resta urgente, Resta armar. Orden de filas = nro. de máquina (como CC) vía BOM + asignación vigente. |
 | 12 | **Chrome (31/07/2026):** botón **Actualizar** (naranja Synap `bg-orange-500`) recarga la grilla **conservando** `fecha_realizado` en la query. Atajos Carrito/Componer **eliminados**. **Fecha realizado** (`type=date`) en chrome: al cambiarla se recarga y muestra el panel **Ya armado** de ese día. |
 | 13 | **Máx. armable (30/07/2026):** el mínimo BOM debe conservar componente con stock 0 (no usar `0` como centinela). Caso: pack 907953-01 / IDArt 637 — componente 984 en Semi = 0 → máx. armable 0. |
 | 14 | **Resultado post-armado:** éxito/parcial/error en **modal Synap corto** (`mprShowAviso`), sin listar ítems ni toast Django duplicado. |
@@ -76,18 +76,21 @@ La pantalla es la **única vista operativa** de armado: grilla densa (`?modo=1ra
 ## 4. Arquitectura de información (columnas)
 
 ```
-┌─────────────┬───────────┬──────────────┬────────┐
-│  Artículo   │ Terminado │ Máx. armable │ Armar  │
-└─────────────┴───────────┴──────────────┴────────┘
-  sticky-left     pares      packs (1ra)    input vacío
+┌──────┬─────────────┬───────────┬──────────────┬────────┐
+│ Máq. │  Artículo   │ Terminado │ Máx. armable │ Armar  │
+└──────┴─────────────┴───────────┴──────────────┴────────┘
+ sticky   sticky-left     pares      packs (1ra)    input vacío
 ```
 
 | Columna | Rol UX | 1ra | 2da |
 |---------|--------|-----|-----|
+| Máq. | Nro. de máquina (chip + orden como CC) | ✓ | ✓ |
 | Artículo | Identidad + marca | ✓ | ✓ |
 | Stock terminado | PT actual (saldo real; negativos visibles en rosa, sin clamp a 0) | ✓ | ✓ |
 | Máx. armable | Tope físico origen | BOM × Semi | — (fase 2) |
 | Armar | Input packs (sin precarga) | entero ≥ 0 | — (pendiente) |
+
+**Máquina del pack:** se resuelve con componentes BOM + `mpr_maquina_articulo` vigente a la fecha del chrome; si hay varias, se muestra el menor código numérico. Sin asignación → «—» al final. Orden: `_orden_maquina_clasificacion` → `id_articulo` (misma clave que Control de calidad, sin turno/operario).
 
 Columnas de demanda (Pedido, Reserva, Resta urgente/armar, 1er fecha entrega) se calculan en backend para filtrar elegibilidad pero **no** se muestran en la grilla operativa.
 
