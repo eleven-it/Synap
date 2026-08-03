@@ -41,7 +41,7 @@
             <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700 sm:px-5">
                 <h2 class="text-sm font-bold text-gray-900 dark:text-white sm:text-base">Parte de producción</h2>
                 <p class="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
-                    Control de saldos: si está activo, la suma por componente (todos los operarios) no puede superar la columna <strong>Fabricando</strong> del tablero.
+                    Control de saldos al guardar o aprobar partes: cupo <strong>Fabricando</strong> y respaldo de envíos del tablero.
                 </p>
             </div>
             <div class="px-4 py-4 sm:px-5">
@@ -54,7 +54,8 @@
                     <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold text-gray-900 dark:text-white">Bloquear parte que supera Fabricando</p>
                         <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                            Preferencia histórica en UI. Desde 07/07/2026 el backend rechaza siempre partes que superen Fabricando o envíos ledger, con independencia de este interruptor.
+                            <strong>Activo (recomendado):</strong> bloquea guardar/aprobar si la suma supera <strong>Fabricando</strong> o no hay respaldo de envíos del tablero.
+                            <strong>Inactivo:</strong> permite cargar y aprobar partes sin ese respaldo (uso excepcional post-cutover o ajuste de stock). Volvé a <strong>Activar</strong> cuando termine el período excepcional.
                         </p>
                     </div>
                     <label class="relative inline-flex min-h-[44px] cursor-pointer items-center gap-2">

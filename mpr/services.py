@@ -17261,7 +17261,15 @@ def validar_cupo_parte(
     `lineas`: [{id_articulo, cantidad}]. Devuelve la lista de errores (vacía si OK);
     no levanta excepción. Reutilizada por el parte directo (al guardar) y por la
     aprobación del supervisor (sobre `cantidad_aprobada`).
+
+    Si ``mpr_config.bloquear_parte_supera_fabricando`` está inactivo, no valida
+    (retorna lista vacía). ``forzar_cupo`` en aprobación sigue siendo bypass puntual
+    cuando el bloqueo está activo.
     """
+    config = obtener_config_mpr(base_empresa)
+    if not config.get("bloquear_parte_supera_fabricando", True):
+        return []
+
     cantidad_por_comp = _sumar_cantidades_parte_por_componente(lineas)
     comp_ids = list(cantidad_por_comp.keys())
     if not comp_ids:
@@ -17326,7 +17334,14 @@ def _validar_cupo_planilla_qc(
     El cupo live ya descuenta la precarga persistida. Por eso se compara la suma
     de deltas positivos de las filas máquina×artículo modificadas por artículo,
     no el total completo del POST.
+
+    Respeta ``mpr_config.bloquear_parte_supera_fabricando``: si está inactivo,
+    no valida (retorna lista vacía).
     """
+    config = obtener_config_mpr(base_empresa)
+    if not config.get("bloquear_parte_supera_fabricando", True):
+        return []
+
     previas_por_celda = previas_por_celda or {}
     actuales_por_fila: Dict[Tuple[int, int], Decimal] = {}
     previas_por_fila: Dict[Tuple[int, int], Decimal] = {}
@@ -17722,7 +17737,8 @@ def aprobar_parte_produccion(
 
     - Fija `cantidad_aprobada`/`gap`/`motivo` por línea (motivo obligatorio si gap != 0)
       y sincroniza la `cantidad` física (= aprobada).
-    - Valida cupo Fabricando/techo de envíos sobre lo aprobado (bloquea salvo `forzar_cupo`).
+    - Valida cupo Fabricando/techo de envíos sobre lo aprobado si el bloqueo está
+      activo en ``mpr_config`` (salvo ``forzar_cupo``).
     - Ejecuta el asiento físico a depósito "Producción" (reutiliza el asiento OPP).
     - Cierra el parte: `estado='aprobado'`, `id_usuario_supervisor`, `aprobado_en`,
       `movimiento_fisico_ok=1`. Idempotente: si ya está aprobado, no re-ejecuta.
@@ -17977,7 +17993,16 @@ def construir_grilla_parte(
                 base_empresa, comp_ids, envios_map, stock_pivot
             )
 
-            comp_activos = [c for c in comp_ids if fabricando_map.get(c, 0.0) > 0]
+            bloquear_fab = bool(
+                obtener_config_mpr(base_empresa).get(
+                    "bloquear_parte_supera_fabricando", True
+                )
+            )
+            if bloquear_fab:
+                comp_activos = [c for c in comp_ids if fabricando_map.get(c, 0.0) > 0]
+            else:
+                # Bloqueo OFF (cutover): incluir componentes con Fabricando = 0.
+                comp_activos = list(comp_ids)
             if marcas_incluidos:
                 permitidos = _filtrar_ids_por_marcas(
                     base_empresa, comp_activos, marcas_incluidos

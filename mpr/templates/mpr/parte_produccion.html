@@ -172,11 +172,19 @@
         {% if not grilla_planilla.dia_aprobado and not grilla_planilla.dia_bloqueado_cc %}
         <div class="mb-3 flex-shrink-0 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-700/50 dark:bg-purple-900/20 sm:mb-4">
             <p class="text-xs text-purple-900 dark:text-purple-100">
-                <strong>Validación:</strong> al <em>aprobar</em>, la suma de turnos no puede superar Fabricando. Podés <strong>Guardar borrador</strong> en cualquier momento (cargas diferidas), incluso si el cupo ya permite aprobar. Si al aprobar faltan turnos en alguna máquina, se advierte sin bloquear.
+                <strong>Validación:</strong> al <em>aprobar</em>, la suma de turnos no puede superar Fabricando (si el bloqueo está activo en <a href="{% url 'mpr:config_depositos' %}" class="font-semibold underline">Config. Depósitos</a>). Podés <strong>Guardar borrador</strong> en cualquier momento (cargas diferidas), incluso si el cupo ya permite aprobar. Si al aprobar faltan turnos en alguna máquina, se advierte sin bloquear.
+                {% if not bloquear_parte_supera_fabricando %}
+                <span class="mt-1 block text-amber-800 dark:text-amber-200">El bloqueo por Fabricando está <strong>desactivado</strong>: podés cargar y aprobar con Fabricando = 0 o con exceso de cupo (uso excepcional; se recomienda reactivarlo después).</span>
+                {% endif %}
             </p>
             <p class="mt-2 text-xs text-purple-900/90 dark:text-purple-100/90">
                 <strong>«Sin cupo Fabricando»:</strong> la fila está asignada a la máquina pero aún no hay envío desde el Tablero (o el cupo ya se acreditó).
                 Asignar artículo <em>no</em> crea cupo. Si el artículo no está en el Tablero, falta demanda (reserva del pack o pedido).
+                {% if bloquear_parte_supera_fabricando %}
+                Con el bloqueo activo las celdas quedan deshabilitadas hasta que haya cupo.
+                {% else %}
+                Con el bloqueo desactivado las celdas se habilitan igual (Fabricando = 0) para ajuste post-cutover.
+                {% endif %}
                 <a href="{% url 'mpr:tablero_produccion' %}" class="font-semibold underline">Ir al Tablero</a>
                 ·
                 <a href="{% url 'mpr:manual_usuario' %}#sin-cupo-fabricando" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Cómo resolverlo</a>.
@@ -503,6 +511,7 @@
     if (!form) { return; }
 
     var PARES_POR_DOCENA = parseInt(form.getAttribute('data-pares-por-docena'), 10) || 12;
+    var bloquearFabricando = form.getAttribute('data-bloquear-fabricando') === '1';
     var qtyInputs = Array.prototype.slice.call(form.querySelectorAll('[data-parte-qty-input]'));
 
     function parseQty(val) {
@@ -741,7 +750,7 @@
         if (diaAprobado) {
             partes.push('Parte aprobado. Borrador deshabilitado; usá «Guardar parte de producción» para corregir.');
         }
-        if (exceso) {
+        if (bloquearFabricando && exceso) {
             partes.push('Guardar bloqueado: el incremento supera Fabricando.');
         }
 
@@ -749,13 +758,13 @@
         motivo.classList.toggle('hidden', partes.length === 0);
 
         if (btnDetalle) {
-            btnDetalle.classList.toggle('hidden', !exceso);
+            btnDetalle.classList.toggle('hidden', !bloquearFabricando || !exceso);
         }
 
         if (btnAprobar) {
             btnAprobar.setAttribute('aria-describedby', partes.length ? 'parte-motivo-bloqueo' : '');
             var diaAprobadoTitulo = form.getAttribute('data-dia-aprobado') === '1';
-            if (exceso) {
+            if (bloquearFabricando && exceso) {
                 btnAprobar.title = diaAprobadoTitulo
                     ? 'Hay filas que superan Fabricando. Corregí las cantidades.'
                     : 'Hay filas que superan Fabricando. Usá «Guardar borrador» o corregí las cantidades.';
@@ -773,7 +782,7 @@
             actualizarMotivoBloqueo();
             return;
         }
-        var exceso = hayExcesoFabricando();
+        var exceso = bloquearFabricando && hayExcesoFabricando();
         if (exceso) {
             btnAprobar.disabled = false;
             btnAprobar.setAttribute('aria-disabled', 'true');
@@ -829,7 +838,7 @@
     function validarAntesDeGuardar(esAprobar) {
         var erroresCupo = [];
         var faltaOperario = [];
-        if (esAprobar) {
+        if (bloquearFabricando && esAprobar) {
             resumenExcesoFabricando().forEach(function (item) {
                 erroresCupo.push('• ' + item.articulo + ': el incremento editado de ' + item.suma + ' pares supera Fabricando (' + item.cupo + ' pares).');
             });
@@ -1193,7 +1202,7 @@
             if (form.getAttribute('data-dia-bloqueado-cc') === '1') {
                 return;
             }
-            if (hayExcesoFabricando()) {
+            if (bloquearFabricando && hayExcesoFabricando()) {
                 abrirModalExcesoCupo();
                 return;
             }

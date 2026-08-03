@@ -7,10 +7,11 @@ from unittest.mock import MagicMock, patch
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from mpr.models import MprEmpresaConfig, MprTurno
+from mpr.models import MprTurno
 from mpr.services import (
     TIPO_MPR_PRODUCCION,
     TIPO_MPR_SEMI_ELABORADO,
+    validar_cupo_parte,
 )
 
 EMPRESA = "test_bloqueo_fab"
@@ -27,7 +28,7 @@ def _crear_turno():
 
 
 class TestBloqueoFabricandoConfigurable(TestCase):
-    """Validaciones fuertes: cupo pipeline + techo envíos (siempre activas)."""
+    """Cupo pipeline + techo envíos según mpr_config.bloquear_parte_supera_fabricando."""
 
     def setUp(self):
         self.turno = _crear_turno()
@@ -67,13 +68,13 @@ class TestBloqueoFabricandoConfigurable(TestCase):
             ),
         )
 
-    def test_bloqueo_activo_rechaza_exceso_fabricando(self):
+    @patch(
+        "mpr.services.obtener_config_mpr",
+        return_value={"bloquear_parte_supera_fabricando": True},
+    )
+    def test_bloqueo_activo_rechaza_exceso_fabricando(self, _mock_cfg):
         from mpr.services import registrar_parte_produccion
 
-        MprEmpresaConfig.objects.create(
-            base_empresa=EMPRESA,
-            bloquear_parte_supera_fabricando=True,
-        )
         lineas = [
             {"id_articulo": 42, "id_operario": 1, "cantidad": Decimal("4")},
             {"id_articulo": 42, "id_operario": 2, "cantidad": Decimal("4")},
@@ -89,27 +90,45 @@ class TestBloqueoFabricandoConfigurable(TestCase):
                         )
         self.assertIn("Fabricando", str(ctx.exception))
 
-    def test_bloqueo_inactivo_tambien_rechaza_exceso_fabricando(self):
-        """Aunque la config legacy esté OFF, las validaciones fuertes bloquean."""
+    @patch(
+        "mpr.services.obtener_config_mpr",
+        return_value={"bloquear_parte_supera_fabricando": False},
+    )
+    def test_bloqueo_inactivo_permite_exceso_fabricando(self, _mock_cfg):
+        """Con bloqueo OFF, registrar_parte_produccion no valida cupo Fabricando."""
         from mpr.services import registrar_parte_produccion
 
-        MprEmpresaConfig.objects.create(
-            base_empresa=EMPRESA,
-            bloquear_parte_supera_fabricando=False,
-        )
         lineas = [
             {"id_articulo": 42, "id_operario": 1, "cantidad": Decimal("4")},
             {"id_articulo": 42, "id_operario": 2, "cantidad": Decimal("4")},
         ]
         patches = self._patches_fabricando({42: 6.0})
         with self._mock_turno():
-            with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8]:
-                with self.assertRaises(ValidationError):
+            with patch("mpr.repositories.parte.crear_parte_con_lineas") as mock_crear:
+                mock_crear.return_value = type("P", (), {"movimiento_fisico_ok": False, "save": lambda *a, **k: None})()
+                with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8]:
                     registrar_parte_produccion(
                         EMPRESA, date(2026, 7, 3), self.turno.pk, 1, lineas,
                     )
+                mock_crear.assert_called_once()
 
-    def test_rechaza_segundo_parte_tras_clasificacion_a_semi(self):
+    @patch(
+        "mpr.services.obtener_config_mpr",
+        return_value={"bloquear_parte_supera_fabricando": False},
+    )
+    def test_validar_cupo_parte_flag_off_retorna_vacio(self, _mock_cfg):
+        lineas = [{"id_articulo": 42, "id_operario": 1, "cantidad": Decimal("999")}]
+        with patch("mpr.services._fabricando_pre_snapshot") as mock_snap:
+            mock_snap.return_value = ({42: 0.0}, {42: ("C42", "Comp 42")})
+            errores = validar_cupo_parte(EMPRESA, lineas)
+        self.assertEqual(errores, [])
+        mock_snap.assert_not_called()
+
+    @patch(
+        "mpr.services.obtener_config_mpr",
+        return_value={"bloquear_parte_supera_fabricando": True},
+    )
+    def test_rechaza_segundo_parte_tras_clasificacion_a_semi(self, _mock_cfg):
         """Caso 1904: envíos 12, semi 12, prod 0 → cupo Fabricando 0."""
         from mpr.services import registrar_parte_produccion
 
@@ -136,7 +155,11 @@ class TestBloqueoFabricandoConfigurable(TestCase):
         msg = str(ctx.exception)
         self.assertTrue("Fabricando" in msg or "envíos" in msg)
 
-    def test_rechaza_cuando_partes_acumulados_superan_envios(self):
+    @patch(
+        "mpr.services.obtener_config_mpr",
+        return_value={"bloquear_parte_supera_fabricando": True},
+    )
+    def test_rechaza_cuando_partes_acumulados_superan_envios(self, _mock_cfg):
         from mpr.services import registrar_parte_produccion
 
         lineas = [{"id_articulo": 99, "id_operario": 1, "cantidad": Decimal("6")}]
