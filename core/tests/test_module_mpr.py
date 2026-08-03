@@ -14,6 +14,7 @@ class MprModuleConfigTest(TestCase):
         cfg = MODULE_CONFIGS["mpr"]
         self.assertEqual(cfg["display_name"], "Producción (MPR)")
         self.assertIn("mpr.ver", cfg["permissions"])
+        self.assertIn("mpr.reportes", cfg["permissions"])
 
     def test_mpr_modulo_activo_refleja_moduleconfig(self):
         ModuleConfig.objects.update_or_create(

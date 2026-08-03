@@ -156,7 +156,7 @@ class TestMenuOperarioTablero(SimpleTestCase):
             for submenu in mpr.get("submenus", [])
             for item in submenu.get("items", [])
         ]
-        self.assertEqual(labels, ["Tablero de producción"])
+        self.assertEqual(labels, ["Tablero de producción", "Consulta de partes"])
         self.assertNotIn("Mi parte", labels)
         self.assertNotIn("Control de calidad", labels)
         self.assertNotIn("Reportes MPR", labels)

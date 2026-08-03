@@ -238,7 +238,7 @@ APPS_MENU = [
     {
         "id": "mpr",
         "nombre": _("Producción (MPR)"),
-        "permiso": ["mpr.ver", "mpr.tablero_ver"],
+        "permiso": ["mpr.ver", "mpr.tablero_ver", "mpr.reportes"],
         "url": "mpr:tablero_produccion",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z'/></svg>""",
         "orden": 5,
@@ -269,7 +269,7 @@ APPS_MENU = [
             {
                 "seccion": _("Reportes"),
                 "items": [
-                    {"label": _("Reportes MPR"), "url": "mpr:reportes", "icon": "assessment", "permission": "mpr.ver", "menu_item_id": "mpr_rep_reportes"},
+                    {"label": _("Reportes MPR"), "url": "mpr:reportes", "icon": "assessment", "permission": ["mpr.ver", "mpr.reportes"], "menu_item_id": "mpr_rep_reportes"},
                 ]
             },
             {
@@ -1475,6 +1475,18 @@ def apps_visibles_sin_filtro_pwa(
                 submenus_visibles = obtener_submenus_por_app(app["id"], permisos_usuario, request)
                 if submenus_visibles:
                     app_copy["submenus"] = submenus_visibles
+                    # Perfiles granulares MPR (p. ej. solo mpr.reportes o solo
+                    # mpr.tablero_ver): la URL de la card debe ser el primer ítem
+                    # visible, no el default de escritorio completo.
+                    if app_id == "mpr" and "mpr.ver" not in permisos_usuario:
+                        for sm in submenus_visibles:
+                            for it in sm.get("items") or []:
+                                if it.get("url"):
+                                    app_copy["url"] = it["url"]
+                                    break
+                            else:
+                                continue
+                            break
                 else:
                     # Si no hay submenús visibles, no mostrar la app
                     continue

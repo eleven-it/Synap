@@ -219,12 +219,21 @@ def _usuario_puede_anular_envios(user) -> bool:
 
 
 PERMISO_TABLERO_VER = "mpr.tablero_ver"
+PERMISO_REPORTES = "mpr.reportes"
 
 
 def _usuario_puede_ver_tablero_produccion(user) -> bool:
     return (
         _usuario_tiene_permiso_mpr(user, "mpr.ver")
         or _usuario_tiene_permiso_mpr(user, PERMISO_TABLERO_VER)
+    )
+
+
+def _usuario_puede_ver_reportes_mpr(user) -> bool:
+    """Reportes: mpr.ver (escritorio) o mpr.reportes (solo analítica)."""
+    return (
+        _usuario_tiene_permiso_mpr(user, "mpr.ver")
+        or _usuario_tiene_permiso_mpr(user, PERMISO_REPORTES)
     )
 
 
@@ -303,6 +312,15 @@ class MprEscritorioVerMixin(MprPermisoMixin):
     """Vistas escritorio MPR sin permiso específico: exigen mpr.ver."""
 
     permiso_requerido = "mpr.ver"
+
+
+class MprReportesVerMixin:
+    """Hub de reportes: exige mpr.ver OR mpr.reportes."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not _usuario_puede_ver_reportes_mpr(getattr(request, "user", None)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
 
 
 def _get_base_empresa(request):
@@ -4324,7 +4342,7 @@ def _agrupar_resumen_por_mes(dias: List[Dict[str, Any]], modo: str) -> List[Dict
     return grupos
 
 
-class ReportesMPRView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
+class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
     """Hub de reportes MPR: producción, demanda y trazabilidad (flujo MPR diario)."""
 
     template_name = "mpr/reportes.html"

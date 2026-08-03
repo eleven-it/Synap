@@ -160,6 +160,7 @@ PERMISOS_POR_MODULO = {
     ],
     "Producción (MPR)": [
         ("mpr.ver", "Ver módulo Producción (MPR)"),
+        ("mpr.reportes", "Ver reportes MPR (analítica y trazabilidad)"),
         ("mpr.imputar_armado_1ra", "Imputación de pedido — Armado 1ra (supervisor)"),
         ("mpr.maquinas_lineas", "Gestionar líneas, máquinas y habilitación de artículos (supervisor)"),
         ("mpr.aprobar_parte", "Aprobar partes de producción y registrar desvíos (supervisor)"),

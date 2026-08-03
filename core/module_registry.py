@@ -398,6 +398,7 @@ MODULE_CONFIGS = {
         },
         'permissions': [
             'mpr.ver',
+            'mpr.reportes',
             'mpr.imputar_armado_1ra',
             'mpr.parte_operario',
             'mpr.tablero_ver',
