@@ -314,3 +314,33 @@ class ArmadoTableroFechaContextTest(SimpleTestCase):
         self.assertIn("fecha_realizado=31%2F07%2F2026", context["filtros_qs"])
         self.assertEqual(len(context["armados_del_dia"]), 1)
         self.assertEqual(context["armados_del_dia_total_packs"], 3)
+
+    @patch("mpr.views.listar_armados_realizados_por_fecha", return_value=[
+        {
+            "id_articulo_pack": 100,
+            "descripcion_articulo": "Pack demo",
+            "cantidad_packs": 3,
+        },
+    ])
+    @patch("mpr.views.listar_tablero_armado", return_value=[])
+    @patch("mpr.views.get_depositos_con_suma_stock", return_value=[])
+    @patch("mpr.views.get_deposito_terminado_mpr", return_value=5)
+    @patch("mpr.views.get_deposito_semi_elaborado_mpr", return_value=3)
+    @patch("mpr.views._usuario_puede_imputar_pedido", return_value=False)
+    @patch("mpr.views._context_filtro_marcas", return_value={"marcas_catalogo": [], "marcas_incluidos": []})
+    @patch("mpr.views._get_id_puesto", return_value=None)
+    @patch("mpr.views._get_base_empresa", return_value="empresa_test")
+    def test_presentacion_default_pares_sin_sesion_ni_query(self, *_mocks):
+        request = self.factory.get(
+            "/mpr/armado/",
+            {"vista": "tablero", "modo": "1ra"},
+        )
+        # Preferencia Docenas del Tablero no debe arrastrarse a Armado.
+        request.session = {"mpr_presentacion_cantidad": "docenas"}
+        self.view.request = request
+        context = self.view._context_armado_tablero({
+            "base_empresa": "empresa_test",
+            "modo": "1ra",
+        })
+        self.assertEqual(context["modo_presentacion"], "unidades")
+        self.assertIn("presentacion=unidades", context["filtros_qs"])

@@ -3786,7 +3786,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         from core.utils.administranet_types import to_date_or_none
         from mpr.presentacion_operativa import (
             enriquecer_filas_tablero_armado,
-            resolver_modo_presentacion_operativa,
+            resolver_modo_presentacion_armado,
         )
         from mpr.services import _fmt_fecha_ddmmaaaa, _parse_fecha_roster_input
 
@@ -3796,7 +3796,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         fecha_hasta_str = (self.request.GET.get("fecha_hasta") or "").strip()
         solo_resta = _resolver_solo_resta_armado(self.request)
         marcas_incluidos = _parse_marcas_incluidos(self.request)
-        modo_presentacion = resolver_modo_presentacion_operativa(self.request)
+        modo_presentacion = resolver_modo_presentacion_armado(self.request)
 
         fecha_realizado_raw = (self.request.GET.get("fecha_realizado") or "").strip()
         fecha_realizado_obj, _err_fecha = _parse_fecha_roster_input(fecha_realizado_raw) if fecha_realizado_raw else (None, None)

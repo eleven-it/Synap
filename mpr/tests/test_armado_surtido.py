@@ -276,3 +276,52 @@ class ListarMovimientosArmadoPorFechaTest(SimpleTestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["id_articulo_pack"], 618)
         self.assertEqual(out[0]["nro_comprobante"], "0001-00001229")
+
+
+class ConsolidarArmadosPorArticuloPackTest(SimpleTestCase):
+    def test_suma_packs_mismo_id_articulo_pack(self):
+        from mpr.services import consolidar_armados_por_articulo_pack
+
+        movs = [
+            {
+                "id_articulo_pack": 508,
+                "codigo_articulo": "508-01",
+                "descripcion_articulo": "Pack demo",
+                "cantidad_packs": 5,
+            },
+            {
+                "id_articulo_pack": 508,
+                "codigo_articulo": "508-01",
+                "descripcion_articulo": "Pack demo",
+                "cantidad_packs": 5,
+            },
+            {
+                "id_articulo_pack": 200,
+                "codigo_articulo": "200-01",
+                "descripcion_articulo": "Otro pack",
+                "cantidad_packs": 2,
+            },
+        ]
+        out = consolidar_armados_por_articulo_pack(movs)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]["id_articulo_pack"], 508)
+        self.assertEqual(out[0]["cantidad_packs"], 10)
+        self.assertEqual(out[1]["cantidad_packs"], 2)
+
+    @patch("mpr.repositories.armado_surtido.listar_movimientos_armado_por_fecha")
+    def test_listar_armados_consolida_por_defecto(self, mock_listar):
+        from datetime import date
+
+        from mpr.services import listar_armados_realizados_por_fecha
+
+        mock_listar.return_value = [
+            {"id_articulo_pack": 1, "codigo_articulo": "A", "descripcion_articulo": "A", "cantidad_packs": 3},
+            {"id_articulo_pack": 1, "codigo_articulo": "A", "descripcion_articulo": "A", "cantidad_packs": 2},
+        ]
+        out = listar_armados_realizados_por_fecha(
+            "empresa_test",
+            fecha_realizado=date(2026, 7, 31),
+            modo="1ra",
+        )
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["cantidad_packs"], 5)

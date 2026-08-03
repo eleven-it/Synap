@@ -10971,22 +10971,52 @@ def _listar_tablero_armado_2da(
     return filas[:limit]
 
 
+def consolidar_armados_por_articulo_pack(
+    movimientos: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Una fila por ``id_articulo_pack`` con ``cantidad_packs`` sumada (orden de primera aparición)."""
+    acumulado: Dict[int, Dict[str, Any]] = {}
+    orden: List[int] = []
+    for mov in movimientos or []:
+        id_pack = to_int_or_none(mov.get("id_articulo_pack"))
+        if id_pack is None:
+            continue
+        key = int(id_pack)
+        qty = int(mov.get("cantidad_packs") or 0)
+        if key not in acumulado:
+            acumulado[key] = {
+                "id_articulo_pack": key,
+                "codigo_articulo": str_or_default(mov.get("codigo_articulo"), "-"),
+                "descripcion_articulo": str_or_default(
+                    mov.get("descripcion_articulo"), f"ID {key}"
+                ),
+                "cantidad_packs": 0,
+            }
+            orden.append(key)
+        acumulado[key]["cantidad_packs"] += qty
+    return [acumulado[k] for k in orden]
+
+
 def listar_armados_realizados_por_fecha(
     base_empresa: str,
     *,
     fecha_realizado: date,
     modo: str = "1ra",
     limit: int = 100,
+    consolidar: bool = True,
 ) -> List[Dict[str, Any]]:
     """Packs armados (aprobados) en la fecha de realizado indicada."""
     from mpr.repositories.armado_surtido import listar_movimientos_armado_por_fecha
 
-    return listar_movimientos_armado_por_fecha(
+    movimientos = listar_movimientos_armado_por_fecha(
         base_empresa,
         fecha_realizado=fecha_realizado,
         modo=modo,
         limit=limit,
     )
+    if consolidar:
+        return consolidar_armados_por_articulo_pack(movimientos)
+    return movimientos
 
 
 def calcular_kpis_tablero_armado(filas: List[Dict[str, Any]]) -> Dict[str, Any]:
