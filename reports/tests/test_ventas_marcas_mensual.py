@@ -25,6 +25,7 @@ from reports.services.ventas_marcas_mensual_runner import (
 )
 from reports.services.ventas_marcas_mensual_export import (
     DETALLE_EXPORT_HEADERS,
+    fetch_detalle_renglones,
     resolve_detalle_headers,
 )
 from reports.services.ventas_marcas_mensual_seed import _report_defaults
@@ -330,6 +331,25 @@ class VentasMarcasMensualRunnerResilienceTest(SimpleTestCase):
         self.assertIn("cc.id_pv IN", captured.get("sql", ""))
         self.assertIn(200, captured.get("params", []))
         self.assertEqual(result.meta["filters_applied"]["punto_venta"], [200])
+        self.assertIn("DATE_FORMAT(cc.Fecha, '%Y%m')", captured["sql"] % tuple(captured["params"]))
+
+    def test_export_detalle_escapa_formatos_date_format_para_mysql(self):
+        cursor = Mock()
+        cursor.fetchall.return_value = []
+        cursor.description = []
+
+        fetch_detalle_renglones(
+            cursor,
+            where_s="cc.Fecha BETWEEN %s AND %s",
+            params=["2026-07-01", "2026-07-31"],
+            cat_sql="",
+            cat_params=[],
+            modo_unidades="packs",
+        )
+
+        sql, params = cursor.execute.call_args.args
+        self.assertIn("DATE_FORMAT(cc.Fecha, '%Y-%m-%d')", sql % tuple(params))
+        self.assertIn("DATE_FORMAT(cc.Fecha, '%Y%m')", sql % tuple(params))
 
 
 class VentasMarcasMensualExportHeadersTest(SimpleTestCase):

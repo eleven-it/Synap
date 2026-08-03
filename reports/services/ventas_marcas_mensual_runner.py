@@ -829,7 +829,7 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
                             COALESCE(v.Nombre, '') AS vend_nombre,
                             cc.Codigo AS codigo_cliente,
                             COALESCE(cl.nombre_cliente, '') AS nombre_cliente,
-                            DATE_FORMAT(cc.Fecha, '%Y%m') AS anio_mes,
+                            DATE_FORMAT(cc.Fecha, '%%Y%%m') AS anio_mes,
                             SUM({signo_qty}) AS packs,
                             SUM({signo_qty} / {factor_sql}) AS docenas,
                             SUM({signo_imp}) AS facturacion,
@@ -841,7 +841,7 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
                         LEFT JOIN unidmed um ON um.id_unimed = art.id_unimed
                         LEFT JOIN viajantes v ON v.CodViajante = cc.CodViajante
                         WHERE {where_s}
-                        GROUP BY cc.CodViajante, v.Nombre, cc.Codigo, cl.nombre_cliente, DATE_FORMAT(cc.Fecha, '%Y%m')
+                        GROUP BY cc.CodViajante, v.Nombre, cc.Codigo, cl.nombre_cliente, DATE_FORMAT(cc.Fecha, '%%Y%%m')
                         HAVING ABS(packs) > 0.00001 OR ABS(facturacion) > 0.01
                     """
                     cursor.execute(sql, params + cat_params)
@@ -888,7 +888,7 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
                         COALESCE(v.Nombre, '') AS vend_nombre,
                         cc.Codigo AS codigo_cliente,
                         COALESCE(cl.nombre_cliente, '') AS nombre_cliente,
-                        DATE_FORMAT(cc.Fecha, '%Y%m') AS anio_mes,
+                        DATE_FORMAT(cc.Fecha, '%%Y%%m') AS anio_mes,
                         SUM({signo_qty}) AS packs,
                         SUM({signo_qty} / {factor_sql}) AS docenas,
                         SUM({signo_imp}) AS facturacion,
@@ -900,7 +900,7 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
                     LEFT JOIN unidmed um ON um.id_unimed = art.id_unimed
                     LEFT JOIN viajantes v ON v.CodViajante = cc.CodViajante
                     WHERE {where_s}
-                    GROUP BY cc.CodViajante, v.Nombre, cc.Codigo, cl.nombre_cliente, DATE_FORMAT(cc.Fecha, '%Y%m')
+                    GROUP BY cc.CodViajante, v.Nombre, cc.Codigo, cl.nombre_cliente, DATE_FORMAT(cc.Fecha, '%%Y%%m')
                     HAVING ABS(packs) > 0.00001 OR ABS(facturacion) > 0.01
                 """
                 cursor.execute(sql, params + cat_params)
