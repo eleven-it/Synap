@@ -27,7 +27,7 @@
             <input id="pedidos-hub-busqueda"
                    type="search"
                    x-model.debounce.200ms="busqueda"
-                   @input="listaPage = 1; reiniciarKanbanVisible()"
+                   @input="listaPage = 1"
                    placeholder="Buscar por PED, cliente, sucursal o vendedor…"
                    autocomplete="off"
                    class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-1.5 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
@@ -345,13 +345,6 @@
               </template>
               <p x-show="!itemsColumna(col).length" class="px-1 py-6 text-center text-xs text-slate-400">Vacío</p>
             </div>
-            <div x-show="kanbanHayMas(col)" class="flex-shrink-0 border-t border-slate-100 p-2 dark:border-slate-700">
-              <button type="button"
-                      @click="mostrarMasKanban(col.id)"
-                      class="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-purple-700 hover:bg-white dark:border-slate-600 dark:bg-slate-900/40 dark:text-purple-400 dark:hover:bg-slate-800">
-                Mostrar más (<span x-text="kanbanRestantes(col)"></span> restantes)
-              </button>
-            </div>
           </div>
         </template>
       </div>
@@ -418,29 +411,6 @@
           </tr>
         </tbody>
       </table>
-      <div x-show="itemsListaFiltrados().length > listaPageSize"
-           class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 dark:border-slate-700">
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          Página <span x-text="listaPage"></span> de <span x-text="listaTotalPaginas()"></span>
-          (<span x-text="itemsListaFiltrados().length"></span> pedidos)
-        </p>
-        <div class="flex items-center gap-2">
-          <button type="button"
-                  @click="listaPaginaAnterior()"
-                  :disabled="listaPage <= 1"
-                  class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-            <span class="material-icons text-sm" aria-hidden="true">chevron_left</span>
-            Anterior
-          </button>
-          <button type="button"
-                  @click="listaPaginaSiguiente()"
-                  :disabled="listaPage >= listaTotalPaginas()"
-                  class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-            Siguiente
-            <span class="material-icons text-sm" aria-hidden="true">chevron_right</span>
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -568,9 +538,6 @@ function pedidosHubApp() {
     _rechazoIt: null,
     _rechazoModo: 'comercial',
     listaPage: 1,
-    listaPageSize: 25,
-    KANBAN_PAGE_SIZE: 15,
-    kanbanVisiblePorColumna: {},
     init() {
       const raw = document.getElementById('pedidos-hub-bootstrap');
       const data = raw ? JSON.parse(raw.textContent) : {};
@@ -630,49 +597,25 @@ function pedidosHubApp() {
       return this.itemsFiltrados();
     },
     itemsListaPaginados() {
-      const items = this.itemsListaFiltrados();
-      const start = (this.listaPage - 1) * this.listaPageSize;
-      return items.slice(start, start + this.listaPageSize);
+      // Sin paginación cliente: lista completa filtrada (scroll en el contenedor).
+      return this.itemsListaFiltrados();
     },
     listaTotalPaginas() {
-      const total = this.itemsListaFiltrados().length;
-      return Math.max(1, Math.ceil(total / this.listaPageSize));
+      return 1;
     },
-    listaPaginaAnterior() {
-      if (this.listaPage > 1) this.listaPage -= 1;
-    },
-    listaPaginaSiguiente() {
-      if (this.listaPage < this.listaTotalPaginas()) this.listaPage += 1;
-    },
-    reiniciarKanbanVisible() {
-      const vis = {};
-      for (const col of this.columnas || []) {
-        vis[col.id] = this.KANBAN_PAGE_SIZE;
-      }
-      this.kanbanVisiblePorColumna = vis;
-    },
+    listaPaginaAnterior() {},
+    listaPaginaSiguiente() {},
     itemsKanbanVisibles(col) {
-      const items = this.itemsColumna(col);
-      const limite = this.kanbanVisiblePorColumna[col.id] ?? this.KANBAN_PAGE_SIZE;
-      return items.slice(0, limite);
+      // Sin lote «Mostrar más»: todas las tarjetas de la columna (scroll vertical).
+      return this.itemsColumna(col);
     },
-    kanbanHayMas(col) {
-      const items = this.itemsColumna(col);
-      const limite = this.kanbanVisiblePorColumna[col.id] ?? this.KANBAN_PAGE_SIZE;
-      return items.length > limite;
+    kanbanHayMas(_col) {
+      return false;
     },
-    kanbanRestantes(col) {
-      const items = this.itemsColumna(col);
-      const limite = this.kanbanVisiblePorColumna[col.id] ?? this.KANBAN_PAGE_SIZE;
-      return Math.max(0, items.length - limite);
+    kanbanRestantes(_col) {
+      return 0;
     },
-    mostrarMasKanban(colId) {
-      const actual = this.kanbanVisiblePorColumna[colId] ?? this.KANBAN_PAGE_SIZE;
-      this.kanbanVisiblePorColumna = {
-        ...this.kanbanVisiblePorColumna,
-        [colId]: actual + this.KANBAN_PAGE_SIZE,
-      };
-    },
+    mostrarMasKanban(_colId) {},
     _estadoLote(it) {
       return String((it && it.meta && it.meta.estado_aprobacion_lote) || '').trim().toLowerCase();
     },
@@ -724,7 +667,6 @@ function pedidosHubApp() {
       this.aprobacionActiva = !!hub.aprobacion_comercial_activa;
       this.labels = hub.labels || this.labels;
       this.listaPage = 1;
-      this.reiniciarKanbanVisible();
       if (this.columnaMovil !== 'todas'
           && !this.columnas.some((c) => c.id === this.columnaMovil)) {
         this.columnaMovil = 'todas';
