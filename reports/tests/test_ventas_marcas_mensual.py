@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests informe ventas-marcas-mensual (factor U.M., matriz, export)."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from django.test import SimpleTestCase
 
@@ -185,6 +185,48 @@ class ProyeccionTest(SimpleTestCase):
 
 
 class VentasMarcasMensualRunnerResilienceTest(SimpleTestCase):
+    def test_normaliza_fechas_string_de_filtros_y_expone_periodo_aplicado(self):
+        report = ReportDefinition(
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category="operational",
+            version="1.0.0",
+        )
+        payload = {
+            "filters": {
+                "base_empresa": "administranet1",
+                "fecha_inicio_facturacion": "2026-07-01",
+                "fecha_fin_facturacion": "2026-07-31",
+            }
+        }
+        cursor = Mock()
+        cursor.fetchone.return_value = None
+        cursor.fetchall.return_value = []
+        cursor.description = []
+        conn = Mock()
+        conn.cursor.return_value = cursor
+        pool = MagicMock()
+        pool.get_connection.return_value.__enter__.return_value = conn
+
+        with (
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.ctx_desde_runner",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.alcance_objetivos_cod_viajante",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.get_mysql_pool",
+                return_value=pool,
+            ),
+        ):
+            result = run_ventas_marcas_mensual(report, payload, Mock())
+
+        self.assertEqual(result.meta["filters_applied"]["fecha_inicio_facturacion"], "2026-07-01")
+        self.assertEqual(result.meta["filters_applied"]["fecha_fin_facturacion"], "2026-07-31")
+
     def test_devuelve_resultado_vacio_si_falla_alcance_comercial(self):
         report = ReportDefinition(
             slug="ventas-marcas-mensual",

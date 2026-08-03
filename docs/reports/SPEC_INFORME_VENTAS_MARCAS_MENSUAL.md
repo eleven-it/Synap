@@ -22,7 +22,7 @@ Cubre la lógica de las hojas Excel PuW/PuM (plantilla BEST) leyendo **solo Admi
 
 | Filtro | Control UI | Campo backend | Notas |
 |--------|------------|---------------|-------|
-| Período | Desde–hasta (dd/MM/yyyy) | `cc.Fecha` | `fecha_inicio_facturacion` / `fecha_fin_facturacion`; fallback `fecha_inicio` / `fecha_fin` |
+| Período | Desde–hasta (dd/MM/yyyy) | `cc.Fecha` | `fecha_inicio_facturacion` / `fecha_fin_facturacion`; fallback `fecha_inicio` / `fecha_fin`. El backend acepta `date`, `datetime` o string y normaliza a `YYYY-MM-DD` para SQL y `filters_applied`. |
 | Marca | Multi-tags | `art.CodigoMarca` | `marcas_incluidos`; vacío = todas |
 | SuperArt | Multi-tags `id_manual` | `art.id_manual IN (...)` | `superarts_incluidos` o `id_manuales`; vacío = todos |
 | Unidades | Toggle packs / docenas | Solo presentación + SQL docenas | `modo_unidades`: `packs` (default) \| `docenas` |
