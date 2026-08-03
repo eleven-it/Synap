@@ -91,8 +91,10 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 ### Escáner y búsqueda manual (conteo móvil)
 
 - **Cámara / escáner:** `getUserMedia` exige **contexto seguro** (HTTPS o `localhost`). En HTTP por IP (ej. `http://181.x.x.x:8100`) el botón «Escanear» muestra un aviso en español y enfoca el ingreso manual; no hay acceso a la cámara.
-- **Fallback obligatorio:** campo siempre visible «EAN o nombre de artículo» + botón «Buscar» (Enter dispara búsqueda). Resuelve vía IndexedDB (`InvFisicoOffline.buscarPorEanONombre`): coincidencia exacta por EAN o contiene en nombre. **No** busca por código manual ni ID de sistema. Si hay varios por nombre, muestra lista para elegir.
-- Si `totalCatalogo === 0` (catálogo no descargado), la búsqueda se bloquea con aviso para conectar y recargar.
+- **Ingreso manual:** botón «Ingreso manual» abre un modal con búsqueda **predictiva** (debounce ~250 ms) sobre IndexedDB (`InvFisicoOffline.buscarPorEanONombre`, máx. ~40 sugerencias): coincidencia exacta por EAN o contiene en nombre. **No** busca por código manual ni ID de sistema. Click en sugerencia o Enter (EAN exacto → directo; si hay lista → primero) cierra el modal y deja el artículo listo para cantidad. Sin campo de búsqueda en la pantalla principal.
+- Si la cámara falla (HTTPS, permisos, sin dispositivo), se abre el modal de ingreso manual.
+- Offline: en `init()`, si no hay red, `totalCatalogo` se obtiene con `InvFisicoOffline.contarCatalogo()` del catálogo ya prefetched; la búsqueda no depende de API.
+- Si `totalCatalogo === 0` (catálogo no descargado), el modal muestra aviso para conectar y recargar (o sesión con prefetch previo).
 
 ### Seguridad / no-filtración
 

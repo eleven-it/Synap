@@ -90,7 +90,7 @@
     return hit || null;
   }
 
-  async function buscarPorEanONombre(consulta) {
+  async function buscarPorEanONombre(consulta, limite) {
     /**
      * Ingreso manual: 1) EAN exacto; 2) nombre de artículo (contiene, sin distinguir mayúsculas).
      * No busca por código manual ni ID de sistema. Devuelve lista (0..N).
@@ -120,7 +120,20 @@
     hits.sort(function (a, b) {
       return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
     });
+    if (limite != null && limite > 0 && hits.length > limite) {
+      hits = hits.slice(0, limite);
+    }
     return hits;
+  }
+
+  async function contarCatalogo() {
+    var db = await openDB();
+    var tx = db.transaction(STORE_CATALOGO, 'readonly');
+    var store = tx.objectStore(STORE_CATALOGO);
+    var count = await promisifyRequest(store.count());
+    await txDone(tx);
+    db.close();
+    return count || 0;
   }
 
   async function encolarEvento(evento) {
@@ -256,6 +269,7 @@
     guardarCatalogo: guardarCatalogo,
     buscarPorEan: buscarPorEan,
     buscarPorEanONombre: buscarPorEanONombre,
+    contarCatalogo: contarCatalogo,
     encolarEvento: encolarEvento,
     listarCola: listarCola,
     syncBatch: syncBatch,

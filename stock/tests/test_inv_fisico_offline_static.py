@@ -16,6 +16,7 @@ class InvFisicoOfflineStaticTests(SimpleTestCase):
         'guardarCatalogo',
         'buscarPorEan',
         'buscarPorEanONombre',
+        'contarCatalogo',
         'encolarEvento',
         'listarCola',
         'syncBatch',
