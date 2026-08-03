@@ -1,11 +1,17 @@
 from django.urls import path
 
-from contabilidad_audit import views
+from contabilidad_audit import cotizacion_views, views
 
 app_name = "contabilidad_audit"
 
 urlpatterns = [
     path("manual/", views.manual_usuario_view, name="manual_usuario"),
+    path("cotizacion-dolar/", cotizacion_views.cotizacion_dolar_view, name="cotizacion_dolar"),
+    path("api/cotizacion/vigente/", cotizacion_views.cotizacion_api_vigente, name="cotizacion_api_vigente"),
+    path("api/cotizacion/sugerencia/", cotizacion_views.cotizacion_api_sugerencia, name="cotizacion_api_sugerencia"),
+    path("api/cotizacion/aceptar/", cotizacion_views.cotizacion_api_aceptar, name="cotizacion_api_aceptar"),
+    path("api/cotizacion/manual/", cotizacion_views.cotizacion_api_manual, name="cotizacion_api_manual"),
+    path("api/cotizacion/historial/", cotizacion_views.cotizacion_api_historial, name="cotizacion_api_historial"),
     path("auditoria/", views.auditoria_tablero, name="auditoria_tablero"),
     path(
         "auditoria/ejercicios-periodos/",

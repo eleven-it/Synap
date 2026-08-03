@@ -1,0 +1,300 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{{ titulo_pagina }} - Synap{% endblock %}
+
+{% block extra_css %}<style>[x-cloak]{display:none !important;}</style>{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24" x-data="cotizacionDolarApp()" x-cloak>
+
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-95"></div>
+        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-6 lg:py-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">
+                        Contabilidad · Cotización dólar
+                    </p>
+                    <h1 class="text-2xl sm:text-3xl md:text-4xl font-semibold text-white tracking-tight">
+                        {{ titulo_pagina }}
+                    </h1>
+                    <p class="text-sm text-slate-300 mt-2 max-w-2xl">
+                        Vigente local, sugerencia BCRA y historial diario. Empresa: <span class="font-mono text-slate-200">{{ base_empresa }}</span>
+                    </p>
+                </div>
+                <a href="{{ tablero_url }}"
+                   class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-slate-200 hover:text-white border border-slate-600 hover:border-slate-400 transition-all min-h-[44px]">
+                    Volver al tablero
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full px-4 sm:px-6 lg:px-12 -mt-4 relative z-10 space-y-4 lg:space-y-6">
+
+        <div x-show="aviso" x-transition
+             class="rounded-xl px-4 py-3 text-sm border bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
+             x-text="aviso"></div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="bg-white dark:bg-slate-900 rounded-2xl shadow border border-slate-200 dark:border-slate-800 p-5">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Vigente (maestro)</p>
+                <p class="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tabular-nums" x-text="fmtNum(vigente)"></p>
+            </div>
+            <div class="bg-white dark:bg-slate-900 rounded-2xl shadow border border-slate-200 dark:border-slate-800 p-5">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Sugerido BCRA</p>
+                <p class="mt-2 text-2xl sm:text-3xl font-bold text-sky-700 dark:text-sky-300 tabular-nums" x-text="fmtNum(sugerido)"></p>
+                <p class="text-[11px] text-slate-400 mt-1" x-show="sugeridoFecha" x-text="'Fuente ' + sugeridoFecha"></p>
+            </div>
+            <div class="bg-white dark:bg-slate-900 rounded-2xl shadow border border-slate-200 dark:border-slate-800 p-5 sm:col-span-2 lg:col-span-1">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Delta %</p>
+                <p class="mt-2 text-2xl sm:text-3xl font-bold tabular-nums"
+                   :class="deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
+                   x-text="deltaPct != null ? (deltaPct >= 0 ? '+' : '') + deltaPct.toFixed(2) + ' %' : '—'"></p>
+            </div>
+        </div>
+
+        {% if puede_aceptar %}
+        <div class="flex flex-col sm:flex-row flex-wrap gap-3">
+            <button type="button" @click="pedirAceptar()"
+                    :disabled="!sugerido || cargando"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 min-h-[44px] text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                Aceptar sugerido BCRA
+            </button>
+            <button type="button" @click="abrirManual()"
+                    :disabled="cargando"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 min-h-[44px] text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+                Registrar manual
+            </button>
+        </div>
+        {% else %}
+        <div class="rounded-xl px-4 py-3 text-sm border bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+            Modo solo consulta. No tiene permiso <code>{{ permiso_aceptar }}</code>.
+        </div>
+        {% endif %}
+
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+                <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Historial reciente</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Fecha</th>
+                            <th class="px-4 py-3 text-right">Valor</th>
+                            <th class="px-4 py-3 text-left">Origen</th>
+                            <th class="px-4 py-3 text-left hidden sm:table-cell">Observación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="fila in historialFilas" :key="fila.id_historial">
+                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                                <td class="px-4 py-3 whitespace-nowrap" x-text="fila.fecha_es"></td>
+                                <td class="px-4 py-3 text-right tabular-nums font-medium" x-text="fmtNum(fila.valor_pesos)"></td>
+                                <td class="px-4 py-3" x-text="fila.origen"></td>
+                                <td class="px-4 py-3 hidden sm:table-cell text-slate-500" x-text="fila.observacion"></td>
+                            </tr>
+                        </template>
+                        <tr x-show="!historialFilas.length">
+                            <td colspan="4" class="px-4 py-6 text-center text-slate-400">Sin registros en el historial.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal confirmación aceptar -->
+    <div x-show="confirmOpen" x-cloak
+         class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+         role="dialog" aria-modal="true">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700"
+             @click.outside="confirmOpen = false">
+            <div class="flex items-start gap-3">
+                <span class="material-icons text-sky-600 text-3xl">currency_exchange</span>
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Confirmar cotización</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-2">
+                        ¿Confirma actualizar el dólar vigente a <strong x-text="fmtNum(sugerido)"></strong>?
+                    </p>
+                </div>
+            </div>
+            <div class="flex flex-col-reverse sm:flex-row gap-2 mt-6 justify-end">
+                <button type="button" @click="confirmOpen = false" :disabled="procesando"
+                        class="px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200">
+                    Cancelar
+                </button>
+                <button type="button" @click="ejecutarAceptar()" :disabled="procesando"
+                        class="px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50">
+                    <span x-text="procesando ? 'Guardando…' : 'Confirmar'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal manual -->
+    <div x-show="manualOpen" x-cloak
+         class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+         role="dialog" aria-modal="true">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Cotización manual</h3>
+            <label class="block mt-4 text-xs font-semibold text-slate-500 uppercase">Valor ($ por USD)</label>
+            <input type="number" x-model="manualValor" min="0" step="0.0001"
+                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 min-h-[44px] text-sm">
+            <label class="block mt-3 text-xs font-semibold text-slate-500 uppercase">Observación</label>
+            <input type="text" x-model="manualObs" maxlength="255"
+                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm">
+            <div class="flex flex-col-reverse sm:flex-row gap-2 mt-6 justify-end">
+                <button type="button" @click="manualOpen = false" :disabled="procesando"
+                        class="px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600">
+                    Cancelar
+                </button>
+                <button type="button" @click="ejecutarManual()" :disabled="procesando"
+                        class="px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function cotizacionDolarApp() {
+  return {
+    vigente: null,
+    sugerido: null,
+    sugeridoFecha: "",
+    deltaPct: null,
+    aviso: "",
+    historialFilas: [],
+    confirmOpen: false,
+    manualOpen: false,
+    manualValor: "",
+    manualObs: "-",
+    cargando: false,
+    procesando: false,
+    apiVigente: "{{ api_vigente|escapejs }}",
+    apiSugerencia: "{{ api_sugerencia|escapejs }}",
+    apiAceptar: "{{ api_aceptar|escapejs }}",
+    apiManual: "{{ api_manual|escapejs }}",
+    apiHistorial: "{{ api_historial|escapejs }}",
+    puedeAceptar: {{ puede_aceptar|yesno:"true,false" }},
+
+    fmtNum(v) {
+      if (v == null || v === "") return "—";
+      return Number(v).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+    },
+
+    showAviso(msg, tipo) {
+      if (typeof window.mprShowAviso === "function") {
+        window.mprShowAviso(msg, tipo || "aviso");
+      }
+      this.aviso = msg;
+    },
+
+    async init() {
+      await this.recargar();
+    },
+
+    async recargar() {
+      this.cargando = true;
+      try {
+        const [vRes, sRes, hRes] = await Promise.all([
+          fetch(this.apiVigente, { credentials: "same-origin", headers: { Accept: "application/json" } }),
+          fetch(this.apiSugerencia, { credentials: "same-origin", headers: { Accept: "application/json" } }),
+          fetch(this.apiHistorial + "?limite=30", { credentials: "same-origin", headers: { Accept: "application/json" } }),
+        ]);
+        const v = vRes.ok ? await vRes.json() : {};
+        const s = sRes.ok ? await sRes.json() : {};
+        const h = hRes.ok ? await hRes.json() : {};
+        this.vigente = v.valor;
+        this.sugerido = s.valor;
+        this.sugeridoFecha = s.fecha_es || "";
+        this.deltaPct = s.delta_pct;
+        this.historialFilas = h.filas || [];
+        if (s.mensaje && !s.disponible) {
+          this.aviso = s.mensaje;
+        } else {
+          this.aviso = "";
+        }
+      } catch (_e) {
+        this.showAviso("Error al cargar cotización.", "error");
+      } finally {
+        this.cargando = false;
+      }
+    },
+
+    pedirAceptar() {
+      if (!this.sugerido) {
+        this.showAviso("No hay sugerencia BCRA disponible.", "aviso");
+        return;
+      }
+      this.confirmOpen = true;
+    },
+
+    async ejecutarAceptar() {
+      this.procesando = true;
+      try {
+        const res = await fetch(this.apiAceptar, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+          body: JSON.stringify({ valor: this.sugerido, observacion: "Aceptado desde pantalla Synap" }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          this.showAviso(data.error || "No se pudo aceptar la cotización.", "error");
+          return;
+        }
+        this.confirmOpen = false;
+        this.showAviso(data.mensaje || "Cotización aceptada.", "success");
+        await this.recargar();
+      } catch (_e) {
+        this.showAviso("Error de red al aceptar.", "error");
+      } finally {
+        this.procesando = false;
+      }
+    },
+
+    abrirManual() {
+      this.manualValor = this.vigente || "";
+      this.manualObs = "-";
+      this.manualOpen = true;
+    },
+
+    async ejecutarManual() {
+      const val = parseFloat(this.manualValor);
+      if (!val || val <= 0) {
+        this.showAviso("Ingrese un valor positivo.", "aviso");
+        return;
+      }
+      this.procesando = true;
+      try {
+        const res = await fetch(this.apiManual, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+          body: JSON.stringify({ valor: val, observacion: this.manualObs || "-" }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          this.showAviso(data.error || "No se pudo registrar la cotización.", "error");
+          return;
+        }
+        this.manualOpen = false;
+        this.showAviso(data.mensaje || "Cotización registrada.", "success");
+        await this.recargar();
+      } catch (_e) {
+        this.showAviso("Error de red al guardar.", "error");
+      } finally {
+        this.procesando = false;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

@@ -6598,9 +6598,10 @@ if (dashboardRoot) {
       // Cargar filtros guardados ANTES de cargar las opciones
       const savedFilters = loadFilters();
 
-      // BO / Objetivos vs BO: no hay filtro de punto de venta en el formulario; sí sucursales (mismo componente tags que otros informes).
+      // BO / Objetivos vs BO: sin PV en formulario salvo ventas-marcas-mensual (ADR familia BO + A3).
       const isBoReport = isInformeBoDualPeriodo(reportSlug);
-      if (!isBoReport) {
+      const loadPuntoVentaOptions = !isBoReport || isVentasMarcasMensualSlug(reportSlug);
+      if (loadPuntoVentaOptions) {
         const pvResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=puntos_venta`, {
           headers: {
             "X-Requested-With": "XMLHttpRequest",
@@ -6958,6 +6959,15 @@ if (dashboardRoot) {
             sel.appendChild(option);
           });
           initializeTagsFilter(selectId, jsonKey);
+          if (
+            selectId === "vmm_marcas_incluidos" &&
+            window.ventasMarcasMensualHandler &&
+            typeof window.ventasMarcasMensualHandler.populateMarcaCompareSelects === "function"
+          ) {
+            window.ventasMarcasMensualHandler.populateMarcaCompareSelects(
+              items.map((item) => ({ value: item.value, label: item.label }))
+            );
+          }
         };
         const reloadSuperArts = async () => {
           const marcasSel = document.getElementById("vmm_marcas_incluidos");
@@ -9200,6 +9210,22 @@ if (dashboardRoot) {
             btn.classList.toggle("dark:text-slate-300", !active);
           });
         }
+        const cmpHidden = document.getElementById("vmm_modo_comparacion");
+        if (cmpHidden && filters.modo_comparacion) {
+          cmpHidden.value = filters.modo_comparacion === "comparar" ? "comparar" : "una";
+          const cmpBtn = document.querySelector(
+            `#vmm-modo-comparacion-buttons .vmm-cmp-btn[data-modo-comparacion="${cmpHidden.value}"]`
+          );
+          if (cmpBtn) cmpBtn.click();
+        }
+        if (filters.marca_a) {
+          const ma = document.getElementById("vmm_marca_a");
+          if (ma) ma.value = String(filters.marca_a);
+        }
+        if (filters.marca_b) {
+          const mb = document.getElementById("vmm_marca_b");
+          if (mb) mb.value = String(filters.marca_b);
+        }
       }
       if (reportSlug === "ventas-objetivos-vs-bo") {
         const tagRestoreVoRubro = (arr, selectId) => {
@@ -9621,6 +9647,18 @@ if (dashboardRoot) {
         if (coefEl && coefEl.value !== "") {
           filters.coef_proyeccion = coefEl.value;
         }
+        const cmpEl = document.getElementById("vmm_modo_comparacion");
+        if (cmpEl && cmpEl.value) {
+          filters.modo_comparacion = cmpEl.value;
+        }
+        const marcaA = document.getElementById("vmm_marca_a");
+        if (marcaA && marcaA.value) {
+          filters.marca_a = marcaA.value;
+        }
+        const marcaB = document.getElementById("vmm_marca_b");
+        if (marcaB && marcaB.value) {
+          filters.marca_b = marcaB.value;
+        }
       }
       if (isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
@@ -9863,6 +9901,28 @@ if (dashboardRoot) {
         reportSlug === "stock-existencias"
           ? enrichStockExistenciasFilters(getFilters())
           : getFilters();
+
+      if (isVentasMarcasMensualSlug(reportSlug)) {
+        const cmpErr =
+          window.ventasMarcasMensualHandler &&
+          typeof window.ventasMarcasMensualHandler.validateCompareFilters === "function"
+            ? window.ventasMarcasMensualHandler.validateCompareFilters(filters)
+            : "";
+        if (cmpErr) {
+          if (!isAutoRefresh) {
+            if (typeof window.ventasMarcasMensualHandler?.showSynapAviso === "function") {
+              window.ventasMarcasMensualHandler.showSynapAviso(cmpErr, "error");
+            } else {
+              toast(cmpErr, "error");
+            }
+          }
+          hideReportsQueryLoadingModal();
+          if (!isAutoRefresh) hideLoadingAnimation();
+          fetchDashboardDataInFlight = false;
+          return;
+        }
+      }
+
       const queryLimit =
         reportSlug === "stock-existencias"
           ? stockExistenciasNeedsFullFetch()
@@ -10568,6 +10628,10 @@ if (dashboardRoot) {
           Object.assign(filters, window.getFilters());
         }
 
+        if (reportSlug === "ventas-marcas-mensual" && typeof window.getFilters === "function") {
+          Object.assign(filters, window.getFilters());
+        }
+
         const baseEmpresa = dashboardRoot?.dataset.baseEmpresa || null;
 
         // Construir payload
@@ -10596,14 +10660,29 @@ if (dashboardRoot) {
 
         // Descargar el archivo
         const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${reportSlug}_${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        const dlName =
+          response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ||
+          `${reportSlug}_${new Date().toISOString().split("T")[0]}.xlsx`;
+        let downloaded = false;
+        if (
+          reportSlug === "ventas-marcas-mensual" &&
+          typeof window.vmmDownloadExportBlob === "function"
+        ) {
+          downloaded = window.vmmDownloadExportBlob(blob, dlName);
+        } else {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = dlName;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          downloaded = true;
+        }
+        if (!downloaded) {
+          throw new Error("No se pudo iniciar la descarga del archivo Excel.");
+        }
 
         // Mostrar mensaje de éxito
         const lbl = excelScope === "detallado" ? " (Detallado)" : excelScope === "resumen" ? " (Resumen)" : "";

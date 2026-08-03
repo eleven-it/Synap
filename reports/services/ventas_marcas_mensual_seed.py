@@ -28,6 +28,11 @@ def _report_defaults():
             "dimensions": ["vendedor", "cliente", "anio_mes"],
             "tags": ["ventas", "marcas", "mensual", "listados"],
             "catalog_legacy_section": "listados",
+            "preset_hombre": {
+                "id_manuales": [],
+                "label": "Hombre",
+                "nota": "Lista de id_manual SuperArt; completar con negocio (Best Sox).",
+            },
             "filters": {
                 "fecha_inicio_facturacion": {
                     "type": "date",
@@ -56,6 +61,15 @@ def _report_defaults():
                     "options": ["packs", "docenas"],
                     "default": "packs",
                 },
+                "modo_comparacion": {
+                    "type": "select",
+                    "required": False,
+                    "label": "Modo marcas",
+                    "options": ["una", "comparar"],
+                    "default": "una",
+                },
+                "marca_a": {"type": "select", "required": False, "label": "Marca A"},
+                "marca_b": {"type": "select", "required": False, "label": "Marca B"},
             },
         },
         "metadata": {

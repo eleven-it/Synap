@@ -9,15 +9,25 @@ from reports.models import ReportDefinition
 from reports.services.export_service import ExportService
 from reports.services.ventas_marcas_mensual_runner import (
     _compute_kpis_licencia,
+    _delta_pct_facturacion,
     _parse_tasa_regalia,
+    _resolve_tc,
     aplicar_proyeccion_filas,
     build_filas_matriz,
+    build_filas_matriz_compare,
+    build_filas_planas_compare_export,
     build_filas_planas_export,
     ceil_proy_unidades,
     factor_docenas_unimed,
     round_proy_facturacion,
     run_ventas_marcas_mensual,
+    sort_filas_vendedores,
 )
+from reports.services.ventas_marcas_mensual_export import (
+    DETALLE_EXPORT_HEADERS,
+    resolve_detalle_headers,
+)
+from reports.services.ventas_marcas_mensual_seed import _report_defaults
 
 
 class FactorDocenasUnimedTest(SimpleTestCase):
@@ -263,6 +273,64 @@ class VentasMarcasMensualRunnerResilienceTest(SimpleTestCase):
         self.assertEqual(result.meta["extra"]["meses"], [])
         self.assertEqual(result.meta["extra"]["kpis"]["unidades"], 0)
 
+    def test_filtro_punto_venta_incluye_id_pv_en_sql(self):
+        report = ReportDefinition(
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category="operational",
+            version="1.0.0",
+        )
+        payload = {
+            "filters": {
+                "base_empresa": "administranet1",
+                "fecha_inicio_facturacion": "2026-07-01",
+                "fecha_fin_facturacion": "2026-07-31",
+                "punto_venta": ["200"],
+            }
+        }
+        captured = {}
+
+        def fake_execute(sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = list(params or [])
+
+        cursor = Mock()
+        cursor.execute = fake_execute
+        cursor.fetchall.return_value = []
+        cursor.description = []
+        conn = Mock()
+        conn.cursor.return_value = cursor
+        pool = MagicMock()
+        pool.get_connection.return_value.__enter__.return_value = conn
+
+        with (
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.ctx_desde_runner",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.alcance_objetivos_cod_viajante",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.get_mysql_pool",
+                return_value=pool,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner._resolve_tc",
+                return_value=14.5817,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner._resolve_marcas_incluidos",
+                return_value=[],
+            ),
+        ):
+            result = run_ventas_marcas_mensual(report, payload, Mock())
+
+        self.assertIn("cc.id_pv IN", captured.get("sql", ""))
+        self.assertIn(200, captured.get("params", []))
+        self.assertEqual(result.meta["filters_applied"]["punto_venta"], [200])
+
 
 class VentasMarcasMensualExportHeadersTest(SimpleTestCase):
     def setUp(self):
@@ -331,3 +399,289 @@ class VentasMarcasMensualExportHeadersTest(SimpleTestCase):
         )
         self.assertTrue(name.startswith("Ventas_marcas_mensual_"))
         self.assertTrue(name.endswith(".xlsx"))
+
+
+class SortFilasVendedoresTest(SimpleTestCase):
+    def _filas_dos_vendedores(self):
+        return [
+            {
+                "cod": 1,
+                "nombre": "Bajo",
+                "total": {"u": 10.0, "f": 100.0},
+            },
+            {
+                "cod": 2,
+                "nombre": "Alto",
+                "total": {"u": 50.0, "f": 5000.0},
+            },
+        ]
+
+    def test_orden_facturacion_desc(self):
+        ordenadas = sort_filas_vendedores(self._filas_dos_vendedores(), campo="f", descendente=True)
+        self.assertEqual(ordenadas[0]["cod"], 2)
+        self.assertEqual(ordenadas[1]["cod"], 1)
+
+    def test_orden_unidades_asc(self):
+        ordenadas = sort_filas_vendedores(self._filas_dos_vendedores(), campo="u", descendente=False)
+        self.assertEqual(ordenadas[0]["cod"], 1)
+        self.assertEqual(ordenadas[1]["cod"], 2)
+
+
+class PresetConfigShapeTest(SimpleTestCase):
+    def test_preset_hombre_en_config_seed(self):
+        cfg = _report_defaults()["config"]
+        self.assertIn("preset_hombre", cfg)
+        preset = cfg["preset_hombre"]
+        self.assertIn("id_manuales", preset)
+        self.assertIsInstance(preset["id_manuales"], list)
+        self.assertEqual(preset.get("label"), "Hombre")
+
+
+class UmDesconocidasMetaTest(SimpleTestCase):
+    def test_um_desconocidas_en_meta_extra(self):
+        report = ReportDefinition(
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category="operational",
+            version="1.0.0",
+        )
+        payload = {
+            "filters": {
+                "base_empresa": "administranet1",
+                "fecha_inicio_facturacion": "2026-07-01",
+                "fecha_fin_facturacion": "2026-07-31",
+            }
+        }
+        cursor = Mock()
+        cursor.fetchall.return_value = [
+            (
+                10,
+                "Vendedor",
+                "C1",
+                "Cliente",
+                "202607",
+                12.0,
+                1.0,
+                1000.0,
+                "XX,P1",
+            )
+        ]
+        cursor.description = [
+            ("ven",),
+            ("vend_nombre",),
+            ("codigo_cliente",),
+            ("nombre_cliente",),
+            ("anio_mes",),
+            ("packs",),
+            ("docenas",),
+            ("facturacion",),
+            ("ums_raw",),
+        ]
+        conn = Mock()
+        conn.cursor.return_value = cursor
+        pool = MagicMock()
+        pool.get_connection.return_value.__enter__.return_value = conn
+
+        with (
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.ctx_desde_runner",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.alcance_objetivos_cod_viajante",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.get_mysql_pool",
+                return_value=pool,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner._resolve_tc",
+                return_value=14.5817,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner._resolve_marcas_incluidos",
+                return_value=[],
+            ),
+        ):
+            result = run_ventas_marcas_mensual(report, payload, Mock())
+
+        ums = result.meta.get("extra", {}).get("um_desconocidas", [])
+        self.assertIn("XX", ums)
+        self.assertNotIn("P1", ums)
+        self.assertTrue(result.meta["extra"]["filas"])
+
+
+class BuildFilasMatrizCompareTest(SimpleTestCase):
+    def _row(self, ven, cli, mes, packs, fact):
+        return {
+            "ven": ven,
+            "vend_nombre": "V",
+            "codigo_cliente": cli,
+            "nombre_cliente": f"C {cli}",
+            "anio_mes": mes,
+            "packs": packs,
+            "docenas": packs / 12.0,
+            "facturacion": fact,
+        }
+
+    def test_celdas_a_b_por_mes(self):
+        rows_a = [self._row(1, "C1", "202601", 12, 100)]
+        rows_b = [self._row(1, "C1", "202601", 6, 50)]
+        filas, kpis_a, kpis_b = build_filas_matriz_compare(rows_a, rows_b, ["202601"], "packs")
+        self.assertAlmostEqual(kpis_a["facturacion"], 100)
+        self.assertAlmostEqual(kpis_b["facturacion"], 50)
+        celda = filas[0]["totales_mes"]["202601"]
+        self.assertAlmostEqual(celda["a"]["u"], 12)
+        self.assertAlmostEqual(celda["b"]["u"], 6)
+
+
+class DeltaPctFacturacionTest(SimpleTestCase):
+    def test_delta_positivo(self):
+        self.assertAlmostEqual(_delta_pct_facturacion(100, 150), 50.0)
+
+    def test_delta_base_cero(self):
+        self.assertIsNone(_delta_pct_facturacion(0, 0))
+
+
+class BuildFilasPlanasCompareExportTest(SimpleTestCase):
+    def test_columnas_a_y_b(self):
+        rows_a = [
+            {
+                "ven": 1,
+                "vend_nombre": "V",
+                "codigo_cliente": "C1",
+                "nombre_cliente": "Cliente",
+                "anio_mes": "202601",
+                "packs": 10,
+                "docenas": 1,
+                "facturacion": 100,
+            }
+        ]
+        rows_b = [
+            {
+                "ven": 1,
+                "vend_nombre": "V",
+                "codigo_cliente": "C1",
+                "nombre_cliente": "Cliente",
+                "anio_mes": "202601",
+                "packs": 5,
+                "docenas": 0.5,
+                "facturacion": 40,
+            }
+        ]
+        planas = build_filas_planas_compare_export(rows_a, rows_b, ["202601"], "packs")
+        self.assertEqual(len(planas), 1)
+        self.assertAlmostEqual(planas[0]["unidades_a"], 10)
+        self.assertAlmostEqual(planas[0]["unidades_b"], 5)
+        self.assertAlmostEqual(planas[0]["facturacion_a"], 100)
+        self.assertAlmostEqual(planas[0]["facturacion_b"], 40)
+
+
+class VentasMarcasMensualCompareRunnerTest(SimpleTestCase):
+    def test_marcas_iguales_rechazadas(self):
+        report = ReportDefinition(
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category="operational",
+            version="1.0.0",
+        )
+        payload = {
+            "filters": {
+                "base_empresa": "administranet1",
+                "fecha_inicio_facturacion": "2026-01-01",
+                "fecha_fin_facturacion": "2026-01-31",
+                "modo_comparacion": "comparar",
+                "marca_a": "PUM",
+                "marca_b": "PUM",
+            }
+        }
+        with (
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.ctx_desde_runner",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.alcance_objetivos_cod_viajante",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.get_mysql_pool",
+            ) as mock_pool,
+            patch(
+                "reports.services.ventas_marcas_mensual_runner._resolve_marca_single",
+                side_effect=[(10, "PUM"), (10, "PUM")],
+            ),
+        ):
+            cursor = Mock()
+            conn = Mock()
+            conn.cursor.return_value = cursor
+            mock_pool.return_value.get_connection.return_value.__enter__.return_value = conn
+
+            result = run_ventas_marcas_mensual(report, payload, Mock())
+
+        self.assertEqual(result.data, [])
+        self.assertIn("Las marcas A y B deben ser distintas.", result.notes)
+
+
+class VentasMarcasMensualExportDetalleTest(SimpleTestCase):
+    def test_headers_detalle(self):
+        self.assertIn("fecha", DETALLE_EXPORT_HEADERS)
+        self.assertIn("nombre_articulo", DETALLE_EXPORT_HEADERS)
+
+    def test_headers_detalle_con_proyeccion(self):
+        h = resolve_detalle_headers({"unidades_proy": 1, "facturacion_proy": 1})
+        self.assertIn("unidades_proy", h)
+
+
+class VentasMarcasMensualExportCompareHeadersTest(SimpleTestCase):
+    def setUp(self):
+        self.svc = ExportService(Mock())
+
+    def test_export_headers_modo_comparar(self):
+        r = ReportDefinition(slug="ventas-marcas-mensual", config={})
+        row = {
+            "cod_viajante": 1,
+            "nombre_vendedor": "A",
+            "codigo_cliente": "C1",
+            "nombre_cliente": "Cliente",
+            "anio_mes": "202601",
+            "unidades_a": 10,
+            "facturacion_a": 100,
+            "unidades_b": 5,
+            "facturacion_b": 40,
+        }
+        h = self.svc._resolve_export_headers(r, row)
+        self.assertEqual(
+            h,
+            [
+                "cod_viajante",
+                "nombre_vendedor",
+                "codigo_cliente",
+                "nombre_cliente",
+                "anio_mes",
+                "unidades_a",
+                "facturacion_a",
+                "unidades_b",
+                "facturacion_b",
+            ],
+        )
+
+
+class ResolveTcRunnerTest(SimpleTestCase):
+    def test_tc_manual_prevalece(self):
+        tc = _resolve_tc(None, {"tc": "1100"}, base_empresa="emp")
+        self.assertEqual(tc, 1100.0)
+
+    @patch("core.services.cotizacion_service.resolver_tc", return_value=1200.0)
+    def test_tc_vacio_delega_resolver_tc(self, mock_resolver):
+        tc = _resolve_tc(MagicMock(), {"tc": ""}, base_empresa="emp_test", fecha_corte="2026-07-15")
+        self.assertEqual(tc, 1200.0)
+        mock_resolver.assert_called_once()
+
+    @patch("core.services.cotizacion_service.resolver_tc", return_value=None)
+    def test_fallback_145817_si_resolver_none(self, _mock_resolver):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = None
+        tc = _resolve_tc(cursor, {}, base_empresa="emp_test", fecha_corte="2026-07-15")
+        self.assertAlmostEqual(tc, 14.5817, places=4)

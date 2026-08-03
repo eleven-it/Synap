@@ -137,9 +137,25 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
     def test_api_reports_query_permitido(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/api/reports/query/'))
 
+    def test_ventas_marcas_mensual_deep_link_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/reports/ventas-marcas-mensual/'))
+
+    def test_ventas_marcas_mensual_dashboard_permitido(self):
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/reports/dashboard/ventas-marcas-mensual/')
+        )
+
+    def test_api_reports_prefijo_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/api/reports/'))
+
     def test_mpr_tablero_permitido(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/mpr/'))
         self.assertTrue(mobile_path_allowed_for_level_a('/mpr/opt/list/'))
+
+    def test_contabilidad_cotizacion_permitida(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/contabilidad/cotizacion-dolar/'))
+        self.assertTrue(mobile_path_allowed_for_level_a('/contabilidad/api/cotizacion/vigente/'))
+        self.assertFalse(mobile_path_allowed_for_level_a('/contabilidad/auditoria/'))
 
     def test_ecom_pedido_simple_venta_y_hub_permitidos(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/venta/'))
@@ -276,6 +292,37 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
         resp = self.mw.process_request(req)
         self.assertIsNone(resp)
 
+    def test_movil_autenticado_ventas_marcas_mensual_deep_link_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/reports/ventas-marcas-mensual/',
+            MOBILE_UA,
+            _minimal_session_user(),
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_ventas_marcas_mensual_dashboard_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/reports/dashboard/ventas-marcas-mensual/',
+            MOBILE_UA,
+            _minimal_session_user(),
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_api_reports_query_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/api/reports/query/',
+            MOBILE_UA,
+            _minimal_session_user(),
+            accept_json=True,
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
     def test_movil_admin_siempre_403_aunque_anonimo(self):
         req = _build_request('GET', '/admin/login/', MOBILE_UA, None)
         # Sin usuario en sesión, /admin/ sigue bloqueado
@@ -344,6 +391,16 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
             MOBILE_UA,
             _minimal_session_user(),
             accept_json=True,
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_cotizacion_dolar_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/contabilidad/cotizacion-dolar/',
+            MOBILE_UA,
+            _minimal_session_user(),
         )
         resp = self.mw.process_request(req)
         self.assertIsNone(resp)

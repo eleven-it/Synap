@@ -115,6 +115,16 @@ _STOCK_CONTEO_PAGE_PATTERNS = tuple(
 
 _STOCK_CONTEO_API_PREFIX = '/stock/api/conteo/'
 
+# Contabilidad — cotización dólar (PWA Nivel A).
+_CONTABILIDAD_COTIZACION_PAGE_PATTERNS = tuple(
+    re.compile(p)
+    for p in (
+        r'^/contabilidad/cotizacion-dolar/?$',
+    )
+)
+
+_CONTABILIDAD_COTIZACION_API_PREFIX = '/contabilidad/api/cotizacion/'
+
 
 def mobile_path_es_ruta_tpv(path: str) -> bool:
     """True si la ruta es HTML o API del módulo TPV / self_checkout."""
@@ -156,6 +166,11 @@ def mobile_path_allowed_for_level_a(path: str) -> bool:
     if path.startswith(_STOCK_CONTEO_API_PREFIX):
         return True
     for rx in _STOCK_CONTEO_PAGE_PATTERNS:
+        if rx.match(path):
+            return True
+    if path.startswith(_CONTABILIDAD_COTIZACION_API_PREFIX):
+        return True
+    for rx in _CONTABILIDAD_COTIZACION_PAGE_PATTERNS:
         if rx.match(path):
             return True
     return False

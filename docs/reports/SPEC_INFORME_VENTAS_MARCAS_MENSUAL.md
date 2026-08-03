@@ -6,7 +6,7 @@ Slug canónico: **`ventas-marcas-mensual`**. Nombre en catálogo/UI: **Ventas ma
 
 Documento para implementación y pruebas. Referencias: [PLAN_INFORME_VENTAS_MARCAS_MENSUAL.md](PLAN_INFORME_VENTAS_MARCAS_MENSUAL.md), [MAPEO_PUW_PUM_ADMINISTRANET.md](MAPEO_PUW_PUM_ADMINISTRANET.md).
 
-**Estado:** Fase 1 + **Fase 2** (regalías, TC, proyección, deep-link Command Center) implementadas (29/07/2026).
+**Estado:** Fases 1–2 base (29/07/2026) + change `vmm-pwa-cotizacion-bcra` **código v1 completo** (02/08/2026): PWA Fases 1–3 (sheet filtros, KPIs, matriz, comparar, export), endurecimiento A2–A8, cableado TC A9 vía `resolver_tc`, cotización BCRA transversal. **QA operativa pendiente:** [QA_VMM_PWA_P7.md](QA_VMM_PWA_P7.md) (device) y [SMOKE_BEST_SOX_VMM.md](SMOKE_BEST_SOX_VMM.md) (SQL+UI Staging). Ver [PLAN_INFORME_VENTAS_MARCAS_MENSUAL.md](PLAN_INFORME_VENTAS_MARCAS_MENSUAL.md) §9.
 
 ---
 
@@ -26,7 +26,7 @@ Cubre la lógica de las hojas Excel PuW/PuM (plantilla BEST) leyendo **solo Admi
 | Marca | Multi-tags | `art.CodigoMarca` | `marcas_incluidos`; vacío = todas |
 | SuperArt | Multi-tags `id_manual` | `art.id_manual IN (...)` | `superarts_incluidos` o `id_manuales`; vacío = todos |
 | Unidades | Toggle packs / docenas | Solo presentación + SQL docenas | `modo_unidades`: `packs` (default) \| `docenas` |
-| Sucursal / PV | Tags (familia VPV) | `cc.CodSucursal`, `cc.id_pv` | Opcional |
+| Sucursal / PV | Tags (familia VPV) | `cc.CodSucursal`, `cc.id_pv` | Opcional; PV expuesto en UI desde change `vmm-pwa-cotizacion-bcra` Fase 1 |
 | Clientes incl/excl | Tags | `cc.Codigo` | Igual VO |
 | Vendedores incl/excl | Tags | `cc.CodViajante` | Alcance comercial del usuario |
 | **Tasa regalía (%)** | Input numérico | `tasa_regalia_pct` | Default **13** (= 13 %). Backend acepta también `tasa_regalia` = 0.13 |
@@ -163,16 +163,71 @@ Antes de ejecutar la matriz, el runner valida el alcance comercial de vendedores
 - **G9:** Dado `incluir_proyeccion=1` y `coef_proyeccion=1.07`, entonces `ceil(12 × 1.07) = 13` en unidades proy y la matriz muestra 4 subcolumnas por mes.
 - **G10:** Dado deep-link desde Command Center con `fecha_inicio`/`fecha_fin`, entonces el informe precarga el período de facturación y sucursal si viene en URL.
 - **G11:** Dado que falla la validación de alcance comercial, cuando se consulta el informe, entonces responde un resultado vacío con aviso y no se exponen ventas sin restricción.
+- **G12:** Dado export con los mismos filtros que la consulta, entonces el Excel tiene hojas «Matriz» y «Detalle» (grano renglón) coherentes con `data[]` y el SQL de detalle.
+- **G13:** Dado modo comparar PUM vs PUW en 01/01/2026–31/01/2026, entonces `meta.extra.compare` incluye KPIs por marca y delta % facturación; la matriz muestra celdas `a`/`b` por mes.
+- **G14:** Dado modo comparar con marca A = marca B, entonces la UI muestra aviso Synap y el backend responde nota en español sin HTTP 500.
+- **G15:** Dado PWA portrait en modo comparar, entonces tabs Marca A/B conmutan la vista sin nueva consulta y el delta permanece visible.
+- **G16:** Dado export en Safari iOS con descarga bloqueada, entonces `mprShowAviso` / `SynapMessages` explica cómo obtener el archivo (sin `alert` nativo).
 
 ---
 
-## 10. Rollback
+## 10. PWA Fase 1 (`vmm-pwa-cotizacion-bcra`)
+
+| Ítem | Estado |
+|------|--------|
+| Acceso Nivel A (deep-link + dashboard, sin `reports` en navbar PWA) | Hecho |
+| Sheet filtros móvil (`reports_filters_sheet.js`, opt-in `data-filters-sheet`) | Hecho |
+| Banner / toast U.M. desconocidas (`meta.extra.um_desconocidas`) | Hecho |
+| Filtro PV en UI (tags) | Hecho |
+| Preset SuperArt «Hombre» (`config.preset_hombre`, botón en filtros) | Hecho (lista `id_manuales` pendiente negocio) |
+
+Checklist QA device (P7): [QA_VMM_PWA_P7.md](QA_VMM_PWA_P7.md) — **pendiente ejecución en dispositivo**.
+
+### A9 — Cableado TC (`resolver_tc`)
+
+Desde Fase 4 (02/08/2026): con filtro TC vacío, el runner delega en `core.services.cotizacion_service.resolver_tc` (carry-forward historial → maestro → fallback 14,5817). Hint «TC vigente BCRA» en filtro cuando TC vacío (`vmm_tc_hint`).
+
+---
+
+## 10.1 PWA Fase 2 (`vmm-pwa-cotizacion-bcra`)
+
+| Ítem | Estado |
+|------|--------|
+| KPIs móvil (2 cols portrait, 5 cols landscape/desktop, sin overflow ~390px) | Hecho |
+| Matriz portrait en tarjetas Ven→Cliente con chips por mes | Hecho |
+| Matriz landscape/desktop en tabla con 1ª columna sticky + scroll horizontal | Hecho |
+| Expand/colapsar vendedor touch ≥44px | Hecho |
+| Ordenación u/f asc/desc con persistencia `localStorage` | Hecho |
+| Tests runner: `sort_filas_vendedores`, `um_desconocidas`, preset config | Hecho |
+
+### Checklist QA device (P7)
+
+Checklist canónico ampliado (filtros, KPIs, matriz, comparar, export, cotización): **[QA_VMM_PWA_P7.md](QA_VMM_PWA_P7.md)**.
+
+**Estado:** **pendiente ejecución en dispositivo** (iOS Safari + Android Chrome PWA). Regla A+P: no marcar P7 como completado hasta acta firmada en ese documento.
+
+---
+
+## 10.3 PWA Fase 3 (`vmm-pwa-cotizacion-bcra`)
+
+| Ítem | Estado |
+|------|--------|
+| Export Excel hojas «Matriz» + «Detalle» (grano renglón) | Hecho |
+| Modo comparar marcas backend (`meta.extra.compare`, celdas a/b) | Hecho |
+| UI desktop: toggle Una/Comparar, KPIs delta, matriz dual | Hecho |
+| PWA tabs Marca A/B portrait + matriz landscape | Hecho |
+| Export PWA con aviso Synap si falla descarga | Hecho |
+| Tests `-k export` y `-k comparar` | Hecho |
+
+---
+
+## 11. Rollback
 
 Eliminar `ReportDefinition`, rama en `query_runner`, runner, plantilla, JS, tests y este archivo. No requiere migración de datos de negocio.
 
 ---
 
-## 11. Relación con otros informes
+## 12. Relación con otros informes
 
 - Reutiliza parsers de período, sucursal/PV, clientes/vendedores y whitelist FA/NC de VO/VPV.
 - **No** reutiliza árbol VO (objetivo, REM, PEA, BO).

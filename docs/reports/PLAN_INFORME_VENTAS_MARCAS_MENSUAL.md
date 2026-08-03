@@ -1,6 +1,6 @@
 # Plan detallado — Informe ventas marcas mensual (PuW / PuM)
 
-**Fecha:** 29/07/2026  
+**Fecha:** 29/07/2026 · **Actualizado:** 02/08/2026  
 **Empresa piloto:** Best Sox (`administranet`)  
 **Plantilla de negocio:** Excel `Reporte Ventas Marcas con detalles Vs.xlsx` (hojas `PuW mensual Hombre`, `PuM mensual`)  
 **Fuente de datos:** solo AdministraNET. Sin históricos Excel ni paridad numérica con la planilla.
@@ -9,9 +9,21 @@
 
 - [MAPEO_PUW_PUM_ADMINISTRANET.md](MAPEO_PUW_PUM_ADMINISTRANET.md) — filtros, métricas, SQL de referencia  
 - [ANALISIS_BEST_REPORTE_VENTAS_MARCAS_VS.md](ANALISIS_BEST_REPORTE_VENTAS_MARCAS_VS.md) — ingeniería inversa  
-- [SPEC_INFORME_VENTAS_POR_VENDEDOR.md](SPEC_INFORME_VENTAS_POR_VENDEDOR.md) — patrón de clon UI/registro
+- [SPEC_INFORME_VENTAS_POR_VENDEDOR.md](SPEC_INFORME_VENTAS_POR_VENDEDOR.md) — patrón de clon UI/registro  
+- Cotización BCRA (transversal, no exclusiva del informe): [PLAN_COTIZACION_BCRA_SYNAP.md](../mpr/best/PLAN_COTIZACION_BCRA_SYNAP.md) y [COTIZACION_DOLAR_ADMINISTRANET_Y_COSTEO.md](../mpr/best/COTIZACION_DOLAR_ADMINISTRANET_Y_COSTEO.md)
 
-**Estado del plan (29/07/2026):** Fase 1 **implementada**; Fase 2 **implementada** (regalías, TC, proyección, deep-link CC). Ver [SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md](SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md).
+**Estado del plan (02/08/2026, post change `vmm-pwa-cotizacion-bcra` v1 código):**
+
+| Fase | Estado |
+|------|--------|
+| Fase 1 (MVP matriz) | **Hecha** |
+| Fase 2 (regalías, TC vía `cotizacion`, proyección, deep-link CC) | **Hecha** |
+| Fase 1.1 (endurecimiento + pendientes de UI) | **Código hecho** — QA smoke A1 pendiente |
+| Fase 3 (multi-marca / «Vs») | **Código hecho** — QA device P5/P7 pendiente |
+| **PWA / móvil (paridad 100 % con desktop)** | **Código hecho (P0–P6)** — **QA device P7 pendiente** ([QA_VMM_PWA_P7.md](QA_VMM_PWA_P7.md)) |
+| Cotización BCRA + historial | **Código v1 hecho** — ops Staging (DDL, job, API BCRA real) + QA cotización en P7 |
+
+**Decisión de producto (02/08/2026):** el informe **debe verse y usarse al 100 % en PWA y en desktop**. Ambas vistas son de primer nivel; el uso esperado es **mayor en PWA**. No es “responsive mínimo”: cada filtro, KPI, matriz, proyección, comparar marcas, export y deep-link CC deben ser operables en viewport móvil (&lt; `lg`) y landscape.
 
 ---
 
@@ -204,13 +216,18 @@ Frontend: render matriz a partir de `meses` + `filas` (sin pivotar en el browser
 
 **Criterio de done Fase 1:** usuario elige marca + fechas, ve matriz meses, totales y export coherentes con AdministraNET; sin diálogos nativos; UI en español.
 
-### Fase 1.1 — Endurecimiento (si hace falta tras smoke)
+### Fase 1.1 — Endurecimiento ✅ pedido producto 02/08/2026
 
-- Preset «Hombre» (lista `id_manual` congelada o JSON en `ReportDefinition.config`).  
-- Endpoint SuperArt con búsqueda y filtro por marca.  
-- Ordenación (por facturación total / unidades).  
-- Límite de meses (avisar si período > 24 meses).  
-- Detalle renglón en 2.ª hoja de export (opcional).
+| Ítem | Notas |
+|------|--------|
+| Smoke Best Sox vs AdministraNET | Checklist documentado + corrida en Staging/local con marca PUM/PUW |
+| Aviso UI U.M. desconocidas | Ya en `meta.extra.um_desconocidas`; falta toast/banner en `ventas_marcas_mensual.js` |
+| Filtro punto de venta en UI | Backend ya filtra `cc.id_pv`; exponer tags PV en plantilla VMM (familia BO) |
+| Preset «Hombre» | Lista `id_manual` en `ReportDefinition.config` + botón «Aplicar preset» |
+| Endpoint SuperArt + filtro por marca | Ya existe `type=superarts`; verificar/completar búsqueda y filtro por marcas seleccionadas |
+| Ordenación matriz | Por facturación total o unidades (asc/desc), control en cabecera/JS |
+| Cap 24 meses + aviso | Ya en runner; confirmar UI muestra `#vmm-aviso-meses` |
+| 2.ª hoja Excel detalle renglón | Export: hoja «Detalle» con grano stock/cuentacliente (FA/NC) mismo filtro |
 
 ### Fase 2 — KPIs licencia y planning ✅
 
@@ -219,9 +236,14 @@ Frontend: render matriz a partir de `meses` + `filas` (sin pivotar en el browser
 - [x] Proyección `CEILING(mes × coef)` en matriz y export.  
 - [x] Deep-link desde Command Center (área ventas) con período/sucursal.
 
-### Fase 3 — (opcional) Multi-marca lado a lado / «Vs»
+### Fase 3 — Multi-marca lado a lado / «Vs» ✅ pedido producto 02/08/2026
 
-Solo si negocio pide comparación explícita entre marcas o períodos.
+Comparación explícita entre **dos marcas** (o marca A vs resto) en el mismo período:
+
+- Modo UI: «Una marca / Comparar marcas».  
+- Columnas mes duplicadas o bloques lado a lado (u/f por marca) **sin** YoY de año anterior en v1 (YoY = fase 3.1 si se pide).  
+- KPIs: totales por marca + delta % facturación.  
+- Export: columnas marca o hojas por marca.
 
 ---
 
@@ -267,10 +289,71 @@ Estimación orientativa: **T1–T8 ≈ 3–5 días** de implementación enfocada
 
 ---
 
-## 8. Siguiente paso inmediato
+## 8. Siguiente paso inmediato (histórico — cerrado)
 
-1. Validar §1 y defaults de Fase 0 (2 min con producto).  
-2. Redactar `SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md` (T1) y abrir change SDD `reports-ventas-marcas-mensual` **o** implementar directo T2–T8 si se prioriza velocidad sobre OpenSpec.  
-3. Arrancar T2 + T3 en paralelo a T5 (UI shell).
+Fases 1–2 entregadas. Ver §9 para el backlog activo.
 
-**Recomendación:** tras OK verbal a este plan → SPEC corta + implementación Fase 1 sin esperar Fase 2.
+---
+
+## 9. Backlog activo (02/08/2026) — orden de entrega
+
+Tres frentes. PWA **no es opcional**: cada entrega de A debe cerrar también el criterio P (móvil + landscape). El informe **sigue usando** `cotizacion` id=1 hasta que BCRA v1 entregue “aceptar → ValorPesos”.
+
+### Frente P — PWA / móvil (paridad 100 %)
+
+Implementación v1 entregada (02/08/2026). QA device **pendiente ejecución** — [QA_VMM_PWA_P7.md](QA_VMM_PWA_P7.md).
+
+| # | Tarea | Estado código | QA |
+|---|-------|---------------|-----|
+| P0 | SPEC PWA VMM (escenarios portrait + landscape) | **Hecho** (SPEC §10–10.3) | — |
+| P1 | Acceso PWA de primer nivel | **Hecho** (deep-link/CC; ADR-2 sin `reports` en navbar PWA) | ☐ device |
+| P2 | Filtros móviles | **Hecho** (`reports_filters_sheet.js`) | ☐ device |
+| P3 | KPIs PWA | **Hecho** | ☐ device |
+| P4 | Matriz PWA | **Hecho** (tarjetas portrait + tabla landscape) | ☐ device |
+| P5 | Comparar marcas (Fase 3) en PWA | **Hecho** (tabs A/B) | ☐ device |
+| P6 | Export / compartir en PWA | **Hecho** (toast si falla descarga) | ☐ device |
+| P7 | QA device | Checklist documentado | **pendiente ejecución en dispositivo** |
+
+**Regla:** ninguna tarea A2–A9 se considera “done” sin verificación P2–P4 (o P5 si aplica comparar). Desktop no se degrada.
+
+### Frente A — Informe VMM (funcional)
+
+| # | Tarea | Dep. | Estado código | QA / ops |
+|---|-------|------|---------------|----------|
+| A1 | Smoke Best Sox + acta en docs (números vs SQL Admin) | — | Plantilla [SMOKE_BEST_SOX_VMM.md](SMOKE_BEST_SOX_VMM.md) | **pendiente corrida Staging** |
+| A2 | UI aviso `um_desconocidas` | — | **Hecho** | ☐ device |
+| A3 | Filtro PV en UI VMM | — | **Hecho** | ☐ device |
+| A4 | Preset Hombre (`config` + botón) | — | **Hecho** (lista `id_manuales` negocio abierta) | ☐ device |
+| A5 | Ordenación facturación/unidades | — | **Hecho** | ☐ device |
+| A6 | Export 2.ª hoja detalle renglón | A1 recomendable | **Hecho** | ☐ smoke A1 |
+| A7 | SPEC delta Fase 3 (comparar marcas) | — | **Hecho** (G12–G16) | — |
+| A8 | Runner + UI + export modo comparar 2 marcas | A7, P5 | **Hecho** | ☐ device + smoke |
+| A9 | Integrar TC VMM con servicio cotización Synap | B4+ | **Hecho** (`resolver_tc`, hint TC) | ☐ smoke BCRA + device |
+
+### Frente B — Cotización BCRA (plan propio)
+
+Ver [PLAN_COTIZACION_BCRA_SYNAP.md](../mpr/best/PLAN_COTIZACION_BCRA_SYNAP.md). **Código v1 implementado** (02/08/2026). Pendiente: DDL en Staging Best Sox, validar IDs variable BCRA contra API real, job `--aplicar` con política explícita, QA PWA §G en [QA_VMM_PWA_P7.md](QA_VMM_PWA_P7.md).
+
+| # | Entrega | Estado código | Ops / QA |
+|---|---------|---------------|----------|
+| B0–B1 | DDL `cotizacion_historial` + provider catálogo | **Hecho** | Ejecutar proveedor en Staging |
+| B2 | Cliente API BCRA + tipo configurable | **Hecho** | Validar respuesta real |
+| B3–B5 | Pantalla Synap + APIs + PWA Nivel A | **Hecho** | ☐ device §G |
+| B4/B7 | Servicio `resolver_tc` + job `sincronizar_cotizacion_bcra` | **Hecho** (dry-run default) | Job `--aplicar` solo con `auto_aceptar_job` |
+| B5/B7 | Cablear VMM `_resolve_tc` | **Hecho** | ☐ smoke A1 §Parte 4 |
+
+### Orden de ejecución recomendado
+
+1. **P0–P2 + A2–A4** (base usable en móvil + pendientes rápidos).  
+2. **P3–P4 + A5–A6** (matriz/KPIs PWA + export).  
+3. **A7–A8 + P5** (comparar marcas en ambas vistas).  
+4. **B0–B7 + A9** (BCRA y cableado TC).  
+5. **P7 + A1** (QA final smoke Best Sox en dispositivo real).
+
+### Fuera de este backlog (salvo pedido nuevo)
+
+- Dólar blue/MEP.  
+- Recálculo masivo `Actualiza_Costos_Dolar_Masivo` al aceptar BCRA.  
+- Paridad con Excel histórico PuW/PuM.  
+- Tipos de TC distintos por módulo (regalías ≠ costeo) — v2 del plan BCRA.  
+- ~~PWA del informe~~ → **incluido en Frente P**.

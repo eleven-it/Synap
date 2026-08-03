@@ -164,13 +164,30 @@ def _fetch_tc_mysql(cursor) -> Optional[float]:
     return None
 
 
-def _resolve_tc(cursor, filters: Dict[str, Any]) -> float:
-    """TC tipado por el usuario; si vacío, cotización MySQL id=1; fallback Excel BEST."""
+def _resolve_tc(
+    cursor,
+    filters: Dict[str, Any],
+    *,
+    base_empresa: Optional[str] = None,
+    fecha_corte: Optional[str] = None,
+) -> float:
+    """TC tipado por el usuario; si vacío, resolver_tc; fallback Excel BEST."""
     raw = filters.get("tc")
     if raw is not None and str(raw).strip() != "":
         dec = to_decimal_or_none(raw)
         if dec is not None and dec > 0:
             return float(dec)
+    be = (base_empresa or filters.get("base_empresa") or "").strip()
+    if be:
+        try:
+            from core.services.cotizacion_service import resolver_tc
+
+            corte = fecha_corte or filters.get("fecha_fin") or filters.get("ff_fac")
+            resolved = resolver_tc(be, corte, id_cotizacion=1)
+            if resolved is not None and resolved > 0:
+                return float(resolved)
+        except Exception:
+            logger.debug("resolver_tc falló; fallback maestro/fijo", exc_info=True)
     from_mysql = _fetch_tc_mysql(cursor) if cursor is not None else None
     if from_mysql is not None:
         return from_mysql
@@ -290,6 +307,21 @@ def build_filas_matriz(
     return filas, kpis
 
 
+def sort_filas_vendedores(
+    filas: List[Dict[str, Any]],
+    *,
+    campo: str = "f",
+    descendente: bool = True,
+) -> List[Dict[str, Any]]:
+    """Ordena filas vendedor por total de unidades (u) o facturación (f). Espejo del sort client-side."""
+    key = "u" if str(campo).lower() == "u" else "f"
+    return sorted(
+        filas,
+        key=lambda v: float((v.get("total") or {}).get(key) or 0),
+        reverse=descendente,
+    )
+
+
 def build_filas_planas_export(
     rows: List[Dict[str, Any]],
     meses: List[str],
@@ -333,6 +365,209 @@ def build_filas_planas_export(
         )
     )
     return planas
+
+
+def aplicar_proyeccion_filas_compare(filas: List[Dict[str, Any]], coef: float) -> List[Dict[str, Any]]:
+    """Proyección pu/pf en matriz comparativa (celdas a/b)."""
+    for vend in filas:
+        for side in ("a", "b"):
+            for celda in (vend.get("totales_mes") or {}).values():
+                if side in celda:
+                    _proyectar_celda(celda[side], coef)
+            if vend.get("total") and side in vend["total"]:
+                _proyectar_celda(vend["total"][side], coef)
+        for cli in vend.get("clientes") or []:
+            for celda in (cli.get("valores_mes") or {}).values():
+                for side in ("a", "b"):
+                    if side in celda:
+                        _proyectar_celda(celda[side], coef)
+            if cli.get("total"):
+                for side in ("a", "b"):
+                    if side in cli["total"]:
+                        _proyectar_celda(cli["total"][side], coef)
+    return filas
+
+
+def _parse_modo_comparacion(filters: Dict[str, Any]) -> str:
+    raw = str_or_default(filters.get("modo_comparacion"), "una").strip().lower()
+    return "comparar" if raw == "comparar" else "una"
+
+
+def _resolve_marca_single(cursor, raw: Any) -> Tuple[Optional[int], str]:
+    """Resuelve una marca (CodMarca o NombreMarca) a (cod, nombre)."""
+    if raw is None:
+        return None, ""
+    if isinstance(raw, list):
+        if not raw:
+            return None, ""
+        raw = raw[0]
+    s = str_or_default(raw, "").strip()
+    if not s:
+        return None, ""
+    codigos = _resolve_marcas_incluidos(cursor, [raw])
+    if not codigos:
+        return None, s
+    cod = int(codigos[0])
+    nombre = s
+    try:
+        cursor.execute(
+            """
+            SELECT NombreMarca FROM marca
+            WHERE CodMarca = %s AND (anulado IS NULL OR anulado = 'No')
+            LIMIT 1
+            """,
+            [cod],
+        )
+        row = cursor.fetchone()
+        if row and row[0]:
+            nombre = str_or_default(row[0], "").strip() or s
+    except Exception:
+        pass
+    return cod, nombre
+
+
+def _delta_pct_facturacion(fact_a: float, fact_b: float) -> Optional[float]:
+    if abs(fact_a) < 1e-9:
+        return None if abs(fact_b) < 1e-9 else 100.0
+    return round((fact_b - fact_a) / fact_a * 100.0, 2)
+
+
+def build_filas_matriz_compare(
+    rows_a: List[Dict[str, Any]],
+    rows_b: List[Dict[str, Any]],
+    meses: List[str],
+    modo_unidades: str,
+) -> Tuple[List[Dict[str, Any]], Dict[str, float], Dict[str, float]]:
+    """Matriz comparativa: celdas por mes con claves a/b."""
+    filas_a, kpis_a = build_filas_matriz(rows_a, meses, modo_unidades)
+    filas_b, kpis_b = build_filas_matriz(rows_b, meses, modo_unidades)
+    map_a = {int(v.get("cod") or 0): v for v in filas_a}
+    map_b = {int(v.get("cod") or 0): v for v in filas_b}
+    all_vends = sorted(set(map_a.keys()) | set(map_b.keys()))
+
+    def _side_cell(vend_map: Dict[int, Dict], vend: int, mes: str, cli_cod: Optional[str] = None) -> Dict[str, float]:
+        vend_row = vend_map.get(vend)
+        if not vend_row:
+            return _celda_vacia()
+        if cli_cod is None:
+            return dict((vend_row.get("totales_mes") or {}).get(mes) or _celda_vacia())
+        for cli in vend_row.get("clientes") or []:
+            if str(cli.get("cod")) == str(cli_cod):
+                return dict((cli.get("valores_mes") or {}).get(mes) or _celda_vacia())
+        return _celda_vacia()
+
+    filas: List[Dict[str, Any]] = []
+    for ven in all_vends:
+        va = map_a.get(ven)
+        vb = map_b.get(ven)
+        nombre = (va or vb or {}).get("nombre") or f"Vendedor {ven}"
+        clientes_a = {str(c.get("cod")): c for c in (va or {}).get("clientes") or []}
+        clientes_b = {str(c.get("cod")): c for c in (vb or {}).get("clientes") or []}
+        all_cli = sorted(set(clientes_a.keys()) | set(clientes_b.keys()), key=lambda c: (
+            (clientes_a.get(c) or clientes_b.get(c) or {}).get("nombre", c).lower(),
+            c,
+        ))
+
+        totales_mes: Dict[str, Dict[str, Dict[str, float]]] = {}
+        for mes in meses:
+            totales_mes[mes] = {
+                "a": _side_cell(map_a, ven, mes),
+                "b": _side_cell(map_b, ven, mes),
+            }
+        total_a = (va or {}).get("total") or _celda_vacia()
+        total_b = (vb or {}).get("total") or _celda_vacia()
+
+        clientes_out = []
+        for cod_cli in all_cli:
+            ca = clientes_a.get(cod_cli) or {}
+            cb = clientes_b.get(cod_cli) or {}
+            valores_mes: Dict[str, Dict[str, Dict[str, float]]] = {}
+            for mes in meses:
+                valores_mes[mes] = {
+                    "a": _side_cell(map_a, ven, mes, cod_cli),
+                    "b": _side_cell(map_b, ven, mes, cod_cli),
+                }
+            clientes_out.append(
+                {
+                    "cod": cod_cli,
+                    "nombre": ca.get("nombre") or cb.get("nombre") or f"Cliente {cod_cli}",
+                    "valores_mes": valores_mes,
+                    "total": {"a": ca.get("total") or _celda_vacia(), "b": cb.get("total") or _celda_vacia()},
+                }
+            )
+
+        filas.append(
+            {
+                "tipo": "vendedor",
+                "cod": ven,
+                "nombre": nombre,
+                "totales_mes": totales_mes,
+                "total": {"a": total_a, "b": total_b},
+                "clientes": clientes_out,
+                "compare": True,
+            }
+        )
+
+    return filas, kpis_a, kpis_b
+
+
+def build_filas_planas_compare_export(
+    rows_a: List[Dict[str, Any]],
+    rows_b: List[Dict[str, Any]],
+    meses: List[str],
+    modo_unidades: str,
+    coef_proyeccion: Optional[float] = None,
+) -> List[Dict[str, Any]]:
+    """Filas planas Ven×Cliente×Mes con columnas u/f por marca A y B."""
+    planas_a = build_filas_planas_export(rows_a, meses, modo_unidades, coef_proyeccion)
+    planas_b = build_filas_planas_export(rows_b, meses, modo_unidades, coef_proyeccion)
+    key_index: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+
+    def _merge_side(planas: List[Dict[str, Any]], side: str) -> None:
+        for row in planas:
+            key = (
+                int(row.get("cod_viajante") or 0),
+                str(row.get("codigo_cliente") or ""),
+                str(row.get("anio_mes") or ""),
+            )
+            if key not in key_index:
+                key_index[key] = {
+                    "cod_viajante": key[0],
+                    "nombre_vendedor": row.get("nombre_vendedor") or "",
+                    "codigo_cliente": key[1],
+                    "nombre_cliente": row.get("nombre_cliente") or "",
+                    "anio_mes": key[2],
+                    "unidades_a": 0.0,
+                    "facturacion_a": 0.0,
+                    "unidades_b": 0.0,
+                    "facturacion_b": 0.0,
+                }
+            dest = key_index[key]
+            if side == "a":
+                dest["unidades_a"] = float(row.get("unidades") or 0)
+                dest["facturacion_a"] = float(row.get("facturacion") or 0)
+                if "unidades_proy" in row:
+                    dest["unidades_proy_a"] = row.get("unidades_proy")
+                    dest["facturacion_proy_a"] = row.get("facturacion_proy")
+            else:
+                dest["unidades_b"] = float(row.get("unidades") or 0)
+                dest["facturacion_b"] = float(row.get("facturacion") or 0)
+                if "unidades_proy" in row:
+                    dest["unidades_proy_b"] = row.get("unidades_proy")
+                    dest["facturacion_proy_b"] = row.get("facturacion_proy")
+
+    _merge_side(planas_a, "a")
+    _merge_side(planas_b, "b")
+    out = list(key_index.values())
+    out.sort(
+        key=lambda r: (
+            int(r.get("cod_viajante") or 0),
+            str(r.get("nombre_vendedor") or "").lower(),
+            str(r.get("codigo_cliente") or "").lower(),
+            str(r.get("anio_mes") or ""),
+        )
+    )
+    return out
 
 
 def _resolve_marcas_incluidos(cursor, raw: Any) -> List[int]:
@@ -415,6 +650,10 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
     superarts = _parse_str_list(filters.get("superarts_incluidos"))
     if not superarts:
         superarts = _parse_str_list(filters.get("id_manuales"))
+
+    modo_comparacion = _parse_modo_comparacion(filters)
+    marca_a_raw = filters.get("marca_a")
+    marca_b_raw = filters.get("marca_b")
 
     alcance_ctx = ctx_desde_runner(user, str(base_empresa), filters)
     try:
@@ -532,6 +771,9 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
         where_parts.append(alcance_sql.lstrip(" AND "))
         params.extend(alcance_params)
 
+    where_parts_base = list(where_parts)
+    params_base = list(params)
+
     sql_rows: List[Dict[str, Any]] = []
     marcas_incluidos: List[int] = []
     aviso_meses: Optional[str] = None
@@ -540,6 +782,9 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
     tasa_regalia = _parse_tasa_regalia(filters)
     incluir_proyeccion = _parse_incluir_proyeccion(filters)
     coef_proyeccion = _parse_coef_proyeccion(filters)
+    compare_meta: Optional[Dict[str, Any]] = None
+    export_detalle = bool(payload.get("_export_detalle"))
+    detalle_rows: Optional[List[Dict[str, Any]]] = None
 
     try:
         pool = get_mysql_pool()
@@ -550,51 +795,137 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
             except Exception:
                 pass
 
-            tc_efectivo = _resolve_tc(cursor, filters)
+            tc_efectivo = _resolve_tc(cursor, filters, base_empresa=str(base_empresa).strip(), fecha_corte=ff_sql)
 
-            marcas_incluidos = _resolve_marcas_incluidos(cursor, raw_marcas)
-            cat_sql, cat_params = _vo_sql_filtros_articulo(
-                "art",
-                marcas_incluidos=marcas_incluidos,
-            )
-            if superarts:
-                ph_sa = ",".join(["%s"] * len(superarts))
-                cat_sql += f" AND art.id_manual IN ({ph_sa})"
-                cat_params = list(cat_params) + superarts
+            if modo_comparacion == "comparar":
+                cod_a, nom_a = _resolve_marca_single(cursor, marca_a_raw)
+                cod_b, nom_b = _resolve_marca_single(cursor, marca_b_raw)
+                if cod_a is None or cod_b is None:
+                    return QueryResult(
+                        meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version},
+                        data=[],
+                        totals={},
+                        notes=["En modo comparar debe seleccionar marca A y marca B."],
+                    )
+                if cod_a == cod_b:
+                    return QueryResult(
+                        meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version},
+                        data=[],
+                        totals={},
+                        notes=["Las marcas A y B deben ser distintas."],
+                    )
+                marcas_incluidos = [cod_a, cod_b]
 
-            where_s = " AND ".join(where_parts) + cat_sql
+                def _run_for_marca(cod_marca: int) -> List[Dict[str, Any]]:
+                    cat_sql, cat_params = _vo_sql_filtros_articulo("art", marcas_incluidos=[cod_marca])
+                    if superarts:
+                        ph_sa = ",".join(["%s"] * len(superarts))
+                        cat_sql += f" AND art.id_manual IN ({ph_sa})"
+                        cat_params = list(cat_params) + superarts
+                    where_s = " AND ".join(where_parts) + cat_sql
+                    sql = f"""
+                        SELECT
+                            cc.CodViajante AS ven,
+                            COALESCE(v.Nombre, '') AS vend_nombre,
+                            cc.Codigo AS codigo_cliente,
+                            COALESCE(cl.nombre_cliente, '') AS nombre_cliente,
+                            DATE_FORMAT(cc.Fecha, '%Y%m') AS anio_mes,
+                            SUM({signo_qty}) AS packs,
+                            SUM({signo_qty} / {factor_sql}) AS docenas,
+                            SUM({signo_imp}) AS facturacion,
+                            GROUP_CONCAT(DISTINCT COALESCE(st.nombre_unimed_vta, um.nombre_unimed, '') SEPARATOR ',') AS ums_raw
+                        FROM stock st
+                        INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+                        INNER JOIN cliente cl ON cl.Codigo = cc.Codigo
+                        LEFT JOIN articulo art ON art.IDArt = st.IDArt
+                        LEFT JOIN unidmed um ON um.id_unimed = art.id_unimed
+                        LEFT JOIN viajantes v ON v.CodViajante = cc.CodViajante
+                        WHERE {where_s}
+                        GROUP BY cc.CodViajante, v.Nombre, cc.Codigo, cl.nombre_cliente, DATE_FORMAT(cc.Fecha, '%Y%m')
+                        HAVING ABS(packs) > 0.00001 OR ABS(facturacion) > 0.01
+                    """
+                    cursor.execute(sql, params + cat_params)
+                    cols = [d[0] for d in cursor.description]
+                    rows_m: List[Dict[str, Any]] = []
+                    for r in cursor.fetchall():
+                        row = dict(zip(cols, r))
+                        ums_raw = str_or_default(row.pop("ums_raw", ""), "")
+                        for um_token in ums_raw.split(","):
+                            um_t = um_token.strip().upper()
+                            if um_t and um_t not in _FACTOR_DOCENAS_MAP:
+                                um_desconocidas.add(um_t)
+                        rows_m.append(row)
+                    return rows_m
 
-            sql = f"""
-                SELECT
-                    cc.CodViajante AS ven,
-                    COALESCE(v.Nombre, '') AS vend_nombre,
-                    cc.Codigo AS codigo_cliente,
-                    COALESCE(cl.nombre_cliente, '') AS nombre_cliente,
-                    DATE_FORMAT(cc.Fecha, '%Y%m') AS anio_mes,
-                    SUM({signo_qty}) AS packs,
-                    SUM({signo_qty} / {factor_sql}) AS docenas,
-                    SUM({signo_imp}) AS facturacion,
-                    GROUP_CONCAT(DISTINCT COALESCE(st.nombre_unimed_vta, um.nombre_unimed, '') SEPARATOR ',') AS ums_raw
-                FROM stock st
-                INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
-                INNER JOIN cliente cl ON cl.Codigo = cc.Codigo
-                LEFT JOIN articulo art ON art.IDArt = st.IDArt
-                LEFT JOIN unidmed um ON um.id_unimed = art.id_unimed
-                LEFT JOIN viajantes v ON v.CodViajante = cc.CodViajante
-                WHERE {where_s}
-                GROUP BY cc.CodViajante, v.Nombre, cc.Codigo, cl.nombre_cliente, DATE_FORMAT(cc.Fecha, '%Y%m')
-                HAVING ABS(packs) > 0.00001 OR ABS(facturacion) > 0.01
-            """
-            cursor.execute(sql, params + cat_params)
-            cols = [d[0] for d in cursor.description]
-            for r in cursor.fetchall():
-                row = dict(zip(cols, r))
-                ums_raw = str_or_default(row.pop("ums_raw", ""), "")
-                for um_token in ums_raw.split(","):
-                    um_t = um_token.strip().upper()
-                    if um_t and um_t not in _FACTOR_DOCENAS_MAP:
-                        um_desconocidas.add(um_t)
-                sql_rows.append(row)
+                sql_rows_a = _run_for_marca(cod_a)
+                sql_rows_b = _run_for_marca(cod_b)
+                sql_rows = sql_rows_a + sql_rows_b
+                compare_meta = {
+                    "cod_a": cod_a,
+                    "nom_a": nom_a,
+                    "cod_b": cod_b,
+                    "nom_b": nom_b,
+                    "rows_a": sql_rows_a,
+                    "rows_b": sql_rows_b,
+                }
+            else:
+                compare_meta = None
+                marcas_incluidos = _resolve_marcas_incluidos(cursor, raw_marcas)
+                cat_sql, cat_params = _vo_sql_filtros_articulo(
+                    "art",
+                    marcas_incluidos=marcas_incluidos,
+                )
+                if superarts:
+                    ph_sa = ",".join(["%s"] * len(superarts))
+                    cat_sql += f" AND art.id_manual IN ({ph_sa})"
+                    cat_params = list(cat_params) + superarts
+
+                where_s = " AND ".join(where_parts) + cat_sql
+
+                sql = f"""
+                    SELECT
+                        cc.CodViajante AS ven,
+                        COALESCE(v.Nombre, '') AS vend_nombre,
+                        cc.Codigo AS codigo_cliente,
+                        COALESCE(cl.nombre_cliente, '') AS nombre_cliente,
+                        DATE_FORMAT(cc.Fecha, '%Y%m') AS anio_mes,
+                        SUM({signo_qty}) AS packs,
+                        SUM({signo_qty} / {factor_sql}) AS docenas,
+                        SUM({signo_imp}) AS facturacion,
+                        GROUP_CONCAT(DISTINCT COALESCE(st.nombre_unimed_vta, um.nombre_unimed, '') SEPARATOR ',') AS ums_raw
+                    FROM stock st
+                    INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+                    INNER JOIN cliente cl ON cl.Codigo = cc.Codigo
+                    LEFT JOIN articulo art ON art.IDArt = st.IDArt
+                    LEFT JOIN unidmed um ON um.id_unimed = art.id_unimed
+                    LEFT JOIN viajantes v ON v.CodViajante = cc.CodViajante
+                    WHERE {where_s}
+                    GROUP BY cc.CodViajante, v.Nombre, cc.Codigo, cl.nombre_cliente, DATE_FORMAT(cc.Fecha, '%Y%m')
+                    HAVING ABS(packs) > 0.00001 OR ABS(facturacion) > 0.01
+                """
+                cursor.execute(sql, params + cat_params)
+                cols = [d[0] for d in cursor.description]
+                for r in cursor.fetchall():
+                    row = dict(zip(cols, r))
+                    ums_raw = str_or_default(row.pop("ums_raw", ""), "")
+                    for um_token in ums_raw.split(","):
+                        um_t = um_token.strip().upper()
+                        if um_t and um_t not in _FACTOR_DOCENAS_MAP:
+                            um_desconocidas.add(um_t)
+                    sql_rows.append(row)
+
+            if export_detalle:
+                from reports.services.ventas_marcas_mensual_export import fetch_detalle_for_filters
+
+                where_s_det = " AND ".join(where_parts_base)
+                detalle_rows = fetch_detalle_for_filters(
+                    cursor,
+                    filters,
+                    where_s=where_s_det,
+                    params=list(params_base),
+                    raw_marcas=raw_marcas,
+                    superarts=superarts,
+                )
 
     except Exception as ex:
         logger.exception("ventas_marcas_mensual: error SQL")
@@ -613,14 +944,52 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
             f"El período incluye {len(meses_all)} meses; se muestran los {_MAX_MESES} más recientes."
         )
 
-    filas, kpis_base = build_filas_matriz(sql_rows, meses, modo_unidades)
-    kpis = _compute_kpis_licencia(kpis_base, tasa_regalia, tc_efectivo)
+    filas: List[Dict[str, Any]]
+    kpis: Dict[str, float]
+    planas: List[Dict[str, Any]]
 
-    coef_proy_activo = coef_proyeccion if incluir_proyeccion else None
-    if incluir_proyeccion:
-        aplicar_proyeccion_filas(filas, coef_proyeccion)
-
-    planas = build_filas_planas_export(sql_rows, meses, modo_unidades, coef_proy_activo)
+    if compare_meta:
+        filas, kpis_a, kpis_b = build_filas_matriz_compare(
+            compare_meta["rows_a"],
+            compare_meta["rows_b"],
+            meses,
+            modo_unidades,
+        )
+        kpis_a_full = _compute_kpis_licencia(kpis_a, tasa_regalia, tc_efectivo)
+        kpis_b_full = _compute_kpis_licencia(kpis_b, tasa_regalia, tc_efectivo)
+        delta_pct = _delta_pct_facturacion(
+            float(kpis_a_full.get("facturacion") or 0),
+            float(kpis_b_full.get("facturacion") or 0),
+        )
+        kpis = {
+            "unidades": float(kpis_a_full.get("unidades") or 0) + float(kpis_b_full.get("unidades") or 0),
+            "facturacion": float(kpis_a_full.get("facturacion") or 0) + float(kpis_b_full.get("facturacion") or 0),
+            "precio_medio": 0.0,
+            "regalias": float(kpis_a_full.get("regalias") or 0) + float(kpis_b_full.get("regalias") or 0),
+            "regalias_tc": float(kpis_a_full.get("regalias_tc") or 0) + float(kpis_b_full.get("regalias_tc") or 0),
+            "tasa_regalia": tasa_regalia,
+            "tc": tc_efectivo,
+        }
+        u_tot = float(kpis.get("unidades") or 0)
+        if abs(u_tot) > 1e-9:
+            kpis["precio_medio"] = float(kpis.get("facturacion") or 0) / u_tot
+        coef_proy_activo = coef_proyeccion if incluir_proyeccion else None
+        if incluir_proyeccion:
+            aplicar_proyeccion_filas_compare(filas, coef_proyeccion)
+        planas = build_filas_planas_compare_export(
+            compare_meta["rows_a"],
+            compare_meta["rows_b"],
+            meses,
+            modo_unidades,
+            coef_proy_activo,
+        )
+    else:
+        filas, kpis_base = build_filas_matriz(sql_rows, meses, modo_unidades)
+        kpis = _compute_kpis_licencia(kpis_base, tasa_regalia, tc_efectivo)
+        coef_proy_activo = coef_proyeccion if incluir_proyeccion else None
+        if incluir_proyeccion:
+            aplicar_proyeccion_filas(filas, coef_proyeccion)
+        planas = build_filas_planas_export(sql_rows, meses, modo_unidades, coef_proy_activo)
 
     extra: Dict[str, Any] = {
         "modo_unidades": modo_unidades,
@@ -634,6 +1003,26 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
         extra["aviso_meses"] = aviso_meses
     if um_desconocidas:
         extra["um_desconocidas"] = sorted(um_desconocidas)
+    if compare_meta:
+        extra["compare"] = {
+            "activo": True,
+            "marca_a": {
+                "cod": compare_meta["cod_a"],
+                "nombre": compare_meta["nom_a"],
+                "kpis": kpis_a_full,
+            },
+            "marca_b": {
+                "cod": compare_meta["cod_b"],
+                "nombre": compare_meta["nom_b"],
+                "kpis": kpis_b_full,
+            },
+            "delta_pct_facturacion": delta_pct,
+        }
+        extra["modo_comparacion"] = "comparar"
+    else:
+        extra["modo_comparacion"] = "una"
+    if detalle_rows is not None:
+        extra["detalle_rows"] = detalle_rows
 
     filters_applied = {
         "fecha_inicio_facturacion": fi_sql,
@@ -653,6 +1042,9 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
         "tc": tc_efectivo,
         "incluir_proyeccion": incluir_proyeccion,
         "coef_proyeccion": coef_proyeccion if incluir_proyeccion else None,
+        "modo_comparacion": modo_comparacion,
+        "marca_a": compare_meta["cod_a"] if compare_meta else None,
+        "marca_b": compare_meta["cod_b"] if compare_meta else None,
     }
 
     return QueryResult(

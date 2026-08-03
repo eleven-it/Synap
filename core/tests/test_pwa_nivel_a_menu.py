@@ -7,6 +7,8 @@ from core.middleware.base_middleware import DeviceDetectionMiddleware
 from ecom.menu_config import MENU_CONFIG
 
 from core.pwa_nivel_a import (
+    PWA_CONTABILIDAD_DEEP_LINKS,
+    PWA_CONTABILIDAD_MENU_ITEM_IDS,
     PWA_ECOM_DEEP_LINKS,
     PWA_ECOM_MENU_ITEM_IDS,
     PWA_MENU_APP_IDS,
@@ -14,6 +16,7 @@ from core.pwa_nivel_a import (
     PWA_MPR_MENU_ITEM_IDS,
     ecom_visible_en_movil,
     filtrar_apps_menu_para_pwa_movil,
+    filtrar_submenus_contabilidad_para_pwa_movil,
     filtrar_submenus_ecom_para_pwa_movil,
     filtrar_submenus_mpr_para_pwa_movil,
     mpr_visible_en_movil,
@@ -197,9 +200,28 @@ class SidebarPwaTests(SimpleTestCase):
         self.assertIn('self_checkout', PWA_MENU_APP_IDS)
         self.assertIn('ecom', PWA_MENU_APP_IDS)
         self.assertIn('mpr', PWA_MENU_APP_IDS)
+        self.assertIn('contabilidad', PWA_MENU_APP_IDS)
+        # ADR-2: reports NO entra al navbar PWA; acceso vía Command Center / deep-link allowlist.
+        self.assertNotIn('reports', PWA_MENU_APP_IDS)
         self.assertEqual(PWA_MPR_MENU_ITEM_IDS, frozenset({'mpr_prod_kpis', 'mpr_prod_inventario'}))
+        self.assertEqual(PWA_CONTABILIDAD_MENU_ITEM_IDS, frozenset({'contabilidad_cotizacion_dolar'}))
+        self.assertIn('/contabilidad/cotizacion-dolar/', PWA_CONTABILIDAD_DEEP_LINKS)
         self.assertIn('/mpr/', PWA_MPR_DEEP_LINKS)
         self.assertIn('/mpr/inventario/', PWA_MPR_DEEP_LINKS)
+
+    def test_filtrar_submenus_contabilidad_solo_cotizacion(self):
+        submenus = [
+            {
+                'seccion': 'Auditoría',
+                'items': [
+                    {'menu_item_id': 'contabilidad_auditoria_tablero', 'label': 'Tablero'},
+                    {'menu_item_id': 'contabilidad_cotizacion_dolar', 'label': 'Cotización'},
+                ],
+            },
+        ]
+        out = filtrar_submenus_contabilidad_para_pwa_movil(submenus)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['items'][0]['menu_item_id'], 'contabilidad_cotizacion_dolar')
 
     def test_ecom_compra_deep_link_masivo_simple(self):
         items = [

@@ -117,7 +117,10 @@ class ExportService:
         
         # Ejecutar la consulta para obtener los datos
         query_service = QueryRunnerService(self.user)
-        query_result = query_service.run(report, payload)
+        run_payload = dict(payload)
+        if report_slug == "ventas-marcas-mensual":
+            run_payload["_export_detalle"] = True
+        query_result = query_service.run(report, run_payload)
         
         # Generar el archivo Excel
         export_dir = Path(settings.MEDIA_ROOT) / "reports" / "exports"
@@ -323,6 +326,23 @@ class ExportService:
             return [h for h in preferred if h in available]
 
         if slug == "ventas-marcas-mensual":
+            if "unidades_a" in available:
+                preferred = [
+                    "cod_viajante",
+                    "nombre_vendedor",
+                    "codigo_cliente",
+                    "nombre_cliente",
+                    "anio_mes",
+                    "unidades_a",
+                    "facturacion_a",
+                    "unidades_b",
+                    "facturacion_b",
+                ]
+                if "unidades_proy_a" in available:
+                    preferred.extend(
+                        ["unidades_proy_a", "facturacion_proy_a", "unidades_proy_b", "facturacion_proy_b"]
+                    )
+                return [h for h in preferred if h in available]
             preferred = [
                 "cod_viajante",
                 "nombre_vendedor",
@@ -428,6 +448,9 @@ class ExportService:
         """
         if report.slug == "documento-presupuesto-ventas":
             self._generate_excel_documento_presupuesto_ventas(file_path, report, query_result, payload)
+            return
+        if report.slug == "ventas-marcas-mensual":
+            self._generate_excel_ventas_marcas_mensual(file_path, report, query_result, payload)
             return
         if report.slug == "bo-stock-facturacion":
             self._generate_excel_bo(file_path, report, query_result, payload)
@@ -991,6 +1014,163 @@ class ExportService:
         # 5. Guardar archivo
         wb.save(file_path)
         logger.info(f"✅ Archivo Excel generado: {file_path}")
+
+    def _generate_excel_ventas_marcas_mensual(
+        self, file_path: Path, report: ReportDefinition, query_result, payload: Dict
+    ):
+        """Excel dual hoja Matriz + Detalle para ventas-marcas-mensual."""
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        from reports.services.ventas_marcas_mensual_export import resolve_detalle_headers
+
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        title_font = Font(bold=True, size=14, color="1E40AF")
+        filter_label_font = Font(bold=True, size=10)
+        filter_value_font = Font(size=10)
+        border = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
+
+        payload = payload if isinstance(payload, dict) else {}
+        base_empresa = payload.get("base_empresa") or (payload.get("filters") or {}).get("base_empresa")
+        filter_lines = build_export_filter_lines(
+            report.slug,
+            payload,
+            (query_result.meta or {}).get("filters_applied"),
+            base_empresa,
+        )
+
+        extra = (query_result.meta or {}).get("extra") or {}
+        detalle_data = extra.get("detalle_rows") or []
+        matriz_data = query_result.data or []
+
+        wb = openpyxl.Workbook()
+        sheets = [
+            ("Matriz", matriz_data),
+            ("Detalle", detalle_data),
+        ]
+
+        currency_headers = {"facturacion", "facturacion_a", "facturacion_b", "facturacion_proy", "facturacion_proy_a", "facturacion_proy_b"}
+        modo = str((payload.get("filters") or {}).get("modo_unidades") or "packs").lower()
+        unidad_label = "DOCENAS" if modo == "docenas" else "UNIDADES"
+
+        header_translations = {
+            "cod_viajante": "Cód. vendedor",
+            "nombre_vendedor": "Vendedor",
+            "codigo_cliente": "Cód. cliente",
+            "nombre_cliente": "Cliente",
+            "anio_mes": "AñoMes",
+            "unidades": unidad_label,
+            "facturacion": "Facturación",
+            "unidades_a": f"{unidad_label} A",
+            "facturacion_a": "Facturación A",
+            "unidades_b": f"{unidad_label} B",
+            "facturacion_b": "Facturación B",
+            "unidades_proy": f"{unidad_label} proy",
+            "facturacion_proy": "Facturación proy",
+            "fecha": "Fecha",
+            "tipo_comprobante": "Tipo",
+            "nro_comprobante": "N° comprobante",
+            "id_manual": "SuperArt",
+            "nombre_articulo": "Artículo",
+            "nombre_marca": "Marca",
+        }
+
+        first = True
+        for sheet_title, data in sheets:
+            if first:
+                ws = wb.active
+                first = False
+            else:
+                ws = wb.create_sheet()
+            ws.title = sheet_title[:31]
+
+            row = 1
+            ws.merge_cells(f"A{row}:D{row}")
+            cell = ws[f"A{row}"]
+            cell.value = f"{report.name} — {sheet_title}"
+            cell.font = title_font
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+            row += 1
+            row = self._append_excel_filter_block(
+                ws, row, filter_lines, filter_label_font, filter_value_font
+            )
+            if query_result.notes:
+                for note_line in query_result.notes[:2]:
+                    if not note_line:
+                        continue
+                    ws.merge_cells(f"A{row}:D{row}")
+                    c = ws[f"A{row}"]
+                    c.value = note_line
+                    c.font = Font(size=10, italic=True)
+                    row += 1
+            row += 1
+
+            if not data:
+                ws.cell(row=row, column=1, value="Sin datos")
+                continue
+
+            if sheet_title == "Detalle":
+                headers = resolve_detalle_headers(data[0])
+            else:
+                headers = self._resolve_export_headers(report, data[0])
+
+            translated = [str(header_translations.get(h, h.replace("_", " ").title())).upper() for h in headers]
+            ws.append(translated)
+            for col_num in range(1, len(translated) + 1):
+                c = ws.cell(row=row, column=col_num)
+                c.fill = header_fill
+                c.font = header_font
+                c.alignment = Alignment(horizontal="center", vertical="center")
+                c.border = border
+            row += 1
+
+            for data_row in data:
+                vals = []
+                for h in headers:
+                    val = data_row.get(h, "")
+                    if h in currency_headers:
+                        try:
+                            vals.append(float(val) if val not in ("", None) else "")
+                        except (TypeError, ValueError):
+                            vals.append("")
+                    elif h == "unidades" or h.startswith("unidades"):
+                        try:
+                            vals.append(float(val) if val not in ("", None) else 0.0)
+                        except (TypeError, ValueError):
+                            vals.append(0.0)
+                    else:
+                        vals.append(val)
+                ws.append(vals)
+                for col_num, (h, val) in enumerate(zip(headers, vals), 1):
+                    c = ws.cell(row=row, column=col_num)
+                    c.border = border
+                    if h in currency_headers and isinstance(val, (int, float)):
+                        c.number_format = '"$"#,##0.00'
+                        c.alignment = Alignment(horizontal="right", vertical="center")
+                    elif (h == "unidades" or h.startswith("unidades")) and isinstance(val, (int, float)):
+                        c.number_format = "#,##0.00"
+                        c.alignment = Alignment(horizontal="right", vertical="center")
+                    else:
+                        c.alignment = Alignment(horizontal="left", vertical="center")
+                row += 1
+
+            for col_num in range(1, ws.max_column + 1):
+                col_letter = get_column_letter(col_num)
+                max_len = 0
+                for c in ws[col_letter]:
+                    if c.value is not None:
+                        max_len = max(max_len, len(str(c.value)))
+                ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
+
+        wb.save(file_path)
+        logger.info("Excel ventas-marcas-mensual (Matriz + Detalle): %s", file_path)
 
     def _generate_excel_bo(
         self, file_path: Path, report: ReportDefinition, query_result, payload: Optional[Dict] = None

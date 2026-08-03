@@ -595,6 +595,13 @@ APPS_MENU = [
                         "permission": "contabilidad.auditoria.leer",
                         "menu_item_id": "contabilidad_manual_usuario",
                     },
+                    {
+                        "label": _("Cotización dólar"),
+                        "url": "contabilidad_audit:cotizacion_dolar",
+                        "icon": "currency_exchange",
+                        "permission": "contabilidad.cotizacion.ver",
+                        "menu_item_id": "contabilidad_cotizacion_dolar",
+                    },
                 ],
             }
         ],

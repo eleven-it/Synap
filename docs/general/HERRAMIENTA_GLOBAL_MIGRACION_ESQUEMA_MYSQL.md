@@ -11,7 +11,7 @@
 
 | Origen | Mecanismo | Ejemplo |
 |--------|-----------|---------|
-| Catálogo único | `core/services/legacy_mysql_schema/catalog.py` + `PROVIDER_REGISTRY` | Tienda Nube, MPR (depósito, **tablas core `mpr_*`**), Self-checkout tablas MySQL, objetivos ventas, asignación vendedores |
+| Catálogo único | `core/services/legacy_mysql_schema/catalog.py` + `PROVIDER_REGISTRY` | Tienda Nube, MPR (depósito, **tablas core `mpr_*`**), Self-checkout tablas MySQL, objetivos ventas, asignación vendedores, **cotización historial (`cotizacion_historial`)** |
 | `core` | Comandos `manage.py` (`apply_schema_mpr`, `apply_mpr_core_tables`, `apply_mpr_maquina_linea`, …) delegan en el catálogo | Misma lógica que la herramienta web |
 | `tiendanube_administranet` | `AdministraNETService.verify_and_migrate_schema()` → `run_tiendanube_integration_mysql` | `id_tiendanube` en `cliente` / `articulo` |
 | UI supervisor | **Archivo → Parámetros → Migración esquema MySQL (legacy)** (`core:legacy_mysql_schema`) | Ejecutar proveedores sobre `base_empresa` de sesión |
@@ -79,6 +79,12 @@ Los módulos **registran** sus necesidades de esquema; el núcleo **orquesta** p
 | **MPR — máquina/línea/trazabilidad** | `mpr_maquina_linea_trazabilidad` | Tablas nuevas de trazabilidad por máquina/línea/operario (`003_mpr_maquina_linea_tables.sql`: `mpr_linea`, `mpr_maquina` con `observacion_planilla`, `mpr_maquina_linea`, `mpr_maquina_articulo`, `mpr_operario_linea`, `mpr_operario_usuario`) + ALTER idempotente de `observacion_planilla` en instalaciones existentes + extensión idempotente del ledger de partes (estado/origen/gap/máquina) y del roster (override de línea), equivalente a `004_mpr_parte_maquina_gap.sql`. Función `run_mpr_maquina_linea_mysql`. CLI: `apply_mpr_maquina_linea <base>`. Ver `docs/mpr/TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md` |
 | **MPR — eliminar OPT legacy** | `mpr_drop_lista_produccion_legacy` | DROP `lista_produccion_*` (irreversible). CLI: `drop_mpr_lista_produccion_legacy <base> --confirm` |
 | *(retirados de la herramienta)* | `mpr_lista_produccion_*` | ~~Creación~~ de tablas OPT legacy. Solo funciones de emergencia en código; **no** recrear tras el DROP |
+
+### Proveedor cotización (estado 02/08/2026)
+
+| Proveedor (UI) | id | Notas |
+|----------------|-----|--------|
+| Cotización — historial diario | `cotizacion_historial` | Crea tabla `cotizacion_historial` (serie TC dólar, UNIQUE `id_cotizacion`+`fecha`). Fuente: `contabilidad_audit/sql/cotizacion_historial.sql`. Función `run_cotizacion_historial_mysql`. Requerido antes de aceptar/manual BCRA v1 y smoke [SMOKE_BEST_SOX_VMM.md](../reports/SMOKE_BEST_SOX_VMM.md). Ver [PLAN_COTIZACION_BCRA_SYNAP.md](../mpr/best/PLAN_COTIZACION_BCRA_SYNAP.md). |
 
 ---
 
