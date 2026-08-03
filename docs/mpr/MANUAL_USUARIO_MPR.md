@@ -55,59 +55,65 @@ Es la pantalla principal del día: muestra la demanda (según pedidos y reserva)
 | **Pack** | Artículo **terminado** (lo que vende / arma) | No. Solo consulta demanda. |
 | **Par** | **Componente** (medias / pares que se tejen) | Sí. Acá se completa **Enviar pares/docenas**. |
 
-La **reserva de stock** que alimenta la demanda se configura en el artículo **pack terminado** (`stock_reserva` en AdministraNET), **no** en el componente de la grilla Par. Ver §3.4 más abajo.
+La **reserva de stock** (colchón de seguridad) se carga en el artículo **pack terminado** en AdministraNET, **no** en el componente que ve en la grilla Par. Ver §3.4 más abajo.
 
 ### 3.1 Columnas del modo Par (cómo leerlas)
 
-Unidades según el conmutador **Docenas / Pares** (y Pack / Par).
+Las cantidades se muestran en **docenas** o **pares**, según el conmutador de la barra.
 
 #### Demanda a producir
 
 | Columna | Qué significa | ¿Es un faltante? |
 |---------|----------------|------------------|
-| **Pedido** | Demanda que viene de pedidos abiertos, explotada a este componente por la receta (BOM). | Sí, en la medida en que no esté cubierta por stock. |
-| **Reserva** | **Colchón objetivo** del pack terminado, mostrado en pares/docenas del componente (`coeficiente BOM × stock_reserva` del pack). | **No.** Es el target maestro, no “faltan N”. |
-| **Urgente** | Brecha **operativa** real: demanda a cubrir **menos** stock ya en pipeline (Producido + Semi + 2da, etc.). Si está en **0 / gris**, no hay que mandar más a planta por demanda. | **Sí.** Este es el número que importa para producir. |
+| **Pedido** | Lo que piden los pedidos abiertos, pasado a este componente según la **receta** del pack. | Sí, en la medida en que todavía no esté cubierto por stock. |
+| **Reserva** | El **colchón objetivo** del pack terminado, mostrado en la unidad del componente. Es la meta de stock de seguridad, no “cuánto falta hoy”. | **No.** No lo tome como cantidad a fabricar. |
+| **Urgente** | Lo que **todavía falta fabricar** sumando pedido y reserva, y restando lo que ya hay en el camino (Producido, Semi, 2da, etc.). Si da **0** (gris), no hace falta mandar más. Es el número que usa **Enviar** y el filtro **Solo urgentes**. | **Sí.** Este es el que importa para producir. |
+| **PED Urgente** | Lo mismo, pero **solo con el pedido** (sin el colchón de reserva). Sirve para **consultar** cuánto falta por pedido. **No** define Enviar ni Solo urgentes. | Sí respecto del pedido; no incluye el colchón. |
+
+Si hay reserva, **Urgente** suele ser **mayor o igual** que **PED Urgente**. Si no hay pedido abierto y solo hay colchón, PED Urgente suele ser **0** y Urgente puede ser mayor que 0.
 
 #### En curso
 
 | Columna | Qué significa |
 |---------|----------------|
-| **Fabricando** | Trabajo **ya enviado** a producción que **todavía no está acreditado** del todo (parte / control de calidad / stock físico en Semi·2da·Scrap). Fórmula conceptual: `máximo(0, Enviado − acreditado)`. |
-| **Enviado** | Total histórico de envíos a producción (ledger), no anulado. |
+| **Fabricando** | Lo que **ya mandó** a fábrica y **todavía no se acreditó** del todo (parte, control de calidad o stock ya clasificado). Es el **cupo** que puede cargar el Parte (número verde). |
+| **Enviado** | Todo lo que se envió a producción a lo largo del tiempo y no se anuló. |
 
-#### Stock en pipeline
+#### Stock en camino
 
 | Columna | Qué significa |
 |---------|----------------|
-| **Producido** | Saldo en depósito tipo **Producción**. |
-| **2da** | Saldo en **2da selección**. |
-| **Semi** | Saldo en **Semi elaborado**. |
-| **Total** | Suma del pipeline que cuenta para cubrir Urgente (sin Terminado ni Scrap en el mismo criterio de cobertura). |
+| **Producido** | Stock en el depósito de **Producción**. |
+| **2da** | Stock en **2da selección**. |
+| **Semi** | Stock en **Semi elaborado**. |
+| **Total** | Suma de esos depósitos que el sistema usa para ver si ya cubrió lo Urgente (no incluye Terminado ni Desperdicio en esa cuenta). |
 
 #### Acción
 
 | Columna | Qué significa |
 |---------|----------------|
-| **Enviar pares / docenas** | Cantidad a mandar ahora. El sistema sugiere / permite hasta aproximadamente `máximo(0, Urgente − Fabricando)`. Si **Urgente = 0**, **Enviar** queda en 0: no hay brecha que cubrir. |
+| **Enviar pares / docenas** | Cuánto mandar **ahora**. El sistema sugiere hasta lo que falta después de restar lo que ya está **Fabricando**. Si **Urgente** es 0, Enviar queda en 0: no hay nada pendiente que cubrir. |
 
-### 3.2 Relación Reserva ↔ Urgente ↔ Enviar ↔ Fabricando
+### 3.2 Relación Reserva ↔ Urgente ↔ PED Urgente ↔ Enviar ↔ Fabricando
 
 Cadena de causa y efecto:
 
-1. **Pedido** + brecha de reserva del pack → demanda operativa del componente.
-2. **Urgente** = máximo(0, demanda − stock en pipeline).
-3. **Enviar** = máximo(0, Urgente − Fabricando).
-4. Tras confirmar el envío → suben **Fabricando** y **Enviado**.
-5. En el Parte, el cupo verde = **Fabricando**.
+1. El **pedido** y la **reserva** del pack definen cuánto se necesita del componente.
+2. **Urgente** es lo que todavía falta: se resta el stock en camino; si ya alcanza, queda en **0**.
+3. **PED Urgente** es lo mismo mirando **solo el pedido** (sin reserva). Es solo lectura.
+4. **Enviar** es lo urgente menos lo que ya está **fabricando**. Si Fabricando ya cubre Urgente, Enviar queda en **0**. **No** usa PED Urgente.
+5. Al confirmar el envío suben **Fabricando** y **Enviado**.
+6. En el Parte, el cupo verde es **Fabricando**.
 
-Si después del envío **cambia el pedido o la reserva**, Urgente y el sugerido a Enviar se recalculan; **Enviado/Fabricando no se reescriben solos**. Ver §3.6.
+Si después del envío **cambia el pedido o la reserva**, se actualizan Urgente, PED Urgente y lo sugerido a Enviar; **Enviado** y **Fabricando** **no** bajan solos. Ver §3.6.
 
 **Errores frecuentes de lectura**
 
 1. Ver **Reserva = 1500** y pensar “faltan 1500” → incorrecto si **Urgente = 0**.
-2. Querer cargar 288 en el Parte sin haber **Enviado** antes → el cupo verde sigue en Fabricando (p. ej. 17).
-3. Subir la reserva del **componente** en AdministraNET → **no** mueve la columna Reserva del tablero Par; hay que tocar el **pack terminado**.
+2. Ver **PED Urgente** alto y **Enviar** en 0 → revise **Urgente** y **Fabricando**; Enviar solo mira Urgente.
+3. Confundir **PED Urgente** con lo que hay que mandar → PED Urgente es el faltante **solo de pedido**; el envío sigue **Urgente** (pedido + colchón).
+4. Querer cargar 288 en el Parte sin haber **Enviado** antes → el cupo verde sigue en Fabricando (por ejemplo 17).
+5. Subir la reserva del **componente** en AdministraNET → **no** cambia la columna Reserva del tablero Par; hay que tocar el **pack terminado**.
 
 ### 3.3 Ejemplo didáctico (artículo componente)
 
@@ -115,19 +121,20 @@ Datos reales de una fila en modo **Par / Pares** (artículo tipo *3120 T4 Reef G
 
 | Dato | Valor | Lectura |
 |------|------:|---------|
-| Pedido | 0 | No hay demanda de pedido abierta para este componente. |
-| Reserva | 1500 | Colchón objetivo mostrado (pack × BOM). **No** es el faltante. |
-| Urgente | 0 | La brecha operativa ya está cubierta por el pipeline. |
-| Fabricando | 17 | Quedan 17 pares enviados aún no acreditados del todo. |
-| Enviado | 72 | Se enviaron 72 en total a lo largo del tiempo (ledger). |
-| Producido / 2da / Semi | 636 / 17 / 38 | Stock físico en pipeline. |
+| Pedido | 0 | No hay pedido abierto para este componente. |
+| Reserva | 1500 | Colchón objetivo (según el pack y su receta). **No** es el faltante. |
+| Urgente | 0 | Con pedido + reserva, el stock en camino **ya alcanza**: no hace falta mandar más. |
+| PED Urgente | 0 | Sin pedido abierto, el faltante solo-por-pedido también es 0. |
+| Fabricando | 17 | Quedan 17 pares enviados que todavía no se acreditaron del todo. |
+| Enviado | 72 | En total se enviaron 72 a lo largo del tiempo (sin anular). |
+| Producido / 2da / Semi | 636 / 17 / 38 | Stock físico en camino. |
 | Total | 691 | 636 + 17 + 38. |
 | Enviar | 0 | Correcto: Urgente 0 → nada que mandar ahora. |
 
 **¿La reserva está “cubierta”?**
 
 - Si la pregunta es *“¿tengo que fabricar más ahora?”* → **No** (Urgente = 0, Enviar = 0).
-- Si la pregunta es *“¿tengo 1500 pares de colchón listos?”* → **No necesariamente**: el colchón objetivo es 1500; en pipeline hay ~691 (más el terminado del pack, que no se ve en estas columnas de componente).
+- Si la pregunta es *“¿tengo 1500 pares de colchón listos?”* → **No necesariamente**: la meta es 1500; en camino hay unos 691 (más el terminado del pack, que no se ve en estas columnas de componente).
 
 **¿Puedo cargar 288 pares en el Parte?**
 
@@ -135,35 +142,34 @@ En la planilla del supervisor, el badge verde muestra el **cupo Fabricando** (en
 
 | Objetivo | Qué hacer |
 |----------|-----------|
-| Aprobar hasta 17 | Cargar ≤ 17 y **Guardar parte de producción**. |
-| Aprobar 288 | Primero generar **Urgente ≥ 288** (p. ej. subiendo la reserva del **pack** y recalculando), luego **Enviar** ~271 (288 − 17 de Fabricando actual), y recién ahí el Parte acepta 288. |
+| Aprobar hasta 17 | Cargar como máximo 17 y **Guardar parte de producción**. |
+| Aprobar 288 | Primero hacer que **Urgente** sea al menos 288 (por ejemplo subiendo la reserva del **pack** y actualizando), luego **Enviar** la diferencia (unos 271, porque ya hay 17 fabricando) y recién ahí el Parte acepta 288. |
 
-Orden de magnitud orientativo (Pedido = 0 y pipeline ya cubriendo ~691):
+Orientación numérica (Pedido = 0 y en camino ya hay ~691):
 
-- Para abrir Urgente ≈ 288 → demanda ≈ 691 + 288 = **979**.
-- Si la Reserva UI actual es 1500 y la brecha escala ~1:1 → Reserva orientativa ≈ **1788** en el **pack terminado**, después **Enviar**, después Parte.
+- Para que Urgente sea cerca de 288 hace falta una demanda total cerca de 691 + 288 = **979**.
+- Si hoy la Reserva en pantalla es 1500, una reserva orientativa del **pack** cerca de **1788**, después **Enviar**, después Parte.
 
 ### 3.4 Dónde modificar la Reserva
 
 1. Identifique el **componente** en el tablero Par (ej. *3120 T4 Reef Gmel Logo Negro 1Par*).
-2. Busque el **artículo pack terminado** cuya **lista de materiales (BOM / receta)** incluye ese componente. Suele ser el mismo modelo/color en presentación pack (no “1Par” de tejido).
-3. En AdministraNET / catálogo de artículos, edite **`stock_reserva`** (reserva de stock) de ese **pack**, no del componente.
-4. Vuelva al tablero → **Actualizar**. Deberían cambiar Reserva / Urgente / Enviar en los componentes de su BOM.
+2. Busque el **artículo pack terminado** cuya **receta** (lista de materiales) incluye ese componente. Suele ser el mismo modelo/color en presentación pack (no “1Par” de tejido).
+3. En AdministraNET / catálogo de artículos, edite la **reserva de stock** de ese **pack**, no del componente.
+4. Vuelva al tablero → **Actualizar**. Deberían cambiar Reserva / Urgente / Enviar en los componentes de su receta.
 
-Si el pack aparece en ámbar **Sin receta**, primero complete la BOM; sin receta el modo Par **no** genera filas de envío para ese terminado.
+Si el pack aparece en ámbar **Sin receta**, primero complete la lista de materiales; sin receta el modo Par **no** genera filas de envío para ese terminado.
 
 ### Modo Pack y packs sin receta
 
-En **Pack** cada fila es un **artículo terminado** (Pedido, Reserva maestro y columna **Urgente** = cantidad a fabricar, sin desglosar componentes). El filtro **Solo urgentes** no aplica en Pack: se listan todos los packs con demanda a fabricar, incluidos quiebres solo-reserva. Puede activar el chip **Sin receta** para ver solo packs sin lista de materiales (BOM).
+En **Pack** cada fila es un **artículo terminado**. Ve Pedido, Reserva, **Urgente** (pedido + reserva menos stock terminado) y **PED Urgente** (solo pedido menos stock terminado). PED Urgente es solo consulta; el envío a planta se hace en modo **Par**. El filtro **Solo urgentes** no aplica en Pack: se listan los packs con demanda a fabricar, incluidos los que solo tienen quiebre de reserva. Puede activar el chip **Sin receta** para ver solo packs sin lista de materiales.
 
-En **Par**, la columna **Urgente** es la base del envío a producción (pedido + brecha de reserva menos pipeline).
+En **Par**, **Urgente** es la base del envío. **PED Urgente** va al lado para comparar el faltante solo de pedido.
 
-Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
+Si el pack **no tiene receta** en AdministraNET:
 
 - La fila se destaca en **ámbar** con el aviso **Sin receta**.
-- Puede abrir el ícono de documento junto al aviso para ver los **pedidos PED** asociados (número, estado, fecha de entrega, cliente y cantidad) y revisar el caso.
-- Ese aviso es **recomendado**: no bloquea el tablero. En modo **Par** ese pack **no genera** componentes para enviar; hay que cargar o corregir la receta del artículo antes de poder producirlo por el flujo normal.
-- Al **generar una OPT** desde Orden de producción / ventana pack, el sistema **sí bloquea** packs sin receta hasta que tengan BOM.
+- Puede abrir el ícono de documento junto al aviso para ver los **pedidos** asociados (número, estado, fecha de entrega, cliente y cantidad).
+- Ese aviso es **recomendado**: no bloquea el tablero. En modo **Par** ese pack **no genera** componentes para enviar; hay que cargar o corregir la receta antes de producirlo por el flujo normal.
 
 ### Avisos frecuentes
 
@@ -179,59 +185,59 @@ El tablero **no** lista todo lo asignado a máquinas. Solo muestra componentes c
 
 | Causa | Qué ve / no ve | Cómo resolver |
 |-------|----------------|---------------|
-| Sin **PED** abierto y sin **`stock_reserva`** en el pack | El componente no aparece en Par | Cargar reserva del **pack** (§3.4) o abrir/cargar un pedido PED del pack |
-| Pack **sin BOM / sin receta** | Pack en ámbar; Par no explota componentes | Completar lista de materiales del pack |
+| Sin **pedido** abierto y sin **reserva** en el pack | El componente no aparece en Par | Cargar reserva del **pack** (§3.4) o abrir/cargar un pedido del pack |
+| Pack **sin receta** | Pack en ámbar; Par no muestra componentes | Completar la lista de materiales del pack |
 | Filtro **Solo urgentes** activo y Urgente = 0 | Fila oculta aunque exista | Desactivar Solo urgentes o ampliar demanda |
 | Rango de **fechas de pedido** / marcas / búsqueda | No coincide | Ampliar fechas, quitar marcas, buscar por código |
-| Solo hay **asignación a máquina** (orden verbal / OPT legacy) | Aparece en el **Parte** con «Sin cupo Fabricando», **no** en el tablero | Misma resolución: demanda (reserva o PED) → **Enviar** → Parte |
+| Solo hay **asignación a máquina** (orden verbal) | Aparece en el **Parte** con «Sin cupo Fabricando», **no** en el tablero | Misma resolución: demanda (reserva o pedido) → **Enviar** → Parte |
 
-**Caso típico de planta:** recibieron orden de producir, asignaron el artículo a las máquinas, pero **no gestionaron la reserva de seguridad** del pack ni hay pedido visible. Resultado: Parte con filas grises; tablero sin el artículo. No hay “enviar forzado” sin Urgente.
+**Caso típico de planta:** recibieron orden de producir, asignaron el artículo a las máquinas, pero **no cargaron la reserva** del pack ni hay pedido visible. Resultado: Parte con filas grises; tablero sin el artículo. No hay “enviar forzado” sin Urgente.
 
 ### 3.6 Si cambia el pedido o la reserva después de Enviar
 
-**Regla clave:** los envíos ya confirmados **no se ajustan solos**. Cambiar un PED (cantidad, cancelación) o el `stock_reserva` del pack **solo recalcula** columnas derivadas (Pedido, Reserva, Urgente, sugerido a Enviar). El historial de envíos (`Enviado` / ledger) queda igual hasta que usted **envíe más** o **anule envíos**.
+**Regla clave:** lo que ya envió **no se corrige solo**. Si cambia un pedido (cantidad, cancelación) o la reserva del pack, el tablero **recalcula** Pedido, Reserva, Urgente y lo sugerido a Enviar. El historial de **Enviado** queda igual hasta que usted **envíe más** o **anule envíos**.
 
 #### Qué se recalcula al recargar el tablero
 
 | Columna | ¿Se actualiza sola? | Cómo |
 |---------|---------------------|------|
-| Pedido / Reserva / Urgente | **Sí** | Lectura en vivo de PED + `stock_reserva` del pack + stock en pipeline |
-| Sugerido **Enviar** | **Sí** | `máximo(0, Urgente − Fabricando)` |
-| **Enviado** (ledger) | **No** | Solo crece con «Enviar a producción» y baja con «Anular envíos» |
+| Pedido / Reserva / Urgente / PED Urgente | **Sí** | Lee pedidos, reserva del pack y stock en camino (PED Urgente no usa la reserva) |
+| Sugerido **Enviar** | **Sí** | Lo que falta de Urgente después de restar Fabricando |
+| **Enviado** | **No** | Solo crece con «Enviar a producción» y baja con «Anular envíos» |
 | **Fabricando** | **No por demanda** | Baja al acreditar (Parte aprobado / Control de calidad) o al anular envíos no consumidos |
 
 «Actualizar» en el tablero **no reescribe** envíos: solo refresca la vista con la demanda actual.
 
 #### Ejemplos (después de haber enviado 300)
 
-Suponga que mandó **300** a fabricar y todavía no acreditó partes (Fabricando ≈ 300).
+Suponga que mandó **300** a fabricar y todavía no acreditó partes (Fabricando cerca de 300).
 
 | Cambio posterior | Urgente | Enviado / Fabricando | Enviar sugerido | Qué hacer |
 |------------------|---------|----------------------|-----------------|-----------|
-| Cancela el PED o baja mucho la reserva → demanda operativa ≈ 0 | → **0** | Siguen ≈ **300** | **0** | Queda **sobre-enviado**. Para bajar cupo: **Anular envíos** (lo no consumido por partes) o dejar que el Parte/CC acredite. |
-| Baja el pedido / reserva pero sigue faltando algo (ej. Urgente nuevo = 100) | → **100** | ≈ **300** | **0** (300 ya cubre 100) | No envíe más. Si no quiere producir de más, anule el excedente de envíos. |
-| Aumenta el PED o sube la reserva → Urgente nuevo = 450 | → **450** | ≈ **300** | ≈ **150** | Complete **Enviar 150** y confirme. Se **suma** un nuevo envío; el de 300 no se modifica. |
-| Aumenta demanda pero Fabricando ya es ≥ Urgente | → nuevo valor | sin cambio | **0** | Nada que enviar; el cupo del Parte ya alcanza. |
+| Cancela el pedido o baja mucho la reserva → casi no hay demanda | → **0** | Siguen cerca de **300** | **0** | Queda **sobre-enviado**. Para bajar cupo: **Anular envíos** (lo no usado en partes) o dejar que el Parte/CC acredite. |
+| Baja el pedido / reserva pero sigue faltando algo (ej. Urgente nuevo = 100) | → **100** | cerca de **300** | **0** (300 ya cubre 100) | No envíe más. Si no quiere producir de más, anule el excedente de envíos. |
+| Aumenta el pedido o sube la reserva → Urgente nuevo = 450 | → **450** | cerca de **300** | cerca de **150** | Complete **Enviar 150** y confirme. Se **suma** un nuevo envío; el de 300 no se modifica. |
+| Aumenta demanda pero Fabricando ya alcanza o supera Urgente | → nuevo valor | sin cambio | **0** | Nada que enviar; el cupo del Parte ya alcanza. |
 
 #### Cómo subir o bajar el cupo a propósito
 
 **Subir (hacer Fabricando más grande)**
 
-1. Aumente demanda: más cantidad en PED y/o suba `stock_reserva` del **pack**.
-2. Tablero Par → recargar / Actualizar → verifique **Enviar > 0**.
-3. **Enviar a producción** por el delta.
+1. Aumente demanda: más cantidad en el pedido y/o suba la reserva del **pack**.
+2. Tablero Par → Actualizar → verifique que **Enviar** sea mayor que 0.
+3. **Enviar a producción** por esa diferencia.
 
 **Bajar (reducir Fabricando / Enviado)**
 
 1. Abra **Anular envíos** en el Tablero (supervisor).
-2. Anule filas de envío **no consumidas** por partes (el sistema no anula lo ya usado en un parte aprobado).
-3. Alternativa operativa: seguir con Parte/CC hasta acreditar; Fabricando baja aunque el ledger histórico de Enviado conserve el rastro de lo no anulado según reglas de pantalla.
+2. Anule filas de envío **no usadas** por partes (no se puede anular lo ya usado en un parte aprobado).
+3. Alternativa: seguir con Parte y Control de calidad hasta acreditar; Fabricando baja al acreditarse.
 
-No existe «recalcular envíos = nueva demanda» ni anulación automática al cancelar un pedido.
+No existe un botón de «recalcular envíos = nueva demanda» ni anulación automática al cancelar un pedido.
 
 #### Relación con el Parte
 
-Mientras **Fabricando > 0**, el Parte permite cargar hasta ese cupo **aunque** Urgente ya sea 0 (porque cancelaron el pedido después). Eso es intencional del ledger: la planta ya tenía trabajo enviado. Si la orden se cayó, anule envíos antes de seguir produciendo de más.
+Mientras **Fabricando** sea mayor que 0, el Parte permite cargar hasta ese cupo **aunque** Urgente ya sea 0 (porque cancelaron el pedido después). Es intencional: la planta ya tenía trabajo enviado. Si la orden se cayó, anule envíos antes de seguir produciendo de más.
 
 ---
 
@@ -254,7 +260,7 @@ Hay dos formas de cargar lo producido.
 **Cupo Fabricando (badge verde)**
 
 - Es el máximo que puede **aprobar** en esa fila máquina × artículo.
-- Sale del tablero: envíos menos lo ya acreditado (parte previo, CC, Semi/2da/Scrap).
+- Sale del tablero: lo enviado menos lo ya acreditado (parte previo, control de calidad, Semi/2da/Desperdicio).
 - Si *Ingresado* supera Fabricando, el número ingresado se ve en rojo y **no** podrá aprobar (el borrador sí puede guardar cantidades por encima para seguir cargando, pero al aprobar se valida el tope).
 
 **Ejemplo:** Fabricando = 17; tres operarios con 8 docenas cada uno → Ingresado = 288 → rojo. Hay que **Enviar** desde el tablero antes de poder aprobar 288.
@@ -310,7 +316,7 @@ Hasta que el supervisor apruebe, el stock **no** ingresa.
 
 ### 4.4 Rectificar un parte ya aprobado
 
-Si después de aprobar necesita bajar o subir cantidades del mismo día (planilla), el sistema registra un **ajuste por diferencia (delta)** en el mismo depósito de Producción (entrada o salida según el caso), no “borra” el movimiento original. El cupo y el tablero se recalculan con lo acreditado.
+Si después de aprobar necesita bajar o subir cantidades del mismo día (planilla), el sistema registra un **ajuste por diferencia** en el mismo depósito de Producción (entrada o salida según el caso); no “borra” el movimiento original. El cupo y el tablero se recalculan con lo acreditado.
 
 Si el día ya tiene **control de calidad confirmado**, no podrá modificar el parte de ese alcance: primero resuelva la clasificación (hoy, correcciones de CC por movimiento de stock; ver §5).
 
@@ -347,7 +353,7 @@ Distribuir lo del **Parte** (y eventual extra en Producción) entre **Semi elabo
 
 ### Correcciones después de confirmar
 
-Para reclasificar entre Semi / 2da / Desperdicio use **Ingreso de movimiento de stock** con una **transferencia interna**. En esta versión **no** hay “rectificar CC con delta” desde la misma pantalla (a diferencia del parte).
+Para reclasificar entre Semi / 2da / Desperdicio use **Ingreso de movimiento de stock** con una **transferencia interna**. En esta versión **no** se puede corregir un control de calidad confirmado desde la misma pantalla (a diferencia del parte).
 
 ### Avisos frecuentes
 
@@ -478,9 +484,9 @@ Sin turno del día, el operario no podrá cargar su parte.
 | Momento | Pantalla | Acción |
 |---------|----------|--------|
 | Arranque de planta | Configuración (líneas → máquinas → depósitos → operarios → vínculos → turnos → planificación) | Dejar lista la fábrica |
-| Ajustar colchón | Artículo **pack** en AdministraNET (`stock_reserva`) | Sube Reserva/Urgente en tablero tras Actualizar |
-| Mañana / turno | Tablero de producción (modo **Par**) | Enviar solo si **Urgente > 0** |
-| Durante el turno | Parte / Carga de producción | Borrador sin stock; aprobar ≤ **Fabricando** |
+| Ajustar colchón | Artículo **pack** en AdministraNET (reserva de stock) | Sube Reserva/Urgente en tablero tras Actualizar |
+| Mañana / turno | Tablero de producción (modo **Par**) | Enviar solo si **Urgente** es mayor que 0 |
+| Durante el turno | Parte / Carga de producción | Borrador sin stock; aprobar hasta el cupo **Fabricando** |
 | Supervisor | Partes pendientes | Aprobar partes de operarios |
 | Después del parte | Control de calidad | Borrador sin stock; confirmar mueve a Semi/2da/Scrap |
 | Cierre de producto | Armado | Armar packs 1ra o 2da |
@@ -490,16 +496,18 @@ Sin turno del día, el operario no podrá cargar su parte.
 
 ## 10. Problemas frecuentes
 
-- **No veo el artículo en el tablero (sí en el Parte / máquinas):** falta demanda. Sin PED ni `stock_reserva` del **pack**, o pack sin BOM, o filtro Solo urgentes. Ver §3.5. Asignar a máquina **no** lo publica en el tablero.
-- **No veo demanda en el tablero:** revise filtros de fecha y marcas; pulse Actualizar; desactive Solo urgentes; confirme reserva del pack o PED (§3.4 / §3.5).
-- **Cancelé / bajé el pedido o la reserva pero Fabricando sigue alto:** es normal. Los envíos **no se ajustan solos**. Anule envíos no consumidos o acredite con Parte/CC. Ver §3.6.
-- **Subí el pedido o la reserva y no puedo enviar el total de nuevo:** el sistema solo sugiere el **delta** (`Urgente − Fabricando`). Envíe esa diferencia; el envío anterior no se borra. Ver §3.6.
-- **Veo un pack en ámbar «Sin receta»:** el terminado no tiene lista de materiales. Use el ícono de pedidos para ver qué PED lo piden; complete la BOM del artículo. En Par no podrá enviar componentes de ese pack hasta tener receta.
-- **Reserva alta pero Urgente en 0:** es normal si el pipeline ya cubre la brecha. No envíe más; el colchón objetivo no es un faltante.
+- **No veo el artículo en el tablero (sí en el Parte / máquinas):** falta demanda. Sin pedido ni reserva del **pack**, o pack sin receta, o filtro Solo urgentes. Ver §3.5. Asignar a máquina **no** lo publica en el tablero.
+- **No veo demanda en el tablero:** revise filtros de fecha y marcas; pulse Actualizar; desactive Solo urgentes; confirme reserva del pack o pedido (§3.4 / §3.5).
+- **Cancelé / bajé el pedido o la reserva pero Fabricando sigue alto:** es normal. Los envíos **no se ajustan solos**. Anule envíos no usados o acredite con Parte/Control de calidad. Ver §3.6.
+- **Subí el pedido o la reserva y no puedo enviar el total de nuevo:** el sistema solo sugiere la **diferencia** (lo urgente menos lo que ya está fabricando). Envíe esa diferencia; el envío anterior no se borra. Ver §3.6.
+- **Veo un pack en ámbar «Sin receta»:** el terminado no tiene lista de materiales. Use el ícono de pedidos para ver qué pedidos lo piden; complete la receta. En Par no podrá enviar componentes de ese pack hasta tener receta.
+- **Reserva alta pero Urgente en 0:** es normal si el stock en camino ya alcanza. No envíe más; el colchón objetivo no es un faltante.
+- **PED Urgente menor que Urgente:** normal cuando hay Reserva: Urgente incluye el colchón; PED Urgente solo el pedido.
+- **PED Urgente = 0 y Urgente mayor que 0:** hay colchón a reponer pero no demanda de pedido abierta (o el pedido ya está cubierto).
 - **Parte con «Sin cupo Fabricando» / celdas grises:** nunca enviaron (o Fabricando = 0). No se puede cargar hasta **Enviar** desde el tablero. Si el artículo no está en el tablero, primero genere demanda (§3.5 / §4.1.1).
-- **Quiero cargar más en el Parte que el verde (Fabricando):** primero **Enviar** desde el tablero (hace falta Urgente). Subir solo la columna Reserva del componente no alcanza; edite `stock_reserva` del **pack** y envíe.
-- **No sé en qué artículo tocar la reserva:** el pack terminado cuya BOM incluye el componente de la fila Par (ver §3.4).
-- **No puedo guardar el parte (aprobar):** no hay cupo en Fabricando, el día tiene CC confirmado, o faltan operarios en el turno.
+- **Quiero cargar más en el Parte que el verde (Fabricando):** primero **Enviar** desde el tablero (hace falta Urgente). Subir solo la Reserva del componente no alcanza; edite la reserva del **pack** y envíe.
+- **No sé en qué artículo tocar la reserva:** el pack terminado cuya receta incluye el componente de la fila Par (ver §3.4).
+- **No puedo guardar el parte (aprobar):** no hay cupo en Fabricando, el día tiene control de calidad confirmado, o faltan operarios en el turno.
 - **El operario no puede cargar:** falta vínculo usuario–operario, turno del día, línea o artículos en la máquina.
 - **No hay filas en Control de calidad:** no hay pendiente en Producción para esa fecha/turno (falta parte).
 - **Perdí la carga a mitad de Control de calidad:** use **Guardar borrador**; al volver se precarga. El borrador no bloquea el parte.
@@ -545,16 +553,17 @@ Los pedidos migrados (comprobantes con origen cutover BEST) se abren desde el hu
 |---------|-------------------|
 | **Pack** | Artículo terminado (venta / armado). |
 | **Par / componente** | Unidad que se teje o clasifica (medias, etc.). |
-| **Reserva** | Colchón objetivo del pack (`stock_reserva`), mostrado explotado en Par. |
-| **Urgente** | Faltante operativo a cubrir con producción. |
-| **Fabricando** | Enviado aún no acreditado; cupo del Parte. |
+| **Reserva** | Colchón objetivo del pack; se muestra repartido en los componentes. |
+| **Urgente** | Lo que todavía falta fabricar (pedido + reserva menos stock en camino). Define Enviar y Solo urgentes. |
+| **PED Urgente** | Lo que falta solo por pedido (sin reserva). Solo para consultar. |
+| **Fabricando** | Lo enviado que aún no se acreditó; cupo del Parte. |
 | **Enviar** | Mandar trabajo desde el tablero a fábrica. |
-| **Anular envíos** | Baja envíos no consumidos; no ocurre solo al cambiar PED/reserva. |
-| **Borrador (parte o CC)** | Guardado intermedio **sin** stock. |
-| **Confirmar / aprobar** | Persiste oficialmente y **sí** mueve stock (según pantalla). |
-| **Pipeline** | Stock en Producción + Semi + 2da (cubre Urgente). |
-| **BOM / receta** | Lista de materiales del pack → componentes. |
+| **Anular envíos** | Baja envíos no usados; no ocurre solo al cambiar pedido o reserva. |
+| **Borrador (parte o CC)** | Guardado intermedio **sin** mover stock. |
+| **Confirmar / aprobar** | Cierra el registro oficial y **sí** mueve stock (según la pantalla). |
+| **Stock en camino** | Producción + Semi + 2da; lo que el sistema resta al calcular Urgente. |
+| **Receta** | Lista de materiales del pack → componentes. |
 
 ---
 
-*Manual de usuario – Producción (MPR). Synap. Actualizado 29/07/2026.*
+*Manual de usuario – Producción (MPR). Synap. Actualizado 03/08/2026.*

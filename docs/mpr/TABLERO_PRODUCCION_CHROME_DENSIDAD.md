@@ -85,8 +85,8 @@ Sin Pack\|Par ni KPI urgente fuera del Tablero. Fecha / línea / máquina / turn
 - Modal Fabricando: artículo como título; tabla por fila
   (`Fila | Mañana/Tarde/Noche + operarios` + una fila de datos por máquina).
 - Ícono máquina en columna Fabricando: tooltip al hover («Máquina N»); clic abre el modal.
-- Modales (envío / Fabricando) y tooltip de máquina en el mismo `x-data` de página, **fuera** del wrapper `sticky` del chrome (un ancestro `sticky`/`transform` crea containing block y desplaza el `position: fixed` respecto de `clientX/Y`).
-- **Thead tabla (Par):** columna Artículo en una sola celda `rowspan="2"` (sin etiqueta duplicada); el encabezado muestra `Artículo (N)` con la cantidad listada (se actualiza con el buscador). Fondos del `thead` (Pack y Par) **opacos** (sin alpha) para que el sticky no deje ver las filas al scrollear.
+- Modales (envío / Fabricando) y tooltip de máquina en el mismo `x-data` de página, **fuera** del wrapper del chrome (`flex-shrink-0` sin `sticky`; un ancestro `sticky`/`transform` crea containing block y desplaza el `position: fixed` respecto de `clientX/Y`).
+- **Thead tabla (Pack y Par):** encabezado de **dos filas** (grupos + nombres de columna) con `sticky` **dentro** del contenedor `overflow-auto` de la grilla (`top-0` fila 1, `top-8` fila 2). Fondos **opacos** (sin alpha) y `z-20`/`z-30` en `th` del thead (por encima de la columna Artículo sticky del `tbody`, `z-10`). El chrome **no** usa `sticky`: queda fijo arriba por layout flex; solo scrollea la grilla.
 
 ## 5. Iconos y tooltips (atajos)
 
@@ -139,12 +139,12 @@ Las URLs pueden existir en código por compatibilidad; **no** son el hub ni el l
 3. Atajos Parte/CC/Actualizar usables solo con ícono + tooltip; menú Más con labels.
 4. Ningún enlace del chrome apunta a ventana_pack / opt_list como flujo primario.
 5. Pack\|Par, filtros, envío y búsqueda siguen funcionando igual (solo reubicación).
-6. Al scrollear la grilla en **Tablero**, **Parte** y **Control de calidad**, la barra slate-800 permanece fija (viewport + `sticky` bajo el menú); solo scrollean datos (y el footer Guardar no se pierde fuera del viewport).
+6. Al scrollear la grilla en **Tablero**, **Parte** y **Control de calidad**, el chrome slate-800 permanece visible arriba (layout flex `flex-shrink-0`, **sin** `sticky` en el chrome); solo scrollean los datos. En Tablero, el `thead` de dos filas permanece pegado al tope del área de scroll (`top-0` / `top-8`).
 
 ## 8. Implementación
 
 - Plantillas: `tablero_produccion.html`, `parte_produccion.html`, `clasificacion_produccion.html` + `clasificacion_encabezado.html`.
-- Layout compartido: `h-[calc(100dvh-4.5rem)]` + chrome `flex-shrink-0` + datos `flex-1 min-h-0`.
+- Layout compartido: `h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-9rem)]` + chrome `flex-shrink-0` (sin sticky) + datos `flex-1 min-h-0 overflow-auto`.
 - Alpine: `masMenuOpen` (+ cierre Escape / click outside opcional) en Tablero.
 - Include navegación: `chrome_nav_flujo.html`; tooltips: `chrome_icon_tooltip.html`.
 - Docs índice: entrada en [README.md](README.md).
