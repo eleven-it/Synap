@@ -47,7 +47,7 @@ Fechas UI: **dd/MM/yyyy**.
 - Etapa terminal **Entregado / Cerrado** separada del trabajo en curso.
 - Búsqueda rápida por identificadores operativos (PED, cliente, sucursal) con contador de resultados.
 - Ventana temporal acotada en pipeline (p. ej. 60 días) para no saturar el Kanban.
-+ Por defecto **sin ventana temporal**: el hub carga todos los PED del alcance del usuario (hasta 5000 en MySQL). Opcionalmente la API acepta `?dias=N` para acotar por fecha (compatibilidad). La UX limita volumen en cliente: **paginación** en vista Lista (25 por página) y **«Mostrar más»** por columna en Kanban (lote inicial 15).
++ Por defecto **sin ventana temporal**: el hub carga todos los PED del alcance del usuario (hasta 5000 en MySQL). Opcionalmente la API acepta `?dias=N` para acotar por fecha (compatibilidad). En cliente **no** hay paginación ni «Mostrar más»: Kanban y Lista muestran todas las tarjetas/filas del dataset (scroll en columna / tabla).
 
 ## Permisos
 
@@ -77,8 +77,7 @@ Implementación: `ecom/services/pedido_permisos.py` (`puede_ver_todos_pedidos` /
 - API: `GET /ecom/api/mayoristapp/pedidos/hub/`, `POST .../hub/archivar-draft/`, `POST .../hub/eliminar-draft/`
 - Preferencia Lista/Kanban: `localStorage` clave `synap_pedidos_hub_vista`
 - Botón **Actualizar** en el hero: vuelve a pedir el JSON del hub (`urls.api`) sin recargar la página; icono `refresh` con spin mientras `cargando`
-- **Paginación Lista (≥ lg):** controles Anterior/Siguiente y texto «Página X de Y (N pedidos)» sobre `itemsFiltrados` (25 por página; reset al cambiar búsqueda o recargar payload)
-- **Kanban (≥ lg):** cada columna muestra un lote inicial de 15 tarjetas; botón «Mostrar más (N restantes)» al pie de la columna suma 15 más (filtrado de búsqueda incluido)
+- **Lista / Kanban (≥ lg):** sin tope de página ni «Mostrar más»; se listan todos los ítems del payload (scroll en el contenedor de columna o de tabla). Cambio 03/08/2026: se retiró el lote Kanban de 15 y la paginación Lista de 25.
 
 ### Viewport fijo (hero + botones) — 16/07/2026
 
