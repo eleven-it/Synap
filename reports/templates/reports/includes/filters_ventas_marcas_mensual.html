@@ -3,6 +3,15 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
 {% endcomment %}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 w-full lg:col-span-6 mt-2">
     <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide md:col-span-2 mb-0">Catálogo y unidades</h3>
+    <div class="flex flex-col gap-2 md:col-span-2">
+        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Preset SuperArt</span>
+        <button type="button" id="vmm-preset-hombre-btn"
+                class="inline-flex items-center justify-center gap-2 min-h-[44px] w-full sm:w-auto px-4 py-2.5 text-xs font-semibold rounded-xl border border-violet-300 dark:border-violet-600 bg-violet-50 dark:bg-violet-900/20 text-violet-800 dark:text-violet-200 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
+            <span class="material-icons text-base" aria-hidden="true">checkroom</span>
+            <span>Aplicar preset Hombre</span>
+        </button>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Rellena SuperArts del preset «Hombre» sin borrar el resto de filtros (solo reemplaza SuperArt).</span>
+    </div>
     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
         Marcas
         <div class="relative">
@@ -17,6 +26,37 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
         </div>
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = todas las marcas.</span>
     </label>
+    <div class="flex flex-col gap-2 md:col-span-2" id="vmm-modo-comparacion-block">
+        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Modo marcas</span>
+        <input type="hidden" name="modo_comparacion" id="vmm_modo_comparacion" value="una">
+        <div class="flex flex-wrap gap-2" id="vmm-modo-comparacion-buttons" role="group" aria-label="Modo marcas">
+            <button type="button" data-modo-comparacion="una"
+                    class="vmm-cmp-btn px-3 py-1.5 min-h-[44px] text-xs font-medium rounded-full border transition-all duration-200 border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md">
+                Una marca
+            </button>
+            <button type="button" data-modo-comparacion="comparar"
+                    class="vmm-cmp-btn px-3 py-1.5 min-h-[44px] text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">
+                Comparar marcas
+            </button>
+        </div>
+        <div id="vmm-comparar-selectores" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-1">
+                Marca A
+                <select name="marca_a" id="vmm_marca_a"
+                        class="min-h-[44px] w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400">
+                    <option value="">Seleccionar…</option>
+                </select>
+            </label>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-1">
+                Marca B
+                <select name="marca_b" id="vmm_marca_b"
+                        class="min-h-[44px] w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400">
+                    <option value="">Seleccionar…</option>
+                </select>
+            </label>
+        </div>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Comparar exige dos marcas distintas (ej. PUM vs PUW).</span>
+    </div>
     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
         SuperArt (id_manual)
         <div class="relative">
@@ -59,7 +99,8 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
         Tipo de cambio (TC)
         <input type="number" name="tc" id="vmm_tc" value="" min="0" step="0.0001" placeholder="Automático (cotización)"
                class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300">
-        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = cotización vigente (dólar id=1). Si falla, se usa 14,5817.</span>
+        <span id="vmm_tc_hint" class="text-[10px] font-normal text-sky-600 dark:text-sky-400 italic mt-0.5 hidden" aria-live="polite"></span>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = TC vigente BCRA (cotización id=1). Si falla, se usa 14,5817.</span>
     </label>
     <div class="flex flex-col gap-2 md:col-span-2">
         <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Incluir proyección</span>

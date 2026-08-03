@@ -145,6 +145,8 @@ PERMISOS_POR_MODULO = {
         ("contabilidad.auditoria.configurar", "Configurar políticas de auditoría contable"),
         ("contabilidad.auditoria.corregir", "Aplicar corrección contable (producción)"),
         ("contabilidad.auditoria.rei", "Aprobar ajustes REI caso a caso"),
+        ("contabilidad.cotizacion.ver", "Ver cotización dólar e historial"),
+        ("contabilidad.cotizacion.aceptar", "Aceptar sugerencia BCRA o registrar cotización manual"),
     ],
     "Stock": [
         ("stock.ver", "Ver módulo Stock"),

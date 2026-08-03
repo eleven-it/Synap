@@ -2616,6 +2616,70 @@ def run_contabilidad_audit_correccion_log_mysql(conn) -> Dict[str, Any]:
     }
 
 
+def run_cotizacion_historial_mysql(conn) -> Dict[str, Any]:
+    """
+    Crea ``cotizacion_historial`` en la base de la empresa (historial diario TC dólar).
+
+    Idempotente. Fuente: ``contabilidad_audit/sql/cotizacion_historial.sql``.
+    """
+    from django.apps import apps
+
+    applied: List[str] = []
+    failed: List[str] = []
+    try:
+        app_path = Path(apps.get_app_config("contabilidad_audit").path)
+    except LookupError:
+        msg = "La app Django «contabilidad_audit» no está instalada."
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    sql_path = app_path / "sql" / "cotizacion_historial.sql"
+    if not sql_path.is_file():
+        msg = f"No se encontró el archivo {sql_path}"
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    cursor = conn.cursor()
+    try:
+        sql_content = sql_path.read_text(encoding="utf-8")
+        raw_statements = _split_sql_statements(sql_content)
+        for stmt in raw_statements:
+            stmt = _sc_sql_strip_leading_comments(stmt)
+            if stmt:
+                cursor.execute(stmt)
+        _append_migration(
+            applied,
+            failed,
+            True,
+            "DDL cotizacion_historial (cotizacion_historial.sql)",
+        )
+        cursor.close()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_cotizacion_historial_mysql: %s", e)
+        failed.append(str(e))
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 PROVIDER_REGISTRY: List[Dict[str, Any]] = [
     {
         "id": "tiendanube_integration",
@@ -2729,6 +2793,17 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_contabilidad_audit_correccion_log_mysql,
+    },
+    {
+        "id": "cotizacion_historial",
+        "title": "Cotización — historial diario (cotizacion_historial)",
+        "description": (
+            "Crea ``cotizacion_historial`` (serie diaria TC dólar, UNIQUE id_cotizacion+fecha). "
+            "Fuente: ``contabilidad_audit/sql/cotizacion_historial.sql``. "
+            "Ver docs/mpr/best/PLAN_COTIZACION_BCRA_SYNAP.md."
+        ),
+        "risk": "bajo",
+        "run": run_cotizacion_historial_mysql,
     },
     {
         "id": "stock_inv_fisico_tables",
