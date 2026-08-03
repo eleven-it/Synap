@@ -91,7 +91,7 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 ### Escáner y búsqueda manual (conteo móvil)
 
 - **Cámara / escáner:** `getUserMedia` exige **contexto seguro** (HTTPS o `localhost`). En HTTP por IP (ej. `http://181.x.x.x:8100`) el botón «Escanear» muestra un aviso en español y enfoca el ingreso manual; no hay acceso a la cámara.
-- **Fallback obligatorio:** campo siempre visible «Código de barras o código artículo» + botón «Buscar» (Enter dispara búsqueda). Resuelve vía IndexedDB (`InvFisicoOffline.buscarPorEan`) sobre el catálogo prefetched.
+- **Fallback obligatorio:** campo siempre visible «EAN o nombre de artículo» + botón «Buscar» (Enter dispara búsqueda). Resuelve vía IndexedDB (`InvFisicoOffline.buscarPorEanONombre`): coincidencia exacta por EAN o contiene en nombre. **No** busca por código manual ni ID de sistema. Si hay varios por nombre, muestra lista para elegir.
 - Si `totalCatalogo === 0` (catálogo no descargado), la búsqueda se bloquea con aviso para conectar y recargar.
 
 ### Seguridad / no-filtración
@@ -146,7 +146,7 @@ Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`,
 
 - [ ] Operario con permiso `contar` abre `/stock/conteo/` en móvil Nivel A.
 - [ ] Prefetch catálogo ciego (sin saldo/diferencia visible).
-- [ ] Scan EAN (HTTPS/localhost) o ingreso manual de código → cantidad en **&lt; 8 s** con catálogo ya prefetched.
+- [ ] Scan EAN (HTTPS/localhost) o ingreso manual por EAN/nombre → cantidad en **&lt; 8 s** con catálogo ya prefetched.
 - [ ] En HTTP por IP: aviso de cámara no disponible; ingreso manual funciona con catálogo cargado.
 - [ ] Modo offline 30+ min: conteos en cola local; banner «N pendientes».
 - [ ] Al reconectar: sync completo o conflictos explícitos en español (no pérdida silenciosa).
