@@ -6,7 +6,9 @@
     <thead class="bg-slate-50 dark:bg-slate-800">
       <tr class="align-bottom">
         <th scope="col" rowspan="{% if modo_presentacion == 'docenas' %}2{% else %}1{% endif %}"
-            class="sticky left-0 top-0 z-30 min-w-[14rem] border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">Artículo</th>
+            class="sticky left-0 top-0 z-30 min-w-[9rem] border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">EAN</th>
+        <th scope="col" rowspan="{% if modo_presentacion == 'docenas' %}2{% else %}1{% endif %}"
+            class="sticky left-[9rem] top-0 z-30 min-w-[14rem] border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">Artículo</th>
         <th scope="col" rowspan="{% if modo_presentacion == 'docenas' %}2{% else %}1{% endif %}"
             class="sticky top-0 z-20 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Talle</th>
         <th scope="col" rowspan="{% if modo_presentacion == 'docenas' %}2{% else %}1{% endif %}"
@@ -41,9 +43,10 @@
     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
       {% for r in filas %}
       <tr class="inv-fila hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
-          data-search="{{ r.nombre_articulo|default:''|lower }} {{ r.talle|default:''|lower }} {{ r.color|default:''|lower }} {{ r.codigo_compuesto|default:''|lower }}"
+          data-search="{{ r.codigo_barras|default:''|lower }} {{ r.nombre_articulo|default:''|lower }} {{ r.talle|default:''|lower }} {{ r.color|default:''|lower }} {{ r.codigo_compuesto|default:''|lower }}"
           x-show="filaVisible($el)">
-        <td class="sticky left-0 z-10 bg-white px-4 py-3 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)] dark:bg-slate-900 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">
+        <td class="sticky left-0 z-10 whitespace-nowrap border-r border-slate-100 bg-white px-3 py-3 align-middle text-sm tabular-nums text-slate-800 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">{{ r.codigo_barras|default:"—" }}</td>
+        <td class="sticky left-[9rem] z-10 bg-white px-4 py-3 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)] dark:bg-slate-900 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">
           <span class="block text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100">{{ r.nombre_articulo }}</span>
         </td>
         <td class="whitespace-nowrap px-3 py-2.5 text-center align-middle text-sm tabular-nums text-slate-800 dark:text-slate-200">{{ r.talle|default:"—" }}</td>
@@ -71,7 +74,7 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="{% if filtros.ambito == 'terminados' %}{{ etapas_columnas|length|add:3 }}{% else %}{{ etapas_columnas|length|add:4 }}{% endif %}" class="px-4 py-14 text-center">
+        <td colspan="{% if filtros.ambito == 'terminados' %}{{ etapas_columnas|length|add:4 }}{% else %}{{ etapas_columnas|length|add:5 }}{% endif %}" class="px-4 py-14 text-center">
           <div class="mx-auto flex max-w-md flex-col items-center gap-2">
             <span class="material-icons text-4xl text-slate-300 dark:text-slate-600" aria-hidden="true">inventory_2</span>
             <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Sin artículos para mostrar</p>
@@ -97,7 +100,7 @@
       {% endfor %}
       {% if filas %}
       <tr x-show="busqueda.trim() !== '' && filasVisibles() === 0" x-cloak>
-        <td colspan="{% if filtros.ambito == 'terminados' %}{{ etapas_columnas|length|add:3 }}{% else %}{{ etapas_columnas|length|add:4 }}{% endif %}" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+        <td colspan="{% if filtros.ambito == 'terminados' %}{{ etapas_columnas|length|add:4 }}{% else %}{{ etapas_columnas|length|add:5 }}{% endif %}" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
           Ningún artículo cargado coincide con la búsqueda.
         </td>
       </tr>
