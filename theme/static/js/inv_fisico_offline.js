@@ -77,6 +77,7 @@
   }
 
   async function buscarPorEan(ean) {
+    /** Coincidencia exacta por EAN (NroCodBarra / NroCodBarraF). Sin código manual ni ID. */
     var codigo = String(ean || '').trim();
     if (!codigo) return null;
     var db = await openDB();
@@ -84,28 +85,42 @@
     var store = tx.objectStore(STORE_CATALOGO);
     var idx = store.index('ean');
     var hit = await promisifyRequest(idx.get(codigo));
-    if (!hit) {
-      var cursorReq = store.openCursor();
-      hit = await new Promise(function (resolve) {
-        cursorReq.onsuccess = function (ev) {
-          var cur = ev.target.result;
-          if (!cur) {
-            resolve(null);
-            return;
-          }
-          var val = cur.value || {};
-          if (String(val.codigo || '').trim() === codigo) {
-            resolve(val);
-            return;
-          }
-          cur.continue();
-        };
-        cursorReq.onerror = function () { resolve(null); };
-      });
-    }
     await txDone(tx);
     db.close();
-    return hit;
+    return hit || null;
+  }
+
+  async function buscarPorEanONombre(consulta) {
+    /**
+     * Ingreso manual: 1) EAN exacto; 2) nombre de artículo (contiene, sin distinguir mayúsculas).
+     * No busca por código manual ni ID de sistema. Devuelve lista (0..N).
+     */
+    var q = String(consulta || '').trim();
+    if (!q) return [];
+    var porEan = await buscarPorEan(q);
+    if (porEan) return [porEan];
+
+    var qNorm = q.toLowerCase();
+    if (qNorm.length < 2) return [];
+
+    var db = await openDB();
+    var tx = db.transaction(STORE_CATALOGO, 'readonly');
+    var store = tx.objectStore(STORE_CATALOGO);
+    var all = await promisifyRequest(store.getAll());
+    await txDone(tx);
+    db.close();
+
+    var hits = [];
+    (all || []).forEach(function (val) {
+      var nombre = String((val && val.nombre) || '').toLowerCase();
+      if (nombre && nombre.indexOf(qNorm) !== -1) {
+        hits.push(val);
+      }
+    });
+    hits.sort(function (a, b) {
+      return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+    });
+    return hits;
   }
 
   async function encolarEvento(evento) {
@@ -240,6 +255,7 @@
     openDB: openDB,
     guardarCatalogo: guardarCatalogo,
     buscarPorEan: buscarPorEan,
+    buscarPorEanONombre: buscarPorEanONombre,
     encolarEvento: encolarEvento,
     listarCola: listarCola,
     syncBatch: syncBatch,
