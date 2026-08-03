@@ -104,13 +104,13 @@
 
                     <div class="ml-auto flex flex-wrap items-center gap-2 self-end">
                         {% include "mpr/includes/chrome_nav_flujo.html" with current="parte" fecha_str=fecha_str only %}
-                        <a href="{% url 'mpr:manual_usuario' %}#sin-cupo-fabricando"
+                        <a href="{% url 'mpr:manual_usuario' %}#parte-produccion"
                            target="_blank"
                            rel="noopener noreferrer"
-                           aria-label="Ayuda: Sin cupo Fabricando"
+                           aria-label="Ayuda: Parte de producción"
                            class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600 hover:text-white">
                             <span class="material-icons text-lg leading-none" aria-hidden="true">help_outline</span>
-                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Ayuda: Sin cupo Fabricando" only %}
+                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Manual: Parte de producción" only %}
                         </a>
                     </div>
                 </header>

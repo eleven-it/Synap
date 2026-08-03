@@ -27,7 +27,7 @@ Las apps **stock**, **compras** y **self_checkout** son **módulos core**: siemp
 |--------|-------------------------|----------------------|
 | **Stock** | stock.ver, stock.crear_movimiento, stock.consultas, stock.ref_movstock, stock.informes | permiso app: stock.ver; vistas con @tiene_permiso |
 | **Compras** | compras.ver, compras.crear, compras.editar, … | permiso app: compras.ver |
-| **Producción (MPR)** | mpr.ver | permiso app: mpr.ver; visibilidad vía `ModuleConfig` |
+| **Producción (MPR)** | mpr.ver, mpr.reportes, mpr.tablero_ver, … | permiso app: `mpr.ver` **OR** `mpr.tablero_ver` **OR** `mpr.reportes`; visibilidad vía `ModuleConfig`. `mpr.reportes` habilita solo el hub `/mpr/reportes/` |
 | **Self-Checkout / TPV** | self_checkout.ver, … | permiso app: self_checkout.ver; siempre activo en menú (`core_modules`) |
 | **Reportes** | reports.ver, … | permiso app: reports.ver; visibilidad vía `ModuleConfig` (bootstrap lo activa) |
 | **IA** | ia.ver, … | permiso app: ia.ver; visibilidad vía `ModuleConfig` |

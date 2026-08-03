@@ -83,22 +83,24 @@ Comportamiento y decisiones de diseño:
 ### Acceso al módulo por permiso granular
 
 El middleware de permisos por módulo (`ModulePermissionMiddleware`) reconoce
-`mpr.parte_operario`, `mpr.tablero_ver`, `mpr.maquinas_lineas` y `mpr.aprobar_parte` como permisos válidos del
+`mpr.parte_operario`, `mpr.tablero_ver`, `mpr.reportes`, `mpr.maquinas_lineas` y `mpr.aprobar_parte` como permisos válidos del
 módulo `mpr` (en `core/module_registry.py`). Así, el **operario puro** (solo
 `mpr.parte_operario`, sin `mpr.ver`) puede acceder a `/mpr/mi-parte/` sin quedar atrapado en
 un bucle dashboard ⇄ carga. Con **`mpr.tablero_ver`** además puede entrar al módulo MPR y ver
-`/mpr/tablero-produccion/` en solo lectura (sin `mpr.ver`). El catálogo Synap (`synap_permiso`) debe tener sembrados estos
+`/mpr/tablero-produccion/` en solo lectura (sin `mpr.ver`). Con solo **`mpr.reportes`** puede abrir
+`/mpr/reportes/` sin Parte, CC, Armado ni configuración. El catálogo Synap (`synap_permiso`) debe tener sembrados estos
 permisos (seed idempotente `seed_synap_permiso_catalog` desde `PERMISOS_POR_MODULO`).
 
-### Matriz de permisos — operario + tablero
+### Matriz de permisos — operario + tablero + reportes
 
-| Permiso | Operario puro (`parte_operario`) | Operario + tablero (`parte_operario` + `tablero_ver`) | Escritorio MPR (`mpr.ver`) |
-|---------|----------------------------------|--------------------------------------------------------|----------------------------|
-| Landing post-login | `/mpr/mi-parte/` | `/mpr/mi-parte/` | Dashboard normal |
-| Menú MPR | Oculto (sin acceso al módulo) | Solo «Tablero de producción» | Menú completo |
-| GET tablero / actualizar / manual | 403 | 200 (solo lectura) | 200 (completo) |
-| POST enviar / CC / reportes / escritorio | 403 | 403 | 200 (según pantalla) |
-| UI tablero | — | Oculta Enviar, E5, enlaces Parte/CC/KPI | Acciones completas |
+| Permiso | Operario puro (`parte_operario`) | Operario + tablero (`parte_operario` + `tablero_ver`) | Solo reportes (`mpr.reportes`) | Escritorio MPR (`mpr.ver`) |
+|---------|----------------------------------|--------------------------------------------------------|--------------------------------|----------------------------|
+| Landing post-login | `/mpr/mi-parte/` | `/mpr/mi-parte/` | `/mpr/reportes/` | Dashboard normal |
+| Menú MPR | Oculto (sin acceso al módulo) | Solo «Tablero de producción» | Solo «Reportes MPR» | Menú completo |
+| GET tablero / actualizar / manual | 403 | 200 (solo lectura) | 403 | 200 (completo) |
+| POST enviar / CC / escritorio | 403 | 403 | 403 | 200 (según pantalla) |
+| GET reportes | 403 | 403 | 200 | 200 |
+| UI tablero | — | Oculta Enviar, E5, enlaces Parte/CC/KPI | — | Acciones completas |
 
 ## Validación (administranet96)
 

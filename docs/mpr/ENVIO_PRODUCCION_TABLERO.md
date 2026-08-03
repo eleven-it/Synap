@@ -220,17 +220,20 @@ Borra: `mpr_envio_produccion`, partes, transiciones, armado surtido, roster. **N
 
 ## Permisos y perfiles (tablero)
 
-| Acción / URL | `mpr.ver` | `mpr.tablero_ver` (sin `mpr.ver`) |
-|--------------|-----------|-----------------------------------|
-| GET `/mpr/tablero-produccion/` | Sí (completo) | Sí (solo lectura) |
-| POST `/mpr/tablero-produccion/actualizar/` | Sí | Sí |
-| GET `/mpr/manual/` | Sí | Sí |
-| POST `/mpr/tablero-produccion/enviar/` | Sí | **403** |
-| GET envíos / POST anular | Sí (supervisor) | **403** |
-| GET clasificación / POST registrar | Sí | **403** |
-| Menú MPR | Completo | Solo «Tablero de producción» |
+| Acción / URL | `mpr.ver` | `mpr.tablero_ver` (sin `mpr.ver`) | `mpr.reportes` (sin `mpr.ver`) |
+|--------------|-----------|-----------------------------------|----------------------------------|
+| GET `/mpr/tablero-produccion/` | Sí (completo) | Sí (solo lectura) | **403** |
+| POST `/mpr/tablero-produccion/actualizar/` | Sí | Sí | **403** |
+| GET `/mpr/manual/` | Sí | Sí | Según vista (manual abierto) |
+| POST `/mpr/tablero-produccion/enviar/` | Sí | **403** | **403** |
+| GET envíos / POST anular | Sí (supervisor) | **403** | **403** |
+| GET clasificación / POST registrar | Sí | **403** | **403** |
+| GET `/mpr/reportes/` | Sí | **403** | Sí |
+| Menú MPR | Completo | Solo «Tablero de producción» | Solo «Reportes MPR» |
 
 Perfil **operario + tablero:** `mpr.parte_operario` + `mpr.tablero_ver`, sin `mpr.ver`. Landing en `/mpr/mi-parte/`; consulta demanda en el tablero sin mutar ledger ni abrir CC/reportes. Flags de contexto: `puede_enviar=False`, `solo_lectura_tablero=True`.
+
+Perfil **solo reportes:** `mpr.reportes` sin `mpr.ver`. Landing y menú en `/mpr/reportes/`; sin Parte, CC, Armado ni tablero.
 
 ---
 

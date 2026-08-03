@@ -47,11 +47,11 @@ Ver §6.
 
 Misma barra densa en:
 
-1. `tablero_produccion.html`
-2. `parte_produccion.html`
-3. `clasificacion_encabezado.html` (+ sin migas en `clasificacion_produccion.html`)
-4. `maquinas_carga_articulos.html` (Asignar artículo a máquina — config planta; sin migas; filtros búsqueda/línea en chrome; chips de artículo en formato multiselección/`tags-filter`, color púrpura)
-5. `armado_tablero.html` (Armado 1ra/2da — única vista; sin migas; búsqueda cliente; Docenas|Pares `variant=dark`; Fecha realizado; atajos Tablero/Imputación; CTA **Ejecutar armado** emerald en 1ra; `chrome_nav_flujo` con `current=armado`. POS/carrito deprecado)
+1. `tablero_produccion.html` (ayuda `help_outline` → `#tablero-produccion`; empty states de artículo ausente → `#articulo-no-en-tablero`)
+2. `parte_produccion.html` (ayuda chrome → `#parte-produccion`; avisos contextuales «Sin cupo» → `#sin-cupo-fabricando`)
+3. `clasificacion_encabezado.html` (+ sin migas en `clasificacion_produccion.html`; ayuda → `#control-calidad`)
+4. `maquinas_carga_articulos.html` (Asignar artículo a máquina — config planta; sin migas; filtros búsqueda/línea en chrome; chips de artículo en formato multiselección/`tags-filter`, color púrpura; ayuda → `#asignar-articulo-maquina`)
+5. `armado_tablero.html` (Armado 1ra/2da — única vista; sin migas; búsqueda cliente; Docenas|Pares `variant=dark`; Fecha realizado; atajos Tablero/Imputación; CTA **Ejecutar armado** emerald en 1ra; `chrome_nav_flujo` con `current=armado`; ayuda → `#armado`. POS/carrito deprecado)
 6. `planificacion_turnos.html` (Planificación de turnos / roster — **config operativa**; sin migas; navegación de semana **Anterior · «Semana del dd/MM/yyyy» · Siguiente** en la barra; CTA **Asignación masiva** púrpura (si hay turnos activos y operarios); **Gestionar turnos** secundario `slate-700` → `turnos_list`; `chrome_nav_flujo` con `current=roster`; ayuda `help_outline` → `#planificacion-turnos`)
 7. `pedidos_fabrica_list.html` (Pedidos con estado de producción — **pantalla de consulta** de demanda alineada al Tablero; sin migas; filtro **Estado** en el chrome (label `text-[10px] text-slate-400` + select `h-9` oscuro + **Filtrar** secundario `slate-700`, GET `?estado=`); chip con cantidad de pedidos listados; CTA primario **Tablero de producción** emerald → `mpr:tablero_produccion`; `chrome_nav_flujo` con `current=tablero_prod`; ayuda `help_outline` → `#tablero-produccion`. **Sin** columna Trazabilidad/Historial ni enlaces a `opts_por_pedido` / `ventana_pack` / `opt_list` (OPT deprecado como flujo y como auditoría desde esta pantalla). Fechas `dd/MM/yyyy`; empty state de una línea)
 
@@ -100,7 +100,7 @@ Los atajos de solo ícono usan tooltip Synap inmediato al hover/foco (`mpr/inclu
 | Tablero KPI | `analytics` | Tablero KPI (ámbar) |
 | Actualizar vista | `refresh` | Actualizar vista (botón con label; `title` con última hora) |
 | Más acciones | `more_horiz` | Más acciones |
-| Ayuda | `help_outline` | Manual del tablero / parte / CC |
+| Ayuda | `help_outline` | Manual de la sección de cada pantalla (`#tablero-produccion`, `#parte-produccion`, `#control-calidad`, `#armado`, …) |
 
 Botón icono: **`h-9 w-9`**, borde slate suave, foco visible. Sin `alert`/`confirm` nativos.
 

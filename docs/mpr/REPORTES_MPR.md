@@ -2,7 +2,18 @@
 
 **Ruta:** `/mpr/reportes/`  
 **Change:** `mpr-reportes-trazabilidad-produccion`  
-**Fecha:** 04/07/2026 — **actualizado 08/07/2026** (Fabricando, control de calidad, componentes vs pack)
+**Fecha:** 04/07/2026 — **actualizado 03/08/2026** (permiso granular `mpr.reportes`)
+
+---
+
+## Permisos
+
+| Permiso | Efecto |
+|---------|--------|
+| `mpr.ver` | Acceso al hub de reportes **y** al resto del escritorio MPR (retrocompatibilidad). |
+| `mpr.reportes` | Acceso **solo** a `/mpr/reportes/` (menú «Reportes MPR», landing y card del módulo). Sin Parte, CC, Armado, tablero ni configuración. |
+
+Regla de acceso en vista: `mpr.ver` **OR** `mpr.reportes` (`MprReportesVerMixin`). Asignación: **Archivo → Parámetros → Asignar permisos por puesto** (pestaña Permisos Synap). Tras cambiar permisos, el usuario debe cerrar sesión y volver a entrar. El catálogo se siembra con `apply_synap_permisos_tables` / `asegurar_synap_schema_si_procede`.
 
 ---
 
