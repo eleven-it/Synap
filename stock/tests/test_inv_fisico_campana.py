@@ -11,14 +11,32 @@ from stock.services import inventario_fisico as svc
 
 
 class TiposMprElegiblesTest(SimpleTestCase):
-    def test_terminado_semi_y_2da_son_elegibles(self):
-        for tipo in ("Terminado", "SemiElaborado", "2daSeleccion"):
+    def test_terminado_y_2da_son_elegibles(self):
+        for tipo in ("Terminado", "2daSeleccion"):
             self.assertTrue(svc.es_tipo_mpr_elegible(tipo))
+
+    def test_semi_elaborado_no_es_elegible(self):
+        self.assertFalse(svc.es_tipo_mpr_elegible("SemiElaborado"))
 
     def test_produccion_no_es_elegible(self):
         self.assertFalse(svc.es_tipo_mpr_elegible("Produccion"))
         self.assertFalse(svc.es_tipo_mpr_elegible(""))
         self.assertFalse(svc.es_tipo_mpr_elegible(None))
+
+
+class TiposArtFabElegiblesTest(SimpleTestCase):
+    def test_terminado_y_fabricado_2da_son_elegibles(self):
+        for tipo in ("Terminado", "Fabricado 2da"):
+            self.assertTrue(svc.es_tipo_art_fab_elegible(tipo))
+
+    def test_fabricado_tercero_y_vacio_no_son_elegibles(self):
+        for tipo in ("Fabricado", "Tercero", "", None, "  "):
+            self.assertFalse(svc.es_tipo_art_fab_elegible(tipo))
+
+    def test_sql_filtro_tipo_art_fab_incluye_placeholders(self):
+        sql, params = svc._sql_filtro_tipo_art_fab("a")
+        self.assertIn("COALESCE(TRIM(a.tipo_art_fab), '') IN", sql)
+        self.assertEqual(set(params), set(svc.TIPOS_ART_FAB_ELEGIBLES))
 
 
 class CalcularDiferenciaTest(SimpleTestCase):
@@ -125,8 +143,13 @@ class CrearCampanaServiceTest(SimpleTestCase):
             "suma_stock": "Si",
         }
         cursor.lastrowid = 42
-        tablas = [{"Tables_in_x": "deposito"}, {"Tables_in_x": "stock_deposito"}]
+        tablas = [
+            {"Tables_in_x": "deposito"},
+            {"Tables_in_x": "stock_deposito"},
+            {"Tables_in_x": "articulo"},
+        ]
         cursor.fetchall.side_effect = [
+            tablas,
             tablas,
             tablas,
             [{"id_articulo": 100, "saldo": Decimal("7.0000")}],
@@ -147,6 +170,17 @@ class CrearCampanaServiceTest(SimpleTestCase):
         linea_inserts = [s for s in inserts if "inv_fisico_linea" in s and "INSERT" in s.upper()]
         self.assertEqual(len(linea_inserts), 1)
         self.assertIn("saldo_snapshot", linea_inserts[0])
+        snapshot_sql = [
+            s for s in inserts if "stock_deposito" in s.lower() and "inner join" in s.lower()
+        ]
+        self.assertEqual(len(snapshot_sql), 1)
+        self.assertIn("tipo_art_fab", snapshot_sql[0].lower())
+        snapshot_args = next(
+            c.args[1]
+            for c in cursor.execute.call_args_list
+            if c.args and "stock_deposito" in c.args[0].lower() and "inner join" in c.args[0].lower()
+        )
+        self.assertEqual(set(snapshot_args[1:]), set(svc.TIPOS_ART_FAB_ELEGIBLES))
 
 
 class InventarioPivoteIntactoTest(SimpleTestCase):

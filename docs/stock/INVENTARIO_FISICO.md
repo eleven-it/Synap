@@ -4,7 +4,8 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 
 ## Alcance MVP
 
-- Campañas mensuales en depósitos MPR (`Terminado`, `SemiElaborado`, `2daSeleccion`).
+- Campañas mensuales en depósitos MPR (`Terminado`, `2daSeleccion`).
+- Solo artículos con `articulo.tipo_art_fab` en **`Terminado`** o **`Fabricado 2da`** (excluye Fabricado, Tercero y vacíos).
 - Conteo ciego offline-first (PWA Nivel A) con sync idempotente.
 - Analizador supervisor con diferencia `contado − snapshot`.
 - Autorización explícita y posteo MSTOCK vía `core/services/administranet_stock.py` (Faltante=3 / Sobrante=4).
@@ -36,7 +37,7 @@ Reconteo ciego: `EnRevision → EnConteo`.
 
 `stock/services/inventario_fisico.py`:
 
-- Campañas, snapshot desde `stock_deposito.saldo`, sync batch, analizador.
+- Campañas, snapshot desde `stock_deposito.saldo` con **INNER JOIN** a `articulo` y filtro `tipo_art_fab`, sync batch, analizador.
 - `calcular_diferencia(contado, snapshot)` = contado − snapshot.
 - `autorizar_y_aplicar_campana`: bloqueo sync → Autorizado → MSTOCK → Aplicado.
 - `anular_campana`: Borrador/EnConteo/EnRevision sin MSTOCK.
