@@ -151,7 +151,7 @@
                     <p class="text-sm text-slate-600 dark:text-slate-300" x-text="articuloSel.codigo"></p>
                     <label class="mt-4 block">
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Cantidad contada</span>
-                        <input type="number" inputmode="decimal" min="0" step="any" x-model="cantidadInput"
+                        <input type="number" inputmode="numeric" min="0" step="1" x-model="cantidadInput"
                                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
                     </label>
                     <button type="button" @click="confirmarConteo()"
@@ -518,11 +518,14 @@ function conteoInvFisico() {
     },
 
     confirmarConteo() {
-      var qty = String(this.cantidadInput || '').trim();
-      if (!qty || isNaN(Number(qty)) || Number(qty) < 0) {
+      var raw = String(this.cantidadInput || '').trim();
+      var n = Number(raw);
+      if (!raw || isNaN(n) || n < 0) {
         this.mensajeError = 'Ingresá una cantidad válida (≥ 0).';
         return;
       }
+      var qty = String(Math.round(n));
+      this.cantidadInput = qty;
       if (this.contadosLocal.has(this.articuloSel.id_articulo)) {
         this.confirmMensaje = 'Ya contaste este artículo. ¿Reemplazar la cantidad por ' + qty + '?';
         this._pendingConteo = { cantidad: qty };

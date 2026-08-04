@@ -8,6 +8,7 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 - Solo artículos con `articulo.tipo_art_fab` en **`Terminado`** o **`Fabricado 2da`** (excluye Fabricado, Tercero y vacíos).
 - Conteo ciego offline-first (PWA Nivel A) con sync idempotente.
 - Analizador supervisor con diferencia `contado − snapshot`.
+- Cantidades en UI (snapshot, contado, diferencia, eventos) se muestran como **enteros** (sin decimales); el ingreso móvil usa `step=1`.
 - Autorización explícita y posteo MSTOCK vía `core/services/administranet_stock.py` (Faltante=3 / Sobrante=4).
 - **Sin** volcado automático a tablas legacy `inventario*` (fase 2 opcional).
 
