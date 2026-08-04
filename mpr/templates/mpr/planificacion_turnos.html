@@ -45,7 +45,7 @@
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
                 <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl"
-                        title="Turno de cada operario por fecha. Solo se editan hoy y fechas futuras.">Planificación de turnos</h1>
+                        title="Turno de cada operario por fecha. No se editan celdas con parte o control de calidad registrado.">Planificación de turnos</h1>
 
                     <div class="flex shrink-0 items-center gap-1.5" role="group" aria-label="Navegación de semana">
                         <a href="?semana={{ semana_anterior|isoformat }}"
@@ -147,16 +147,24 @@
                             {% for dia in dias %}
                             {% with fecha_iso=dia.fecha|isoformat %}
                             {% with asig=op_asigs|dict_get:fecha_iso %}
-                            <td class="border-b border-l border-slate-200 px-2 py-1.5 text-center align-middle dark:border-slate-700{% if dia.fecha == hoy %} bg-purple-50/70 dark:bg-purple-950/30{% endif %}{% if dia.fecha < hoy %} opacity-60{% endif %}">
-                                {% if dia.fecha < hoy %}
-                                    {# Fecha pasada: solo lectura (mismo color; la celda ya baja opacidad) #}
+                            {% with op_bloqueos=celdas_bloqueadas|dict_get:op.id %}
+                            {% with celda_bloq=op_bloqueos|dict_get:fecha_iso %}
+                            <td class="border-b border-l border-slate-200 px-2 py-1.5 text-center align-middle dark:border-slate-700{% if dia.fecha == hoy %} bg-purple-50/70 dark:bg-purple-950/30{% endif %}">
+                                {% if celda_bloq.bloqueada %}
+                                    {# Celda bloqueada por parte o control de calidad #}
                                     {% if asig %}
-                                    <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
+                                    <div class="flex items-center justify-center gap-1" title="{{ celda_bloq.motivo }}">
+                                        <span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400" aria-hidden="true">lock</span>
+                                        <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
+                                    </div>
                                     {% else %}
-                                    <span class="text-slate-300 dark:text-slate-600">—</span>
+                                    <span class="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500" title="{{ celda_bloq.motivo }}">
+                                        <span class="material-icons text-sm leading-none" aria-hidden="true">lock</span>
+                                        <span>—</span>
+                                    </span>
                                     {% endif %}
                                 {% else %}
-                                    {# Fecha hoy o futura: editable #}
+                                    {# Celda editable (pasado, hoy o futuro) #}
                                     {% if asig %}
                                     <div class="flex items-center justify-center gap-1">
                                         <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
@@ -200,6 +208,8 @@
                             </td>
                             {% endwith %}
                             {% endwith %}
+                            {% endwith %}
+                            {% endwith %}
                             {% endfor %}
                         </tr>
                         {% endwith %}
@@ -214,7 +224,7 @@
                 <span class="mpr-turno-badge mpr-turno-badge--{{ t|turno_color }}">{{ t.nombre }}</span>
                 {% endfor %}
                 <span class="mx-0.5 hidden h-4 w-px bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true"></span>
-                <span class="flex items-center gap-1.5"><span class="inline-block h-3 w-3 rounded-full bg-slate-300 dark:bg-slate-600"></span> Fecha pasada (solo lectura)</span>
+                <span class="flex items-center gap-1.5"><span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400">lock</span> Celda bloqueada (parte o CC)</span>
                 <span class="flex items-center gap-1.5"><span class="inline-block h-3.5 w-5 rounded bg-purple-100 dark:bg-purple-900/40"></span> Hoy</span>
             </div>
             {% endif %}
@@ -321,7 +331,7 @@
 
                     <p class="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
                         <span class="material-icons text-sm leading-none" aria-hidden="true">info</span>
-                        Las fechas anteriores a hoy se omitirán.
+                        Se omitirán celdas con parte o control de calidad registrado en esa fecha y turno.
                     </p>
 
                     <div class="flex flex-wrap justify-end gap-2 pt-1">

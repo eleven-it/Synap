@@ -187,35 +187,63 @@ El sistema MUST permitir:
 
 ---
 
-### Requirement: Edición Restringida a Hoy y Futuro — Pasado en Solo Lectura
+### Requirement: Edición bloqueada si hay parte o control de calidad (operario+fecha+turno)
 
-El sistema MUST permitir **crear, editar y borrar asignaciones de roster** SOLO para fechas **hoy o futuras** (fecha >= hoy).
+El sistema MUST permitir **crear, editar y borrar asignaciones de roster** en **cualquier fecha** (pasado, hoy o futuro), salvo cuando exista producción registrada para la combinación **(operario, fecha, turno)**.
 
-El sistema MUST mostrar fechas **pasadas** (fecha < hoy) en **solo lectura**: las asignaciones existentes se visualizan pero NO se pueden modificar ni eliminar.
+El bloqueo MUST aplicarse cuando:
 
-#### Scenario: Editar asignación para fecha futura
+- **Parte:** existe al menos una línea en `mpr_parte` + `mpr_parte_linea` para esa fecha, turno y operario, en **cualquier estado** (incluye borrador).
+- **Control de calidad:** existe al menos una fila en `mpr_transicion_lote` para esa fecha, turno y operario.
 
-- GIVEN hoy es 10/07/2026
-- AND un operario tiene asignado turno "Mañana" para fecha="15/07/2026" (futura)
+El sistema MUST NOT imponer tope de antigüedad ni restricción `fecha >= hoy`.
+
+Al **reasignar** turno T → T': MUST bloquear si hay parte o CC en T **o** en T'.
+
+Al **asignar** vacío → T: MUST bloquear si hay parte o CC en T.
+
+Al **eliminar** asignación con turno T: MUST bloquear si hay parte o CC en T.
+
+La misma asignación T → T (idempotente, p. ej. solo override de línea): MUST permitir aunque haya parte o CC.
+
+La UI MUST marcar celdas bloqueadas con ícono candado y tooltip con el motivo; MUST NOT mostrar selectores ni botón quitar en esas celdas.
+
+#### Scenario: Editar asignación sin producción registrada
+
+- GIVEN un operario tiene asignado turno "Mañana" para fecha="08/07/2026"
+- AND no hay parte ni CC para ese operario en esa fecha y turno
 - WHEN el usuario cambia el turno a "Tarde" en la grilla
 - THEN la asignación se actualiza correctamente
 
-#### Scenario: Intentar editar asignación en fecha pasada
+#### Scenario: Intentar editar asignación con parte registrado
 
-- GIVEN hoy es 10/07/2026
-- AND un operario tiene asignado turno "Mañana" para fecha="08/07/2026" (pasada)
-- WHEN el usuario intenta cambiar el turno en la grilla
+- GIVEN un operario tiene asignado turno "Mañana" para fecha="08/07/2026"
+- AND existe al menos una línea de parte para ese operario, fecha y turno
+- WHEN el usuario intenta cambiar o quitar el turno
 - THEN el sistema rechaza la operación
-- AND retorna mensaje "No se pueden modificar asignaciones de fechas pasadas"
-- AND la celda en UI se muestra deshabilitada (solo lectura)
+- AND retorna mensaje indicando que hay partes registrados
+- AND la celda en UI se muestra bloqueada (candado, sin controles de edición)
 
-#### Scenario: Visualizar asignaciones pasadas sin editar
+#### Scenario: Asignar turno en fecha pasada sin producción
 
 - GIVEN hoy es 10/07/2026
-- AND la grilla muestra semana del 01/07/2026 al 07/07/2026 (toda pasada)
-- WHEN el usuario navega a esa semana
-- THEN todas las asignaciones existentes se muestran
-- AND todos los selectores/botones de edición están deshabilitados
+- AND un operario no tiene turno asignado para fecha="08/07/2026"
+- AND no hay parte ni CC para ese operario en turno "Mañana" el 08/07/2026
+- WHEN el usuario asigna turno "Mañana" en esa celda
+- THEN la asignación se crea correctamente
+
+#### Scenario: Asignación masiva omite celdas bloqueadas
+
+- GIVEN un rango de fechas con al menos una celda con parte o CC registrado
+- WHEN el usuario ejecuta asignación masiva
+- THEN las celdas bloqueadas se omiten (`omitidos_bloqueados`)
+- AND las celdas editables se aplican normalmente
+
+#### Scenario: Reasignación idempotente con parte registrado
+
+- GIVEN un operario tiene turno "Mañana" con parte registrado en esa fecha y turno
+- WHEN el servicio recibe la misma asignación T → T (solo override de línea)
+- THEN la operación se permite sin error
 
 ---
 

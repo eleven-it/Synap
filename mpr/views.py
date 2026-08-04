@@ -6258,6 +6258,7 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, Temp
             "operarios": roster_data["operarios"],
             "dias": roster_data["dias"],
             "asignaciones": roster_data["asignaciones"],
+            "celdas_bloqueadas": roster_data.get("celdas_bloqueadas") or {},
             "hoy": hoy,
         })
         return context

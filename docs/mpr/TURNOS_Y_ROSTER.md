@@ -130,14 +130,15 @@ listar_roster_semana(base_empresa, fecha_lunes: date) -> dict
 #   {
 #     operarios: [{id, nombre}],
 #     dias: [{fecha, fecha_str (dd/MM/yyyy), dia_nombre}],  # 7 días
-#     asignaciones: {id_operario: {"YYYY-MM-DD": {id_turno, nombre_turno}}}
+#     asignaciones: {id_operario: {"YYYY-MM-DD": {id_turno, nombre_turno}}},
+#     celdas_bloqueadas: {id_operario: {"YYYY-MM-DD": {bloqueada, motivo}}}
 #   }
 
 asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno) -> Tuple[bool, Optional[str]]
-# Usa update_or_create (reasignación segura, no duplica). Valida fecha >= hoy.
+# Usa update_or_create (reasignación segura, no duplica). Bloquea si hay parte/CC al cambiar turno.
 
 eliminar_asignacion_roster(base_empresa, fecha_str, id_operario) -> Tuple[bool, Optional[str]]
-# Valida fecha >= hoy.
+# Bloquea si hay parte/CC en el turno asignado.
 ```
 
 ### Asignación masiva (rango)
@@ -157,7 +158,7 @@ asignar_turno_roster_rango(
 
 - **URL:** `planificacion-turnos/asignar-masivo/` (`roster_asignar_masivo`), vista `AsignarTurnoRosterMasivoView` (POST).
 - **Campos del formulario:** `ids_operario` (lista), `id_turno`, `fecha_desde`, `fecha_hasta` (ISO `YYYY-MM-DD` desde inputs HTML), `semana` (redirect).
-- **Reglas:** valida empresa, operarios y turno; recorre el rango con `_iter_dias_rango`; **omite fechas anteriores a hoy** (`omitidos_pasados`); aplica `upsert_roster` por celda operario×fecha (reasignación segura). Retorna resumen `{aplicados, omitidos_pasados, errores}`; éxito parcial si `aplicados > 0`.
+- **Reglas:** valida empresa, operarios y turno; recorre el rango con `_iter_dias_rango`; **omite celdas con parte o CC** (`omitidos_bloqueados`); aplica `upsert_roster` por celda operario×fecha (reasignación segura). Retorna resumen `{aplicados, omitidos_pasados (siempre 0), omitidos_bloqueados, errores}`; éxito parcial si `aplicados > 0`.
 - **Helper UI:** `mensaje_flash_asignacion_masiva(resumen)` construye el mensaje de éxito en español.
 
 ---
@@ -198,9 +199,9 @@ Sigue el mismo patrón que `operarios_list.html`:
 
 - Tabla con sticky-left en columna Operario; `thead` compacto (`text-[10px]`) con fondo opaco.
 - 7 columnas de días (lunes a domingo).
-- Celdas **fecha pasada**: solo lectura (badge atenuado).
-- Celdas **hoy/futuro con asignación**: badge de color del turno + botón "Quitar".
-- Celdas **hoy/futuro sin asignación**: `<select>` de turnos activos + botón confirmar.
+- Celdas **bloqueadas** (parte o CC en operario+fecha+turno asignado): badge + ícono candado + `title` con motivo; sin select ni quitar.
+- Celdas **editables** (sin bloqueo): badge + botón "Quitar" si hay asignación; `<select>` + confirmar si está vacía. Aplica a pasado, hoy y futuro por igual.
+- Columna **hoy** resaltada en púrpura (solo visual; no define editabilidad).
 - `<select>` con JS `onchange` dispara el form automáticamente.
 - Fechas en cabecera: `"Lu dd/MM/yyyy"`.
 - **Quitar turno** abre un **modal Synap** de confirmación (Alpine `confirmOpen`); no se usan
@@ -241,10 +242,10 @@ El link «Quitar» permanece en rojo/rose (acción destructiva) y no compite con
 |---|---|
 | `hora_inicio != hora_fin` | Service `crear_turno` / `actualizar_turno` |
 | Nombre único por empresa | DB `UniqueConstraint` + captura `IntegrityError` en service |
-| `fecha >= hoy` para asignar | Service `asignar_turno_roster` |
-| `fecha >= hoy` para eliminar | Service `eliminar_asignacion_roster` |
+| Bloqueo si hay parte/CC en (operario, fecha, turno) | Repos `operario_tiene_parte_fecha_turno`, `operario_tiene_control_calidad_fecha_turno`; services `asignar_turno_roster`, `eliminar_asignacion_roster`, `asignar_turno_roster_rango` |
 | Unicidad (empresa, fecha, operario) | DB `UniqueConstraint` + `update_or_create` en service |
 | Turno no eliminable con asignaciones | DB `on_delete=PROTECT` |
+| Misma asignación T→T permitida con parte/CC | Service `_motivo_bloqueo_cambio_roster` (idempotente) |
 
 ---
 
@@ -281,12 +282,19 @@ Archivo: `mpr/tests/test_turnos_roster.py`
 | TestServiciosTurnos | test_actualizar_turno | Actualización |
 | TestServiciosTurnos | test_toggle_turno_activo | Toggle activo/inactivo |
 | TestServiciosTurnos | test_listar_turnos_solo_activos | Filtro solo_activos |
-| TestServiciosRoster | test_asignar_turno_fecha_pasada_rechazado | Validación fecha pasada |
-| TestServiciosRoster | test_eliminar_asignacion_fecha_pasada_rechazada | Validación fecha pasada |
+| TestServiciosRoster | test_asignar_turno_fecha_pasada_ok_sin_produccion | Pasado editable sin parte/CC |
+| TestServiciosRoster | test_eliminar_asignacion_fecha_pasada_ok_sin_produccion | Eliminar pasado sin parte/CC |
+| TestServiciosRoster | test_asignar_turno_bloqueado_por_parte | Bloqueo por parte |
+| TestServiciosRoster | test_asignar_turno_bloqueado_por_cc | Bloqueo por CC |
+| TestServiciosRoster | test_eliminar_asignacion_bloqueada_por_parte | Eliminar bloqueado |
+| TestServiciosRoster | test_reasignar_bloqueado_turno_destino_con_cc | Reasignar bloqueado en T' |
+| TestServiciosRoster | test_asignar_mismo_turno_idempotente_con_parte | T→T permitido con parte |
 | TestServiciosRoster | test_asignar_turno_reasignacion_no_duplica | update_or_create |
 | TestServiciosRoster | test_asignar_turno_fecha_futura_ok | Asignar OK |
 | TestServiciosRoster | test_eliminar_asignacion_existente | Eliminar OK |
-| TestServiciosRoster | test_eliminar_asignacion_inexistente | No encontrada |
+| TestAsignarTurnoRosterRango | test_rango_incluye_ayer_aplica_tambien_pasado | Rango incluye fechas pasadas |
+| TestAsignarTurnoRosterRango | test_rango_omite_celdas_bloqueadas | Omite celdas con parte/CC |
+| TestAsignarTurnoRosterRango | test_rango_solo_bloqueos_retorna_mensaje | Mensaje si todo bloqueado |
 
 Ejecutar: `docker exec Synap_app python manage.py test mpr.tests.test_turnos_roster --keepdb --noinput`
 

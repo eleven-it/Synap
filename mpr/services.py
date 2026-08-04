@@ -16767,7 +16767,7 @@ def listar_roster_semana(
     from datetime import timedelta
 
     if not (base_empresa or "").strip():
-        return {"operarios": [], "dias": [], "asignaciones": {}}
+        return {"operarios": [], "dias": [], "asignaciones": {}, "celdas_bloqueadas": {}}
     dias_semana = []
     nombres_dia = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"]
     for i in range(7):
@@ -16796,14 +16796,18 @@ def listar_roster_semana(
                 "id_turno": int(asig["id_mpr_turno"]),
                 "nombre_turno": str(asig.get("nombre_turno") or ""),
             }
+        celdas_bloqueadas = _mapa_celdas_bloqueadas_roster(
+            base_empresa, fecha_lunes, fecha_fin, asignaciones_dict
+        )
         return {
             "operarios": [{"id": op["id"], "nombre": op["label"]} for op in operarios_raw],
             "dias": dias_semana,
             "asignaciones": asignaciones_dict,
+            "celdas_bloqueadas": celdas_bloqueadas,
         }
     except Exception as e:
         logger.error("Error al listar roster semana en %s: %s", base_empresa, e, exc_info=True)
-        return {"operarios": [], "dias": [], "asignaciones": {}}
+        return {"operarios": [], "dias": [], "asignaciones": {}, "celdas_bloqueadas": {}}
 
 
 def _franja_horaria_turno(nombre_turno: str, hora_inicio: Optional[str]) -> Optional[str]:
@@ -16965,6 +16969,101 @@ def operarios_roster_por_franja(
         return resultado
 
 
+def _motivo_bloqueo_roster_celda(
+    base_empresa: str,
+    fecha: date,
+    id_operario: int,
+    id_turno: int,
+) -> Optional[str]:
+    """Motivo de bloqueo si hay parte o CC en operario+fecha+turno; None si editable."""
+    from mpr.repositories.parte import operario_tiene_parte_fecha_turno
+    from mpr.repositories.transicion_lote import operario_tiene_control_calidad_fecha_turno
+
+    if operario_tiene_parte_fecha_turno(base_empresa, fecha, id_operario, id_turno):
+        return (
+            "No se puede modificar: el operario ya tiene partes registrados "
+            "en esa fecha y turno."
+        )
+    if operario_tiene_control_calidad_fecha_turno(base_empresa, fecha, id_operario, id_turno):
+        return (
+            "No se puede modificar: el operario ya tiene control de calidad registrado "
+            "en esa fecha y turno."
+        )
+    return None
+
+
+def _motivo_bloqueo_cambio_roster(
+    base_empresa: str,
+    fecha: date,
+    id_operario: int,
+    turno_actual: Optional[int],
+    turno_nuevo: Optional[int],
+) -> Optional[str]:
+    """
+    Valida bloqueo al cambiar asignación. Misma asignación T→T (idempotente) permite
+    aunque haya parte/CC; reasignar o quitar valida turno actual y/o nuevo.
+    """
+    actual = to_int_or_none(turno_actual)
+    nuevo = to_int_or_none(turno_nuevo)
+    if actual is not None and nuevo is not None and actual == nuevo:
+        return None
+    turnos_a_validar: set = set()
+    if actual is not None:
+        turnos_a_validar.add(actual)
+    if nuevo is not None:
+        turnos_a_validar.add(nuevo)
+    for tid in turnos_a_validar:
+        motivo = _motivo_bloqueo_roster_celda(base_empresa, fecha, id_operario, tid)
+        if motivo:
+            return motivo
+    return None
+
+
+def _mapa_celdas_bloqueadas_roster(
+    base_empresa: str,
+    fecha_desde: date,
+    fecha_hasta: date,
+    asignaciones: Dict[int, Dict[str, Any]],
+) -> Dict[int, Dict[str, Dict[str, Any]]]:
+    """Mapa UI: id_operario → fecha ISO → {bloqueada, motivo} según turno asignado."""
+    from mpr.repositories.parte import set_operarios_con_parte_en_rango
+    from mpr.repositories.transicion_lote import set_operarios_con_cc_en_rango
+
+    if not asignaciones:
+        return {}
+    parte_set = set_operarios_con_parte_en_rango(base_empresa, fecha_desde, fecha_hasta)
+    cc_set = set_operarios_con_cc_en_rango(base_empresa, fecha_desde, fecha_hasta)
+    celdas: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    msg_parte = (
+        "No se puede modificar: el operario ya tiene partes registrados "
+        "en esa fecha y turno."
+    )
+    msg_cc = (
+        "No se puede modificar: el operario ya tiene control de calidad registrado "
+        "en esa fecha y turno."
+    )
+    for op_id, por_fecha in asignaciones.items():
+        oid = to_int_or_none(op_id)
+        if oid is None:
+            continue
+        for fecha_key, asig in (por_fecha or {}).items():
+            tid = to_int_or_none(asig.get("id_turno"))
+            if tid is None:
+                continue
+            clave = (oid, fecha_key, tid)
+            motivo = None
+            if clave in parte_set:
+                motivo = msg_parte
+            elif clave in cc_set:
+                motivo = msg_cc
+            if motivo:
+                celdas.setdefault(oid, {})[fecha_key] = {
+                    "bloqueada": True,
+                    "motivo": motivo,
+                }
+    return celdas
+
+
 def asignar_turno_roster(
     base_empresa: str,
     fecha_str: str,
@@ -16975,7 +17074,7 @@ def asignar_turno_roster(
     """
     Asigna (o reasigna) un turno a un operario en una fecha.
     Usa update_or_create para garantizar constraint único (no duplica).
-    Validaciones: fecha >= hoy, turno existe, operario existe.
+    Validaciones: turno existe, operario existe; bloqueo si hay parte/CC al cambiar turno.
     `id_linea` es el override de línea del día (None = usar la habitual).
     Returns:
         (ok, mensaje_error)
@@ -16986,10 +17085,10 @@ def asignar_turno_roster(
     fecha_obj, error = _parse_fecha_ddmmaaaa(fecha_str)
     if error:
         return False, error
-    hoy = date.today()
-    if fecha_obj < hoy:
-        return False, "No se pueden asignar turnos en fechas pasadas."
-    turno = obtener_turno(base_empresa, id_turno)
+    id_turno_norm = to_int_or_none(id_turno)
+    if id_turno_norm is None:
+        return False, "Turno inválido."
+    turno = obtener_turno(base_empresa, id_turno_norm)
     if not turno:
         return False, "Turno no encontrado."
     operario_data = obtener_operario(base_empresa, id_operario)
@@ -17005,9 +17104,15 @@ def asignar_turno_roster(
         if not linea.get("activo"):
             return False, "La línea de override está inactiva."
     try:
-        from mpr.repositories.turno_roster import upsert_roster
+        from mpr.repositories.turno_roster import turno_del_operario_dia, upsert_roster
 
-        upsert_roster(base_empresa, fecha_obj, id_operario, id_turno, id_mpr_linea=id_linea_norm)
+        turno_actual = turno_del_operario_dia(base_empresa, id_operario, fecha_obj)
+        motivo = _motivo_bloqueo_cambio_roster(
+            base_empresa, fecha_obj, id_operario, turno_actual, id_turno_norm
+        )
+        if motivo:
+            return False, motivo
+        upsert_roster(base_empresa, fecha_obj, id_operario, id_turno_norm, id_mpr_linea=id_linea_norm)
         return True, None
     except IntegrityError as e:
         logger.error("IntegrityError al asignar turno roster en %s: %s", base_empresa, e, exc_info=True)
@@ -17018,7 +17123,7 @@ def asignar_turno_roster(
 
 
 def _resumen_asignacion_masiva_vacio() -> Dict[str, Any]:
-    return {"aplicados": 0, "omitidos_pasados": 0, "errores": []}
+    return {"aplicados": 0, "omitidos_pasados": 0, "omitidos_bloqueados": 0, "errores": []}
 
 
 def _parse_fecha_roster_input(fecha_raw: Any) -> Tuple[Optional[date], Optional[str]]:
@@ -17051,11 +17156,13 @@ def _parse_fecha_roster_input(fecha_raw: Any) -> Tuple[Optional[date], Optional[
 def mensaje_flash_asignacion_masiva(resumen: Dict[str, Any]) -> str:
     """Construye mensaje en español para flash messages de asignación masiva."""
     aplicados = int(resumen.get("aplicados") or 0)
-    omitidos = int(resumen.get("omitidos_pasados") or 0)
+    omitidos_bloqueados = int(resumen.get("omitidos_bloqueados") or 0)
     errores = resumen.get("errores") or []
     partes = [f"Se asignaron {aplicados} día(s)."]
-    if omitidos:
-        partes.append(f" Se omitieron {omitidos} fecha(s) pasada(s).")
+    if omitidos_bloqueados:
+        partes.append(
+            f" Se omitieron {omitidos_bloqueados} celda(s) con parte o control de calidad."
+        )
     if errores:
         partes.append(f" {len(errores)} asignación(es) no se pudieron aplicar.")
     return "".join(partes)
@@ -17071,7 +17178,7 @@ def asignar_turno_roster_rango(
 ) -> Tuple[bool, Optional[str], Dict[str, Any]]:
     """
     Asigna un turno a varios operarios en un rango de fechas (upsert por celda).
-    Omite fechas pasadas. Retorna (ok, mensaje_error, resumen).
+    Omite celdas bloqueadas por parte o control de calidad. Retorna (ok, mensaje_error, resumen).
     """
     from django.db import IntegrityError
 
@@ -17128,16 +17235,18 @@ def asignar_turno_roster_rango(
     if not operarios_validos:
         return False, "Operario no encontrado.", resumen
 
-    hoy = date.today()
-
     try:
-        from mpr.repositories.turno_roster import upsert_roster
+        from mpr.repositories.turno_roster import turno_del_operario_dia, upsert_roster
 
         for d in _iter_dias_rango(desde, hasta):
-            if d < hoy:
-                resumen["omitidos_pasados"] += 1
-                continue
             for oid in operarios_validos:
+                turno_actual = turno_del_operario_dia(base_empresa, oid, d)
+                motivo = _motivo_bloqueo_cambio_roster(
+                    base_empresa, d, oid, turno_actual, id_turno_norm
+                )
+                if motivo:
+                    resumen["omitidos_bloqueados"] += 1
+                    continue
                 try:
                     upsert_roster(
                         base_empresa, d, oid, id_turno_norm, id_mpr_linea=id_linea_norm
@@ -17181,12 +17290,16 @@ def asignar_turno_roster_rango(
         return False, "Error al asignar turnos.", resumen
 
     aplicados = resumen["aplicados"]
-    omitidos = resumen["omitidos_pasados"]
+    omitidos_bloqueados = int(resumen.get("omitidos_bloqueados") or 0)
     errores = resumen["errores"]
 
     if aplicados == 0:
-        if omitidos > 0 and not errores:
-            return False, "No hay fechas editables en el rango (solo hoy o futuras).", resumen
+        if omitidos_bloqueados > 0 and not errores:
+            return (
+                False,
+                "No se aplicó ninguna asignación: todas las celdas tienen parte o control de calidad.",
+                resumen,
+            )
         if errores:
             return False, errores[0]["msg"], resumen
         return False, "No se aplicó ninguna asignación.", resumen
@@ -17201,7 +17314,7 @@ def eliminar_asignacion_roster(
 ) -> Tuple[bool, Optional[str]]:
     """
     Elimina la asignación de turno de un operario en una fecha.
-    Validación: fecha >= hoy.
+    Bloquea si hay parte o CC en el turno asignado.
     Returns:
         (ok, mensaje_error)
     """
@@ -17210,12 +17323,17 @@ def eliminar_asignacion_roster(
     fecha_obj, error = _parse_fecha_ddmmaaaa(fecha_str)
     if error:
         return False, error
-    hoy = date.today()
-    if fecha_obj < hoy:
-        return False, "No se pueden eliminar asignaciones de fechas pasadas."
     try:
-        from mpr.repositories.turno_roster import eliminar_roster
+        from mpr.repositories.turno_roster import eliminar_roster, turno_del_operario_dia
 
+        turno_actual = turno_del_operario_dia(base_empresa, id_operario, fecha_obj)
+        if turno_actual is None:
+            return False, "No se encontró asignación para eliminar."
+        motivo = _motivo_bloqueo_cambio_roster(
+            base_empresa, fecha_obj, id_operario, turno_actual, None
+        )
+        if motivo:
+            return False, motivo
         deleted = eliminar_roster(base_empresa, fecha_obj, id_operario)
         if deleted == 0:
             return False, "No se encontró asignación para eliminar."
