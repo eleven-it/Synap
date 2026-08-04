@@ -37,8 +37,9 @@ tr.armado-inicio-maquina > td {
          x-init="cargarResultado((document.getElementById('resultado-lote-armado') || {}).textContent || 'null')">
         {{ resultado_lote|json_script:"resultado-lote-armado" }}
 
-        {# Chrome denso slate-800 — sticky bajo navbar (mismo criterio que Tablero / Parte / CC) #}
-        <div class="sticky top-14 z-40 mb-3 flex-shrink-0 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16">
+        {# Chrome + panel Ya armado en el mismo sticky: evita que el toggle quede bajo la barra oscura #}
+        <div class="sticky top-14 z-40 mb-3 flex-shrink-0 space-y-2 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16"
+             x-data="{ abiertoYaArmado: {{ armados_del_dia|length|yesno:'true,false' }} }">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
                 <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div class="flex shrink-0 items-center gap-2">
@@ -137,55 +138,58 @@ tr.armado-inicio-maquina > td {
                     </div>
                 </header>
             </div>
-        </div>
 
-        <div class="mb-2 flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800/80"
-             x-data="{ abierto: {{ armados_del_dia|length|yesno:'true,false' }} }">
-            <button type="button"
-                    class="flex w-full items-center gap-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200"
-                    @click="abierto = !abierto"
-                    :aria-expanded="abierto.toString()">
-                <span class="material-icons text-base text-slate-500" aria-hidden="true"
-                      x-text="abierto ? 'expand_less' : 'expand_more'"></span>
-                <span>
-                    Ya armado el {{ fecha_realizado_default }}
-                    <span class="font-normal text-slate-500 dark:text-slate-400">
-                        · {{ armados_del_dia|length }} artículo(s)
-                        {% if armados_del_dia_total_packs %}· {{ armados_del_dia_total_packs }} pack(s){% endif %}
+            <div class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
+                <button type="button"
+                        class="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/60"
+                        @click="abiertoYaArmado = !abiertoYaArmado"
+                        :aria-expanded="abiertoYaArmado.toString()"
+                        aria-controls="panel-ya-armado">
+                    <span class="material-icons text-base text-slate-500" aria-hidden="true"
+                          x-text="abiertoYaArmado ? 'expand_less' : 'expand_more'"></span>
+                    <span class="min-w-0 flex-1">
+                        Ya armado el {{ fecha_realizado_default }}
+                        <span class="font-normal text-slate-500 dark:text-slate-400">
+                            · {{ armados_del_dia|length }} artículo(s)
+                            {% if armados_del_dia_total_packs %}· {{ armados_del_dia_total_packs }} pack(s){% endif %}
+                        </span>
                     </span>
-                </span>
-            </button>
-            <div x-show="abierto"
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0 -translate-y-1"
-                 x-transition:enter-end="opacity-100 translate-y-0"
-                 class="mt-2 max-h-36 overflow-auto border-t border-slate-100 pt-2 dark:border-slate-700">
-                {% if armados_del_dia %}
-                <table class="w-full text-left text-xs">
-                    <thead>
-                        <tr class="text-[10px] uppercase tracking-wide text-slate-500">
-                            <th class="pb-1 pr-2 font-semibold">Artículo</th>
-                            <th class="pb-1 text-right font-semibold">Packs</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                        {% for mov in armados_del_dia %}
-                        <tr>
-                            <td class="py-1 pr-2 text-slate-800 dark:text-slate-100">
-                                <span class="font-medium">{{ mov.descripcion_articulo }}</span>
-                            </td>
-                            <td class="py-1 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{{ mov.cantidad_packs }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                    No hay armados aprobados con fecha realizado {{ fecha_realizado_default }}.
-                    La grilla de abajo es capacidad actual para armar; no es el historial.
-                </p>
-                {% endif %}
+                    <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide text-slate-400"
+                          x-text="abiertoYaArmado ? 'Ocultar' : 'Mostrar'"></span>
+                </button>
+                <div id="panel-ya-armado"
+                     x-show="abiertoYaArmado"
+                     x-cloak
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0 -translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="mt-1 max-h-36 overflow-auto border-t border-slate-100 pt-2 dark:border-slate-700">
+                    {% if armados_del_dia %}
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="text-[10px] uppercase tracking-wide text-slate-500">
+                                <th class="pb-1 pr-2 font-semibold">Artículo</th>
+                                <th class="pb-1 text-right font-semibold">Packs</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                            {% for mov in armados_del_dia %}
+                            <tr>
+                                <td class="py-1 pr-2 text-slate-800 dark:text-slate-100">
+                                    <span class="font-medium">{{ mov.descripcion_articulo }}</span>
+                                </td>
+                                <td class="py-1 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{{ mov.cantidad_packs }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        No hay armados aprobados con fecha realizado {{ fecha_realizado_default }}.
+                        La grilla de abajo es capacidad actual para armar; no es el historial.
+                    </p>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
