@@ -7,7 +7,8 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 - Campañas mensuales en depósitos MPR (`Terminado`, `2daSeleccion`).
 - Solo artículos con `articulo.tipo_art_fab` en **`Terminado`** o **`Fabricado 2da`** (excluye Fabricado, Tercero y vacíos).
 - Conteo ciego offline-first (PWA Nivel A) con sync idempotente.
-- Analizador supervisor con diferencia `contado − snapshot` (columna UI **Disponible**, campo interno `saldo_snapshot`).
+- Analizador supervisor con diferencia `contado − snapshot` (columna UI **Disponible**, campo interno `saldo_snapshot`) y **ajuste post-snapshot** (ver sección siguiente).
+- **Ajuste post-snapshot (implementado):** gap de movimientos posteriores al snapshot; MSTOCK usa **Diferencia real**. Detalle en [`PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md`](PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md).
 - Cantidades en UI (disponible, contado, diferencia, eventos) se muestran como **enteros** (sin decimales); el ingreso móvil usa `inputmode="numeric"` y validación JavaScript ≥ 0.
 - Autorización explícita y posteo MSTOCK vía `core/services/administranet_stock.py` (Faltante=3 / Sobrante=4).
 - **Sin** volcado automático a tablas legacy `inventario*` (fase 2 opcional).
@@ -19,10 +20,11 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 | Tabla | Rol |
 |-------|-----|
 | `inv_fisico_campana` | Cabecera: fecha, estado, depósitos JSON, contadores, `id_movimiento_mstock` |
-| `inv_fisico_linea` | Proyección artículo×depósito: `saldo_snapshot`, `cantidad_contada`, `diferencia` (privados al contador) |
+| `inv_fisico_linea` | Proyección artículo×depósito: `saldo_snapshot`, `cantidad_contada`, `diferencia` (privados al contador); columnas de ajuste post-snapshot (`ajuste_sistema`, `ajuste_manual`, `diferencia_real`, …) solo supervisor |
 | `inv_fisico_evento` | Ledger append-only con `client_event_id` UNIQUE (sync idempotente) |
+| `inv_fisico_ajuste_auditoria` | Historial override / recalc / autorización MSTOCK por línea |
 
-DDL idempotente: `stock/sql/001_inv_fisico_tables.sql` → proveedor `run_stock_inv_fisico_tables_mysql` en `core/services/legacy_mysql_schema/catalog.py`.
+DDL idempotente: `stock/sql/001_inv_fisico_tables.sql` + `002_inv_fisico_ajuste_post_snapshot.sql` → proveedor `run_stock_inv_fisico_tables_mysql` en `core/services/legacy_mysql_schema/catalog.py`. Índice opcional en tabla legacy `stock`: proveedor `stock_indice_fechacontrol` (`idx_stock_dep_fechactrl` sobre `CodDeposito`, `FechaControl`).
 
 ### Estados de campaña
 
@@ -39,9 +41,41 @@ Reconteo ciego: `EnRevision → EnConteo`.
 `stock/services/inventario_fisico.py`:
 
 - Campañas, snapshot desde `stock_deposito.saldo` con **INNER JOIN** a `articulo` y filtro `tipo_art_fab`, sync batch, analizador.
-- `calcular_diferencia(contado, snapshot)` = contado − snapshot.
-- `autorizar_y_aplicar_campana`: bloqueo sync → Autorizado → MSTOCK → Aplicado.
+- `calcular_diferencia(contado, snapshot)` = contado − snapshot (legacy; contador no la ve).
+- **Ajuste post-snapshot:** funciones puras `ajuste_efectivo`, `calcular_disponible_ajustado`, `calcular_diferencia_real`, `hay_descuadre`; persistencia en `inv_fisico_linea`; auditoría en `inv_fisico_ajuste_auditoria`.
+- `autorizar_y_aplicar_campana`: recalc fresco → bloqueo sync → Autorizado → MSTOCK por **diferencia_real** → Aplicado.
 - `anular_campana`: Borrador/EnConteo/EnRevision sin MSTOCK.
+
+### Ajuste post-snapshot (supervisor)
+
+**Fuente de movimientos:** tabla legacy `stock` (renglones por artículo×depósito), filtrada por `CodDeposito IN depósitos de campaña`, `FechaControl >= inv_fisico_campana.fecha_snapshot` y `Anulado <> 'Si'`. Campo temporal **autoritativo = `stock.FechaControl`** (TIMESTAMP de inserción; no usar `stock.Fecha` ni solo la cabecera `movimiento_stock`). Desglose en detalle de línea con JOIN opcional a `movimiento_stock` para motivo/comprobante.
+
+**Fórmulas:**
+
+```
+Cargado después (ajuste_sistema) = Σ (Entrada − Salida) post-snapshot por artículo×depósito
+Ajuste efectivo                  = ajuste_manual si existe; si no, ajuste_sistema
+Disponible ajustado              = saldo_snapshot + ajuste_efectivo
+Diferencia real                  = cantidad_contada − disponible_ajustado  (NULL si no contado)
+```
+
+**Control de descuadre:** `saldo_actual_ref` = `stock_deposito.saldo` al recalcular; si difiere de `snapshot + ajuste_sistema`, el analizador muestra aviso (no bloquea).
+
+**Flujo refresh / override / autorizar:**
+
+1. Al abrir analizador (estado no final): `recalcular_ajuste_post_snapshot(pisar_overrides=False)`.
+2. Botón **Actualizar ajustes post-snapshot** → POST `/stock/api/campana/<id>/ajuste/recalcular/`; modal Synap si hay overrides (conservar vs reemplazar).
+3. Override por línea → POST/DELETE `/stock/api/campana/<id>/linea/<id_linea>/ajuste/` + auditoría.
+4. Detalle línea → GET movimientos post-snapshot; tabla con fecha dd/MM/yyyy.
+5. **Autorizar** → recalc preservando overrides → MSTOCK solo líneas con `cantidad_contada IS NOT NULL` y `diferencia_real <> 0` (motivo 3 Faltante / 4 Sobrante por signo).
+
+**APIs nuevas (permiso `gestionar`):**
+
+| Ruta | Método | Acción |
+|------|--------|--------|
+| `/stock/api/campana/<id>/ajuste/recalcular/` | POST | Recalcular ajustes (`pisar_overrides` opcional) |
+| `/stock/api/campana/<id>/linea/<id_linea>/ajuste/` | POST / DELETE | Guardar / quitar override |
+| `/stock/api/campana/<id>/linea/<id_linea>/movimientos/` | GET | Desglose movimientos post-snapshot |
 
 ### Rutas
 
@@ -84,7 +118,7 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 
 `inventario_fisico_crear_view` acepta `contadores` (lista) + `contadores_texto` y `accion` (`crear_abrir`/`crear_borrador`); `inventario_fisico_monitor_view` acepta `accion=reasignar`.
 
-**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia) vía GET `filtro`; multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. Columna de saldo al abrir conteo: **Disponible** (campo interno `saldo_snapshot`).
+**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia) vía GET `filtro` sobre **Diferencia real**; columnas **Disponible** (`saldo_snapshot`), **Cargado después**, **Disponible ajustado**, **Contado**, **Diferencia real**, **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas.
 
 ### Offline (PWA)
 
@@ -122,7 +156,7 @@ Las pantallas de conteo tienen **templates mobile dedicados** seleccionados por 
 
 ### Seguridad / no-filtración
 
-- APIs contador **no** serializan `saldo_snapshot` ni `diferencia` (tests `test_inv_fisico_no_filtracion.py`).
+- APIs contador **no** serializan `saldo_snapshot`, `diferencia` ni campos de ajuste post-snapshot (`ajuste_sistema`, `ajuste_manual`, `ajuste_efectivo`, `disponible_ajustado`, `diferencia_real`, `saldo_actual_ref`) — lista `CAMPOS_PROHIBIDOS_CONTEO` en `inventario_fisico.py` (tests `test_inv_fisico_no_filtracion.py`).
 - Autorización bloqueada si:
   - `pendientes_cliente > 0` (cola IndexedDB reportada por UI), o
   - conflictos `resultado=conflicto` en `inv_fisico_evento`, o
@@ -130,13 +164,13 @@ Las pantallas de conteo tienen **templates mobile dedicados** seleccionados por 
 
 ### MSTOCK
 
-Tras autorización, por cada grupo (depósito × motivo):
+Tras autorización (con recálculo fresco de ajustes), por cada grupo (depósito × motivo):
 
-- Diferencia &lt; 0 → motivo **Faltante (3)**, renglón **Salida**.
-- Diferencia &gt; 0 → motivo **Sobrante (4)**, renglón **Entrada**.
-- Diferencia = 0 → sin movimiento.
+- **Diferencia real** &lt; 0 → motivo **Faltante (3)**, renglón **Salida**.
+- **Diferencia real** &gt; 0 → motivo **Sobrante (4)**, renglón **Entrada**.
+- **Diferencia real** = 0 → sin movimiento (aunque la diferencia cruda snapshot ≠ 0).
 
-Invoca `administranet_stock.alta_movimiento` con cabecera MSTOCK y renglones normalizados (`administranet_types`).
+Invoca `administranet_stock.alta_movimiento` con cabecera MSTOCK y renglones normalizados (`administranet_types`). Auditoría por línea en `inv_fisico_ajuste_auditoria` con `accion='autorizacion'` y `codigo_movimiento`.
 
 ## Permisos
 
@@ -164,7 +198,7 @@ Rollback despliegue: deshabilitar URLs/permisos; quitar whitelist PWA; DDL no de
 docker exec Synap_app python manage.py test stock.tests.test_inv_fisico_*
 ```
 
-Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`, `offline_static`, `ajuste`, `urls`, `permisos`.
+Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`, `offline_static`, `ajuste`, `ajuste_post_snapshot`, `urls`, `permisos`.
 
 ## Checklist verificación MVP (manual)
 
@@ -186,9 +220,9 @@ Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`,
 - [ ] Asignar contadores; abrir conteo (`EnConteo`).
 - [ ] Monitor muestra progreso y conflictos sync.
 - [ ] Cerrar conteo → `EnRevision`.
-- [ ] Analizador: filtros faltante/sobrante; multi-marca (GET `marcas_incluidos`); búsqueda en vivo por código/nombre; columna **Disponible**; detalle línea en ≤ 2 clics desde monitor.
+- [ ] Analizador: filtros faltante/sobrante; multi-marca (GET `marcas_incluidos`); búsqueda en vivo por código/nombre; columnas **Disponible**, **Cargado después**, **Disponible ajustado**, **Diferencia real**, **Contador**; botón actualizar ajustes; detalle línea con movimientos post-snapshot en ≤ 2 clics desde monitor.
 - [ ] Autorizar bloqueado si hay `pendientes_cliente` o conflictos sync.
-- [ ] Autorizar OK → campaña `Aplicado`, MSTOCK Faltante/Sobrante, línea diff=0 sin movimiento.
+- [ ] Autorizar OK → campaña `Aplicado`, MSTOCK Faltante/Sobrante según **diferencia real**, línea diff_real=0 sin movimiento.
 - [ ] Anular en `EnConteo` → `Anulado` sin MSTOCK.
 
 ### Separación consulta pivote

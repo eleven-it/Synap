@@ -50,6 +50,33 @@ class ConstruirRenglonMstockTest(SimpleTestCase):
         self.assertEqual(reng["salida"], Decimal("0"))
         self.assertEqual(reng["ES"], "E")
 
+    def test_prioriza_diferencia_real_sobre_legacy(self):
+        linea = {
+            "id_articulo": 12,
+            "id_deposito": 3,
+            "diferencia": Decimal("10"),
+            "diferencia_real": Decimal("-3"),
+            "codigo": "ART-12",
+            "nombre": "Artículo doce",
+        }
+        reng = svc.construir_renglon_mstock(linea)
+        self.assertEqual(reng["salida"], Decimal("3"))
+        self.assertEqual(reng["entrada"], Decimal("0"))
+        self.assertEqual(reng["ES"], "S")
+
+    def test_diferencia_real_cero_sin_movimiento(self):
+        linea = {
+            "id_articulo": 13,
+            "id_deposito": 3,
+            "diferencia": Decimal("5"),
+            "diferencia_real": Decimal("0"),
+            "codigo": "ART-13",
+            "nombre": "Artículo trece",
+        }
+        reng = svc.construir_renglon_mstock(linea)
+        self.assertEqual(reng["entrada"], Decimal("0"))
+        self.assertEqual(reng["salida"], Decimal("0"))
+
 
 class BloqueoAutorizacionSyncTest(SimpleTestCase):
     def test_bloqueado_si_pendientes_cliente(self):
@@ -122,15 +149,24 @@ class AutorizarCampanaServiceTest(SimpleTestCase):
 
     @patch("stock.services.inventario_fisico.transicionar_campana")
     @patch("core.services.administranet_stock.alta_movimiento")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
     @patch("stock.services.inventario_fisico.contar_conflictos_sync")
     @patch("stock.services.inventario_fisico.obtener_campana")
     @patch("stock.services.inventario_fisico._query_lineas_analizador")
     @patch("stock.services.inventario_fisico.mysql_cursor")
     def test_autoriza_aplica_mstock_y_transiciona(
-        self, mock_cursor_ctx, mock_lineas, mock_obtener, mock_conflictos, mock_alta, mock_transicion
+        self,
+        mock_cursor_ctx,
+        mock_lineas,
+        mock_obtener,
+        mock_conflictos,
+        mock_recalc,
+        mock_alta,
+        mock_transicion,
     ):
         mock_obtener.return_value = self._campana_revision()
         mock_conflictos.return_value = 0
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 3})
         mock_alta.return_value = (True, Decimal("9001"), "00012345", None, None)
         mock_transicion.return_value = (True, {"estado": svc.ESTADO_APLICADO})
         cursor = MagicMock()
@@ -144,6 +180,7 @@ class AutorizarCampanaServiceTest(SimpleTestCase):
                 "saldo_snapshot": Decimal("10"),
                 "cantidad_contada": Decimal("12"),
                 "diferencia": Decimal("2"),
+                "diferencia_real": Decimal("2"),
                 "codigo": "A100",
                 "nombre": "Art 100",
             },
@@ -154,6 +191,7 @@ class AutorizarCampanaServiceTest(SimpleTestCase):
                 "saldo_snapshot": Decimal("5"),
                 "cantidad_contada": Decimal("4"),
                 "diferencia": Decimal("-1"),
+                "diferencia_real": Decimal("-1"),
                 "codigo": "A101",
                 "nombre": "Art 101",
             },
@@ -164,8 +202,20 @@ class AutorizarCampanaServiceTest(SimpleTestCase):
                 "saldo_snapshot": Decimal("7"),
                 "cantidad_contada": Decimal("7"),
                 "diferencia": Decimal("0"),
+                "diferencia_real": Decimal("0"),
                 "codigo": "A102",
                 "nombre": "Art 102",
+            },
+            {
+                "id_linea": 4,
+                "id_articulo": 103,
+                "id_deposito": 3,
+                "saldo_snapshot": Decimal("20"),
+                "cantidad_contada": Decimal("25"),
+                "diferencia": Decimal("5"),
+                "diferencia_real": Decimal("0"),
+                "codigo": "A103",
+                "nombre": "Art 103",
             },
         ]
 
@@ -182,6 +232,9 @@ class AutorizarCampanaServiceTest(SimpleTestCase):
         self.assertEqual(result["movimientos_mstock"], 2)
         self.assertEqual(mock_alta.call_count, 2)
         self.assertGreaterEqual(mock_transicion.call_count, 2)
+        mock_recalc.assert_called_once_with(
+            "emp", 7, id_usuario=9, pisar_overrides=False
+        )
 
     @patch("core.services.administranet_stock.alta_movimiento")
     @patch("stock.services.inventario_fisico.obtener_campana")
@@ -224,9 +277,11 @@ class AnularCampanaServiceTest(SimpleTestCase):
 
 
 class ListarLineasAnalizadorTest(SimpleTestCase):
+    @patch("stock.services.inventario_fisico.listar_contadores_candidatos")
     @patch("stock.services.inventario_fisico._query_lineas_analizador")
     @patch("stock.services.inventario_fisico.mysql_cursor")
-    def test_filtro_faltante_solo_negativas(self, mock_cursor_ctx, mock_query):
+    def test_filtro_faltante_solo_negativas(self, mock_cursor_ctx, mock_query, mock_candidatos):
+        mock_candidatos.return_value = []
         cursor = MagicMock()
         mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
         mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -238,6 +293,7 @@ class ListarLineasAnalizadorTest(SimpleTestCase):
                 "saldo_snapshot": Decimal("10"),
                 "cantidad_contada": Decimal("8"),
                 "diferencia": Decimal("-2"),
+                "diferencia_real": Decimal("-2"),
                 "codigo": "X1",
                 "nombre": "Uno",
                 "id_contador": 10,
@@ -250,6 +306,7 @@ class ListarLineasAnalizadorTest(SimpleTestCase):
                 "saldo_snapshot": Decimal("5"),
                 "cantidad_contada": Decimal("7"),
                 "diferencia": Decimal("2"),
+                "diferencia_real": Decimal("2"),
                 "codigo": "X2",
                 "nombre": "Dos",
                 "id_contador": 10,
@@ -259,11 +316,13 @@ class ListarLineasAnalizadorTest(SimpleTestCase):
 
         lineas = svc.listar_lineas_analizador("emp", 1, filtro="faltante")
         self.assertEqual(len(lineas), 1)
-        self.assertEqual(lineas[0]["diferencia"], Decimal("-2"))
+        self.assertEqual(lineas[0]["diferencia_real"], Decimal("-2"))
 
+    @patch("stock.services.inventario_fisico.listar_contadores_candidatos")
     @patch("stock.services.inventario_fisico._query_lineas_analizador")
     @patch("stock.services.inventario_fisico.mysql_cursor")
-    def test_filtro_marcas_solo_seleccionadas(self, mock_cursor_ctx, mock_query):
+    def test_filtro_marcas_solo_seleccionadas(self, mock_cursor_ctx, mock_query, mock_candidatos):
+        mock_candidatos.return_value = []
         cursor = MagicMock()
         mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
         mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -403,11 +462,14 @@ class ApiCampanaAutorizarTest(SimpleTestCase):
     },
 )
 class AnalizadorVistaTest(SimpleTestCase):
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
     @patch("stock.services.inventario_fisico.listar_lineas_analizador")
     @patch("stock.services.inventario_fisico.obtener_resumen_monitor")
     @patch("stock.services.inventario_fisico.obtener_campana")
     @patch("stock.services.inventario_tabla.listar_marcas_catalogo")
-    def test_vista_muestra_diferencias(self, mock_marcas, mock_campana, mock_resumen, mock_lineas):
+    def test_vista_muestra_diferencias(
+        self, mock_marcas, mock_campana, mock_resumen, mock_lineas, mock_recalc
+    ):
         from django.contrib.sessions.middleware import SessionMiddleware
         from django.http import HttpResponse
         from django.test import RequestFactory
@@ -415,6 +477,7 @@ class AnalizadorVistaTest(SimpleTestCase):
         from stock.views import inventario_fisico_analizador_view
 
         mock_marcas.return_value = [{"value": 1, "label": "Marca Uno"}]
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 1})
         mock_campana.return_value = {
             "id_campana": 3,
             "estado": svc.ESTADO_EN_REVISION,
@@ -435,6 +498,7 @@ class AnalizadorVistaTest(SimpleTestCase):
             {
                 "id_linea": 1,
                 "diferencia": Decimal("-2"),
+                "diferencia_real": Decimal("-2"),
                 "saldo_snapshot": Decimal("10"),
                 "cantidad_contada": Decimal("8"),
                 "codigo": "A1",
@@ -466,6 +530,7 @@ class AnalizadorVistaTest(SimpleTestCase):
         content = resp.content.decode()
         self.assertIn("Analizador", content)
         self.assertIn("Disponible", content)
+        self.assertIn("Diferencia real", content)
         self.assertIn("Buscar en tabla", content)
         self.assertIn("-2", content)
         self.assertIn("sincronizar", content.lower())

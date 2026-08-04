@@ -56,7 +56,18 @@ RESULTADO_CONFLICTO = "conflicto"
 RESULTADO_RECHAZADO = "rechazado"
 
 CAMPOS_PROHIBIDOS_CONTEO = frozenset(
-    {"saldo_snapshot", "saldo_sistema", "diferencia", "saldo"}
+    {
+        "saldo_snapshot",
+        "saldo_sistema",
+        "diferencia",
+        "saldo",
+        "ajuste_sistema",
+        "ajuste_manual",
+        "ajuste_efectivo",
+        "disponible_ajustado",
+        "diferencia_real",
+        "saldo_actual_ref",
+    }
 )
 
 
@@ -85,6 +96,64 @@ def calcular_diferencia(
     contado = to_decimal_or_none(cantidad_contada) or Decimal("0")
     snapshot = to_decimal_or_none(saldo_snapshot) or Decimal("0")
     return contado - snapshot
+
+
+def ajuste_efectivo(ajuste_sistema: Any, ajuste_manual: Any) -> Decimal:
+    """Override manual si existe; si no, neto del sistema post-snapshot."""
+    manual = to_decimal_or_none(ajuste_manual)
+    if manual is not None:
+        return manual
+    return to_decimal_or_none(ajuste_sistema) or Decimal("0")
+
+
+def calcular_disponible_ajustado(saldo_snapshot: Any, ajuste_ef: Any) -> Decimal:
+    snapshot = to_decimal_or_none(saldo_snapshot) or Decimal("0")
+    ajuste = to_decimal_or_none(ajuste_ef) or Decimal("0")
+    return snapshot + ajuste
+
+
+def calcular_diferencia_real(
+    cantidad_contada: Any,
+    disponible_ajustado: Any,
+) -> Optional[Decimal]:
+    contado = to_decimal_or_none(cantidad_contada)
+    if contado is None:
+        return None
+    disp = to_decimal_or_none(disponible_ajustado) or Decimal("0")
+    return contado - disp
+
+
+def hay_descuadre(
+    saldo_snapshot: Any,
+    ajuste_sistema: Any,
+    saldo_actual_ref: Any,
+) -> bool:
+    """True si stock_deposito.saldo difiere de snapshot + ajuste_sistema (control)."""
+    actual = to_decimal_or_none(saldo_actual_ref)
+    if actual is None:
+        return False
+    snapshot = to_decimal_or_none(saldo_snapshot) or Decimal("0")
+    ajuste = to_decimal_or_none(ajuste_sistema) or Decimal("0")
+    return actual != snapshot + ajuste
+
+
+def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
+    """Completa campos derivados de ajuste post-snapshot en una fila del analizador."""
+    saldo_snap = to_decimal_or_none(linea.get("saldo_snapshot")) or Decimal("0")
+    ajuste_sys = to_decimal_or_none(linea.get("ajuste_sistema"))
+    ajuste_man = to_decimal_or_none(linea.get("ajuste_manual"))
+    ajuste_eff = ajuste_efectivo(ajuste_sys, ajuste_man)
+    disp_ajust = calcular_disponible_ajustado(saldo_snap, ajuste_eff)
+    diff_real = to_decimal_or_none(linea.get("diferencia_real"))
+    if diff_real is None:
+        diff_real = calcular_diferencia_real(linea.get("cantidad_contada"), disp_ajust)
+    linea["ajuste_sistema"] = ajuste_sys
+    linea["ajuste_manual"] = ajuste_man
+    linea["ajuste_efectivo"] = ajuste_eff
+    linea["disponible_ajustado"] = disp_ajust
+    linea["diferencia_real"] = diff_real
+    linea["descuadre"] = hay_descuadre(saldo_snap, ajuste_sys, linea.get("saldo_actual_ref"))
+    return linea
 
 
 def transicion_estado_permitida(estado_actual: str, estado_nuevo: str) -> bool:
@@ -913,6 +982,394 @@ def sync_eventos(
 MOTIVO_FALTANTE = 3
 MOTIVO_SOBRANTE = 4
 
+ACCION_AUDIT_OVERRIDE_GUARDADO = "override_guardado"
+ACCION_AUDIT_OVERRIDE_QUITADO = "override_quitado"
+ACCION_AUDIT_OVERRIDE_PISADO = "override_pisado"
+ACCION_AUDIT_AUTORIZACION = "autorizacion"
+
+
+def _insert_auditoria_ajuste(
+    cursor,
+    *,
+    id_campana: int,
+    id_linea: int,
+    id_articulo: int,
+    id_deposito: int,
+    accion: str,
+    id_usuario: int,
+    ajuste_sistema: Optional[Decimal] = None,
+    ajuste_anterior: Optional[Decimal] = None,
+    ajuste_nuevo: Optional[Decimal] = None,
+    diferencia_real: Optional[Decimal] = None,
+    codigo_movimiento: Optional[int] = None,
+) -> None:
+    cursor.execute(
+        "INSERT INTO inv_fisico_ajuste_auditoria "
+        "(id_campana, id_linea, id_articulo, id_deposito, accion, "
+        "ajuste_sistema, ajuste_anterior, ajuste_nuevo, diferencia_real, "
+        "codigo_movimiento, id_usuario) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        [
+            id_campana,
+            id_linea,
+            id_articulo,
+            id_deposito,
+            accion,
+            ajuste_sistema,
+            ajuste_anterior,
+            ajuste_nuevo,
+            diferencia_real,
+            codigo_movimiento,
+            id_usuario,
+        ],
+    )
+
+
+def calcular_ajuste_post_snapshot(
+    base_empresa: str,
+    id_campana: int,
+) -> Dict[Tuple[int, int], Decimal]:
+    """Neto agregado (entrada − salida) post-snapshot por (id_articulo, id_deposito)."""
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana:
+        return {}
+    fecha_snapshot = campana.get("fecha_snapshot")
+    if not fecha_snapshot:
+        return {}
+    depositos = [
+        d for d in (to_int_or_none(x) for x in (campana.get("depositos") or [])) if d is not None
+    ]
+    if not depositos:
+        return {}
+
+    resultado: Dict[Tuple[int, int], Decimal] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            if not tbl_stock:
+                return {}
+            ts = tbl_stock.replace("`", "``")
+            ph = ",".join(["%s"] * len(depositos))
+            cursor.execute(
+                f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, "
+                f"SUM(COALESCE(s.Entrada, 0)) - SUM(COALESCE(s.Salida, 0)) AS neto "
+                f"FROM `{ts}` s "
+                f"WHERE s.CodDeposito IN ({ph}) "
+                f"AND s.FechaControl >= %s "
+                f"AND COALESCE(s.Anulado, 'No') <> 'Si' "
+                f"GROUP BY s.IDArt, s.CodDeposito",
+                [*depositos, fecha_snapshot],
+            )
+            for row in cursor.fetchall():
+                id_art = to_int_or_none(row.get("id_articulo"))
+                id_dep = to_int_or_none(row.get("id_deposito"))
+                if id_art is None or id_dep is None:
+                    continue
+                neto = to_decimal_or_none(row.get("neto")) or Decimal("0")
+                resultado[(id_art, id_dep)] = neto
+    except Exception as exc:
+        logger.warning("calcular_ajuste_post_snapshot %s/%s: %s", base_empresa, id_campana, exc)
+    return resultado
+
+
+def listar_movimientos_post_snapshot(
+    base_empresa: str,
+    id_campana: int,
+    id_articulo: int,
+    id_deposito: int,
+) -> List[Dict[str, Any]]:
+    """Desglose de movimientos legacy posteriores al snapshot (solo lectura)."""
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana or not campana.get("fecha_snapshot"):
+        return []
+    id_art = to_int_or_none(id_articulo)
+    id_dep = to_int_or_none(id_deposito)
+    if id_art is None or id_dep is None:
+        return []
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            if not tbl_stock:
+                return []
+            ts = tbl_stock.replace("`", "``")
+            tbl_ms = _nombre_tabla(cursor, "movimiento_stock")
+            join_ms = ""
+            select_detalle = "'' AS detalle"
+            if tbl_ms:
+                tms = tbl_ms.replace("`", "``")
+                join_ms = f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
+                select_detalle = "COALESCE(ms.detalle, '') AS detalle"
+            cursor.execute(
+                f"SELECT s.id_stock, s.FechaControl, s.Fecha, "
+                f"COALESCE(s.Entrada, 0) AS Entrada, COALESCE(s.Salida, 0) AS Salida, "
+                f"COALESCE(s.TipoComp, '-') AS motivo, "
+                f"COALESCE(s.NroComprobante, '-') AS nro, "
+                f"{select_detalle} "
+                f"FROM `{ts}` s "
+                f"{join_ms}"
+                f"WHERE s.IDArt = %s AND s.CodDeposito = %s "
+                f"AND s.FechaControl >= %s AND COALESCE(s.Anulado, 'No') <> 'Si' "
+                f"ORDER BY s.FechaControl, s.id_stock",
+                [id_art, id_dep, campana["fecha_snapshot"]],
+            )
+            movimientos: List[Dict[str, Any]] = []
+            for row in cursor.fetchall():
+                entrada = to_decimal_or_none(row.get("Entrada")) or Decimal("0")
+                salida = to_decimal_or_none(row.get("Salida")) or Decimal("0")
+                fc = row.get("FechaControl")
+                fc_txt = fc.strftime("%d/%m/%Y") if hasattr(fc, "strftime") else str_or_default(fc, "")
+                movimientos.append(
+                    {
+                        "id_stock": to_int_or_none(row.get("id_stock")),
+                        "fecha_control": fc_txt,
+                        "fecha": row.get("Fecha"),
+                        "entrada": entrada,
+                        "salida": salida,
+                        "neto": entrada - salida,
+                        "motivo": str_or_default(row.get("motivo"), "-"),
+                        "nro": str_or_default(row.get("nro"), "-"),
+                        "detalle": str_or_default(row.get("detalle"), ""),
+                    }
+                )
+            return movimientos
+    except Exception as exc:
+        logger.warning("listar_movimientos_post_snapshot: %s", exc)
+        return []
+
+
+def _fetch_saldos_deposito(
+    cursor,
+    id_articulo: int,
+    depositos: Sequence[int],
+) -> Dict[int, Decimal]:
+    tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+    if not tbl_sd or not depositos:
+        return {}
+    tsd = tbl_sd.replace("`", "``")
+    ph = ",".join(["%s"] * len(depositos))
+    cursor.execute(
+        f"SELECT id_deposito, COALESCE(saldo, 0) AS saldo "
+        f"FROM `{tsd}` WHERE id_articulo = %s AND id_deposito IN ({ph})",
+        [id_articulo, *depositos],
+    )
+    out: Dict[int, Decimal] = {}
+    for row in cursor.fetchall():
+        id_dep = to_int_or_none(row.get("id_deposito"))
+        if id_dep is not None:
+            out[id_dep] = to_decimal_or_none(row.get("saldo")) or Decimal("0")
+    return out
+
+
+def recalcular_ajuste_post_snapshot(
+    base_empresa: str,
+    id_campana: int,
+    *,
+    id_usuario: int,
+    pisar_overrides: bool = False,
+) -> Tuple[bool, Dict[str, Any]]:
+    """Persiste ajuste_sistema, saldo_actual_ref y diferencia_real por línea."""
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana:
+        return False, {"error": "Campaña no encontrada."}
+    if campana["estado"] in (ESTADO_APLICADO, ESTADO_ANULADO):
+        return True, {"omitido": True, "motivo": "estado_final"}
+
+    netos = calcular_ajuste_post_snapshot(base_empresa, id_campana)
+    uid = to_int_or_none(id_usuario) or 0
+    lineas_actualizadas = 0
+    overrides_pisados = 0
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                "SELECT id_linea, id_articulo, id_deposito, saldo_snapshot, "
+                "cantidad_contada, ajuste_manual "
+                "FROM inv_fisico_linea WHERE id_campana = %s",
+                [id_campana],
+            )
+            lineas = [dict(r) for r in cursor.fetchall()]
+
+            for linea in lineas:
+                id_linea = to_int_or_none(linea.get("id_linea"))
+                id_art = to_int_or_none(linea.get("id_articulo"))
+                id_dep = to_int_or_none(linea.get("id_deposito"))
+                if id_linea is None or id_art is None or id_dep is None:
+                    continue
+
+                ajuste_sys = netos.get((id_art, id_dep), Decimal("0"))
+                saldo_snap = to_decimal_or_none(linea.get("saldo_snapshot")) or Decimal("0")
+                ajuste_manual = to_decimal_or_none(linea.get("ajuste_manual"))
+
+                if pisar_overrides and ajuste_manual is not None:
+                    _insert_auditoria_ajuste(
+                        cursor,
+                        id_campana=id_campana,
+                        id_linea=id_linea,
+                        id_articulo=id_art,
+                        id_deposito=id_dep,
+                        accion=ACCION_AUDIT_OVERRIDE_PISADO,
+                        id_usuario=uid,
+                        ajuste_sistema=ajuste_sys,
+                        ajuste_anterior=ajuste_manual,
+                        ajuste_nuevo=ajuste_sys,
+                    )
+                    ajuste_manual = None
+                    overrides_pisados += 1
+
+                saldos_dep = _fetch_saldos_deposito(cursor, id_art, [id_dep])
+                saldo_actual = saldos_dep.get(id_dep)
+
+                ajuste_eff = ajuste_efectivo(ajuste_sys, ajuste_manual)
+                disp_ajust = calcular_disponible_ajustado(saldo_snap, ajuste_eff)
+                diff_real = calcular_diferencia_real(linea.get("cantidad_contada"), disp_ajust)
+
+                if pisar_overrides:
+                    cursor.execute(
+                        "UPDATE inv_fisico_linea SET "
+                        "ajuste_sistema = %s, saldo_actual_ref = %s, diferencia_real = %s, "
+                        "ajuste_calculado_at = NOW(), "
+                        "ajuste_manual = NULL, ajuste_manual_usuario = NULL, ajuste_manual_fecha = NULL "
+                        "WHERE id_linea = %s",
+                        [ajuste_sys, saldo_actual, diff_real, id_linea],
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE inv_fisico_linea SET "
+                        "ajuste_sistema = %s, saldo_actual_ref = %s, diferencia_real = %s, "
+                        "ajuste_calculado_at = NOW() "
+                        "WHERE id_linea = %s",
+                        [ajuste_sys, saldo_actual, diff_real, id_linea],
+                    )
+                lineas_actualizadas += 1
+
+        return True, {
+            "lineas_actualizadas": lineas_actualizadas,
+            "overrides_pisados": overrides_pisados,
+        }
+    except Exception as exc:
+        logger.exception("recalcular_ajuste_post_snapshot %s: %s", id_campana, exc)
+        return False, {"error": "No se pudo recalcular el ajuste post-snapshot."}
+
+
+def guardar_override_ajuste(
+    base_empresa: str,
+    id_campana: int,
+    id_linea: int,
+    valor: Any,
+    id_usuario: int,
+) -> Tuple[bool, Dict[str, Any]]:
+    nuevo = to_decimal_or_none(valor)
+    if nuevo is None:
+        return False, {"error": "Valor de ajuste inválido."}
+    lid = to_int_or_none(id_linea)
+    uid = to_int_or_none(id_usuario)
+    if lid is None or uid is None:
+        return False, {"error": "Datos inválidos."}
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                "SELECT id_linea, id_campana, id_articulo, id_deposito, saldo_snapshot, "
+                "cantidad_contada, ajuste_sistema, ajuste_manual "
+                "FROM inv_fisico_linea WHERE id_linea = %s AND id_campana = %s",
+                [lid, id_campana],
+            )
+            linea = cursor.fetchone()
+            if not linea:
+                return False, {"error": "Línea no encontrada en la campaña."}
+
+            anterior = to_decimal_or_none(linea.get("ajuste_manual"))
+            ajuste_sys = to_decimal_or_none(linea.get("ajuste_sistema")) or Decimal("0")
+            saldo_snap = to_decimal_or_none(linea.get("saldo_snapshot")) or Decimal("0")
+            disp_ajust = calcular_disponible_ajustado(saldo_snap, nuevo)
+            diff_real = calcular_diferencia_real(linea.get("cantidad_contada"), disp_ajust)
+
+            cursor.execute(
+                "UPDATE inv_fisico_linea SET ajuste_manual = %s, "
+                "ajuste_manual_usuario = %s, ajuste_manual_fecha = NOW(), "
+                "diferencia_real = %s WHERE id_linea = %s",
+                [nuevo, uid, diff_real, lid],
+            )
+            _insert_auditoria_ajuste(
+                cursor,
+                id_campana=id_campana,
+                id_linea=lid,
+                id_articulo=to_int_or_none(linea.get("id_articulo")) or 0,
+                id_deposito=to_int_or_none(linea.get("id_deposito")) or 0,
+                accion=ACCION_AUDIT_OVERRIDE_GUARDADO,
+                id_usuario=uid,
+                ajuste_sistema=ajuste_sys,
+                ajuste_anterior=anterior,
+                ajuste_nuevo=nuevo,
+                diferencia_real=diff_real,
+            )
+        return True, {
+            "id_linea": lid,
+            "ajuste_manual": nuevo,
+            "diferencia_real": diff_real,
+        }
+    except Exception as exc:
+        logger.warning("guardar_override_ajuste: %s", exc)
+        return False, {"error": "No se pudo guardar el override."}
+
+
+def quitar_override_ajuste(
+    base_empresa: str,
+    id_campana: int,
+    id_linea: int,
+    id_usuario: int,
+) -> Tuple[bool, Dict[str, Any]]:
+    lid = to_int_or_none(id_linea)
+    uid = to_int_or_none(id_usuario)
+    if lid is None or uid is None:
+        return False, {"error": "Datos inválidos."}
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                "SELECT id_linea, id_campana, id_articulo, id_deposito, saldo_snapshot, "
+                "cantidad_contada, ajuste_sistema, ajuste_manual "
+                "FROM inv_fisico_linea WHERE id_linea = %s AND id_campana = %s",
+                [lid, id_campana],
+            )
+            linea = cursor.fetchone()
+            if not linea:
+                return False, {"error": "Línea no encontrada en la campaña."}
+
+            anterior = to_decimal_or_none(linea.get("ajuste_manual"))
+            if anterior is None:
+                return True, {"id_linea": lid, "sin_override": True}
+
+            ajuste_sys = to_decimal_or_none(linea.get("ajuste_sistema")) or Decimal("0")
+            saldo_snap = to_decimal_or_none(linea.get("saldo_snapshot")) or Decimal("0")
+            disp_ajust = calcular_disponible_ajustado(saldo_snap, ajuste_sys)
+            diff_real = calcular_diferencia_real(linea.get("cantidad_contada"), disp_ajust)
+
+            cursor.execute(
+                "UPDATE inv_fisico_linea SET ajuste_manual = NULL, "
+                "ajuste_manual_usuario = NULL, ajuste_manual_fecha = NULL, "
+                "diferencia_real = %s WHERE id_linea = %s",
+                [diff_real, lid],
+            )
+            _insert_auditoria_ajuste(
+                cursor,
+                id_campana=id_campana,
+                id_linea=lid,
+                id_articulo=to_int_or_none(linea.get("id_articulo")) or 0,
+                id_deposito=to_int_or_none(linea.get("id_deposito")) or 0,
+                accion=ACCION_AUDIT_OVERRIDE_QUITADO,
+                id_usuario=uid,
+                ajuste_sistema=ajuste_sys,
+                ajuste_anterior=anterior,
+                ajuste_nuevo=ajuste_sys,
+                diferencia_real=diff_real,
+            )
+        return True, {"id_linea": lid, "diferencia_real": diff_real}
+    except Exception as exc:
+        logger.warning("quitar_override_ajuste: %s", exc)
+        return False, {"error": "No se pudo quitar el override."}
+
 
 def motivo_mstock_por_diferencia(diferencia: Any) -> Optional[int]:
     diff = to_decimal_or_none(diferencia) or Decimal("0")
@@ -928,8 +1385,10 @@ def cantidad_mstock_por_diferencia(diferencia: Any) -> Decimal:
 
 
 def construir_renglon_mstock(linea: Dict[str, Any]) -> Dict[str, Any]:
-    """Renglón para alta_movimiento según signo de diferencia (Faltante=salida, Sobrante=entrada)."""
-    diferencia = to_decimal_or_none(linea.get("diferencia")) or Decimal("0")
+    """Renglón para alta_movimiento según signo de diferencia_real (Faltante=salida, Sobrante=entrada)."""
+    diferencia = to_decimal_or_none(linea.get("diferencia_real"))
+    if diferencia is None:
+        diferencia = to_decimal_or_none(linea.get("diferencia")) or Decimal("0")
     motivo = motivo_mstock_por_diferencia(diferencia)
     cantidad = cantidad_mstock_por_diferencia(diferencia)
     id_art = to_int_or_none(linea.get("id_articulo"))
@@ -1048,7 +1507,9 @@ def _query_lineas_analizador(cursor, id_campana: int) -> List[Dict[str, Any]]:
     filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
     cursor.execute(
         f"SELECT l.id_linea, l.id_articulo, l.id_deposito, l.saldo_snapshot, "
-        f"l.cantidad_contada, l.diferencia, l.id_contador, l.estado_linea, "
+        f"l.cantidad_contada, l.diferencia, l.diferencia_real, "
+        f"l.ajuste_sistema, l.ajuste_manual, l.saldo_actual_ref, "
+        f"l.id_contador, l.estado_linea, "
         f"COALESCE(a.id_manual, '-') AS codigo, "
         f"COALESCE(a.NombreArticulo, '') AS nombre, "
         f"{select_marca} "
@@ -1056,26 +1517,40 @@ def _query_lineas_analizador(cursor, id_campana: int) -> List[Dict[str, Any]]:
         f"INNER JOIN `{ta}` a ON a.IDArt = l.id_articulo "
         f"{join_marca}"
         f"WHERE l.id_campana = %s AND {filtro_art} "
-        f"ORDER BY ABS(COALESCE(l.diferencia, 0)) DESC, a.NombreArticulo",
+        f"ORDER BY ABS(COALESCE(l.diferencia_real, 0)) DESC, a.NombreArticulo",
         [id_campana, *params_art],
     )
     lineas: List[Dict[str, Any]] = []
     for row in cursor.fetchall():
+        saldo_snap = to_decimal_or_none(row.get("saldo_snapshot")) or Decimal("0")
+        ajuste_sys = to_decimal_or_none(row.get("ajuste_sistema"))
+        ajuste_man = to_decimal_or_none(row.get("ajuste_manual"))
+        ajuste_eff = ajuste_efectivo(ajuste_sys, ajuste_man)
+        disp_ajust = calcular_disponible_ajustado(saldo_snap, ajuste_eff)
+        diff_real = to_decimal_or_none(row.get("diferencia_real"))
+        if diff_real is None:
+            diff_real = calcular_diferencia_real(row.get("cantidad_contada"), disp_ajust)
         lineas.append(
-            {
-                "id_linea": to_int_or_none(row.get("id_linea")),
-                "id_articulo": to_int_or_none(row.get("id_articulo")),
-                "id_deposito": to_int_or_none(row.get("id_deposito")),
-                "saldo_snapshot": to_decimal_or_none(row.get("saldo_snapshot")) or Decimal("0"),
-                "cantidad_contada": to_decimal_or_none(row.get("cantidad_contada")),
-                "diferencia": to_decimal_or_none(row.get("diferencia")),
-                "id_contador": to_int_or_none(row.get("id_contador")),
-                "estado_linea": str_or_default(row.get("estado_linea"), "Pendiente"),
-                "codigo": str_or_default(row.get("codigo"), "-"),
-                "nombre": str_or_default(row.get("nombre"), "-"),
-                "id_marca": to_int_or_none(row.get("id_marca")),
-                "nombre_marca": str_or_default(row.get("nombre_marca"), ""),
-            }
+            enriquecer_linea_analizador(
+                {
+                    "id_linea": to_int_or_none(row.get("id_linea")),
+                    "id_articulo": to_int_or_none(row.get("id_articulo")),
+                    "id_deposito": to_int_or_none(row.get("id_deposito")),
+                    "saldo_snapshot": saldo_snap,
+                    "cantidad_contada": to_decimal_or_none(row.get("cantidad_contada")),
+                    "diferencia": to_decimal_or_none(row.get("diferencia")),
+                    "diferencia_real": diff_real,
+                    "ajuste_sistema": ajuste_sys,
+                    "ajuste_manual": ajuste_man,
+                    "saldo_actual_ref": to_decimal_or_none(row.get("saldo_actual_ref")),
+                    "id_contador": to_int_or_none(row.get("id_contador")),
+                    "estado_linea": str_or_default(row.get("estado_linea"), "Pendiente"),
+                    "codigo": str_or_default(row.get("codigo"), "-"),
+                    "nombre": str_or_default(row.get("nombre"), "-"),
+                    "id_marca": to_int_or_none(row.get("id_marca")),
+                    "nombre_marca": str_or_default(row.get("nombre_marca"), ""),
+                }
+            )
         )
     return lineas
 
@@ -1096,6 +1571,19 @@ def listar_lineas_analizador(
         logger.warning("listar_lineas_analizador %s/%s: %s", base_empresa, id_campana, exc)
         return []
 
+    candidatos = listar_contadores_candidatos(base_empresa)
+    etiquetas_contador = {
+        c["id_usuario"]: c["etiqueta"]
+        for c in etiquetar_contadores(
+            list({l.get("id_contador") for l in lineas if l.get("id_contador")}),
+            candidatos,
+        )
+    }
+    for linea in lineas:
+        enriquecer_linea_analizador(linea)
+        uid = linea.get("id_contador")
+        linea["contador_etiqueta"] = etiquetas_contador.get(uid, "") if uid else ""
+
     marcas_set: Optional[Set[int]] = None
     if marcas_incluidos:
         marcas_set = {m for m in (to_int_or_none(x) for x in marcas_incluidos) if m is not None}
@@ -1104,11 +1592,11 @@ def listar_lineas_analizador(
 
     filtro_norm = str_or_default(filtro, "").strip().lower()
     if filtro_norm == "faltante":
-        return [l for l in lineas if (l.get("diferencia") or Decimal("0")) < 0]
+        return [l for l in lineas if (l.get("diferencia_real") or Decimal("0")) < 0]
     if filtro_norm == "sobrante":
-        return [l for l in lineas if (l.get("diferencia") or Decimal("0")) > 0]
+        return [l for l in lineas if (l.get("diferencia_real") or Decimal("0")) > 0]
     if filtro_norm == "con_diferencia":
-        return [l for l in lineas if (l.get("diferencia") or Decimal("0")) != 0]
+        return [l for l in lineas if (l.get("diferencia_real") or Decimal("0")) != 0]
     return lineas
 
 
@@ -1195,7 +1683,10 @@ def _agrupar_lineas_mstock(
     """Agrupa renglones por (id_deposito, motivo_movimiento) para cabecera única."""
     grupos: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
     for linea in lineas:
-        motivo = motivo_mstock_por_diferencia(linea.get("diferencia"))
+        diff = to_decimal_or_none(linea.get("diferencia_real"))
+        if diff is None:
+            diff = to_decimal_or_none(linea.get("diferencia"))
+        motivo = motivo_mstock_por_diferencia(diff)
         if motivo is None:
             continue
         id_dep = to_int_or_none(linea.get("id_deposito")) or 0
@@ -1236,15 +1727,30 @@ def autorizar_y_aplicar_campana(
             payload["conflictos_sync"] = conflictos
         return False, payload
 
+    ok_recalc, recalc_info = recalcular_ajuste_post_snapshot(
+        base_empresa,
+        id_campana,
+        id_usuario=id_usuario,
+        pisar_overrides=False,
+    )
+    if not ok_recalc:
+        return False, {"error": recalc_info.get("error", "No se pudo recalcular ajustes.")}
+
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
-            lineas_raw = _query_lineas_analizador(cursor, id_campana)
+            lineas_raw = [
+                enriquecer_linea_analizador(dict(l))
+                for l in _query_lineas_analizador(cursor, id_campana)
+            ]
     except Exception as exc:
         logger.exception("autorizar lineas %s: %s", id_campana, exc)
         return False, {"error": "No se pudieron leer las líneas de la campaña."}
 
     lineas_ajustar = [
-        l for l in lineas_raw if motivo_mstock_por_diferencia(l.get("diferencia")) is not None
+        l
+        for l in lineas_raw
+        if l.get("cantidad_contada") is not None
+        and (to_decimal_or_none(l.get("diferencia_real")) or Decimal("0")) != 0
     ]
     grupos = _agrupar_lineas_mstock(lineas_ajustar)
 
@@ -1296,8 +1802,21 @@ def autorizar_y_aplicar_campana(
                     "UPDATE inv_fisico_campana SET id_movimiento_mstock = %s WHERE id_campana = %s",
                     [ultimo_codigo, id_campana],
                 )
+                for linea in lineas_ajustar:
+                    _insert_auditoria_ajuste(
+                        cursor,
+                        id_campana=id_campana,
+                        id_linea=to_int_or_none(linea.get("id_linea")) or 0,
+                        id_articulo=to_int_or_none(linea.get("id_articulo")) or 0,
+                        id_deposito=to_int_or_none(linea.get("id_deposito")) or 0,
+                        accion=ACCION_AUDIT_AUTORIZACION,
+                        id_usuario=id_usuario,
+                        ajuste_sistema=to_decimal_or_none(linea.get("ajuste_sistema")),
+                        diferencia_real=to_decimal_or_none(linea.get("diferencia_real")),
+                        codigo_movimiento=ultimo_codigo,
+                    )
         except Exception as exc:
-            logger.warning("guardar id_movimiento_mstock: %s", exc)
+            logger.warning("guardar id_movimiento_mstock / auditoría: %s", exc)
 
     return True, {
         "id_campana": id_campana,

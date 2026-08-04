@@ -587,6 +587,8 @@ def inventario_fisico_analizador_view(request, id_campana):
         return redirect("core:dashboard")
 
     from stock.services.inventario_fisico import (
+        ESTADO_APLICADO,
+        ESTADO_ANULADO,
         ESTADO_BORRADOR,
         ESTADO_EN_CONTEO,
         build_analizador_query_string,
@@ -594,6 +596,7 @@ def inventario_fisico_analizador_view(request, id_campana):
         obtener_resumen_monitor,
         listar_lineas_analizador,
         parse_marcas_incluidos,
+        recalcular_ajuste_post_snapshot,
     )
     from stock.services.inventario_tabla import listar_marcas_catalogo
 
@@ -601,6 +604,16 @@ def inventario_fisico_analizador_view(request, id_campana):
     if not campana:
         messages.error(request, "Campaña no encontrada.")
         return redirect("stock:inventario_fisico_list")
+
+    id_usuario = session_user.get("id_usuario")
+    puede_recalcular = campana["estado"] not in (ESTADO_APLICADO, ESTADO_ANULADO)
+    if puede_recalcular and id_usuario:
+        recalcular_ajuste_post_snapshot(
+            base_empresa,
+            id_campana,
+            id_usuario=int(id_usuario),
+            pisar_overrides=False,
+        )
 
     filtro = request.GET.get("filtro", "").strip().lower()
     if filtro not in ("", "faltante", "sobrante", "con_diferencia"):
@@ -613,6 +626,14 @@ def inventario_fisico_analizador_view(request, id_campana):
         id_campana,
         filtro=filtro or None,
         marcas_incluidos=marcas_incluidos or None,
+    )
+    todas_lineas = listar_lineas_analizador(
+        base_empresa,
+        id_campana,
+        marcas_incluidos=marcas_incluidos or None,
+    )
+    cantidad_overrides = sum(
+        1 for l in todas_lineas if l.get("ajuste_manual") is not None
     )
     resumen = obtener_resumen_monitor(base_empresa, id_campana)
     puede_autorizar = (
@@ -641,6 +662,9 @@ def inventario_fisico_analizador_view(request, id_campana):
         ),
         "puede_autorizar": puede_autorizar,
         "puede_anular": campana["estado"] in (ESTADO_BORRADOR, ESTADO_EN_CONTEO),
+        "puede_recalcular": puede_recalcular,
+        "hay_overrides": cantidad_overrides > 0,
+        "cantidad_overrides": cantidad_overrides,
     }
     return render(request, "stock/inventario_fisico/analizador.html", context)
 
@@ -658,6 +682,7 @@ def inventario_fisico_linea_view(request, id_campana, id_linea):
         obtener_campana,
         obtener_linea_analizador,
         listar_eventos_linea,
+        listar_movimientos_post_snapshot,
     )
 
     campana = obtener_campana(base_empresa, id_campana)
@@ -676,9 +701,16 @@ def inventario_fisico_linea_view(request, id_campana, id_linea):
         linea["id_articulo"],
         linea["id_deposito"],
     )
+    movimientos = listar_movimientos_post_snapshot(
+        base_empresa,
+        id_campana,
+        linea["id_articulo"],
+        linea["id_deposito"],
+    )
     context = {
         "campana": campana,
         "linea": linea,
         "eventos": eventos,
+        "movimientos": movimientos,
     }
     return render(request, "stock/inventario_fisico/linea_detalle.html", context)

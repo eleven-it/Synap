@@ -86,6 +86,13 @@ Los módulos **registran** sus necesidades de esquema; el núcleo **orquesta** p
 |----------------|-----|--------|
 | Cotización — historial diario | `cotizacion_historial` | Crea tabla `cotizacion_historial` (serie TC dólar, UNIQUE `id_cotizacion`+`fecha`). Fuente: `contabilidad_audit/sql/cotizacion_historial.sql`. Función `run_cotizacion_historial_mysql`. Requerido antes de aceptar/manual BCRA v1 y smoke [SMOKE_BEST_SOX_VMM.md](../reports/SMOKE_BEST_SOX_VMM.md). Ver [PLAN_COTIZACION_BCRA_SYNAP.md](../mpr/best/PLAN_COTIZACION_BCRA_SYNAP.md). |
 
+### Proveedores Stock / inventario físico (estado 04/08/2026)
+
+| Proveedor (UI) | id | Notas |
+|----------------|-----|--------|
+| Stock — tablas inventario físico Synap | `stock_inv_fisico_tables` | Tablas `inv_fisico_*` + columnas ajuste post-snapshot y `inv_fisico_ajuste_auditoria`. Fuentes: `stock/sql/001_inv_fisico_tables.sql`, `002_inv_fisico_ajuste_post_snapshot.sql`. Función `run_stock_inv_fisico_tables_mysql`. Ver [INVENTARIO_FISICO.md](../stock/INVENTARIO_FISICO.md). |
+| Stock — índice FechaControl por depósito | `stock_indice_fechacontrol` | Crea `idx_stock_dep_fechactrl` en tabla legacy `stock` (`CodDeposito`, `FechaControl`) si no existe. Proveedor **separado** por posible demora en tablas grandes. Función `run_stock_indice_fechacontrol_mysql`. Acelera el cálculo de ajuste post-snapshot del inventario físico. |
+
 ---
 
 ## Si la migración «no termina» y no hay error en el log

@@ -60,4 +60,19 @@ urlpatterns = [
     path("api/conteo/registrados/", api_views.api_conteo_registrados, name="api_conteo_registrados"),
     path("api/conteo/sync/", api_views.api_conteo_sync, name="api_conteo_sync"),
     path("api/campana/<int:id_campana>/autorizar/", api_views.api_campana_autorizar, name="api_campana_autorizar"),
+    path(
+        "api/campana/<int:id_campana>/ajuste/recalcular/",
+        api_views.api_campana_ajuste_recalcular,
+        name="api_campana_ajuste_recalcular",
+    ),
+    path(
+        "api/campana/<int:id_campana>/linea/<int:id_linea>/ajuste/",
+        api_views.api_campana_linea_ajuste,
+        name="api_campana_linea_ajuste",
+    ),
+    path(
+        "api/campana/<int:id_campana>/linea/<int:id_linea>/movimientos/",
+        api_views.api_campana_linea_movimientos,
+        name="api_campana_linea_movimientos",
+    ),
 ]

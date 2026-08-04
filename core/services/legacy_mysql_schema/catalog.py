@@ -2495,12 +2495,86 @@ def run_stock_inv_fisico_tables_mysql(conn) -> Dict[str, Any]:
                 "COMMENT 'JSON array id_usuario contadores asignados'"
             )
             _append_migration(applied, failed, True, "inv_fisico_campana.contadores_json")
+
+        sql_path_002 = app_path / "sql" / "002_inv_fisico_ajuste_post_snapshot.sql"
+        if sql_path_002.is_file():
+            sql_content_002 = sql_path_002.read_text(encoding="utf-8")
+            for stmt in _split_sql_statements(sql_content_002):
+                stmt = _sc_sql_strip_leading_comments(stmt)
+                if stmt:
+                    cursor.execute(stmt)
+            _append_migration(
+                applied,
+                failed,
+                True,
+                "DDL inventario físico Synap (002_inv_fisico_ajuste_post_snapshot.sql)",
+            )
+        columnas_linea_ajuste = (
+            ("ajuste_sistema", "DECIMAL(18, 4) NULL COMMENT 'Neto movimientos post-snapshot (privado)'"),
+            ("ajuste_manual", "DECIMAL(18, 4) NULL COMMENT 'Override supervisor (privado)'"),
+            ("ajuste_manual_usuario", "INT NULL"),
+            ("ajuste_manual_fecha", "DATETIME NULL"),
+            ("ajuste_calculado_at", "DATETIME NULL"),
+            ("saldo_actual_ref", "DECIMAL(18, 4) NULL COMMENT 'stock_deposito.saldo al recalcular (control descuadre)'"),
+            ("diferencia_real", "DECIMAL(18, 4) NULL COMMENT 'Contado - (snapshot + ajuste efectivo) (privado)'"),
+        )
+        for col_name, col_def in columnas_linea_ajuste:
+            if not columna_existe(cursor, "inv_fisico_linea", col_name):
+                cursor.execute(
+                    f"ALTER TABLE inv_fisico_linea ADD COLUMN {col_name} {col_def}"
+                )
+                _append_migration(applied, failed, True, f"inv_fisico_linea.{col_name}")
+
         cursor.close()
         conn.commit()
     except Exception as e:
         conn.rollback()
         logger.exception("run_stock_inv_fisico_tables_mysql: %s", e)
         failed.append(str(e))
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
+def run_stock_indice_fechacontrol_mysql(conn) -> Dict[str, Any]:
+    """
+    Índice compuesto ``(CodDeposito, FechaControl)`` en tabla legacy ``stock``.
+
+    Acelera el cálculo de ajuste post-snapshot del inventario físico Synap.
+    Proveedor separado por posible demora en tablas grandes.
+    """
+    from core.services.legacy_mysql_schema.helpers import nombre_tabla_real
+
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    idx_name = "idx_stock_dep_fechactrl"
+    try:
+        tbl_stock = nombre_tabla_real(cursor, "stock")
+        if not tbl_stock:
+            _append_migration(applied, failed, False, idx_name, "Tabla stock no encontrada.")
+        elif not indice_existe(cursor, tbl_stock, idx_name):
+            t = tbl_stock.replace("`", "``")
+            cursor.execute(
+                f"CREATE INDEX `{idx_name}` ON `{t}` (CodDeposito, FechaControl)"
+            )
+            _append_migration(applied, failed, True, f"CREATE INDEX {idx_name} en {tbl_stock}")
+        else:
+            _append_migration(applied, failed, True, f"{idx_name} ya existe (omitido)")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_stock_indice_fechacontrol_mysql: %s", e)
+        _append_migration(applied, failed, False, idx_name, str(e))
+    finally:
         try:
             cursor.close()
         except Exception:
@@ -2811,11 +2885,23 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         "description": (
             "Crea ``inv_fisico_campana``, ``inv_fisico_linea`` e ``inv_fisico_evento`` "
             "(conteo ciego, sync offline, ledger idempotente). "
-            "Fuente: ``stock/sql/001_inv_fisico_tables.sql``. "
+            "Incluye columnas de ajuste post-snapshot y ``inv_fisico_ajuste_auditoria``. "
+            "Fuente: ``stock/sql/001_inv_fisico_tables.sql`` y ``002_inv_fisico_ajuste_post_snapshot.sql``. "
             "Ver openspec/changes/stock-inventario-fisico/design.md."
         ),
         "risk": "medio",
         "run": run_stock_inv_fisico_tables_mysql,
+    },
+    {
+        "id": "stock_indice_fechacontrol",
+        "title": "Stock — índice FechaControl por depósito",
+        "description": (
+            "Crea ``idx_stock_dep_fechactrl`` en ``stock`` "
+            "(CodDeposito, FechaControl) para acelerar el ajuste post-snapshot "
+            "del inventario físico Synap."
+        ),
+        "risk": "medio",
+        "run": run_stock_indice_fechacontrol_mysql,
     },
     {
         "id": "viajantes_objetivos_ventas",
