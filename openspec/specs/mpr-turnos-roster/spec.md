@@ -187,22 +187,28 @@ El sistema MUST permitir:
 
 ---
 
-### Requirement: Edición bloqueada si hay parte o control de calidad (operario+fecha+turno)
+### Requirement: Guardrail y migración de roster con ledger no físico (operario+fecha+turno)
 
 El sistema MUST permitir **crear, editar y borrar asignaciones de roster** en **cualquier fecha** (pasado, hoy o futuro), salvo cuando exista producción registrada para la combinación **(operario, fecha, turno)**.
 
-El bloqueo MUST aplicarse cuando:
+El bloqueo duro MUST aplicarse cuando:
 
-- **Parte:** existe al menos una línea en `mpr_parte` + `mpr_parte_linea` para esa fecha, turno y operario, en **cualquier estado** (incluye borrador).
-- **Control de calidad:** existe al menos una fila en `mpr_transicion_lote` para esa fecha, turno y operario.
+- **Parte:** existe una línea en `mpr_parte` + `mpr_parte_linea` para esa fecha, turno y operario con estado **`aprobado`** o `movimiento_fisico_ok` verdadero.
+- **Control de calidad confirmado:** existe al menos una fila en `mpr_transicion_lote` para esa fecha, turno y operario.
 
 El sistema MUST NOT imponer tope de antigüedad ni restricción `fecha >= hoy`.
 
-Al **reasignar** turno T → T': MUST bloquear si hay parte o CC en T **o** en T'.
+Si solo existen líneas de parte `borrador` o `pendiente`, sin stock físico:
 
-Al **asignar** vacío → T: MUST bloquear si hay parte o CC en T.
+- Al **reasignar** T → T', el sistema MUST mover atómicamente las líneas y ajustes no físicos del operario hacia un parte destino compatible (misma fecha, turno destino y origen), fusionando la clave artículo×operario×máquina cuando ya exista. También MUST migrar el borrador de clasificación CC del operario si existe.
+- La migración MUST preservar `cantidad_declarada`, MUST NOT crear movimientos de stock, y MUST NOT tocar `mpr_transicion_lote` ni MSTOCK.
+- Al **eliminar** asignación T → vacío, el sistema MUST rechazar la acción e indicar que el turno debe reasignarse.
 
-Al **eliminar** asignación con turno T: MUST bloquear si hay parte o CC en T.
+Al **reasignar** T → T', MUST bloquear si hay parte aprobada/física o CC confirmado en T **o** en T'.
+
+Al **asignar** vacío → T, MUST bloquear si hay parte aprobada/física o CC confirmado en T.
+
+Al **eliminar** asignación con turno T, MUST bloquear si hay parte aprobada/física o CC confirmado en T.
 
 La misma asignación T → T (idempotente, p. ej. solo override de línea): MUST permitir aunque haya parte o CC.
 
@@ -215,10 +221,17 @@ La UI MUST marcar celdas bloqueadas con ícono candado y tooltip con el motivo; 
 - WHEN el usuario cambia el turno a "Tarde" en la grilla
 - THEN la asignación se actualiza correctamente
 
-#### Scenario: Intentar editar asignación con parte registrado
+#### Scenario: Reasignar borrador sin movimiento físico
+- GIVEN un operario con turno "Mañana" y líneas de parte en estado `borrador` o `pendiente`
+- AND no hay movimiento físico ni CC confirmado
+- WHEN se reasigna al turno "Tarde"
+- THEN las líneas, ajustes no físicos y borrador CC del operario se trasladan al turno "Tarde"
+- AND no se crea ni modifica ningún movimiento de stock
+
+#### Scenario: Intentar editar asignación con parte aprobado
 
 - GIVEN un operario tiene asignado turno "Mañana" para fecha="08/07/2026"
-- AND existe al menos una línea de parte para ese operario, fecha y turno
+- AND existe una línea de parte aprobada o con movimiento físico para ese operario, fecha y turno
 - WHEN el usuario intenta cambiar o quitar el turno
 - THEN el sistema rechaza la operación
 - AND retorna mensaje indicando que hay partes registrados
@@ -232,9 +245,14 @@ La UI MUST marcar celdas bloqueadas con ícono candado y tooltip con el motivo; 
 - WHEN el usuario asigna turno "Mañana" en esa celda
 - THEN la asignación se crea correctamente
 
+#### Scenario: Quitar turno con borrador pendiente
+- GIVEN un operario con turno asignado y líneas de parte en `borrador` o `pendiente`
+- WHEN intenta quitar el turno
+- THEN el sistema rechaza la operación con el mensaje "No se puede quitar el turno: hay datos en parte borrador/pendiente. Reasigná a otro turno."
+
 #### Scenario: Asignación masiva omite celdas bloqueadas
 
-- GIVEN un rango de fechas con al menos una celda con parte o CC registrado
+- GIVEN un rango de fechas con al menos una celda con parte aprobada/física o CC confirmado
 - WHEN el usuario ejecuta asignación masiva
 - THEN las celdas bloqueadas se omiten (`omitidos_bloqueados`)
 - AND las celdas editables se aplican normalmente

@@ -16975,13 +16975,14 @@ def _motivo_bloqueo_roster_celda(
     id_operario: int,
     id_turno: int,
 ) -> Optional[str]:
-    """Motivo de bloqueo si hay parte o CC en operario+fecha+turno; None si editable."""
-    from mpr.repositories.parte import operario_tiene_parte_fecha_turno
+    """Motivo de bloqueo duro: parte aprobada/física o CC confirmado."""
+    from mpr.repositories.parte import operario_estado_produccion_roster
     from mpr.repositories.transicion_lote import operario_tiene_control_calidad_fecha_turno
 
-    if operario_tiene_parte_fecha_turno(base_empresa, fecha, id_operario, id_turno):
+    estado = operario_estado_produccion_roster(base_empresa, fecha, id_operario, id_turno)
+    if estado["tiene_aprobado_o_fisico"]:
         return (
-            "No se puede modificar: el operario ya tiene partes registrados "
+            "No se puede modificar: el operario tiene un parte aprobado o con movimiento físico "
             "en esa fecha y turno."
         )
     if operario_tiene_control_calidad_fecha_turno(base_empresa, fecha, id_operario, id_turno):
@@ -17000,22 +17001,27 @@ def _motivo_bloqueo_cambio_roster(
     turno_nuevo: Optional[int],
 ) -> Optional[str]:
     """
-    Valida bloqueo al cambiar asignación. Misma asignación T→T (idempotente) permite
-    aunque haya parte/CC; reasignar o quitar valida turno actual y/o nuevo.
+    Valida cambio según el estado del ledger. Borrador/pendiente solo bloquea
+    quitar: al reasignar se migra atómicamente hacia el turno destino.
     """
     actual = to_int_or_none(turno_actual)
     nuevo = to_int_or_none(turno_nuevo)
     if actual is not None and nuevo is not None and actual == nuevo:
         return None
-    turnos_a_validar: set = set()
-    if actual is not None:
-        turnos_a_validar.add(actual)
-    if nuevo is not None:
-        turnos_a_validar.add(nuevo)
-    for tid in turnos_a_validar:
+    turnos_a_validar = [tid for tid in (actual, nuevo) if tid is not None]
+    for tid in dict.fromkeys(turnos_a_validar):
         motivo = _motivo_bloqueo_roster_celda(base_empresa, fecha, id_operario, tid)
         if motivo:
             return motivo
+    if actual is not None and nuevo is None:
+        from mpr.repositories.parte import operario_estado_produccion_roster
+
+        estado = operario_estado_produccion_roster(base_empresa, fecha, id_operario, actual)
+        if estado["tiene_borrador_o_pendiente"]:
+            return (
+                "No se puede quitar el turno: hay datos en parte borrador/pendiente. "
+                "Reasigná a otro turno."
+            )
     return None
 
 
@@ -17026,16 +17032,16 @@ def _mapa_celdas_bloqueadas_roster(
     asignaciones: Dict[int, Dict[str, Any]],
 ) -> Dict[int, Dict[str, Dict[str, Any]]]:
     """Mapa UI: id_operario → fecha ISO → {bloqueada, motivo} según turno asignado."""
-    from mpr.repositories.parte import set_operarios_con_parte_en_rango
+    from mpr.repositories.parte import set_operarios_bloqueados_roster_en_rango
     from mpr.repositories.transicion_lote import set_operarios_con_cc_en_rango
 
     if not asignaciones:
         return {}
-    parte_set = set_operarios_con_parte_en_rango(base_empresa, fecha_desde, fecha_hasta)
+    parte_set = set_operarios_bloqueados_roster_en_rango(base_empresa, fecha_desde, fecha_hasta)
     cc_set = set_operarios_con_cc_en_rango(base_empresa, fecha_desde, fecha_hasta)
     celdas: Dict[int, Dict[str, Dict[str, Any]]] = {}
     msg_parte = (
-        "No se puede modificar: el operario ya tiene partes registrados "
+        "No se puede modificar: el operario tiene un parte aprobado o con movimiento físico "
         "en esa fecha y turno."
     )
     msg_cc = (
@@ -17074,7 +17080,8 @@ def asignar_turno_roster(
     """
     Asigna (o reasigna) un turno a un operario en una fecha.
     Usa update_or_create para garantizar constraint único (no duplica).
-    Validaciones: turno existe, operario existe; bloqueo si hay parte/CC al cambiar turno.
+    Validaciones: turno existe, operario existe; migra borrador/pendiente al
+    reasignar y bloquea parte aprobada/física o CC confirmado.
     `id_linea` es el override de línea del día (None = usar la habitual).
     Returns:
         (ok, mensaje_error)
@@ -17112,6 +17119,14 @@ def asignar_turno_roster(
         )
         if motivo:
             return False, motivo
+        if turno_actual is not None and turno_actual != id_turno_norm:
+            from mpr.repositories.parte import migrar_lineas_operario_entre_turnos
+
+            ok_migracion, error_migracion, _ = migrar_lineas_operario_entre_turnos(
+                base_empresa, fecha_obj, id_operario, turno_actual, id_turno_norm
+            )
+            if not ok_migracion:
+                return False, error_migracion or "No se pudieron migrar los datos de producción."
         upsert_roster(base_empresa, fecha_obj, id_operario, id_turno_norm, id_mpr_linea=id_linea_norm)
         return True, None
     except IntegrityError as e:
@@ -17161,7 +17176,7 @@ def mensaje_flash_asignacion_masiva(resumen: Dict[str, Any]) -> str:
     partes = [f"Se asignaron {aplicados} día(s)."]
     if omitidos_bloqueados:
         partes.append(
-            f" Se omitieron {omitidos_bloqueados} celda(s) con parte o control de calidad."
+            f" Se omitieron {omitidos_bloqueados} celda(s) con parte aprobado/físico o control de calidad."
         )
     if errores:
         partes.append(f" {len(errores)} asignación(es) no se pudieron aplicar.")
@@ -17178,7 +17193,8 @@ def asignar_turno_roster_rango(
 ) -> Tuple[bool, Optional[str], Dict[str, Any]]:
     """
     Asigna un turno a varios operarios en un rango de fechas (upsert por celda).
-    Omite celdas bloqueadas por parte o control de calidad. Retorna (ok, mensaje_error, resumen).
+    Omite celdas con parte aprobado/físico o control de calidad y migra las
+    líneas borrador/pendiente de las reasignaciones aplicables.
     """
     from django.db import IntegrityError
 
@@ -17248,6 +17264,22 @@ def asignar_turno_roster_rango(
                     resumen["omitidos_bloqueados"] += 1
                     continue
                 try:
+                    if turno_actual is not None and turno_actual != id_turno_norm:
+                        from mpr.repositories.parte import migrar_lineas_operario_entre_turnos
+
+                        ok_migracion, error_migracion, _ = migrar_lineas_operario_entre_turnos(
+                            base_empresa, d, oid, turno_actual, id_turno_norm
+                        )
+                        if not ok_migracion:
+                            resumen["omitidos_bloqueados"] += 1
+                            resumen["errores"].append(
+                                {
+                                    "operario": oid,
+                                    "fecha": _fmt_fecha_ddmmaaaa(d),
+                                    "msg": error_migracion or "No se pudieron migrar los datos de producción.",
+                                }
+                            )
+                            continue
                     upsert_roster(
                         base_empresa, d, oid, id_turno_norm, id_mpr_linea=id_linea_norm
                     )
@@ -17297,7 +17329,7 @@ def asignar_turno_roster_rango(
         if omitidos_bloqueados > 0 and not errores:
             return (
                 False,
-                "No se aplicó ninguna asignación: todas las celdas tienen parte o control de calidad.",
+                "No se aplicó ninguna asignación: todas las celdas tienen parte aprobado/físico o control de calidad.",
                 resumen,
             )
         if errores:
@@ -17314,7 +17346,8 @@ def eliminar_asignacion_roster(
 ) -> Tuple[bool, Optional[str]]:
     """
     Elimina la asignación de turno de un operario en una fecha.
-    Bloquea si hay parte o CC en el turno asignado.
+    Bloquea si hay parte aprobado/físico o CC; con borrador/pendiente exige
+    reasignar hacia otro turno para conservar el ledger.
     Returns:
         (ok, mensaje_error)
     """

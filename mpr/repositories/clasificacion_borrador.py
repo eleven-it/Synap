@@ -175,6 +175,132 @@ def eliminar_borrador(
         )
 
 
+def migrar_borrador_operario_entre_turnos(
+    base_empresa: str,
+    fecha: date,
+    id_operario: int,
+    id_turno_origen: int,
+    id_turno_destino: int,
+    *,
+    cursor=None,
+) -> int:
+    """Mueve el borrador CC de un operario sin confirmar a otro turno.
+
+    Si el destino ya contiene la misma clave artículo/máquina, suma los tres
+    destinos de clasificación y elimina la línea de origen. No toca
+    ``mpr_transicion_lote`` ni genera movimientos de stock. El cursor opcional
+    permite integrar esta migración a la transacción del ledger de partes.
+    """
+    base = (base_empresa or "").strip()
+    oid = to_int_or_none(id_operario)
+    origen = to_int_or_none(id_turno_origen)
+    destino = to_int_or_none(id_turno_destino)
+    if not base or oid is None or origen is None or destino is None or origen == destino:
+        return 0
+
+    def _migrar(cur) -> int:
+        cur.execute(
+            """
+            SELECT id_mpr_clasificacion_borrador, id_usuario
+            FROM mpr_clasificacion_borrador
+            WHERE fecha_produccion = %s AND id_mpr_turno = %s
+            LIMIT 1
+            """,
+            [fecha, origen],
+        )
+        cabecera_origen = cur.fetchone()
+        if not cabecera_origen:
+            return 0
+        id_origen = to_int_or_none(cabecera_origen.get("id_mpr_clasificacion_borrador"))
+        if id_origen is None:
+            return 0
+        cur.execute(
+            """
+            SELECT id_mpr_clasificacion_borrador
+            FROM mpr_clasificacion_borrador
+            WHERE fecha_produccion = %s AND id_mpr_turno = %s
+            LIMIT 1
+            """,
+            [fecha, destino],
+        )
+        cabecera_destino = cur.fetchone()
+        if cabecera_destino:
+            id_destino = to_int_or_none(cabecera_destino.get("id_mpr_clasificacion_borrador"))
+        else:
+            cur.execute(
+                """
+                INSERT INTO mpr_clasificacion_borrador (fecha_produccion, id_mpr_turno, id_usuario)
+                VALUES (%s, %s, %s)
+                """,
+                [fecha, destino, to_int_or_none(cabecera_origen.get("id_usuario")) or 0],
+            )
+            id_destino = to_int_or_none(cur.lastrowid)
+        if id_destino is None:
+            raise RuntimeError("No se pudo crear el borrador de clasificación destino.")
+
+        cur.execute(
+            """
+            SELECT * FROM mpr_clasificacion_borrador_linea
+            WHERE id_mpr_clasificacion_borrador = %s AND id_operario = %s
+            """,
+            [id_origen, oid],
+        )
+        movidas = 0
+        for linea in cur.fetchall() or []:
+            id_linea = to_int_or_none(linea.get("id_mpr_clasificacion_borrador_linea"))
+            articulo = to_int_or_none(linea.get("id_articulo"))
+            maquina = to_int_or_none(linea.get("id_mpr_maquina")) or 0
+            if id_linea is None or articulo is None:
+                continue
+            cur.execute(
+                """
+                SELECT id_mpr_clasificacion_borrador_linea
+                FROM mpr_clasificacion_borrador_linea
+                WHERE id_mpr_clasificacion_borrador = %s AND id_articulo = %s
+                  AND id_operario = %s AND id_mpr_maquina = %s
+                LIMIT 1
+                """,
+                [id_destino, articulo, oid, maquina],
+            )
+            duplicada = cur.fetchone()
+            if duplicada:
+                cur.execute(
+                    """
+                    UPDATE mpr_clasificacion_borrador_linea
+                    SET cant_semi = COALESCE(cant_semi, 0) + %s,
+                        cant_2da = COALESCE(cant_2da, 0) + %s,
+                        cant_scrap = COALESCE(cant_scrap, 0) + %s
+                    WHERE id_mpr_clasificacion_borrador_linea = %s
+                    """,
+                    [
+                        to_decimal_or_none(linea.get("cant_semi")) or Decimal("0"),
+                        to_decimal_or_none(linea.get("cant_2da")) or Decimal("0"),
+                        to_decimal_or_none(linea.get("cant_scrap")) or Decimal("0"),
+                        to_int_or_none(duplicada.get("id_mpr_clasificacion_borrador_linea")),
+                    ],
+                )
+                cur.execute(
+                    "DELETE FROM mpr_clasificacion_borrador_linea WHERE id_mpr_clasificacion_borrador_linea = %s",
+                    [id_linea],
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE mpr_clasificacion_borrador_linea
+                    SET id_mpr_clasificacion_borrador = %s
+                    WHERE id_mpr_clasificacion_borrador_linea = %s
+                    """,
+                    [id_destino, id_linea],
+                )
+            movidas += 1
+        return movidas
+
+    if cursor is not None:
+        return _migrar(cursor)
+    with mysql_cursor(base, dict_cursor=True) as propio_cursor:
+        return _migrar(propio_cursor)
+
+
 def tiene_borrador(
     base_empresa: str,
     fecha: date,

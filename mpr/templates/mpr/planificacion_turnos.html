@@ -151,7 +151,7 @@
                             {% with celda_bloq=op_bloqueos|dict_get:fecha_iso %}
                             <td class="border-b border-l border-slate-200 px-2 py-1.5 text-center align-middle dark:border-slate-700{% if dia.fecha == hoy %} bg-purple-50/70 dark:bg-purple-950/30{% endif %}">
                                 {% if celda_bloq.bloqueada %}
-                                    {# Celda bloqueada por parte o control de calidad #}
+                                    {# Celda bloqueada por parte aprobada/física o CC confirmado #}
                                     {% if asig %}
                                     <div class="flex items-center justify-center gap-1" title="{{ celda_bloq.motivo }}">
                                         <span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400" aria-hidden="true">lock</span>
@@ -177,7 +177,7 @@
                                                     @click.prevent="pedirQuitarTurno($el.closest('form'), '{{ op.nombre|escapejs }}', '{{ dia.fecha_str|escapejs }}', '{{ asig.nombre_turno|escapejs }}')"
                                                     class="inline-flex h-6 w-6 items-center justify-center rounded text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500 dark:text-red-400 dark:hover:bg-red-900/20"
                                                     aria-label="Quitar turno de {{ op.nombre }} el {{ dia.fecha_str }}"
-                                                    title="Quitar turno">
+                                                    title="Quitar turno. Si hay borrador o pendiente, reasigná a otro turno para conservar los datos.">
                                                 <span class="material-icons text-sm leading-none" aria-hidden="true">close</span>
                                             </button>
                                         </form>
@@ -224,7 +224,8 @@
                 <span class="mpr-turno-badge mpr-turno-badge--{{ t|turno_color }}">{{ t.nombre }}</span>
                 {% endfor %}
                 <span class="mx-0.5 hidden h-4 w-px bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true"></span>
-                <span class="flex items-center gap-1.5"><span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400">lock</span> Celda bloqueada (parte o CC)</span>
+                <span class="flex items-center gap-1.5"><span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400">lock</span> Celda bloqueada (parte aprobada/física o CC confirmado)</span>
+                <span>Los borradores se pueden reasignar y se migran; no se pueden quitar sin reasignarlos.</span>
                 <span class="flex items-center gap-1.5"><span class="inline-block h-3.5 w-5 rounded bg-purple-100 dark:bg-purple-900/40"></span> Hoy</span>
             </div>
             {% endif %}

@@ -135,10 +135,12 @@ listar_roster_semana(base_empresa, fecha_lunes: date) -> dict
 #   }
 
 asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno) -> Tuple[bool, Optional[str]]
-# Usa update_or_create (reasignación segura, no duplica). Bloquea si hay parte/CC al cambiar turno.
+# Usa update_or_create (reasignación segura, no duplica). Al cambiar turno migra
+# el ledger borrador/pendiente; bloquea parte aprobada/física o CC confirmado.
 
 eliminar_asignacion_roster(base_empresa, fecha_str, id_operario) -> Tuple[bool, Optional[str]]
-# Bloquea si hay parte/CC en el turno asignado.
+# Bloquea parte aprobada/física o CC. Si solo hay borrador/pendiente, exige
+# reasignar hacia otro turno para conservar los datos.
 ```
 
 ### Asignación masiva (rango)
@@ -158,7 +160,7 @@ asignar_turno_roster_rango(
 
 - **URL:** `planificacion-turnos/asignar-masivo/` (`roster_asignar_masivo`), vista `AsignarTurnoRosterMasivoView` (POST).
 - **Campos del formulario:** `ids_operario` (lista), `id_turno`, `fecha_desde`, `fecha_hasta` (ISO `YYYY-MM-DD` desde inputs HTML), `semana` (redirect).
-- **Reglas:** valida empresa, operarios y turno; recorre el rango con `_iter_dias_rango`; **omite celdas con parte o CC** (`omitidos_bloqueados`); aplica `upsert_roster` por celda operario×fecha (reasignación segura). Retorna resumen `{aplicados, omitidos_pasados (siempre 0), omitidos_bloqueados, errores}`; éxito parcial si `aplicados > 0`.
+- **Reglas:** valida empresa, operarios y turno; recorre el rango con `_iter_dias_rango`; **omite celdas con parte aprobada/física o CC confirmado** (`omitidos_bloqueados`); al reasignar celdas con borrador/pendiente migra sus líneas antes del `upsert_roster`. Retorna resumen `{aplicados, omitidos_pasados (siempre 0), omitidos_bloqueados, errores}`; éxito parcial si `aplicados > 0`.
 - **Helper UI:** `mensaje_flash_asignacion_masiva(resumen)` construye el mensaje de éxito en español.
 
 ---
@@ -199,8 +201,9 @@ Sigue el mismo patrón que `operarios_list.html`:
 
 - Tabla con sticky-left en columna Operario; `thead` compacto (`text-[10px]`) con fondo opaco.
 - 7 columnas de días (lunes a domingo).
-- Celdas **bloqueadas** (parte o CC en operario+fecha+turno asignado): badge + ícono candado + `title` con motivo; sin select ni quitar.
-- Celdas **editables** (sin bloqueo): badge + botón "Quitar" si hay asignación; `<select>` + confirmar si está vacía. Aplica a pasado, hoy y futuro por igual.
+- Celdas **bloqueadas** (parte aprobada/con movimiento físico o CC confirmado en operario+fecha+turno asignado): badge + ícono candado + `title` con motivo; sin select ni quitar.
+- Celdas con solo **borrador/pendiente** permanecen editables: una reasignación migra su ledger no físico al turno destino; quitar el turno se rechaza para no perder la relación con el turno.
+- Celdas **editables** (sin bloqueo duro): badge + botón "Quitar" si hay asignación; `<select>` + confirmar si está vacía. Aplica a pasado, hoy y futuro por igual.
 - Columna **hoy** resaltada en púrpura (solo visual; no define editabilidad).
 - `<select>` con JS `onchange` dispara el form automáticamente.
 - Fechas en cabecera: `"Lu dd/MM/yyyy"`.
@@ -242,7 +245,8 @@ El link «Quitar» permanece en rojo/rose (acción destructiva) y no compite con
 |---|---|
 | `hora_inicio != hora_fin` | Service `crear_turno` / `actualizar_turno` |
 | Nombre único por empresa | DB `UniqueConstraint` + captura `IntegrityError` en service |
-| Bloqueo si hay parte/CC en (operario, fecha, turno) | Repos `operario_tiene_parte_fecha_turno`, `operario_tiene_control_calidad_fecha_turno`; services `asignar_turno_roster`, `eliminar_asignacion_roster`, `asignar_turno_roster_rango` |
+| Bloqueo duro por parte aprobada/física o CC confirmado | Repos `operario_estado_produccion_roster`, `set_operarios_bloqueados_roster_en_rango`, `operario_tiene_control_calidad_fecha_turno`; services de roster |
+| Migración T→T' de borrador/pendiente | `migrar_lineas_operario_entre_turnos`: transacción MySQL que mueve/combina líneas, ajustes no físicos y borrador CC; no toca `mpr_transicion_lote`, MSTOCK ni stock físico |
 | Unicidad (empresa, fecha, operario) | DB `UniqueConstraint` + `update_or_create` en service |
 | Turno no eliminable con asignaciones | DB `on_delete=PROTECT` |
 | Misma asignación T→T permitida con parte/CC | Service `_motivo_bloqueo_cambio_roster` (idempotente) |

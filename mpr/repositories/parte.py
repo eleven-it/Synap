@@ -6,6 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
+import MySQLdb
 from core.utils.administranet_types import (
     str_or_default,
     to_date_or_none,
@@ -13,7 +14,7 @@ from core.utils.administranet_types import (
     to_int_or_none,
 )
 
-from mpr.db import mysql_cursor
+from mpr.db import get_mysql_connection, mysql_cursor
 from mpr.repositories.records import ParteAjusteRecord, ParteLineaRecord, ParteRecord
 from mpr.repositories.turno_roster import obtener_turno_record
 
@@ -1185,6 +1186,293 @@ def operario_tiene_parte_fecha_turno(
             [f_prod, tid, oid],
         )
         return cursor.fetchone() is not None
+
+
+def operario_estado_produccion_roster(
+    base_empresa: str,
+    fecha: date,
+    id_operario: int,
+    id_mpr_turno: int,
+) -> Dict[str, bool]:
+    """Estado de líneas de parte para decidir una edición de roster.
+
+    Las líneas de borrador/pendiente no constituyen un bloqueo: pueden migrarse
+    al reasignar el turno. Una parte aprobada o con movimiento físico sí bloquea
+    cualquier cambio, porque su ledger ya representa producción consolidada.
+    """
+    estado = {
+        "tiene_lineas": False,
+        "tiene_aprobado_o_fisico": False,
+        "tiene_borrador_o_pendiente": False,
+    }
+    base = (base_empresa or "").strip()
+    oid = to_int_or_none(id_operario)
+    tid = to_int_or_none(id_mpr_turno)
+    f_prod = to_date_or_none(fecha)
+    if not base or oid is None or tid is None or f_prod is None:
+        return estado
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT LOWER(COALESCE(p.estado, '')) AS estado,
+                   COALESCE(p.movimiento_fisico_ok, 0) AS movimiento_fisico_ok
+            FROM mpr_parte p
+            INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+            WHERE p.fecha_produccion = %s
+              AND p.id_mpr_turno = %s
+              AND pl.id_operario = %s
+            """,
+            [f_prod, tid, oid],
+        )
+        for row in cursor.fetchall() or []:
+            estado["tiene_lineas"] = True
+            nombre_estado = str_or_default(row.get("estado"), "").strip().lower()
+            if nombre_estado == "aprobado" or bool(row.get("movimiento_fisico_ok")):
+                estado["tiene_aprobado_o_fisico"] = True
+            elif nombre_estado in {"borrador", "pendiente"}:
+                estado["tiene_borrador_o_pendiente"] = True
+            else:
+                # Un estado desconocido no puede migrarse de manera segura.
+                estado["tiene_aprobado_o_fisico"] = True
+    return estado
+
+
+def set_operarios_bloqueados_roster_en_rango(
+    base_empresa: str,
+    fecha_desde: date,
+    fecha_hasta: date,
+) -> set:
+    """Celdas con parte aprobada o movimiento físico para el candado del roster."""
+    base = (base_empresa or "").strip()
+    f_desde = to_date_or_none(fecha_desde)
+    f_hasta = to_date_or_none(fecha_hasta)
+    if not base or f_desde is None or f_hasta is None:
+        return set()
+    resultado: set = set()
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT DISTINCT pl.id_operario, p.fecha_produccion, p.id_mpr_turno
+            FROM mpr_parte p
+            INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+            WHERE p.fecha_produccion BETWEEN %s AND %s
+              AND (
+                  LOWER(COALESCE(p.estado, '')) = 'aprobado'
+                  OR COALESCE(p.movimiento_fisico_ok, 0) = 1
+              )
+            """,
+            [f_desde, f_hasta],
+        )
+        for row in cursor.fetchall() or []:
+            oid = to_int_or_none(row.get("id_operario"))
+            f_prod = to_date_or_none(row.get("fecha_produccion"))
+            tid = to_int_or_none(row.get("id_mpr_turno"))
+            if oid is not None and f_prod is not None and tid is not None:
+                resultado.add((oid, f_prod, tid))
+    return resultado
+
+
+def migrar_lineas_operario_entre_turnos(
+    base_empresa: str,
+    fecha: date,
+    id_operario: int,
+    id_turno_origen: int,
+    id_turno_destino: int,
+) -> Tuple[bool, Optional[str], Dict[str, int]]:
+    """Mueve el ledger no físico de un operario a otro turno de la misma fecha.
+
+    La transacción solo reasigna/combina filas de ``mpr_parte_linea`` y ajustes
+    no físicos. No invoca MSTOCK ni modifica ``mpr_transicion_lote``.
+    """
+    base = (base_empresa or "").strip()
+    oid = to_int_or_none(id_operario)
+    origen = to_int_or_none(id_turno_origen)
+    destino = to_int_or_none(id_turno_destino)
+    f_prod = to_date_or_none(fecha)
+    resumen = {"lineas_movidas": 0, "lineas_combinadas": 0, "ajustes_movidos": 0, "borradores_cc_movidos": 0}
+    if not base or oid is None or origen is None or destino is None or f_prod is None:
+        return False, "Datos inválidos para migrar el parte.", resumen
+    if origen == destino:
+        return True, None, resumen
+
+    try:
+        with get_mysql_connection(base) as conn:
+            conn.autocommit(False)
+            cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+            try:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT p.id_mpr_parte, p.id_usuario, p.origen,
+                           LOWER(COALESCE(p.estado, '')) AS estado,
+                           COALESCE(p.movimiento_fisico_ok, 0) AS movimiento_fisico_ok
+                    FROM mpr_parte p
+                    INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+                    WHERE p.fecha_produccion = %s AND p.id_mpr_turno = %s AND pl.id_operario = %s
+                    FOR UPDATE
+                    """,
+                    [f_prod, origen, oid],
+                )
+                partes_origen = cursor.fetchall() or []
+                for parte in partes_origen:
+                    if (
+                        str_or_default(parte.get("estado"), "").lower() not in {"borrador", "pendiente"}
+                        or bool(parte.get("movimiento_fisico_ok"))
+                    ):
+                        conn.rollback()
+                        return False, "No se puede migrar: el parte está aprobado o tiene movimiento físico.", resumen
+
+                for parte in partes_origen:
+                    id_parte_origen = to_int_or_none(parte.get("id_mpr_parte"))
+                    if id_parte_origen is None:
+                        continue
+                    cursor.execute(
+                        """
+                        SELECT id_mpr_parte FROM mpr_parte
+                        WHERE fecha_produccion = %s AND id_mpr_turno = %s
+                          AND origen = %s AND LOWER(COALESCE(estado, '')) = %s
+                        LIMIT 1 FOR UPDATE
+                        """,
+                        [f_prod, destino, str_or_default(parte.get("origen"), ORIGEN_DIRECTO_SUPERVISOR), parte["estado"]],
+                    )
+                    existente = cursor.fetchone()
+                    if existente:
+                        id_parte_destino = to_int_or_none(existente.get("id_mpr_parte"))
+                    else:
+                        cursor.execute(
+                            """
+                            INSERT INTO mpr_parte
+                                (uuid_parte, fecha_produccion, id_mpr_turno, id_usuario, notas,
+                                 movimiento_fisico_ok, estado, origen)
+                            VALUES (%s, %s, %s, %s, %s, 0, %s, %s)
+                            """,
+                            [
+                                str(uuid.uuid4()), f_prod, destino,
+                                to_int_or_none(parte.get("id_usuario")) or 0, "",
+                                parte["estado"], str_or_default(parte.get("origen"), ORIGEN_DIRECTO_SUPERVISOR),
+                            ],
+                        )
+                        id_parte_destino = to_int_or_none(cursor.lastrowid)
+                    if id_parte_destino is None:
+                        raise RuntimeError("No se pudo crear el parte destino.")
+
+                    cursor.execute(
+                        """
+                        SELECT * FROM mpr_parte_linea
+                        WHERE id_mpr_parte = %s AND id_operario = %s FOR UPDATE
+                        """,
+                        [id_parte_origen, oid],
+                    )
+                    for linea in cursor.fetchall() or []:
+                        id_linea = to_int_or_none(linea.get("id_mpr_parte_linea"))
+                        articulo = to_int_or_none(linea.get("id_articulo"))
+                        maquina = to_int_or_none(linea.get("id_mpr_maquina"))
+                        if id_linea is None or articulo is None:
+                            continue
+                        cursor.execute(
+                            """
+                            SELECT id_mpr_parte_linea FROM mpr_parte_linea
+                            WHERE id_mpr_parte = %s AND id_articulo = %s AND id_operario = %s
+                              AND (id_mpr_maquina = %s OR (id_mpr_maquina IS NULL AND %s IS NULL))
+                            LIMIT 1 FOR UPDATE
+                            """,
+                            [id_parte_destino, articulo, oid, maquina, maquina],
+                        )
+                        duplicada = cursor.fetchone()
+                        if duplicada:
+                            qty_origen = to_decimal_or_none(linea.get("cantidad")) or Decimal("0")
+                            # Evitar fusionar cantidades físicas: solo ledger no acreditado.
+                            if qty_origen > 0:
+                                conn.rollback()
+                                return (
+                                    False,
+                                    "No se puede migrar: hay cantidad física en el parte origen. "
+                                    "Evitá riesgo de stock duplicado.",
+                                    resumen,
+                                )
+                            cursor.execute(
+                                """
+                                SELECT COALESCE(cantidad, 0) AS cantidad
+                                FROM mpr_parte_linea
+                                WHERE id_mpr_parte_linea = %s
+                                FOR UPDATE
+                                """,
+                                [to_int_or_none(duplicada.get("id_mpr_parte_linea"))],
+                            )
+                            dest_row = cursor.fetchone() or {}
+                            if (to_decimal_or_none(dest_row.get("cantidad")) or Decimal("0")) > 0:
+                                conn.rollback()
+                                return (
+                                    False,
+                                    "No se puede migrar: el turno destino ya tiene cantidad física "
+                                    "para ese artículo/máquina.",
+                                    resumen,
+                                )
+                            cursor.execute(
+                                """
+                                UPDATE mpr_parte_linea
+                                SET cantidad_declarada = COALESCE(cantidad_declarada, 0) + %s
+                                WHERE id_mpr_parte_linea = %s
+                                """,
+                                [
+                                    to_decimal_or_none(linea.get("cantidad_declarada")) or Decimal("0"),
+                                    to_int_or_none(duplicada.get("id_mpr_parte_linea")),
+                                ],
+                            )
+                            cursor.execute("DELETE FROM mpr_parte_linea WHERE id_mpr_parte_linea = %s", [id_linea])
+                            resumen["lineas_combinadas"] += 1
+                        else:
+                            qty_origen = to_decimal_or_none(linea.get("cantidad")) or Decimal("0")
+                            if qty_origen > 0:
+                                conn.rollback()
+                                return (
+                                    False,
+                                    "No se puede migrar: hay cantidad física en el parte origen. "
+                                    "Evitá riesgo de stock duplicado.",
+                                    resumen,
+                                )
+                            cursor.execute(
+                                "UPDATE mpr_parte_linea SET id_mpr_parte = %s WHERE id_mpr_parte_linea = %s",
+                                [id_parte_destino, id_linea],
+                            )
+                            resumen["lineas_movidas"] += 1
+
+                    cursor.execute(
+                        """
+                        SELECT id_mpr_parte_ajuste FROM mpr_parte_ajuste
+                        WHERE id_mpr_parte = %s AND id_operario = %s
+                          AND COALESCE(ajuste_fisico_ok, 0) = 1
+                        LIMIT 1 FOR UPDATE
+                        """,
+                        [id_parte_origen, oid],
+                    )
+                    if cursor.fetchone():
+                        conn.rollback()
+                        return False, "No se puede migrar: existe un ajuste con movimiento físico.", resumen
+                    cursor.execute(
+                        """
+                        UPDATE mpr_parte_ajuste SET id_mpr_parte = %s
+                        WHERE id_mpr_parte = %s AND id_operario = %s
+                          AND COALESCE(ajuste_fisico_ok, 0) = 0
+                        """,
+                        [id_parte_destino, id_parte_origen, oid],
+                    )
+                    resumen["ajustes_movidos"] += max(0, cursor.rowcount)
+
+                from mpr.repositories.clasificacion_borrador import migrar_borrador_operario_entre_turnos
+
+                resumen["borradores_cc_movidos"] = migrar_borrador_operario_entre_turnos(
+                    base, fecha, oid, origen, destino, cursor=cursor
+                )
+                conn.commit()
+                return True, None, resumen
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()
+                conn.autocommit(True)
+    except Exception:
+        return False, "No se pudieron migrar los datos de producción del operario.", resumen
 
 
 def set_operarios_con_parte_en_rango(
