@@ -707,3 +707,133 @@ def api_campana_autorizar(request, id_campana):
         "codigo_movimiento": result.get("codigo_movimiento"),
         "mensaje": "Campaña aplicada. Ajustes MSTOCK generados.",
     })
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+@require_http_methods(["POST"])
+def api_campana_ajuste_recalcular(request, id_campana):
+    """POST: recalcular ajustes post-snapshot. Body opcional: {pisar_overrides: bool}."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido."}, status=400)
+
+    pisar = data.get("pisar_overrides") is True or data.get("pisar_overrides") == "true"
+
+    from stock.services.inventario_fisico import recalcular_ajuste_post_snapshot
+
+    ok, result = recalcular_ajuste_post_snapshot(
+        ctx["base_empresa"],
+        id_campana,
+        id_usuario=ctx["id_usuario"],
+        pisar_overrides=pisar,
+    )
+    if not ok:
+        return JsonResponse({"error": result.get("error", "No se pudo recalcular.")}, status=400)
+    if result.get("omitido"):
+        return JsonResponse({
+            "ok": True,
+            "omitido": True,
+            "mensaje": "La campaña está en estado final; no se recalculó.",
+        })
+    return JsonResponse({
+        "ok": True,
+        "lineas_actualizadas": result.get("lineas_actualizadas", 0),
+        "overrides_pisados": result.get("overrides_pisados", 0),
+        "mensaje": "Ajustes post-snapshot actualizados.",
+    })
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+@require_http_methods(["POST", "DELETE"])
+def api_campana_linea_ajuste(request, id_campana, id_linea):
+    """POST: guardar override manual. DELETE: quitar override."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+
+    from stock.services.inventario_fisico import guardar_override_ajuste, quitar_override_ajuste
+
+    if request.method == "DELETE":
+        ok, result = quitar_override_ajuste(
+            ctx["base_empresa"],
+            id_campana,
+            id_linea,
+            ctx["id_usuario"],
+        )
+    else:
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "JSON inválido."}, status=400)
+        valor = data.get("ajuste_manual")
+        if valor is None:
+            return JsonResponse({"error": "Debe indicar ajuste_manual."}, status=400)
+        ok, result = guardar_override_ajuste(
+            ctx["base_empresa"],
+            id_campana,
+            id_linea,
+            valor,
+            ctx["id_usuario"],
+        )
+
+    if not ok:
+        return JsonResponse({"error": result.get("error", "Operación no disponible.")}, status=400)
+
+    def _dec(val):
+        if val is None:
+            return None
+        return str(val)
+
+    payload = {"ok": True, "id_linea": result.get("id_linea", id_linea)}
+    if "ajuste_manual" in result:
+        payload["ajuste_manual"] = _dec(result.get("ajuste_manual"))
+    if "diferencia_real" in result:
+        payload["diferencia_real"] = _dec(result.get("diferencia_real"))
+    if result.get("sin_override"):
+        payload["sin_override"] = True
+    payload["mensaje"] = "Override guardado." if request.method == "POST" else "Override quitado."
+    return JsonResponse(payload)
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+@require_http_methods(["GET"])
+def api_campana_linea_movimientos(request, id_campana, id_linea):
+    """GET: desglose de movimientos post-snapshot para una línea."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+
+    from stock.services.inventario_fisico import obtener_linea_analizador, listar_movimientos_post_snapshot
+
+    linea = obtener_linea_analizador(ctx["base_empresa"], id_campana, id_linea)
+    if not linea:
+        return JsonResponse({"error": "Línea no encontrada en la campaña."}, status=404)
+
+    movimientos = listar_movimientos_post_snapshot(
+        ctx["base_empresa"],
+        id_campana,
+        linea["id_articulo"],
+        linea["id_deposito"],
+    )
+
+    def _mov_json(m):
+        return {
+            "id_stock": m.get("id_stock"),
+            "fecha_control": m.get("fecha_control"),
+            "entrada": str(m.get("entrada", 0)),
+            "salida": str(m.get("salida", 0)),
+            "neto": str(m.get("neto", 0)),
+            "motivo": m.get("motivo"),
+            "nro": m.get("nro"),
+            "detalle": m.get("detalle"),
+        }
+
+    return JsonResponse({
+        "ok": True,
+        "id_linea": id_linea,
+        "movimientos": [_mov_json(m) for m in movimientos],
+    })

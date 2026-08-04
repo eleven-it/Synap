@@ -10,10 +10,19 @@
           <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stock · Inventario físico · Detalle de línea</p>
           <div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-2">
             <h1 class="text-base font-bold tracking-tight text-white sm:text-lg">{{ linea.codigo }} — {{ linea.nombre }}</h1>
+            {% if linea.ajuste_manual is not None %}
+            <span class="rounded-full bg-violet-500/20 px-2 py-0.5 text-[11px] font-semibold text-violet-200">override manual</span>
+            {% endif %}
+            {% if linea.descuadre %}
+            <span class="material-icons text-base text-amber-400" title="Descuadre de saldo">warning</span>
+            {% endif %}
           </div>
           <p class="mt-1 text-xs leading-snug text-slate-300">
-            Disponible {{ linea.saldo_snapshot|floatformat:0 }} · Contado {% if linea.cantidad_contada is not None %}{{ linea.cantidad_contada|floatformat:0 }}{% else %}—{% endif %}
-            · Diferencia <strong class="text-white">{% if linea.diferencia is not None %}{{ linea.diferencia|floatformat:0 }}{% else %}—{% endif %}</strong>
+            Disponible {{ linea.saldo_snapshot|floatformat:0 }}
+            · Cargado después {% if linea.ajuste_efectivo is not None %}{{ linea.ajuste_efectivo|floatformat:0 }}{% else %}0{% endif %}
+            · Disponible ajustado {{ linea.disponible_ajustado|floatformat:0 }}
+            · Contado {% if linea.cantidad_contada is not None %}{{ linea.cantidad_contada|floatformat:0 }}{% else %}—{% endif %}
+            · Diferencia real <strong class="text-white">{% if linea.diferencia_real is not None %}{{ linea.diferencia_real|floatformat:0 }}{% else %}—{% endif %}</strong>
           </p>
         </div>
         <div class="ml-auto flex flex-wrap items-center gap-2">
@@ -24,6 +33,54 @@
           </a>
         </div>
       </header>
+    </div>
+
+    {% if linea.ajuste_manual is not None %}
+    <div class="mb-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100">
+      <p class="font-semibold">Override manual activo</p>
+      <p class="mt-0.5">
+        El ajuste efectivo es <strong>{{ linea.ajuste_manual|floatformat:0 }}</strong>
+        (sistema calculó {{ linea.ajuste_sistema|default:0|floatformat:0 }}).
+        La diferencia real y la autorización MSTOCK usan el valor manual.
+      </p>
+    </div>
+    {% endif %}
+
+    <div class="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+        <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Movimientos post-snapshot</h2>
+        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Registros en stock con FechaControl posterior al snapshot de la campaña.</p>
+      </div>
+      {% if movimientos %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+          <thead class="bg-slate-50 dark:bg-slate-800/50">
+            <tr>
+              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Fecha</th>
+              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Motivo</th>
+              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Comprobante</th>
+              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Entrada</th>
+              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Salida</th>
+              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Neto</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            {% for m in movimientos %}
+            <tr>
+              <td class="px-4 py-2 tabular-nums text-slate-700 dark:text-slate-200">{{ m.fecha_control }}</td>
+              <td class="px-4 py-2 text-slate-700 dark:text-slate-200">{{ m.motivo }}</td>
+              <td class="px-4 py-2 font-mono text-xs text-slate-600 dark:text-slate-300">{{ m.nro }}</td>
+              <td class="px-4 py-2 text-right tabular-nums text-emerald-600">{{ m.entrada|floatformat:0 }}</td>
+              <td class="px-4 py-2 text-right tabular-nums text-red-600">{{ m.salida|floatformat:0 }}</td>
+              <td class="px-4 py-2 text-right tabular-nums font-medium text-slate-800 dark:text-slate-100">{{ m.neto|floatformat:0 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos posteriores al snapshot.</p>
+      {% endif %}
     </div>
 
     <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">

@@ -9,7 +9,31 @@ from stock.services import inventario_fisico as svc
 
 
 class CamposProhibidosConteoTest(SimpleTestCase):
-    PROHIBIDOS = frozenset({"saldo_snapshot", "saldo_sistema", "diferencia", "saldo"})
+    PROHIBIDOS = frozenset(
+        {
+            "saldo_snapshot",
+            "saldo_sistema",
+            "diferencia",
+            "saldo",
+            "ajuste_sistema",
+            "ajuste_manual",
+            "ajuste_efectivo",
+            "disponible_ajustado",
+            "diferencia_real",
+            "saldo_actual_ref",
+        }
+    )
+
+    def test_campos_prohibidos_incluye_ajuste_post_snapshot(self):
+        for campo in (
+            "ajuste_sistema",
+            "ajuste_manual",
+            "ajuste_efectivo",
+            "disponible_ajustado",
+            "diferencia_real",
+            "saldo_actual_ref",
+        ):
+            self.assertIn(campo, svc.CAMPOS_PROHIBIDOS_CONTEO)
 
     def test_serializar_articulo_catalogo_ciego_omite_saldo(self):
         fila = {
@@ -39,6 +63,9 @@ class CamposProhibidosConteoTest(SimpleTestCase):
                     "nombre": "Uno",
                     "ean": [],
                     "saldo_snapshot": Decimal("99"),
+                    "ajuste_sistema": Decimal("3"),
+                    "diferencia_real": Decimal("1"),
+                    "disponible_ajustado": Decimal("102"),
                 }
             ],
         }
@@ -73,9 +100,15 @@ class CamposProhibidosConteoTest(SimpleTestCase):
         self.assertEqual(payload["contados"][0]["id_articulo"], 10)
 
     def test_buscar_claves_prohibidas_en_anidado(self):
-        payload = {"articulos": [{"id_articulo": 1, "nested": {"diferencia": 1}}]}
+        payload = {
+            "articulos": [
+                {"id_articulo": 1, "nested": {"diferencia": 1}},
+                {"id_articulo": 2, "ajuste_efectivo": Decimal("5")},
+            ]
+        }
         encontradas = svc.buscar_claves_prohibidas_conteo(payload)
         self.assertIn("diferencia", encontradas)
+        self.assertIn("ajuste_efectivo", encontradas)
 
 
 class SyncRespuestaConteoTest(SimpleTestCase):
