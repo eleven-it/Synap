@@ -8,7 +8,7 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 - Solo artículos con `articulo.tipo_art_fab` en **`Terminado`** o **`Fabricado 2da`** (excluye Fabricado, Tercero y vacíos).
 - Conteo ciego offline-first (PWA Nivel A) con sync idempotente.
 - Analizador supervisor con diferencia `contado − snapshot` (columna UI **Disponible**, campo interno `saldo_snapshot`).
-- Cantidades en UI (disponible, contado, diferencia, eventos) se muestran como **enteros** (sin decimales); el ingreso móvil usa `step=1`.
+- Cantidades en UI (disponible, contado, diferencia, eventos) se muestran como **enteros** (sin decimales); el ingreso móvil usa `inputmode="numeric"` y validación JavaScript ≥ 0.
 - Autorización explícita y posteo MSTOCK vía `core/services/administranet_stock.py` (Faltante=3 / Sobrante=4).
 - **Sin** volcado automático a tablas legacy `inventario*` (fase 2 opcional).
 
@@ -96,6 +96,7 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 ### Escáner y búsqueda manual (conteo móvil)
 
 - **Cámara / escáner:** `getUserMedia` exige **contexto seguro** (HTTPS o `localhost`). En HTTP por IP (ej. `http://181.x.x.x:8100`) el botón «Escanear» muestra un aviso en español y enfoca el ingreso manual; no hay acceso a la cámara.
+- **Cantidad tras selección:** al escanear, seleccionar desde el ingreso manual o reabrir un conteo, Synap espera el cierre de la cámara y enfoca automáticamente **Cantidad**. El campo usa el teclado numérico del sistema cuando el navegador lo permite y, en móvil, muestra además un teclado numérico en pantalla (0–9, borrar y limpiar) para cargar sin tocar el input.
 - **Ingreso manual:** botón «Ingreso manual» abre un modal con búsqueda **predictiva** (debounce ~250 ms) sobre IndexedDB (`InvFisicoOffline.buscarPorEanONombre`, máx. ~40 sugerencias): coincidencia exacta por EAN o contiene en nombre. **No** busca por código manual ni ID de sistema. En desktop el modal es más ancho (`sm:max-w-xl` … `lg:max-w-3xl`). Flecha abajo/arriba navega la lista; Enter confirma la sugerencia resaltada (o EAN exacto / primer hit). Click en sugerencia también selecciona. Sin campo de búsqueda en la pantalla principal.
 - **Corregir conteo:** panel **Artículos contados** (siempre visible) lista lo registrado en el depósito: carga desde API `GET /stock/api/conteo/registrados/` + IndexedDB local, con filtro por código/nombre. Tocá un ítem para reabrir y corregir (modal de confirmación). Re-escanear o rebuscar el mismo artículo también precompleta la cantidad anterior. El mismo operario puede sobrescribir en sync (`evaluar_resultado_evento_sync`); al encolar una corrección se reemplaza el evento pendiente previo del mismo artículo/depósito.
 - Si la cámara falla (HTTPS, permisos, sin dispositivo), se abre el modal de ingreso manual.
@@ -154,7 +155,7 @@ Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`,
 
 - [ ] Operario con permiso `contar` abre `/stock/conteo/` en móvil Nivel A.
 - [ ] Prefetch catálogo ciego (sin saldo/diferencia visible).
-- [ ] Scan EAN (HTTPS/localhost) o ingreso manual por EAN/nombre → cantidad en **&lt; 8 s** con catálogo ya prefetched.
+- [ ] Scan EAN (HTTPS/localhost) o ingreso manual por EAN/nombre → cantidad en **&lt; 8 s** con catálogo ya prefetched; el foco pasa a Cantidad y aparece el teclado numérico en pantalla.
 - [ ] En HTTP por IP: aviso de cámara no disponible; ingreso manual funciona con catálogo cargado.
 - [ ] Modo offline 30+ min: conteos en cola local; banner «N pendientes».
 - [ ] Al reconectar: sync completo o conflictos explícitos en español (no pérdida silenciosa).
