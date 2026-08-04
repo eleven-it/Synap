@@ -11,7 +11,7 @@
  *   3. El navegador detecta el cambio y activa el nuevo SW
  */
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE  = `synap-static-${CACHE_VERSION}`;
 const PAGES_CACHE   = `synap-pages-${CACHE_VERSION}`;
 const OFFLINE_URL   = '/offline/';
