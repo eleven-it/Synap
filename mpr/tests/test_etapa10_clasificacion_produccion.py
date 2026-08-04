@@ -459,6 +459,65 @@ class TestClasificacionProduccionViewGet(TestCase):
         resp = self._get(autenticado=False)
         self.assertEqual(resp.status_code, 302)
 
+    @patch("mpr.services.listar_turnos", return_value=[])
+    @patch("mpr.services.construir_grilla_clasificacion_produccion")
+    def test_default_ver_roster_completo(self, mock_grilla, _turnos):
+        """Sin param ver_roster: se pide roster completo (default)."""
+        from mpr.views import ClasificacionProduccionView
+
+        mock_grilla.return_value = {
+            "filas": [],
+            "filas_vacio": True,
+            "hay_filas_editables": False,
+            "confirmadas_ocultas": 0,
+            "bloqueos": [],
+            "requiere_fecha": False,
+            "requiere_fecha_turno": False,
+            "componentes": [],
+            "componentes_vacio": True,
+            "tiene_borrador": False,
+        }
+        request = self.factory.get(
+            reverse("mpr:clasificacion_produccion"),
+            {"fecha": "24/07/2026"},
+        )
+        request.session = {"user": {"id_usuario": 1, "base_empresa": EMPRESA}}
+        request.user = self.user
+        _add_messages(request)
+        resp = ClasificacionProduccionView.as_view()(request)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(mock_grilla.called)
+        self.assertTrue(mock_grilla.call_args.kwargs.get("ver_roster_completo"))
+
+    @patch("mpr.services.listar_turnos", return_value=[])
+    @patch("mpr.services.construir_grilla_clasificacion_produccion")
+    def test_ver_roster_0_solo_pendiente(self, mock_grilla, _turnos):
+        """ver_roster=0 activa filtro solo pendiente."""
+        from mpr.views import ClasificacionProduccionView
+
+        mock_grilla.return_value = {
+            "filas": [],
+            "filas_vacio": True,
+            "hay_filas_editables": False,
+            "confirmadas_ocultas": 2,
+            "bloqueos": [],
+            "requiere_fecha": False,
+            "requiere_fecha_turno": False,
+            "componentes": [],
+            "componentes_vacio": True,
+            "tiene_borrador": False,
+        }
+        request = self.factory.get(
+            reverse("mpr:clasificacion_produccion"),
+            {"fecha": "24/07/2026", "ver_roster": "0"},
+        )
+        request.session = {"user": {"id_usuario": 1, "base_empresa": EMPRESA}}
+        request.user = self.user
+        _add_messages(request)
+        resp = ClasificacionProduccionView.as_view()(request)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(mock_grilla.call_args.kwargs.get("ver_roster_completo"))
+
 
 # ---------------------------------------------------------------------------
 # TestRegistrarClasificacionProduccionViewPost

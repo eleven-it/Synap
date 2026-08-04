@@ -7001,7 +7001,12 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
         marcas_incluidos = _parse_marcas_incluidos(self.request)
         fecha_str = (self.request.GET.get("fecha") or "").strip()
         turno_id_raw = (self.request.GET.get("turno_id") or "").strip()
-        ver_roster = (self.request.GET.get("ver_roster") or "").strip() == "1"
+        # Default: roster completo. «Solo pendiente» = ver_roster=0.
+        _vr = (self.request.GET.get("ver_roster") or "").strip().lower()
+        if _vr in ("0", "false", "no", "pendiente"):
+            ver_roster = False
+        else:
+            ver_roster = True
 
         fecha_obj = None
         turno_id = None
@@ -7089,7 +7094,7 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
                     k: v for k, v in (
                         ("fecha", fecha_str),
                         ("turno_id", turno_id_raw),
-                        ("ver_roster", "1" if ver_roster else ""),
+                        ("ver_roster", "1" if ver_roster else "0"),
                     ) if v
                 },
                 marcas_incluidos,

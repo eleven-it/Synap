@@ -52,7 +52,7 @@
                         </button>
                         <input type="hidden" name="turno_id" :value="selectedId">
                         <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
-                        {% if ver_roster %}<input type="hidden" name="ver_roster" value="1">{% endif %}
+                        <input type="hidden" name="ver_roster" value="{% if ver_roster %}1{% else %}0{% endif %}">
 
                         <ul x-show="open"
                             x-cloak
@@ -119,7 +119,7 @@
             {% if puede_ver_roster_completo and not requiere_fecha %}
             <div class="flex items-center gap-2 self-end">
                 {% if ver_roster %}
-                <a href="?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}&amp;presentacion={{ modo_presentacion }}"
+                <a href="?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}&amp;ver_roster=0&amp;presentacion={{ modo_presentacion }}"
                    title="Vuelve a solo filas pendientes de clasificar"
                    class="group relative inline-flex h-9 items-center rounded-lg border border-slate-500 bg-slate-700 px-3 text-xs font-medium text-white hover:bg-slate-600">
                     Solo pendiente
