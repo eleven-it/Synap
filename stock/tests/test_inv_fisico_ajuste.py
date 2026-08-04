@@ -261,6 +261,59 @@ class ListarLineasAnalizadorTest(SimpleTestCase):
         self.assertEqual(len(lineas), 1)
         self.assertEqual(lineas[0]["diferencia"], Decimal("-2"))
 
+    @patch("stock.services.inventario_fisico._query_lineas_analizador")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    def test_filtro_marcas_solo_seleccionadas(self, mock_cursor_ctx, mock_query):
+        cursor = MagicMock()
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        mock_query.return_value = [
+            {
+                "id_linea": 1,
+                "id_articulo": 1,
+                "id_deposito": 3,
+                "saldo_snapshot": Decimal("10"),
+                "cantidad_contada": Decimal("8"),
+                "diferencia": Decimal("-2"),
+                "codigo": "X1",
+                "nombre": "Uno",
+                "id_marca": 5,
+                "nombre_marca": "Marca A",
+            },
+            {
+                "id_linea": 2,
+                "id_articulo": 2,
+                "id_deposito": 3,
+                "saldo_snapshot": Decimal("5"),
+                "cantidad_contada": Decimal("7"),
+                "diferencia": Decimal("2"),
+                "codigo": "X2",
+                "nombre": "Dos",
+                "id_marca": 9,
+                "nombre_marca": "Marca B",
+            },
+        ]
+
+        lineas = svc.listar_lineas_analizador("emp", 1, marcas_incluidos=[5])
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(lineas[0]["id_marca"], 5)
+
+
+class ParseMarcasIncluidosTest(SimpleTestCase):
+    def test_normaliza_ids(self):
+        self.assertEqual(svc.parse_marcas_incluidos(["1", "2", "x", "3"]), [1, 2, 3])
+
+    def test_vacio(self):
+        self.assertEqual(svc.parse_marcas_incluidos([]), [])
+
+
+class BuildAnalizadorQueryStringTest(SimpleTestCase):
+    def test_preserva_filtro_y_marcas(self):
+        qs = svc.build_analizador_query_string(filtro="faltante", marcas_incluidos=[3, 7])
+        self.assertIn("filtro=faltante", qs)
+        self.assertIn("marcas_incluidos=3", qs)
+        self.assertIn("marcas_incluidos=7", qs)
+
 
 @override_settings(
     SESSION_ENGINE="django.contrib.sessions.backends.cache",
@@ -353,13 +406,15 @@ class AnalizadorVistaTest(SimpleTestCase):
     @patch("stock.services.inventario_fisico.listar_lineas_analizador")
     @patch("stock.services.inventario_fisico.obtener_resumen_monitor")
     @patch("stock.services.inventario_fisico.obtener_campana")
-    def test_vista_muestra_diferencias(self, mock_campana, mock_resumen, mock_lineas):
+    @patch("stock.services.inventario_tabla.listar_marcas_catalogo")
+    def test_vista_muestra_diferencias(self, mock_marcas, mock_campana, mock_resumen, mock_lineas):
         from django.contrib.sessions.middleware import SessionMiddleware
         from django.http import HttpResponse
         from django.test import RequestFactory
 
         from stock.views import inventario_fisico_analizador_view
 
+        mock_marcas.return_value = [{"value": 1, "label": "Marca Uno"}]
         mock_campana.return_value = {
             "id_campana": 3,
             "estado": svc.ESTADO_EN_REVISION,
@@ -410,5 +465,7 @@ class AnalizadorVistaTest(SimpleTestCase):
         self.assertEqual(resp.status_code, 200)
         content = resp.content.decode()
         self.assertIn("Analizador", content)
+        self.assertIn("Disponible", content)
+        self.assertIn("Buscar en tabla", content)
         self.assertIn("-2", content)
         self.assertIn("sincronizar", content.lower())

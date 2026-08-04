@@ -7,8 +7,8 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 - Campañas mensuales en depósitos MPR (`Terminado`, `2daSeleccion`).
 - Solo artículos con `articulo.tipo_art_fab` en **`Terminado`** o **`Fabricado 2da`** (excluye Fabricado, Tercero y vacíos).
 - Conteo ciego offline-first (PWA Nivel A) con sync idempotente.
-- Analizador supervisor con diferencia `contado − snapshot`.
-- Cantidades en UI (snapshot, contado, diferencia, eventos) se muestran como **enteros** (sin decimales); el ingreso móvil usa `step=1`.
+- Analizador supervisor con diferencia `contado − snapshot` (columna UI **Disponible**, campo interno `saldo_snapshot`).
+- Cantidades en UI (disponible, contado, diferencia, eventos) se muestran como **enteros** (sin decimales); el ingreso móvil usa `step=1`.
 - Autorización explícita y posteo MSTOCK vía `core/services/administranet_stock.py` (Faltante=3 / Sobrante=4).
 - **Sin** volcado automático a tablas legacy `inventario*` (fase 2 opcional).
 
@@ -50,7 +50,7 @@ Reconteo ciego: `EnRevision → EnConteo`.
 | `/stock/inventario-fisico/` | `stock.inventario_fisico.gestionar` | Listado campañas |
 | `/stock/inventario-fisico/nueva/` | gestionar | Alta campaña + snapshot |
 | `/stock/inventario-fisico/<id>/monitor/` | gestionar | Progreso, conflictos, cierre conteo |
-| `/stock/inventario-fisico/<id>/analizador/` | gestionar | Diferencias, filtros faltante/sobrante |
+| `/stock/inventario-fisico/<id>/analizador/` | gestionar | Diferencias, filtros faltante/sobrante, marcas y búsqueda en tabla |
 | `/stock/inventario-fisico/<id>/linea/<id_linea>/` | gestionar | Detalle eventos por línea |
 | `/stock/conteo/` | `stock.inventario_fisico.contar` | PWA operario |
 | `/stock/api/conteo/prefetch/` | contar | Catálogo ciego |
@@ -82,6 +82,8 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 | `etiquetar_contadores(ids, candidatos)` | Enlaza ids asignados a su etiqueta legible |
 
 `inventario_fisico_crear_view` acepta `contadores` (lista) + `contadores_texto` y `accion` (`crear_abrir`/`crear_borrador`); `inventario_fisico_monitor_view` acepta `accion=reasignar`.
+
+**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia) vía GET `filtro`; multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. Columna de saldo al abrir conteo: **Disponible** (campo interno `saldo_snapshot`).
 
 ### Offline (PWA)
 
@@ -161,7 +163,7 @@ Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`,
 - [ ] Asignar contadores; abrir conteo (`EnConteo`).
 - [ ] Monitor muestra progreso y conflictos sync.
 - [ ] Cerrar conteo → `EnRevision`.
-- [ ] Analizador: filtros faltante/sobrante; detalle línea en ≤ 2 clics desde monitor.
+- [ ] Analizador: filtros faltante/sobrante; multi-marca (GET `marcas_incluidos`); búsqueda en vivo por código/nombre; columna **Disponible**; detalle línea en ≤ 2 clics desde monitor.
 - [ ] Autorizar bloqueado si hay `pendientes_cliente` o conflictos sync.
 - [ ] Autorizar OK → campaña `Aplicado`, MSTOCK Faltante/Sobrante, línea diff=0 sin movimiento.
 - [ ] Anular en `EnConteo` → `Anulado` sin MSTOCK.

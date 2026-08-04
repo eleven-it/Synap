@@ -12,7 +12,7 @@
             <h1 class="text-base font-bold tracking-tight text-white sm:text-lg">{{ linea.codigo }} — {{ linea.nombre }}</h1>
           </div>
           <p class="mt-1 text-xs leading-snug text-slate-300">
-            Snapshot {{ linea.saldo_snapshot|floatformat:0 }} · Contado {% if linea.cantidad_contada is not None %}{{ linea.cantidad_contada|floatformat:0 }}{% else %}—{% endif %}
+            Disponible {{ linea.saldo_snapshot|floatformat:0 }} · Contado {% if linea.cantidad_contada is not None %}{{ linea.cantidad_contada|floatformat:0 }}{% else %}—{% endif %}
             · Diferencia <strong class="text-white">{% if linea.diferencia is not None %}{{ linea.diferencia|floatformat:0 }}{% else %}—{% endif %}</strong>
           </p>
         </div>
