@@ -47,7 +47,9 @@ TRANSICIONES_ESTADO: Dict[str, frozenset] = {
     ESTADO_ANULADO: frozenset(),
 }
 
-TIPOS_MPR_ELEGIBLES = frozenset({"Terminado", "SemiElaborado", "2daSeleccion"})
+TIPOS_MPR_ELEGIBLES = frozenset({"Terminado", "2daSeleccion"})
+
+TIPOS_ART_FAB_ELEGIBLES = frozenset({"Terminado", "Fabricado 2da"})
 
 RESULTADO_ACEPTADO = "aceptado"
 RESULTADO_CONFLICTO = "conflicto"
@@ -63,6 +65,17 @@ CAMPOS_PROHIBIDOS_CONTEO = frozenset(
 
 def es_tipo_mpr_elegible(tipo_mpr: Any) -> bool:
     return str_or_default(tipo_mpr, "").strip() in TIPOS_MPR_ELEGIBLES
+
+
+def es_tipo_art_fab_elegible(tipo_art_fab: Any) -> bool:
+    return str_or_default(tipo_art_fab, "").strip() in TIPOS_ART_FAB_ELEGIBLES
+
+
+def _sql_filtro_tipo_art_fab(alias: str = "a") -> Tuple[str, List[Any]]:
+    """Fragmento SQL ``AND COALESCE(TRIM(alias.tipo_art_fab), '') IN (...)``."""
+    tipos = tuple(TIPOS_ART_FAB_ELEGIBLES)
+    ph = ",".join(["%s"] * len(tipos))
+    return f"COALESCE(TRIM({alias}.tipo_art_fab), '') IN ({ph})", list(tipos)
 
 
 def calcular_diferencia(
@@ -441,13 +454,20 @@ def crear_campana(
             tbl_sd = _nombre_tabla(cursor, "stock_deposito")
             if not tbl_sd:
                 return False, {"error": "Tabla stock_deposito no encontrada."}
+            tbl_art = _nombre_tabla(cursor, "articulo")
+            if not tbl_art:
+                return False, {"error": "Tabla articulo no encontrada."}
             tsd = tbl_sd.replace("`", "``")
+            ta = tbl_art.replace("`", "``")
+            filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
             lineas = 0
             for did in dep_ids:
                 cursor.execute(
-                    f"SELECT id_articulo, COALESCE(saldo, 0) AS saldo "
-                    f"FROM `{tsd}` WHERE id_deposito = %s",
-                    [did],
+                    f"SELECT sd.id_articulo, COALESCE(sd.saldo, 0) AS saldo "
+                    f"FROM `{tsd}` sd "
+                    f"INNER JOIN `{ta}` a ON a.IDArt = sd.id_articulo "
+                    f"WHERE sd.id_deposito = %s AND {filtro_art}",
+                    [did, *params_art],
                 )
                 for fila in cursor.fetchall():
                     id_art = to_int_or_none(fila.get("id_articulo"))
@@ -578,6 +598,7 @@ def prefetch_catalogo_ciego(
             if not tbl_art:
                 return False, {"error": "Tabla articulo no encontrada."}
             ta = tbl_art.replace("`", "``")
+            filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
             cursor.execute(
                 f"SELECT l.id_articulo, "
                 f"COALESCE(a.id_manual, '-') AS codigo, "
@@ -586,9 +607,9 @@ def prefetch_catalogo_ciego(
                 f"COALESCE(a.NroCodBarraF, '') AS ean2 "
                 f"FROM inv_fisico_linea l "
                 f"INNER JOIN `{ta}` a ON a.IDArt = l.id_articulo "
-                f"WHERE l.id_campana = %s AND l.id_deposito = %s "
+                f"WHERE l.id_campana = %s AND l.id_deposito = %s AND {filtro_art} "
                 f"ORDER BY a.NombreArticulo",
-                [id_campana, dep],
+                [id_campana, dep, *params_art],
             )
             articulos = []
             for r in cursor.fetchall():
@@ -903,16 +924,17 @@ def _query_lineas_analizador(cursor, id_campana: int) -> List[Dict[str, Any]]:
     if not tbl_art:
         return []
     ta = tbl_art.replace("`", "``")
+    filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
     cursor.execute(
         f"SELECT l.id_linea, l.id_articulo, l.id_deposito, l.saldo_snapshot, "
         f"l.cantidad_contada, l.diferencia, l.id_contador, l.estado_linea, "
         f"COALESCE(a.id_manual, '-') AS codigo, "
         f"COALESCE(a.NombreArticulo, '') AS nombre "
         f"FROM inv_fisico_linea l "
-        f"LEFT JOIN `{ta}` a ON a.IDArt = l.id_articulo "
-        f"WHERE l.id_campana = %s "
+        f"INNER JOIN `{ta}` a ON a.IDArt = l.id_articulo "
+        f"WHERE l.id_campana = %s AND {filtro_art} "
         f"ORDER BY ABS(COALESCE(l.diferencia, 0)) DESC, a.NombreArticulo",
-        [id_campana],
+        [id_campana, *params_art],
     )
     lineas: List[Dict[str, Any]] = []
     for row in cursor.fetchall():
