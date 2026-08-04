@@ -17748,8 +17748,8 @@ def _registrar_parte_produccion_planilla(
             "Para corregir cantidades usá «Guardar parte de producción»."
         )
 
-    # Se conservan también las celdas en cero: al editar una cantidad existente
-    # hacia cero el upsert debe borrar esa línea, no dejarla persistida.
+    # Payload parcial: solo celdas presentes en el POST. Cero intencional borra
+    # esa celda; celdas ausentes (filtro/roster/cupo) se conservan en el repo.
     lineas_norm: List[Dict[str, Any]] = []
     for cel in lineas or []:
         id_art = to_int_or_none(cel.get("id_articulo"))
@@ -17757,17 +17757,12 @@ def _registrar_parte_produccion_planilla(
         id_maq = to_int_or_none(cel.get("id_mpr_maquina"))
         turno_cel = to_int_or_none(cel.get("turno_id"))
         cantidad = to_decimal_or_none(cel.get("cantidad"))
-        if (
-            id_art is None
-            or id_op is None
-            or id_maq is None
-            or turno_cel is None
-            or cantidad is None
-        ):
+        if id_art is None or id_maq is None or turno_cel is None or cantidad is None:
             continue
         if cantidad > 0 and id_op is None:
             raise DjValidationError(
-                f"Artículo {id_art}: seleccioná el operario antes de guardar."
+                f"Artículo {id_art} (máquina {id_maq}): seleccioná el operario "
+                "antes de guardar."
             )
         op_data = obtener_operario(base_empresa, id_op) if id_op is not None else None
         nombre_snap = str_or_default(
@@ -17862,12 +17857,11 @@ def _registrar_parte_produccion_planilla(
                 partes_creados.append(parte)
                 continue
 
-            nuevas_por_art: Dict[int, Decimal] = {}
-            for ln in lineas_turno:
-                aid = int(ln["id_articulo"])
-                cant = to_decimal_or_none(ln.get("cantidad")) or Decimal("0")
-                if cant > 0:
-                    nuevas_por_art[aid] = nuevas_por_art.get(aid, Decimal("0")) + cant
+            # Tras merge diferencial, el stock debe reflejar el parte completo
+            # (celdas tocadas + conservadas), no solo el POST parcial.
+            nuevas_por_art = sumar_cantidades_aprobadas_por_articulo(
+                base_empresa, int(parte.id_mpr_parte)
+            )
 
             if tenia_fisico and deposito_produccion:
                 todos_art = set(prev_aprobadas) | set(nuevas_por_art)
@@ -17887,8 +17881,9 @@ def _registrar_parte_produccion_planilla(
                 parte.save(update_fields=["movimiento_fisico_ok"])
             elif not getattr(parte, "movimiento_fisico_ok", False):
                 lineas_creadas = [
-                    ({"id_articulo": ln["id_articulo"]}, ln["cantidad"])
-                    for ln in lineas_turno
+                    ({"id_articulo": ln.id_articulo}, ln.cantidad)
+                    for ln in (parte.lineas or [])
+                    if (to_decimal_or_none(ln.cantidad) or Decimal("0")) > 0
                 ]
                 if deposito_produccion and lineas_creadas:
                     _registrar_asiento_fisico_opp_parte(

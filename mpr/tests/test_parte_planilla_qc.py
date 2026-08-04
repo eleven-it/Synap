@@ -79,6 +79,10 @@ class ConstruirGrillaPartePlanillaTest(SimpleTestCase):
         ("mpr.repositories.transicion_lote.fecha_tiene_control_calidad", False),
         ("mpr.repositories.transicion_lote.turnos_con_control_calidad", set()),
         ("mpr.repositories.parte.fecha_planilla_tiene_parte_aprobado", False),
+        (
+            "mpr.services.obtener_config_mpr",
+            {"bloquear_parte_supera_fabricando": True},
+        ),
     )
 
     def setUp(self):
@@ -404,7 +408,17 @@ class CrearOActualizarPartePlanillaTest(SimpleTestCase):
             c for c in cursor.execute.call_args_list
             if "DELETE FROM mpr_parte_linea" in str(c.args[0])
         ]
-        self.assertTrue(delete_calls)
+        self.assertEqual(len(delete_calls), 1)
+        delete_sql = delete_calls[0].args[0]
+        delete_params = delete_calls[0].args[1]
+        self.assertIn("id_mpr_maquina", delete_sql)
+        self.assertIn("id_articulo", delete_sql)
+        self.assertNotRegex(
+            delete_sql,
+            r"WHERE id_mpr_parte = %s\s*$",
+            msg="No debe borrar todas las líneas del parte (wipe total)",
+        )
+        self.assertEqual(delete_params, [77, 10, 100])
         insert_calls = [
             c for c in cursor.execute.call_args_list
             if "INSERT INTO mpr_parte_linea" in str(c.args[0])
@@ -412,6 +426,107 @@ class CrearOActualizarPartePlanillaTest(SimpleTestCase):
         self.assertTrue(insert_calls)
         insert_sql = insert_calls[0].args[0]
         self.assertIn(", 0, %s", insert_sql)
+
+    @patch("mpr.repositories.parte.mysql_cursor")
+    @patch("mpr.repositories.parte.obtener_parte_por_pk")
+    def test_merge_preserva_celdas_ausentes_del_payload(self, mock_obtener, mock_cursor_ctx):
+        """POST parcial: solo toca la celda enviada; no borra el resto del turno."""
+        from mpr.repositories.parte import crear_o_actualizar_parte_planilla
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        with patch(
+            "mpr.repositories.parte.obtener_parte_planilla_directo_supervisor",
+            return_value={
+                "id_mpr_parte": 77,
+                "uuid_parte": "u-77",
+                "movimiento_fisico_ok": True,
+                "estado": "borrador",
+            },
+        ):
+            mock_obtener.return_value = MagicMock(id_mpr_parte=77)
+            crear_o_actualizar_parte_planilla(
+                EMPRESA,
+                date(2026, 7, 21),
+                1,
+                1,
+                [
+                    {
+                        "id_articulo": 100,
+                        "id_operario": 5,
+                        "cantidad": Decimal("12"),
+                        "operario_nombre": "JUAN",
+                        "id_mpr_maquina": 10,
+                        "maquina_nombre": "M1",
+                    }
+                ],
+                estado="borrador",
+            )
+
+        delete_calls = [
+            c for c in cursor.execute.call_args_list
+            if "DELETE FROM mpr_parte_linea" in str(c.args[0])
+        ]
+        self.assertEqual(len(delete_calls), 1)
+        delete_sql = delete_calls[0].args[0]
+        self.assertIn("id_mpr_maquina", delete_sql)
+        self.assertIn("id_articulo", delete_sql)
+        self.assertNotRegex(
+            delete_sql,
+            r"WHERE id_mpr_parte = %s\s*$",
+            msg="No debe borrar todas las líneas del parte",
+        )
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO mpr_parte_linea" in str(c.args[0])
+        ]
+        self.assertEqual(len(insert_calls), 1)
+
+    @patch("mpr.repositories.parte.mysql_cursor")
+    @patch("mpr.repositories.parte.obtener_parte_por_pk")
+    def test_cero_intencional_borra_solo_esa_celda(self, mock_obtener, mock_cursor_ctx):
+        """Cantidad 0 en celda presente: DELETE puntual sin INSERT."""
+        from mpr.repositories.parte import crear_o_actualizar_parte_planilla
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        with patch(
+            "mpr.repositories.parte.obtener_parte_planilla_directo_supervisor",
+            return_value={
+                "id_mpr_parte": 77,
+                "uuid_parte": "u-77",
+                "movimiento_fisico_ok": True,
+                "estado": "borrador",
+            },
+        ):
+            mock_obtener.return_value = MagicMock(id_mpr_parte=77)
+            crear_o_actualizar_parte_planilla(
+                EMPRESA,
+                date(2026, 7, 21),
+                1,
+                1,
+                [
+                    {
+                        "id_articulo": 100,
+                        "id_operario": 5,
+                        "cantidad": Decimal("0"),
+                        "operario_nombre": "JUAN",
+                        "id_mpr_maquina": 10,
+                        "maquina_nombre": "M1",
+                    }
+                ],
+                estado="borrador",
+            )
+
+        delete_calls = [
+            c for c in cursor.execute.call_args_list
+            if "DELETE FROM mpr_parte_linea" in str(c.args[0])
+        ]
+        self.assertEqual(len(delete_calls), 1)
+        self.assertEqual(delete_calls[0].args[1], [77, 10, 100])
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO mpr_parte_linea" in str(c.args[0])
+        ]
+        self.assertEqual(len(insert_calls), 0)
 
     @patch("mpr.repositories.parte.mysql_cursor")
     @patch("mpr.repositories.parte.obtener_parte_por_pk")
@@ -546,6 +661,12 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
         patcher = patch("mpr.services._validar_planilla_sin_control_calidad", return_value=[])
         self._mock_validar_cc = patcher.start()
         self.addCleanup(patcher.stop)
+        patcher_cfg = patch(
+            "mpr.services.obtener_config_mpr",
+            return_value={"bloquear_parte_supera_fabricando": True},
+        )
+        patcher_cfg.start()
+        self.addCleanup(patcher_cfg.stop)
         patcher_precarga = patch(
             "mpr.repositories.parte.precarga_planilla_por_fecha", return_value={}
         )
@@ -690,10 +811,11 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
     @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
     @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
     @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
+    @patch("mpr.repositories.parte.sumar_cantidades_aprobadas_por_articulo")
     @patch("mpr.services.cupo_fabricando_por_articulo")
     @patch("mpr.services.obtener_turno")
     def test_modo_planilla_upsert_un_parte_por_turno(
-        self, mock_turno, mock_cupo, mock_crear, _op, _dep, _asiento, _obtener
+        self, mock_turno, mock_cupo, mock_sumar, mock_crear, _op, _dep, _asiento, _obtener
     ):
         from mpr.services import registrar_parte_produccion
 
@@ -701,7 +823,14 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
         turno_rec.id_mpr_turno = 1
         mock_turno.return_value = turno_rec
         mock_cupo.return_value = {100: 48.0}
-        parte_mock = MagicMock(movimiento_fisico_ok=False, save=lambda *a, **k: None)
+        mock_sumar.return_value = {100: Decimal("12")}
+        ln = MagicMock(id_articulo=100, cantidad=Decimal("12"))
+        parte_mock = MagicMock(
+            movimiento_fisico_ok=False,
+            id_mpr_parte=99,
+            lineas=[ln],
+            save=lambda *a, **k: None,
+        )
         mock_crear.return_value = parte_mock
         lineas = [
             {
@@ -736,6 +865,33 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
         estados = {c.kwargs.get("estado") for c in mock_crear.call_args_list}
         self.assertEqual(estados, {"aprobado"})
         _asiento.assert_called()
+
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
+    def test_rechaza_cantidad_positiva_sin_operario(self, mock_crear):
+        from mpr.services import registrar_parte_produccion
+
+        lineas = [
+            {
+                "id_articulo": 100,
+                "id_operario": None,
+                "cantidad": Decimal("12"),
+                "id_mpr_maquina": 10,
+                "maquina_nombre": "M1",
+                "turno_id": 1,
+            },
+        ]
+        with self.assertRaises(ValidationError) as ctx:
+            registrar_parte_produccion(
+                EMPRESA,
+                date(2026, 7, 21),
+                None,
+                1,
+                lineas,
+                modo_planilla=True,
+                accion="borrador",
+            )
+        self.assertIn("operario", str(ctx.exception).lower())
+        mock_crear.assert_not_called()
 
     @patch("mpr.services._validar_planilla_sin_control_calidad", return_value=["CC bloqueado"])
     def test_rechaza_post_si_dia_tiene_cc(self, _cc):
@@ -826,8 +982,12 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
             "movimiento_fisico_ok": True,
             "estado": "aprobado",
         }
-        mock_sumar.return_value = {100: Decimal("12")}
-        parte_mock = MagicMock(movimiento_fisico_ok=True, save=lambda *a, **k: None)
+        mock_sumar.side_effect = [{100: Decimal("12")}, {100: Decimal("18")}]
+        parte_mock = MagicMock(
+            movimiento_fisico_ok=True,
+            id_mpr_parte=50,
+            save=lambda *a, **k: None,
+        )
         mock_crear.return_value = parte_mock
         lineas = [
             {
@@ -1067,10 +1227,15 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
     @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
     @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
     @patch("mpr.services.cupo_fabricando_por_articulo")
+    @patch(
+        "mpr.services.obtener_config_mpr",
+        return_value={"bloquear_parte_supera_fabricando": True},
+    )
     @patch("mpr.views._get_base_empresa", return_value=EMPRESA)
     def test_post_rechaza_sobre_cupo_mensaje_es(
         self,
         _base,
+        _cfg,
         mock_cupo,
         mock_crear,
         _op,

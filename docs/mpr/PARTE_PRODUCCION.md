@@ -323,7 +323,19 @@ Turnos con **control de calidad** (`cel.bloqueado`): mismos casilleros Docenas/P
 Al abrir con fecha, `precarga_planilla_por_fecha` lee partes existentes por tupla  
 `(fecha, id_mpr_maquina, id_articulo, id_mpr_turno)` y rellena docenas/pares en cada columna turno.
 
-El guardado es **idempotente** vía `uk_mpr_parte_linea_maq` (`ON DUPLICATE KEY UPDATE`): un re-envío del formulario actualiza las cantidades del turno correspondiente.
+El guardado usa **persistencia diferencial** por celda `(id_mpr_maquina, id_articulo)`
+dentro de cada parte (turno en cabecera). Por cada celda del POST:
+
+- **cantidad > 0** con operario → DELETE puntual de esa celda e INSERT con los nuevos valores.
+- **cantidad = 0** en celda presente → DELETE puntual (cero intencional; borra solo esa celda).
+- **Celdas ausentes** del payload (filtro línea/máquina, sin roster, sin cupo, artículo no
+  vigente) → **se conservan**; no se borra el resto del turno.
+
+Un POST parcial no reemplaza todo el parte del turno. La cabecera existente se bloquea con
+`SELECT ... FOR UPDATE` antes de actualizar (mitiga last-write-wins concurrente).
+
+_Nota (04/08/2026): reemplaza el wipe total de líneas y la descripción anterior de
+idempotencia vía `ON DUPLICATE KEY UPDATE` en este flujo planilla._
 
 La precarga no persiste un snapshot de **Cupo Fabricando**. Al abrir una fila con
 cantidades existentes, el badge de cupo queda oculto. Reaparece y se consulta en vivo
@@ -425,9 +437,12 @@ Heredado de `operadores_por_linea` / roster del builder de planilla:
 3. Completa docenas/pares por turno y operario
 4. POST /mpr/parte-produccion/registrar/
 5. registrar_parte_produccion(modo_planilla=True):
-   a. Valida cupo cross-turno (bloqueante)
-   b. Por turno con cantidades: crear_parte_con_lineas(id_mpr_maquina, ...)
-   c. Asiento físico OPP (ya_componentes=True) por cada parte creado
+   a. Valida operario obligatorio si cantidad > 0; rechaza si falta
+   b. Valida cupo solo en aprobar (incremento editado vs Fabricando live)
+   c. Por turno con celdas actualizables: crear_o_actualizar_parte_planilla
+      (merge diferencial: POST parcial no borra celdas ausentes)
+   d. Stock / asiento OPP sobre el parte **completo** tras el merge
+      (sumar_cantidades_aprobadas_por_articulo / parte.lineas), no solo el POST
 6. Redirect con filtros preservados; mensaje éxito/error en español
 ```
 

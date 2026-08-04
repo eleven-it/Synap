@@ -590,25 +590,43 @@ def sumar_cantidades_aprobadas_por_articulo(
     return acum
 
 
-def _insertar_lineas_planilla(
+def _aplicar_lineas_planilla_diferencial(
     cursor,
     id_parte: int,
     lineas: List[Dict[str, Any]],
     *,
     es_borrador: bool,
 ) -> None:
+    """Aplica solo las celdas recibidas; no toca el resto del turno.
+
+    Clave de celda planilla: ``(id_mpr_maquina, id_articulo)`` dentro del parte
+    (el turno vive en la cabecera). Por cada celda del payload:
+
+    - cantidad > 0 + operario → reemplaza esa celda (borra maq×art previas e inserta)
+    - cantidad <= 0 → borra esa celda (cero intencional)
+    - celdas ausentes del payload → se conservan (mitiga POST parcial por filtro /
+      sin roster / sin cupo / artículo no vigente)
+    """
+    por_celda: Dict[Tuple[int, int], Dict[str, Any]] = {}
     for cel in lineas or []:
         id_art = to_int_or_none(cel.get("id_articulo"))
-        id_op = to_int_or_none(cel.get("id_operario"))
         id_maq = to_int_or_none(cel.get("id_mpr_maquina"))
         cantidad = to_decimal_or_none(cel.get("cantidad"))
-        if (
-            id_art is None
-            or id_op is None
-            or id_maq is None
-            or cantidad is None
-            or cantidad <= 0
-        ):
+        if id_art is None or id_maq is None or cantidad is None:
+            continue
+        por_celda[(int(id_maq), int(id_art))] = cel
+
+    for (id_maq, id_art), cel in por_celda.items():
+        id_op = to_int_or_none(cel.get("id_operario"))
+        cantidad = to_decimal_or_none(cel.get("cantidad")) or Decimal("0")
+        cursor.execute(
+            """
+            DELETE FROM mpr_parte_linea
+            WHERE id_mpr_parte = %s AND id_mpr_maquina = %s AND id_articulo = %s
+            """,
+            [int(id_parte), id_maq, id_art],
+        )
+        if cantidad <= 0 or id_op is None:
             continue
         if es_borrador:
             cursor.execute(
@@ -663,7 +681,9 @@ def crear_o_actualizar_parte_planilla(
 ) -> ParteRecord:
     """Upsert planilla desktop: un ``mpr_parte`` por (fecha, turno, origen directo).
 
-    Reemplaza las líneas por completo (delete + reinsert). Estados:
+    Persistencia **diferencial** por celda ``(máquina, artículo)`` del turno:
+    solo crea/actualiza/borra las celdas del payload; el resto del parte se conserva.
+    Estados:
     - ``borrador``: cantidad_declarada, cantidad física 0.
     - ``aprobado``: cantidad = cantidad_aprobada = cantidad_declarada.
     """
@@ -687,6 +707,14 @@ def crear_o_actualizar_parte_planilla(
         if existente:
             id_parte = int(existente["id_mpr_parte"])
             uid = existente.get("uuid_parte") or str(uuid.uuid4())
+            # Bloqueo de fila de cabecera para mitigar last-write-wins concurrente.
+            cursor.execute(
+                """
+                SELECT id_mpr_parte FROM mpr_parte
+                WHERE id_mpr_parte = %s FOR UPDATE
+                """,
+                [id_parte],
+            )
             if es_borrador:
                 cursor.execute(
                     """
@@ -712,7 +740,6 @@ def crear_o_actualizar_parte_planilla(
                         id_parte,
                     ],
                 )
-            cursor.execute("DELETE FROM mpr_parte_linea WHERE id_mpr_parte = %s", [id_parte])
         else:
             uid = str(uuid.uuid4())
             cursor.execute(
@@ -733,7 +760,9 @@ def crear_o_actualizar_parte_planilla(
                 ],
             )
             id_parte = int(cursor.lastrowid)
-        _insertar_lineas_planilla(cursor, id_parte, lineas, es_borrador=es_borrador)
+        _aplicar_lineas_planilla_diferencial(
+            cursor, id_parte, lineas, es_borrador=es_borrador
+        )
 
     parte = obtener_parte_por_pk(base, uid, with_relations=True)
     if parte is None:
