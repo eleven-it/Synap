@@ -149,14 +149,19 @@
                     <p class="text-xs uppercase tracking-wide text-purple-600 dark:text-purple-300">Artículo</p>
                     <p class="mt-0.5 text-base font-semibold text-slate-900 dark:text-white" x-text="articuloSel.nombre"></p>
                     <p class="text-sm text-slate-600 dark:text-slate-300" x-text="articuloSel.codigo"></p>
+                    <p x-show="yaContadoActual" x-cloak
+                       class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100">
+                        Ya contado: <strong class="tabular-nums" x-text="cantidadPrevia"></strong>. Corregí la cifra y confirmá.
+                    </p>
                     <label class="mt-4 block">
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Cantidad contada</span>
                         <input type="number" inputmode="numeric" min="0" step="1" x-model="cantidadInput"
+                               x-ref="cantidadInputEl"
                                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
                     </label>
                     <button type="button" @click="confirmarConteo()"
                             class="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 active:scale-[0.98]">
-                        Registrar conteo
+                        <span x-text="yaContadoActual ? 'Corregir conteo' : 'Registrar conteo'"></span>
                     </button>
                 </div>
             </template>
@@ -165,6 +170,52 @@
                 Última acción: <span x-text="ultimaAccion"></span>
             </div>
         </div>
+    </div>
+
+    {# Registro de control — ancho completo #}
+    <div class="mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Artículos contados</p>
+                <p class="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
+                    <span class="font-semibold tabular-nums text-slate-900 dark:text-white" x-text="historialConteos.length"></span>
+                    registrados en este depósito · tocá uno para corregir
+                </p>
+            </div>
+            <button type="button" @click="cargarHistorialConteos()"
+                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/40">
+                <span class="material-icons text-sm" aria-hidden="true">refresh</span>
+                Actualizar
+            </button>
+        </div>
+        <label class="mt-3 block">
+            <span class="sr-only">Filtrar artículos contados</span>
+            <input type="search" x-model="filtroHistorial" placeholder="Filtrar por código o nombre…"
+                   class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+        </label>
+        <p x-show="!historialConteos.length" class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+            Todavía no registraste artículos en este depósito. Escaneá o usá ingreso manual; acá vas a ver el listado para control.
+        </p>
+        <p x-show="historialConteos.length && !historialFiltrado.length" x-cloak
+           class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+            Ningún artículo coincide con el filtro.
+        </p>
+        <ul x-show="historialFiltrado.length" x-cloak class="mt-3 max-h-80 space-y-2 overflow-y-auto sm:max-h-96">
+            <template x-for="item in historialFiltrado" :key="item.id_articulo">
+                <li>
+                    <button type="button"
+                            @click="editarConteo(item)"
+                            class="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-left transition-colors hover:bg-slate-50 active:scale-[0.99] dark:border-slate-600 dark:hover:bg-slate-700/40">
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-medium text-slate-900 dark:text-white" x-text="item.nombre"></p>
+                            <p class="truncate text-xs text-slate-500 dark:text-slate-400" x-text="item.codigo"></p>
+                        </div>
+                        <span class="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-sm font-bold tabular-nums text-slate-800 dark:bg-slate-700 dark:text-slate-100" x-text="item.cantidad"></span>
+                        <span class="material-icons shrink-0 text-base text-purple-500" aria-hidden="true">edit</span>
+                    </button>
+                </li>
+            </template>
+        </ul>
     </div>
     {% endif %}
 
@@ -247,6 +298,7 @@ function conteoInvFisico() {
     catalogoVersion: '{{ campana.catalogo_version|escapejs }}',
     urlPrefetch: '{{ url_prefetch|escapejs }}',
     urlSync: '{{ url_sync|escapejs }}',
+    urlRegistrados: '{{ url_registrados|escapejs }}',
     csrf: document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}',
   };
 
@@ -272,6 +324,9 @@ function conteoInvFisico() {
     totalCatalogo: 0,
     pendientesSync: 0,
     contadosLocal: new Set(),
+    historialConteos: [],
+    filtroHistorial: '',
+    cantidadPrevia: '',
     mensajeOk: '',
     mensajeError: '',
     ultimaAccion: '',
@@ -280,6 +335,20 @@ function conteoInvFisico() {
     get porcentajeAvance() {
       if (!this.totalCatalogo) return 0;
       return Math.min(100, Math.round(this.contados * 100 / this.totalCatalogo));
+    },
+
+    get yaContadoActual() {
+      return !!(this.articuloSel && this.contadosLocal.has(this.articuloSel.id_articulo));
+    },
+
+    get historialFiltrado() {
+      var q = String(this.filtroHistorial || '').trim().toLowerCase();
+      if (!q) return this.historialConteos;
+      return this.historialConteos.filter(function (it) {
+        var codigo = String((it && it.codigo) || '').toLowerCase();
+        var nombre = String((it && it.nombre) || '').toLowerCase();
+        return codigo.indexOf(q) !== -1 || nombre.indexOf(q) !== -1;
+      });
     },
 
     async init() {
@@ -303,6 +372,79 @@ function conteoInvFisico() {
           ? this.pendientesSync + ' pendientes de sync'
           : 'Sin conexión — modo offline';
       }
+      await this.cargarHistorialConteos();
+    },
+
+    async cargarHistorialConteos() {
+      if (!window.InvFisicoOffline || !cfg.idDeposito) return;
+      var mapa = {};
+      try {
+        var locales = await window.InvFisicoOffline.listarConteosLocales(cfg.idCampana, cfg.idDeposito);
+        (locales || []).forEach(function (it) {
+          if (!it || it.id_articulo == null) return;
+          mapa[String(it.id_articulo)] = {
+            id_articulo: it.id_articulo,
+            codigo: it.codigo || '-',
+            nombre: it.nombre || '-',
+            cantidad: String(it.cantidad),
+            ts: it.ts || '',
+            origen: 'local',
+          };
+        });
+      } catch (e) { /* sin local */ }
+
+      if (this.online && cfg.urlRegistrados) {
+        try {
+          var params = new URLSearchParams({
+            id_campana: String(cfg.idCampana),
+            id_deposito: String(cfg.idDeposito),
+          });
+          var r = await fetch(cfg.urlRegistrados + '?' + params.toString(), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-CSRFToken': cfg.csrf },
+          });
+          var data = await r.json().catch(function () { return {}; });
+          if (r.ok) {
+            (data.contados || []).forEach(function (it) {
+              if (!it || it.id_articulo == null) return;
+              var key = String(it.id_articulo);
+              var row = {
+                id_articulo: it.id_articulo,
+                codigo: it.codigo || '-',
+                nombre: it.nombre || '-',
+                cantidad: String(it.cantidad),
+                ts: it.ts || '',
+                origen: 'servidor',
+              };
+              var prev = mapa[key];
+              if (!prev || String(prev.ts || '') <= String(row.ts || '')) {
+                mapa[key] = row;
+              }
+            });
+            // Sembrar IndexedDB con lo del servidor (corrige tras refresh / otro dispositivo)
+            for (var k of Object.keys(mapa)) {
+              var reg = mapa[k];
+              try {
+                await window.InvFisicoOffline.guardarConteoLocal(cfg.idCampana, cfg.idDeposito, {
+                  id_articulo: reg.id_articulo,
+                  cantidad: reg.cantidad,
+                  codigo: reg.codigo,
+                  nombre: reg.nombre,
+                  ts: reg.ts || new Date().toISOString(),
+                });
+              } catch (e2) { /* ignore seed */ }
+            }
+          }
+        } catch (e) { /* offline o error: seguir con local */ }
+      }
+
+      var lista = Object.keys(mapa).map(function (k) { return mapa[k]; });
+      lista.sort(function (a, b) {
+        return String(b.ts || '').localeCompare(String(a.ts || ''));
+      });
+      this.historialConteos = lista;
+      this.contadosLocal = new Set(lista.map(function (it) { return it.id_articulo; }));
+      this.contados = this.contadosLocal.size;
     },
 
     abrirIngresoManual() {
@@ -464,6 +606,7 @@ function conteoInvFisico() {
           this.mensajeOk = res.aceptados.length + ' conteo(s) sincronizado(s).';
           this.bannerSync = this.pendientesSync ? this.pendientesSync + ' pendientes de sync' : '';
         }
+        await this.cargarHistorialConteos();
       } catch (e) {
         this.mensajeError = e.message || 'No se pudo sincronizar.';
       } finally {
@@ -525,13 +668,41 @@ function conteoInvFisico() {
       await this.resolverCodigoEscaneado(String(codigo || '').trim());
     },
 
-    seleccionarArticulo(art) {
+    async seleccionarArticulo(art) {
       if (!art) return;
       this.articuloSel = art;
+      this.cantidadPrevia = '';
       this.cantidadInput = '';
       this.cerrarIngresoManual();
       this.mensajeError = '';
       this.mensajeOk = '';
+      try {
+        var prev = await window.InvFisicoOffline.obtenerConteoLocal(
+          cfg.idCampana, cfg.idDeposito, art.id_articulo
+        );
+        if (prev && prev.cantidad != null && prev.cantidad !== '') {
+          this.cantidadPrevia = String(prev.cantidad);
+          this.cantidadInput = String(prev.cantidad);
+          this.contadosLocal.add(art.id_articulo);
+        }
+      } catch (e) { /* sin prev local */ }
+      this.$nextTick(() => {
+        var el = this.$refs.cantidadInputEl;
+        if (el) {
+          el.focus();
+          if (typeof el.select === 'function') el.select();
+        }
+      });
+    },
+
+    async editarConteo(item) {
+      if (!item) return;
+      await this.seleccionarArticulo({
+        id_articulo: item.id_articulo,
+        codigo: item.codigo || '-',
+        nombre: item.nombre || '-',
+        ean: [],
+      });
     },
 
     async resolverCodigoEscaneado(codigo) {
@@ -543,7 +714,7 @@ function conteoInvFisico() {
         this.abrirIngresoManual();
         return;
       }
-      this.seleccionarArticulo(art);
+      await this.seleccionarArticulo(art);
     },
 
     confirmarConteo() {
@@ -556,7 +727,8 @@ function conteoInvFisico() {
       var qty = String(Math.round(n));
       this.cantidadInput = qty;
       if (this.contadosLocal.has(this.articuloSel.id_articulo)) {
-        this.confirmMensaje = 'Ya contaste este artículo. ¿Reemplazar la cantidad por ' + qty + '?';
+        this.confirmMensaje = 'Ya contaste este artículo (' + (this.cantidadPrevia || '—')
+          + '). ¿Reemplazar la cantidad por ' + qty + '?';
         this._pendingConteo = { cantidad: qty };
         this.confirmOpen = true;
         return;
@@ -570,6 +742,7 @@ function conteoInvFisico() {
       var qty = this._pendingConteo && this._pendingConteo.cantidad;
       this._pendingConteo = null;
       if (!this.articuloSel || qty == null) return;
+      var eraCorreccion = this.contadosLocal.has(this.articuloSel.id_articulo);
 
       var evento = {
         client_event_id: (crypto.randomUUID && crypto.randomUUID()) || ('ev-' + Date.now()),
@@ -583,14 +756,23 @@ function conteoInvFisico() {
 
       try {
         await window.InvFisicoOffline.encolarEvento(evento);
+        await window.InvFisicoOffline.guardarConteoLocal(cfg.idCampana, cfg.idDeposito, {
+          id_articulo: this.articuloSel.id_articulo,
+          cantidad: qty,
+          codigo: this.articuloSel.codigo,
+          nombre: this.articuloSel.nombre,
+          ts: evento.client_ts,
+        });
         this.contadosLocal.add(this.articuloSel.id_articulo);
-        this.contados = this.contadosLocal.size;
+        await this.cargarHistorialConteos();
         await this.actualizarPendientes();
         this.ultimaAccion = this.articuloSel.codigo + ' → ' + qty;
-        this.mensajeOk = 'Conteo registrado' + (this.online ? '' : ' (pendiente de sync)');
+        this.mensajeOk = (eraCorreccion ? 'Conteo corregido' : 'Conteo registrado')
+          + (this.online ? '' : ' (pendiente de sync)');
         this.mensajeError = '';
         this.articuloSel = null;
         this.cantidadInput = '';
+        this.cantidadPrevia = '';
         if (this.online) await this.sincronizar();
         else this.bannerSync = this.pendientesSync + ' pendientes de sync';
       } catch (e) {

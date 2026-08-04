@@ -21,6 +21,9 @@ class InvFisicoOfflineStaticTests(SimpleTestCase):
         'listarCola',
         'syncBatch',
         'marcarAceptados',
+        'listarConteosLocales',
+        'obtenerConteoLocal',
+        'guardarConteoLocal',
         'InvFisicoOffline',
     )
 
