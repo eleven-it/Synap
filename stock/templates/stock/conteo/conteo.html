@@ -161,7 +161,7 @@
                 </div>
                 <label class="block w-full shrink-0 lg:w-40">
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Cantidad</span>
-                    <input type="number" inputmode="numeric" min="0" step="1" x-model="cantidadInput"
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" x-model="cantidadInput"
                            x-ref="cantidadInputEl"
                            @keydown.enter.prevent="confirmarConteo()"
                            class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
@@ -169,6 +169,26 @@
                 <button type="button" @click="confirmarConteo()"
                         class="w-full shrink-0 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 active:scale-[0.98] lg:w-auto lg:min-w-[11rem]">
                     <span x-text="yaContadoActual ? 'Corregir conteo' : 'Registrar conteo'"></span>
+                </button>
+            </div>
+            <div class="mt-3 grid grid-cols-3 gap-2 lg:hidden" aria-label="Teclado numérico para cantidad">
+                <template x-for="digito in ['1', '2', '3', '4', '5', '6', '7', '8', '9']" :key="digito">
+                    <button type="button" @click="agregarDigitoCantidad(digito)"
+                            class="rounded-xl border border-slate-300 bg-white py-3 text-lg font-bold tabular-nums text-slate-800 shadow-sm transition-colors hover:bg-purple-50 active:scale-[0.97] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-purple-900/30"
+                            :aria-label="'Agregar ' + digito"
+                            x-text="digito"></button>
+                </template>
+                <button type="button" @click="limpiarCantidad()"
+                        class="rounded-xl border border-slate-300 bg-slate-100 py-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200 active:scale-[0.97] dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600">
+                    Limpiar
+                </button>
+                <button type="button" @click="agregarDigitoCantidad('0')"
+                        class="rounded-xl border border-purple-600 bg-purple-600 py-3 text-lg font-bold tabular-nums text-white shadow-sm transition-colors hover:bg-purple-700 active:scale-[0.97]"
+                        aria-label="Agregar 0">0</button>
+                <button type="button" @click="borrarDigitoCantidad()"
+                        class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white py-3 text-slate-700 shadow-sm transition-colors hover:bg-purple-50 active:scale-[0.97] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-purple-900/30"
+                        aria-label="Borrar último dígito">
+                    <span class="material-icons text-xl" aria-hidden="true">backspace</span>
                 </button>
             </div>
             <p x-show="ultimaAccion" x-cloak class="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -318,6 +338,8 @@ function conteoInvFisico() {
     tieneCamera: false,
     camaraDisponible: false,
     _html5QrCode: null,
+    _scannerStopPromise: null,
+    _procesandoScan: false,
     _busquedaTimeout: null,
     articuloSel: null,
     cantidadInput: '',
@@ -701,22 +723,40 @@ function conteoInvFisico() {
       });
     },
 
-    cerrarScanner() {
-      var self = this;
-      if (this._html5QrCode) {
-        this._html5QrCode.stop().then(function () {
-          self._html5QrCode.clear();
-          self._html5QrCode = null;
-        }).catch(function () { self._html5QrCode = null; });
-      }
+    async cerrarScanner() {
       this.scannerActivo = false;
+      if (this._scannerStopPromise) {
+        await this._scannerStopPromise;
+        return;
+      }
+      var scanner = this._html5QrCode;
+      if (!scanner) return;
+
+      var self = this;
+      this._scannerStopPromise = (async function () {
+        try {
+          await scanner.stop();
+        } catch (e) { /* el escáner ya puede estar detenido */ }
+        try {
+          await scanner.clear();
+        } catch (e) { /* la vista puede haber sido retirada */ }
+        if (self._html5QrCode === scanner) self._html5QrCode = null;
+        self._scannerStopPromise = null;
+      })();
+      await this._scannerStopPromise;
     },
 
     async onScan(codigo) {
-      if (navigator.vibrate) navigator.vibrate(200);
-      this.cerrarScanner();
-      this.resultadosBusqueda = [];
-      await this.resolverCodigoEscaneado(String(codigo || '').trim());
+      if (this._procesandoScan) return;
+      this._procesandoScan = true;
+      try {
+        if (navigator.vibrate) navigator.vibrate(200);
+        await this.cerrarScanner();
+        this.resultadosBusqueda = [];
+        await this.resolverCodigoEscaneado(String(codigo || '').trim());
+      } finally {
+        this._procesandoScan = false;
+      }
     },
 
     async seleccionarArticulo(art) {
@@ -735,13 +775,69 @@ function conteoInvFisico() {
           this.contadosLocal.add(art.id_articulo);
         }
       } catch (e) { /* sin prev local */ }
+      await this.enfocarCantidad({ abrirTeclado: true });
+    },
+
+    enfocarCantidad(opciones) {
+      var self = this;
+      var abrirTeclado = !opciones || opciones.abrirTeclado !== false;
+      var demoras = [0, 100, 350];
+      return new Promise(function (resolver) {
+        var pendientes = demoras.length;
+        var completar = function () {
+          pendientes -= 1;
+          if (!pendientes) resolver();
+        };
+        demoras.forEach(function (demora) {
+          setTimeout(function () {
+            self.$nextTick(function () {
+              var el = self.$refs.cantidadInputEl;
+              if (!el) {
+                completar();
+                return;
+              }
+              el.setAttribute('readonly', 'readonly');
+              try {
+                el.focus({ preventScroll: true });
+              } catch (e) {
+                el.focus();
+              }
+              requestAnimationFrame(function () {
+                el.removeAttribute('readonly');
+                if (typeof el.select === 'function') el.select();
+                if (abrirTeclado && typeof el.click === 'function') el.click();
+                completar();
+              });
+            });
+          }, demora);
+        });
+      });
+    },
+
+    actualizarCursorCantidad() {
       this.$nextTick(() => {
         var el = this.$refs.cantidadInputEl;
-        if (el) {
-          el.focus();
-          if (typeof el.select === 'function') el.select();
-        }
+        if (!el) return;
+        el.focus({ preventScroll: true });
+        var posicion = String(this.cantidadInput || '').length;
+        if (typeof el.setSelectionRange === 'function') el.setSelectionRange(posicion, posicion);
       });
+    },
+
+    agregarDigitoCantidad(digito) {
+      if (!/^\d$/.test(String(digito))) return;
+      this.cantidadInput = String(this.cantidadInput || '') + String(digito);
+      this.actualizarCursorCantidad();
+    },
+
+    borrarDigitoCantidad() {
+      this.cantidadInput = String(this.cantidadInput || '').slice(0, -1);
+      this.actualizarCursorCantidad();
+    },
+
+    limpiarCantidad() {
+      this.cantidadInput = '';
+      this.actualizarCursorCantidad();
     },
 
     async editarConteo(item) {

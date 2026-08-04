@@ -30,6 +30,16 @@ class InvFisicoOfflineStaticTests(SimpleTestCase):
     def _js_path(self) -> Path:
         return Path(settings.BASE_DIR) / 'theme' / 'static' / 'js' / 'inv_fisico_offline.js'
 
+    def _conteo_template_path(self) -> Path:
+        return (
+            Path(settings.BASE_DIR)
+            / 'stock'
+            / 'templates'
+            / 'stock'
+            / 'conteo'
+            / 'conteo.html'
+        )
+
     def test_archivo_js_existe(self):
         path = self._js_path()
         self.assertTrue(path.is_file(), f'Falta {path}')
@@ -46,3 +56,15 @@ class InvFisicoOfflineStaticTests(SimpleTestCase):
         self.assertIn('CONTEO_SHELL_URLS', contenido)
         self.assertIn('/stock/conteo/', contenido)
         self.assertIn("'/api/'", contenido)
+
+    def test_conteo_movilidad_prioriza_cantidad_tras_seleccionar_articulo(self):
+        contenido = self._conteo_template_path().read_text(encoding='utf-8')
+        self.assertIn(
+            'type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"',
+            contenido,
+        )
+        self.assertIn('enfocarCantidad(opciones)', contenido)
+        self.assertIn('await this.cerrarScanner();', contenido)
+        self.assertIn('agregarDigitoCantidad(digito)', contenido)
+        self.assertIn('borrarDigitoCantidad()', contenido)
+        self.assertIn('limpiarCantidad()', contenido)
