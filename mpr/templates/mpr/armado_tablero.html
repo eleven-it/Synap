@@ -37,11 +37,11 @@ tr.armado-inicio-maquina > td {
          x-init="cargarResultado((document.getElementById('resultado-lote-armado') || {}).textContent || 'null')">
         {{ resultado_lote|json_script:"resultado-lote-armado" }}
 
-        {# Chrome 1 línea; toggle «Ya armado» dentro de la barra oscura (no se puede tapar) #}
+        {# Chrome original (sin botón Ya armado) + tarjeta colapsable estilo Contexto comercial #}
         <div class="sticky top-14 z-40 mb-3 flex-shrink-0 space-y-2 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16"
-             x-data="{ abiertoYaArmado: {{ armados_del_dia|length|yesno:'true,false' }} }">
+             x-data="{ abiertoYaArmado: false }">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
-                <header class="flex flex-nowrap items-center gap-x-2 overflow-x-auto">
+                <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div class="flex shrink-0 items-center gap-2">
                         <div class="inline-flex h-9 rounded-lg border p-0.5 {% if modo == '1ra' %}border-emerald-500/60 bg-emerald-950/30{% else %}border-amber-500/60 bg-amber-950/25{% endif %}"
                              role="group"
@@ -53,11 +53,11 @@ tr.armado-inicio-maquina > td {
                                {% if modo != '1ra' %}aria-current="true"{% endif %}
                                class="inline-flex h-full items-center rounded-md px-2.5 text-xs font-bold transition-colors {% if modo != '1ra' %}bg-amber-500 text-amber-950{% else %}text-amber-300 hover:bg-amber-900/35{% endif %}">2da</a>
                         </div>
-                        <h1 class="whitespace-nowrap text-lg font-bold tracking-tight text-white sm:text-xl"
+                        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl"
                             title="{{ nombre_deposito_origen }} → {{ nombre_deposito_destino }}">{{ modo_label }}</h1>
                     </div>
 
-                    <div class="relative min-w-[8rem] flex-1 sm:min-w-[10rem] sm:max-w-sm">
+                    <div class="relative min-w-[12rem] flex-1 sm:min-w-[14rem] sm:max-w-md">
                         <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
                         <input type="search"
                                x-model="busqueda"
@@ -76,12 +76,12 @@ tr.armado-inicio-maquina > td {
                         </button>
                     </div>
 
-                    <div class="ml-auto flex shrink-0 flex-nowrap items-center gap-1.5">
+                    <div class="ml-auto flex flex-wrap items-center gap-2">
                         {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="dark" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
 
                         <label class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-900/80 px-2 text-xs font-medium text-slate-200"
                                title="Fecha del movimiento de stock y consulta de armados de ese día">
-                            <span class="hidden whitespace-nowrap text-slate-400 lg:inline">Fecha</span>
+                            <span class="hidden whitespace-nowrap text-slate-400 sm:inline">Fecha</span>
                             <input type="date"
                                    id="fecha-realizado-tablero"
                                    x-model="fechaIso"
@@ -90,23 +90,11 @@ tr.armado-inicio-maquina > td {
                                    class="h-7 max-w-[9.5rem] rounded border-0 bg-transparent p-0 text-sm text-white focus:outline-none focus:ring-0 [color-scheme:dark]"/>
                         </label>
 
-                        <button type="button"
-                                @click="abiertoYaArmado = !abiertoYaArmado"
-                                :aria-expanded="abiertoYaArmado.toString()"
-                                aria-controls="panel-ya-armado"
-                                title="Mostrar u ocultar lo ya armado en la fecha"
-                                class="inline-flex h-9 items-center gap-1 rounded-lg border border-sky-400/60 bg-sky-900/50 px-2.5 text-xs font-semibold text-sky-100 hover:bg-sky-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                            <span class="material-icons text-base" aria-hidden="true"
-                                  x-text="abiertoYaArmado ? 'expand_less' : 'expand_more'"></span>
-                            <span class="whitespace-nowrap">Ya armado</span>
-                            <span class="tabular-nums text-sky-200/90">{{ armados_del_dia|length }}{% if armados_del_dia_total_packs %}·{{ armados_del_dia_total_packs }}p{% endif %}</span>
-                        </button>
-
                         <span class="group relative inline-flex h-9 items-center gap-1 rounded-lg border border-emerald-500/50 bg-emerald-900/40 px-2.5 text-xs font-semibold text-emerald-100"
                               aria-current="page"
                               aria-label="Vista tablero">
                             <span class="material-icons text-base" aria-hidden="true">table_chart</span>
-                            <span class="hidden xl:inline">Tablero</span>
+                            <span class="hidden sm:inline">Tablero</span>
                             {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Vista tablero (única)" only %}
                         </span>
 
@@ -115,7 +103,7 @@ tr.armado-inicio-maquina > td {
                            aria-label="Imputación de pedido"
                            class="group relative inline-flex h-9 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
                             <span class="material-icons text-base" aria-hidden="true">link</span>
-                            <span class="hidden xl:inline">Imputación</span>
+                            <span class="hidden sm:inline">Imputación</span>
                             {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Imputación de pedido" only %}
                         </a>
                         {% endif %}
@@ -124,16 +112,16 @@ tr.armado-inicio-maquina > td {
                            aria-label="Actualizar vista"
                            class="group relative inline-flex h-9 items-center gap-1 rounded-lg border border-orange-400/70 bg-orange-500 px-2.5 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                             <span class="material-icons text-base" aria-hidden="true">refresh</span>
-                            <span class="hidden xl:inline">Actualizar</span>
+                            <span class="hidden sm:inline">Actualizar</span>
                             {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Actualizar stock, demanda y armados del día" only %}
                         </a>
 
                         {% if modo == '1ra' %}
                         <button type="button"
                                 @click="abrirModalArmado()"
-                                class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                             <span class="material-icons text-base" aria-hidden="true">build</span>
-                            <span class="whitespace-nowrap">Ejecutar armado</span>
+                            Ejecutar armado
                         </button>
                         {% endif %}
 
@@ -151,22 +139,49 @@ tr.armado-inicio-maquina > td {
                 </header>
             </div>
 
-            <div id="panel-ya-armado"
-                 x-show="abiertoYaArmado"
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0 -translate-y-1"
-                 x-transition:enter-end="opacity-100 translate-y-0"
-                 class="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
-                <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Ya armado el {{ fecha_realizado_default }}
-                    <span class="font-normal normal-case tracking-normal">
-                        · {{ armados_del_dia|length }} artículo(s)
-                        {% if armados_del_dia_total_packs %}· {{ armados_del_dia_total_packs }} pack(s){% endif %}
+            {# Mismo patrón que Contexto comercial (pedido masivo): eyebrow + chevron #}
+            <div class="rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-2.5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800/90">
+                <div class="flex items-center justify-between gap-2">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">
+                        Ya armado
+                    </p>
+                    <button type="button"
+                            @click="abiertoYaArmado = !abiertoYaArmado"
+                            class="inline-flex h-6 w-6 items-center justify-center rounded-md text-sky-700 hover:bg-sky-100/70 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:text-sky-300 dark:hover:bg-sky-900/40"
+                            :aria-expanded="abiertoYaArmado.toString()"
+                            :title="abiertoYaArmado ? 'Compactar ya armado' : 'Expandir ya armado'"
+                            aria-label="Expandir o compactar ya armado"
+                            aria-controls="panel-ya-armado">
+                        <span class="material-icons text-lg leading-none transition-transform"
+                              :class="abiertoYaArmado ? '' : '-rotate-90'"
+                              aria-hidden="true">expand_more</span>
+                    </button>
+                </div>
+
+                <div x-show="!abiertoYaArmado"
+                     x-cloak
+                     class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+                    <span>
+                        <span class="text-slate-500 dark:text-slate-400">Fecha:</span>
+                        <span class="font-semibold tabular-nums">{{ fecha_realizado_default }}</span>
                     </span>
-                </p>
-                {% if armados_del_dia %}
-                <div class="max-h-36 overflow-auto">
+                    <span>
+                        <span class="text-slate-500 dark:text-slate-400">Artículos:</span>
+                        <span class="font-semibold tabular-nums">{{ armados_del_dia|length }}</span>
+                    </span>
+                    {% if armados_del_dia_total_packs %}
+                    <span>
+                        <span class="text-slate-500 dark:text-slate-400">Packs:</span>
+                        <span class="font-semibold tabular-nums">{{ armados_del_dia_total_packs }}</span>
+                    </span>
+                    {% endif %}
+                </div>
+
+                <div id="panel-ya-armado"
+                     x-show="abiertoYaArmado"
+                     x-cloak
+                     class="mt-2 max-h-36 overflow-auto border-t border-sky-100 pt-2 dark:border-sky-900/40">
+                    {% if armados_del_dia %}
                     <table class="w-full text-left text-xs">
                         <thead>
                             <tr class="text-[10px] uppercase tracking-wide text-slate-500">
@@ -185,13 +200,13 @@ tr.armado-inicio-maquina > td {
                             {% endfor %}
                         </tbody>
                     </table>
+                    {% else %}
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        No hay armados aprobados con fecha realizado {{ fecha_realizado_default }}.
+                        La grilla de abajo es capacidad actual para armar; no es el historial.
+                    </p>
+                    {% endif %}
                 </div>
-                {% else %}
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                    No hay armados aprobados con fecha realizado {{ fecha_realizado_default }}.
-                    La grilla de abajo es capacidad actual para armar; no es el historial.
-                </p>
-                {% endif %}
             </div>
         </div>
 
