@@ -355,3 +355,65 @@ def sumar_clasificado_desglose_por_operario_fecha_turno(
             elif dest == "Scrap":
                 entry["scrap"] += total
     return acum
+
+
+def operario_tiene_control_calidad_fecha_turno(
+    base_empresa: str,
+    fecha: date,
+    id_operario: int,
+    id_mpr_turno: int,
+) -> bool:
+    """True si existe al menos una fila de control de calidad para operario+fecha+turno."""
+    base = (base_empresa or "").strip()
+    oid = to_int_or_none(id_operario)
+    tid = to_int_or_none(id_mpr_turno)
+    f_prod = to_date_or_none(fecha)
+    if not base or oid is None or tid is None or f_prod is None:
+        return False
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM mpr_transicion_lote
+            WHERE fecha_produccion = %s
+              AND id_mpr_turno = %s
+              AND id_operario = %s
+            LIMIT 1
+            """,
+            [f_prod, tid, oid],
+        )
+        return cursor.fetchone() is not None
+
+
+def set_operarios_con_cc_en_rango(
+    base_empresa: str,
+    fecha_desde: date,
+    fecha_hasta: date,
+) -> set:
+    """Conjunto de (id_operario, fecha_iso, id_mpr_turno) con CC en el rango."""
+    base = (base_empresa or "").strip()
+    f_desde = to_date_or_none(fecha_desde)
+    f_hasta = to_date_or_none(fecha_hasta)
+    if not base or f_desde is None or f_hasta is None:
+        return set()
+    resultado: set = set()
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT DISTINCT id_operario, fecha_produccion, id_mpr_turno
+            FROM mpr_transicion_lote
+            WHERE fecha_produccion >= %s
+              AND fecha_produccion <= %s
+              AND id_operario IS NOT NULL
+              AND id_mpr_turno IS NOT NULL
+            """,
+            [f_desde, f_hasta],
+        )
+        for row in cursor.fetchall() or []:
+            oid = to_int_or_none(row.get("id_operario"))
+            f_prod = to_date_or_none(row.get("fecha_produccion"))
+            tid = to_int_or_none(row.get("id_mpr_turno"))
+            if oid is not None and f_prod is not None and tid is not None:
+                # to_date_or_none ya normaliza a str YYYY-MM-DD
+                resultado.add((oid, f_prod, tid))
+    return resultado

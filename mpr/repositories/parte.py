@@ -1156,3 +1156,64 @@ def listar_partes_trazabilidad(
         _row_to_parte(base, row, with_relations=True)
         for row in rows
     ]
+
+
+def operario_tiene_parte_fecha_turno(
+    base_empresa: str,
+    fecha: date,
+    id_operario: int,
+    id_mpr_turno: int,
+) -> bool:
+    """True si existe al menos una línea de parte para operario+fecha+turno (cualquier estado)."""
+    base = (base_empresa or "").strip()
+    oid = to_int_or_none(id_operario)
+    tid = to_int_or_none(id_mpr_turno)
+    f_prod = to_date_or_none(fecha)
+    if not base or oid is None or tid is None or f_prod is None:
+        return False
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM mpr_parte p
+            INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+            WHERE p.fecha_produccion = %s
+              AND p.id_mpr_turno = %s
+              AND pl.id_operario = %s
+            LIMIT 1
+            """,
+            [f_prod, tid, oid],
+        )
+        return cursor.fetchone() is not None
+
+
+def set_operarios_con_parte_en_rango(
+    base_empresa: str,
+    fecha_desde: date,
+    fecha_hasta: date,
+) -> set:
+    """Conjunto de (id_operario, fecha_iso, id_mpr_turno) con parte en el rango."""
+    base = (base_empresa or "").strip()
+    f_desde = to_date_or_none(fecha_desde)
+    f_hasta = to_date_or_none(fecha_hasta)
+    if not base or f_desde is None or f_hasta is None:
+        return set()
+    resultado: set = set()
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT DISTINCT pl.id_operario, p.fecha_produccion, p.id_mpr_turno
+            FROM mpr_parte p
+            INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+            WHERE p.fecha_produccion >= %s AND p.fecha_produccion <= %s
+            """,
+            [f_desde, f_hasta],
+        )
+        for row in cursor.fetchall() or []:
+            oid = to_int_or_none(row.get("id_operario"))
+            f_prod = to_date_or_none(row.get("fecha_produccion"))
+            tid = to_int_or_none(row.get("id_mpr_turno"))
+            if oid is not None and f_prod is not None and tid is not None:
+                # to_date_or_none ya normaliza a str YYYY-MM-DD
+                resultado.add((oid, f_prod, tid))
+    return resultado
