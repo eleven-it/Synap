@@ -40,8 +40,8 @@
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12"
          x-data="planificacionTurnosState()">
 
-        {# Chrome denso slate-800 — sticky bajo navbar (canon Tablero / Parte / CC) #}
-        <div class="sticky top-14 z-40 mb-3 flex-shrink-0 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16">
+        {# Chrome denso slate-800; la grilla, no la página, maneja el desplazamiento. #}
+        <div class="z-40 mb-3 flex-shrink-0">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
                 <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl"
@@ -220,7 +220,7 @@
             {% endif %}
         </div>
 
-        {# Modales fuera del sticky del chrome (position: fixed respecto al viewport) #}
+        {# Modales: position fixed respecto al viewport #}
         {% if turnos_activos and operarios %}
         <div x-show="modalMasivoOpen"
              x-cloak
