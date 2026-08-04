@@ -589,10 +589,13 @@ def inventario_fisico_analizador_view(request, id_campana):
     from stock.services.inventario_fisico import (
         ESTADO_BORRADOR,
         ESTADO_EN_CONTEO,
+        build_analizador_query_string,
         obtener_campana,
         obtener_resumen_monitor,
         listar_lineas_analizador,
+        parse_marcas_incluidos,
     )
+    from stock.services.inventario_tabla import listar_marcas_catalogo
 
     campana = obtener_campana(base_empresa, id_campana)
     if not campana:
@@ -603,10 +606,13 @@ def inventario_fisico_analizador_view(request, id_campana):
     if filtro not in ("", "faltante", "sobrante", "con_diferencia"):
         filtro = ""
 
+    marcas_incluidos = parse_marcas_incluidos(request.GET.getlist("marcas_incluidos"))
+
     lineas = listar_lineas_analizador(
         base_empresa,
         id_campana,
         filtro=filtro or None,
+        marcas_incluidos=marcas_incluidos or None,
     )
     resumen = obtener_resumen_monitor(base_empresa, id_campana)
     puede_autorizar = (
@@ -621,6 +627,18 @@ def inventario_fisico_analizador_view(request, id_campana):
         "lineas": lineas,
         "resumen": resumen,
         "filtro": filtro,
+        "marcas_catalogo": listar_marcas_catalogo(base_empresa),
+        "marcas_incluidos": marcas_incluidos,
+        "analizador_qs_todas": build_analizador_query_string(marcas_incluidos=marcas_incluidos),
+        "analizador_qs_faltante": build_analizador_query_string(
+            filtro="faltante", marcas_incluidos=marcas_incluidos
+        ),
+        "analizador_qs_sobrante": build_analizador_query_string(
+            filtro="sobrante", marcas_incluidos=marcas_incluidos
+        ),
+        "analizador_qs_con_diferencia": build_analizador_query_string(
+            filtro="con_diferencia", marcas_incluidos=marcas_incluidos
+        ),
         "puede_autorizar": puede_autorizar,
         "puede_anular": campana["estado"] in (ESTADO_BORRADOR, ESTADO_EN_CONTEO),
     }

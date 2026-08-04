@@ -919,19 +919,60 @@ def contar_conflictos_sync(base_empresa: str, id_campana: int) -> int:
         return 0
 
 
+def parse_marcas_incluidos(raw_values: Optional[Sequence[Any]] = None) -> List[int]:
+    """Normaliza IDs de marca desde query string (`marcas_incluidos`)."""
+    marcas: List[int] = []
+    for raw in raw_values or ():
+        mid = to_int_or_none(raw)
+        if mid is not None:
+            marcas.append(mid)
+    return marcas
+
+
+def build_analizador_query_string(
+    *,
+    filtro: Optional[str] = None,
+    marcas_incluidos: Optional[Sequence[int]] = None,
+) -> str:
+    """Query string para enlaces del analizador (preserva filtro y marcas)."""
+    from urllib.parse import urlencode
+
+    pairs: List[Tuple[str, str]] = []
+    filtro_norm = str_or_default(filtro, "").strip()
+    if filtro_norm:
+        pairs.append(("filtro", filtro_norm))
+    for marca_id in marcas_incluidos or ():
+        mid = to_int_or_none(marca_id)
+        if mid is not None:
+            pairs.append(("marcas_incluidos", str(mid)))
+    qs = urlencode(pairs)
+    return f"?{qs}" if qs else "?"
+
+
 def _query_lineas_analizador(cursor, id_campana: int) -> List[Dict[str, Any]]:
     tbl_art = _nombre_tabla(cursor, "articulo")
     if not tbl_art:
         return []
     ta = tbl_art.replace("`", "``")
+    tbl_marca = _nombre_tabla(cursor, "marca")
+    join_marca = ""
+    select_marca = "NULL AS id_marca, '' AS nombre_marca"
+    if tbl_marca:
+        tm = tbl_marca.replace("`", "``")
+        join_marca = f"LEFT JOIN `{tm}` m ON m.CodMarca = a.CodigoMarca "
+        select_marca = (
+            "a.CodigoMarca AS id_marca, COALESCE(m.NombreMarca, '') AS nombre_marca"
+        )
     filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
     cursor.execute(
         f"SELECT l.id_linea, l.id_articulo, l.id_deposito, l.saldo_snapshot, "
         f"l.cantidad_contada, l.diferencia, l.id_contador, l.estado_linea, "
         f"COALESCE(a.id_manual, '-') AS codigo, "
-        f"COALESCE(a.NombreArticulo, '') AS nombre "
+        f"COALESCE(a.NombreArticulo, '') AS nombre, "
+        f"{select_marca} "
         f"FROM inv_fisico_linea l "
         f"INNER JOIN `{ta}` a ON a.IDArt = l.id_articulo "
+        f"{join_marca}"
         f"WHERE l.id_campana = %s AND {filtro_art} "
         f"ORDER BY ABS(COALESCE(l.diferencia, 0)) DESC, a.NombreArticulo",
         [id_campana, *params_art],
@@ -950,6 +991,8 @@ def _query_lineas_analizador(cursor, id_campana: int) -> List[Dict[str, Any]]:
                 "estado_linea": str_or_default(row.get("estado_linea"), "Pendiente"),
                 "codigo": str_or_default(row.get("codigo"), "-"),
                 "nombre": str_or_default(row.get("nombre"), "-"),
+                "id_marca": to_int_or_none(row.get("id_marca")),
+                "nombre_marca": str_or_default(row.get("nombre_marca"), ""),
             }
         )
     return lineas
@@ -959,6 +1002,7 @@ def listar_lineas_analizador(
     base_empresa: str,
     id_campana: int,
     filtro: Optional[str] = None,
+    marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     cid = to_int_or_none(id_campana)
     if cid is None:
@@ -969,6 +1013,12 @@ def listar_lineas_analizador(
     except Exception as exc:
         logger.warning("listar_lineas_analizador %s/%s: %s", base_empresa, id_campana, exc)
         return []
+
+    marcas_set: Optional[Set[int]] = None
+    if marcas_incluidos:
+        marcas_set = {m for m in (to_int_or_none(x) for x in marcas_incluidos) if m is not None}
+        if marcas_set:
+            lineas = [l for l in lineas if l.get("id_marca") in marcas_set]
 
     filtro_norm = str_or_default(filtro, "").strip().lower()
     if filtro_norm == "faltante":

@@ -2,6 +2,7 @@
 {% load i18n static %}
 {% block title %}Analizador campaña #{{ campana.id_campana }} | Inventario físico | Synap{% endblock %}
 {% block content %}
+<script type="module" src="{% static 'stock/js/filtro_marcas_tags.mjs' %}"></script>
 <div class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pb-24"
      x-data="analizadorInvFisico()"
      x-init="init()">
@@ -35,24 +36,60 @@
     </div>
     {% endif %}
 
+    <form method="get" x-ref="filtrosForm"
+          class="relative z-20 mb-4 overflow-visible rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-4">
+      <input type="hidden" name="filtro" value="{{ filtro }}">
+
+      <div class="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:gap-x-4 lg:gap-y-3">
+        {% include "includes/filtro_marcas_tags.html" with variant="light" marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
+
+        <div class="relative z-20 min-w-0 flex-1 lg:max-w-md xl:max-w-lg">
+          <label for="analizador-busqueda" class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300">Buscar en tabla</label>
+          <div class="relative">
+            <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">search</span>
+            <input type="search" id="analizador-busqueda" x-model="busqueda"
+                   placeholder="Filtrar por código o nombre de artículo…" autocomplete="off"
+                   class="h-8 w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-8 text-xs shadow-sm placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500">
+            <button type="button" x-show="busqueda.trim() !== ''" x-cloak @click="limpiarBusqueda()"
+                    class="absolute right-1.5 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                    aria-label="Quitar filtro de búsqueda">
+              <span class="material-icons text-base" aria-hidden="true">close</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex shrink-0 flex-wrap items-center gap-2 lg:ml-auto">
+          <button type="submit"
+                  class="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-purple-600 px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
+            <span class="material-icons text-base" aria-hidden="true">filter_list</span>
+            Aplicar filtros
+          </button>
+        </div>
+      </div>
+
+      <p class="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+        Marcas vacías = todas · La búsqueda filtra en vivo sobre las filas cargadas.
+      </p>
+    </form>
+
     <div class="mb-4 flex flex-wrap items-center gap-2">
       <a href="{% url 'stock:inventario_fisico_monitor' id_campana=campana.id_campana %}"
          class="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200">
         Monitor
       </a>
-      <a href="?filtro="
+      <a href="{{ analizador_qs_todas }}"
          class="rounded-lg px-3 py-1.5 text-xs font-medium {% if not filtro %}bg-purple-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
         Todas
       </a>
-      <a href="?filtro=faltante"
+      <a href="{{ analizador_qs_faltante }}"
          class="rounded-lg px-3 py-1.5 text-xs font-medium {% if filtro == 'faltante' %}bg-red-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
         Faltante
       </a>
-      <a href="?filtro=sobrante"
+      <a href="{{ analizador_qs_sobrante }}"
          class="rounded-lg px-3 py-1.5 text-xs font-medium {% if filtro == 'sobrante' %}bg-emerald-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
         Sobrante
       </a>
-      <a href="?filtro=con_diferencia"
+      <a href="{{ analizador_qs_con_diferencia }}"
          class="rounded-lg px-3 py-1.5 text-xs font-medium {% if filtro == 'con_diferencia' %}bg-amber-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
         Con diferencia
       </a>
@@ -72,7 +109,7 @@
           <tr>
             <th class="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Código</th>
             <th class="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Artículo</th>
-            <th class="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Snapshot</th>
+            <th class="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Disponible</th>
             <th class="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Contado</th>
             <th class="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Diferencia</th>
             <th class="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Detalle</th>
@@ -80,7 +117,11 @@
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
           {% for l in lineas %}
-          <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+          <tr class="analizador-fila hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+              data-codigo="{{ l.codigo|default:''|lower }}"
+              data-nombre="{{ l.nombre|default:''|lower }}"
+              data-search="{{ l.codigo|default:''|lower }} {{ l.nombre|default:''|lower }}"
+              x-show="filaVisible($el)">
             <td class="px-4 py-2.5 font-mono text-xs text-slate-800 dark:text-slate-100">{{ l.codigo }}</td>
             <td class="px-4 py-2.5 text-slate-700 dark:text-slate-200">{{ l.nombre }}</td>
             <td class="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{{ l.saldo_snapshot|floatformat:0 }}</td>
@@ -96,6 +137,10 @@
           {% endfor %}
         </tbody>
       </table>
+      <p x-show="busqueda.trim() && filasVisibles() === 0" x-cloak
+         class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+        Ninguna fila coincide con «<span x-text="busqueda.trim()"></span>».
+      </p>
       {% else %}
       <div class="px-4 py-14 text-center">
         <div class="mx-auto flex max-w-sm flex-col items-center gap-2">
@@ -155,7 +200,26 @@ function analizadorInvFisico() {
     bloqueoMensaje: '',
     procesando: false,
     pendientesCliente: 0,
+    busqueda: '',
     init() {},
+    filaVisible(el) {
+      var q = (this.busqueda || '').trim().toLowerCase();
+      if (!q) return true;
+      var hay = (el.getAttribute('data-search') || '').toLowerCase();
+      return hay.indexOf(q) !== -1;
+    },
+    filasVisibles() {
+      var filas = this.$root.querySelectorAll('tr.analizador-fila');
+      var n = 0;
+      var self = this;
+      filas.forEach(function(el) {
+        if (self.filaVisible(el)) n += 1;
+      });
+      return n;
+    },
+    limpiarBusqueda() {
+      this.busqueda = '';
+    },
     async autorizar() {
       this.procesando = true;
       try {
