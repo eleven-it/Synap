@@ -190,9 +190,11 @@ Sigue el mismo patrón que `operarios_list.html`:
 
 ### Grilla Semanal (planificacion_turnos.html)
 
-> **UI:** la pantalla usa el **chrome denso MPR** (barra `slate-800` sticky, sin migas de pan) descrito en
+> **UI:** la pantalla usa el **chrome denso MPR** (barra `slate-800`, sin migas de pan) descrito en
 > [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1: navegación de semana,
 > **Asignación masiva**, **Gestionar turnos**, atajos `chrome_nav_flujo` (`current=roster`) y ayuda al manual.
+> El chrome permanece en el flujo del contenedor: la grilla es el único scrollport, evitando que la barra
+> cubra su cabecera o sus primeras filas.
 
 - Tabla con sticky-left en columna Operario; `thead` compacto (`text-[10px]`) con fondo opaco.
 - 7 columnas de días (lunes a domingo).
