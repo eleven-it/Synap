@@ -30,15 +30,14 @@ class InvFisicoOfflineStaticTests(SimpleTestCase):
     def _js_path(self) -> Path:
         return Path(settings.BASE_DIR) / 'theme' / 'static' / 'js' / 'inv_fisico_offline.js'
 
+    def _conteo_dir(self) -> Path:
+        return Path(settings.BASE_DIR) / 'stock' / 'templates' / 'stock' / 'conteo'
+
     def _conteo_template_path(self) -> Path:
-        return (
-            Path(settings.BASE_DIR)
-            / 'stock'
-            / 'templates'
-            / 'stock'
-            / 'conteo'
-            / 'conteo.html'
-        )
+        return self._conteo_dir() / 'conteo.html'
+
+    def _alpine_include_path(self) -> Path:
+        return self._conteo_dir() / 'includes' / '_conteo_alpine.html'
 
     def test_archivo_js_existe(self):
         path = self._js_path()
@@ -63,8 +62,37 @@ class InvFisicoOfflineStaticTests(SimpleTestCase):
             'type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"',
             contenido,
         )
-        self.assertIn('enfocarCantidad(opciones)', contenido)
-        self.assertIn('await this.cerrarScanner();', contenido)
         self.assertIn('agregarDigitoCantidad(digito)', contenido)
         self.assertIn('borrarDigitoCantidad()', contenido)
         self.assertIn('limpiarCantidad()', contenido)
+
+    def test_logica_alpine_extraida_a_include_compartido(self):
+        """El Alpine vive en un partial que comparten desktop y mobile."""
+        include = self._alpine_include_path()
+        self.assertTrue(include.is_file(), f'Falta {include}')
+        contenido = include.read_text(encoding='utf-8')
+        self.assertIn('function conteoInvFisico()', contenido)
+        self.assertIn('enfocarCantidad(opciones)', contenido)
+        self.assertIn('await this.cerrarScanner();', contenido)
+        self.assertIn('agregarDigitoCantidad(digito)', contenido)
+
+        ruta_include = 'stock/conteo/includes/_conteo_alpine.html'
+        for template in ('conteo.html', 'mobile/conteo.html'):
+            texto = (self._conteo_dir() / template).read_text(encoding='utf-8')
+            self.assertIn(ruta_include, texto, f'{template} no incluye el Alpine compartido')
+            self.assertNotIn(
+                'function conteoInvFisico()', texto,
+                f'{template} volvió a duplicar la lógica Alpine',
+            )
+
+    def test_validacion_anti_codigo_barras_en_cantidad(self):
+        """La cantidad rechaza largos de EAN/UPC y bloquea el wedge tras el scan."""
+        contenido = self._alpine_include_path().read_text(encoding='utf-8')
+        self.assertIn('LARGOS_CODIGO_BARRAS', contenido)
+        self.assertIn('MAX_DIGITOS_CANTIDAD', contenido)
+        self.assertIn('validarCantidad(valor)', contenido)
+        self.assertIn('sanitizarCantidad()', contenido)
+        self.assertIn('onKeydownCantidad(evento)', contenido)
+        self.assertIn('bloquearWedgeCantidad(ms)', contenido)
+        self.assertIn('wedgeBloqueado()', contenido)
+        self.assertIn('código de barras', contenido)

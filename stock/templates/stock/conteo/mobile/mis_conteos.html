@@ -1,0 +1,102 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% comment %}
+Landing del operario en móvil: campañas asignadas para conteo ciego.
+Mismo shell PWA que la pantalla de conteo (sin navbar ni barra de estado),
+tarjetas grandes por campaña y CTA «Contar» a ancho completo.
+{% endcomment %}
+
+{% block title %}Mis conteos · Synap{% endblock %}
+
+{% block extra_meta %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{% endblock %}
+
+{% block extra_css %}
+{% include "stock/conteo/includes/_pwa_shell.html" %}
+{% endblock %}
+
+{% block content %}
+<script>document.body.classList.add('conteo-pwa');</script>
+
+<section class="conteo-pwa-root bg-slate-100 dark:bg-slate-950">
+    <header class="conteo-pwa-top shrink-0 bg-slate-900 px-3 pb-2 text-white shadow-md">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Stock · Inventario físico</p>
+        <div class="mt-0.5 flex items-center gap-2">
+            <h1 class="min-w-0 flex-1 truncate text-lg font-bold leading-tight">Mis conteos</h1>
+            <span class="conteo-pwa-chip inline-flex shrink-0 items-center rounded-full bg-purple-500/20 px-2.5 text-xs font-bold text-purple-200 tabular-nums">
+                {{ filas|length }} campaña{{ filas|length|pluralize }}
+            </span>
+        </div>
+        {% if nombre_usuario %}
+        <p class="truncate text-[11px] leading-tight text-slate-400">Hola, {{ nombre_usuario }}. Campañas abiertas asignadas a vos.</p>
+        {% endif %}
+    </header>
+
+    <div class="conteo-pwa-scroll conteo-pwa-bottom px-3 py-3">
+        {% if not filas %}
+        <div class="rounded-xl border-2 border-dashed border-slate-300 bg-white px-4 py-12 text-center dark:border-slate-700 dark:bg-slate-900">
+            <span class="material-icons text-5xl text-slate-300 dark:text-slate-700" aria-hidden="true">inventory_2</span>
+            <p class="mt-2 text-base font-bold text-slate-800 dark:text-slate-100">No tenés campañas en conteo</p>
+            {% if puede_gestionar %}
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Esta pantalla es solo para contar. Para crear y asignar campañas usá
+                <strong class="font-semibold text-slate-700 dark:text-slate-200">Inventario físico (campañas)</strong>.
+            </p>
+            <div class="mt-4 flex flex-col gap-2">
+                <a href="{{ url_nueva_campana }}"
+                   class="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-bold text-white active:bg-purple-700">
+                    <span class="material-icons text-lg" aria-hidden="true">add</span>
+                    Crear campaña
+                </a>
+                <a href="{{ url_campanas }}"
+                   class="inline-flex items-center justify-center rounded-xl border-2 border-slate-300 px-4 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200">
+                    Ir al listado de campañas
+                </a>
+            </div>
+            {% else %}
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Cuando tu supervisor te asigne una campaña activa, aparecerá acá.
+            </p>
+            {% endif %}
+        </div>
+        {% else %}
+        <ul class="space-y-3">
+            {% for fila in filas %}
+            <li class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                <div class="flex items-start gap-2">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[11px] font-bold uppercase tracking-wide text-purple-700 dark:text-purple-300">
+                            Campaña #{{ fila.campana.id_campana }}
+                        </p>
+                        <p class="mt-0.5 text-lg font-bold tabular-nums leading-tight text-slate-900 dark:text-white">
+                            {{ fila.campana.fecha|date:"d/m/Y" }}
+                        </p>
+                    </div>
+                    <span class="conteo-pwa-chip inline-flex shrink-0 items-center rounded-full bg-sky-100 px-2.5 text-xs font-bold text-sky-800 dark:bg-sky-950/60 dark:text-sky-200"
+                          data-estado="{{ fila.campana.estado }}">{{ fila.campana.estado }}</span>
+                </div>
+
+                {% if fila.depositos %}
+                <ul class="mt-2 space-y-1">
+                    {% for dep in fila.depositos %}
+                    <li class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        <span class="material-icons text-lg text-slate-400" aria-hidden="true">warehouse</span>
+                        <span class="min-w-0 truncate">{{ dep.nombre|default:"Depósito" }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                <a href="{{ fila.url_conteo }}"
+                   class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 py-3 text-base font-black uppercase tracking-wide text-white shadow-sm active:bg-purple-700">
+                    <span class="material-icons text-xl" aria-hidden="true">qr_code_scanner</span>
+                    Contar
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

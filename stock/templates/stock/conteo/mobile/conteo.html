@@ -1,0 +1,366 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% comment %}
+Conteo de inventario físico — shell 100% PWA para operario de almacén.
+Oculta el chrome Synap (navbar + barra de estado), ocupa el viewport completo
+(100dvh + safe areas) y prioriza el flujo escanear → cantidad → registrar.
+Comparte toda la lógica Alpine con el desktop vía includes/_conteo_alpine.html.
+{% endcomment %}
+
+{% block title %}Conteo · Campaña {{ campana.id_campana }} · Synap{% endblock %}
+
+{% block extra_meta %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{% endblock %}
+
+{% block extra_css %}
+{% include "stock/conteo/includes/_pwa_shell.html" %}
+<style>
+/* Teclas del pad numérico: más altas que el mínimo táctil para uso con guantes */
+.conteo-pwa-tecla { min-height: 3rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<script>document.body.classList.add('conteo-pwa');</script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{% static 'js/inv_fisico_offline.js' %}?v=inv3"></script>
+
+<section class="conteo-pwa-root bg-slate-100 dark:bg-slate-950"
+         x-data="conteoInvFisico()"
+         x-init="init()"
+         @online.window="onOnline()"
+         @offline.window="onOffline()">
+
+    {# ===== Header compacto propio ===== #}
+    <header class="conteo-pwa-top shrink-0 bg-slate-900 px-2 pb-2 text-white shadow-md">
+        <div class="flex items-center gap-2">
+            <a href="{{ url_mis_conteos }}"
+               class="inline-flex w-11 shrink-0 items-center justify-center rounded-lg text-slate-300 active:bg-slate-800"
+               aria-label="Volver a Mis conteos">
+                <span class="material-icons text-2xl" aria-hidden="true">arrow_back</span>
+            </a>
+            <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-bold leading-tight">
+                    Campaña #{{ campana.id_campana }}
+                    {% if deposito_sel %}<span class="font-normal text-slate-400">·</span>
+                    <span class="font-semibold text-slate-200">{{ deposito_sel.nombre|default:"Depósito" }}</span>{% endif %}
+                </p>
+                <p class="truncate text-[11px] leading-tight text-slate-400">
+                    Conteo ciego · {{ campana.fecha|date:"d/m/Y" }}
+                </p>
+            </div>
+            <span class="conteo-pwa-chip inline-flex shrink-0 items-center gap-1 rounded-full px-2 text-[11px] font-bold"
+                  :class="online ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/20 text-amber-200'"
+                  :aria-label="online ? 'Conectado' : 'Sin conexión'">
+                <span class="material-icons text-sm" aria-hidden="true" x-text="online ? 'wifi' : 'wifi_off'"></span>
+                <span x-text="online ? 'En línea' : 'Offline'"></span>
+            </span>
+        </div>
+
+        {% if deposito_sel %}
+        <div class="mt-1.5 flex items-center gap-2">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Contados
+                <span class="ml-1 text-sm font-bold tabular-nums text-white" x-text="contados"></span>
+                <span class="text-slate-500">/</span>
+                <span class="text-sm font-bold tabular-nums text-slate-300" x-text="totalCatalogo"></span>
+            </p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Sync
+                <span class="ml-1 text-sm font-bold tabular-nums"
+                      :class="pendientesSync ? 'text-amber-300' : 'text-slate-300'"
+                      x-text="pendientesSync"></span>
+            </p>
+            <button type="button" @click="sincronizar()" :disabled="syncEnCurso || !online"
+                    class="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 text-xs font-bold text-slate-100 disabled:opacity-40">
+                <span class="material-icons text-base" aria-hidden="true" :class="{ 'animate-spin': syncEnCurso }">sync</span>
+                Sincronizar
+            </button>
+        </div>
+        <div class="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-800">
+            <div class="h-full rounded-full bg-purple-500 transition-all duration-300"
+                 :style="'width:' + porcentajeAvance + '%'"></div>
+        </div>
+        {% endif %}
+    </header>
+
+    {% if not deposito_sel %}
+    {# ===== Selección de depósito ===== #}
+    <div class="conteo-pwa-scroll conteo-pwa-bottom px-3 py-3">
+        <p class="px-1 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Elegí el depósito a contar</p>
+        <ul class="mt-2 space-y-2">
+            {% for dep in depositos %}
+            <li>
+                <a href="?deposito={{ dep.id_deposito }}"
+                   class="flex items-center gap-3 rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900 active:border-purple-500 active:bg-purple-50 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                    <span class="material-icons text-2xl text-purple-600 dark:text-purple-400" aria-hidden="true">warehouse</span>
+                    <span class="min-w-0 flex-1 truncate">{{ dep.nombre|default:"Depósito" }}</span>
+                    <span class="material-icons text-xl text-slate-400" aria-hidden="true">chevron_right</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+
+    {# ===== Acciones primarias: escanear / manual ===== #}
+    <div class="shrink-0 border-b border-slate-200 bg-white px-2 py-2 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex gap-2">
+            <button type="button" @click="abrirScanner()"
+                    class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-purple-600 px-3 text-base font-bold text-white shadow-sm active:bg-purple-700">
+                <span class="material-icons text-xl" aria-hidden="true">qr_code_scanner</span>
+                Escanear
+            </button>
+            <button type="button" @click="abrirIngresoManual()"
+                    class="inline-flex w-32 items-center justify-center gap-1.5 rounded-xl border-2 border-slate-300 bg-white px-3 text-sm font-bold text-slate-700 active:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                <span class="material-icons text-lg" aria-hidden="true">edit</span>
+                Manual
+            </button>
+        </div>
+    </div>
+
+    {# ===== Cuerpo: cámara / artículo / avisos ===== #}
+    <div class="conteo-pwa-scroll px-2 py-2">
+        <div x-show="bannerSync" x-cloak
+             class="mb-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-100">
+            <span class="material-icons text-base" aria-hidden="true">cloud_off</span>
+            <span class="min-w-0 flex-1" x-text="bannerSync"></span>
+        </div>
+        <div x-show="mensajeOk" x-cloak
+             class="mb-2 flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-100">
+            <span class="material-icons text-base" aria-hidden="true">check_circle</span>
+            <span class="min-w-0 flex-1" x-text="mensajeOk"></span>
+        </div>
+        <div x-show="mensajeError" x-cloak
+             class="mb-2 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-900 dark:border-red-700 dark:bg-red-900/25 dark:text-red-100">
+            <span class="material-icons text-base" aria-hidden="true">error</span>
+            <span class="min-w-0 flex-1" x-text="mensajeError"></span>
+        </div>
+        <p x-show="scannerError" x-cloak class="mb-2 text-sm font-semibold text-red-700 dark:text-red-300" x-text="scannerError"></p>
+
+        {# Cámara #}
+        <div x-show="scannerActivo" x-cloak class="mb-2 overflow-hidden rounded-xl border-2 border-purple-500 bg-black">
+            <div id="scanner-container" class="min-h-[200px] w-full"></div>
+            <button type="button" @click="cerrarScanner()"
+                    class="w-full bg-slate-900 text-sm font-bold text-white">Cerrar cámara</button>
+        </div>
+
+        {# Artículo seleccionado #}
+        <template x-if="articuloSel">
+            <div class="rounded-xl border-2 border-purple-500 bg-white px-3 py-2.5 dark:bg-slate-900">
+                <p class="text-[11px] font-bold uppercase tracking-wide text-purple-700 dark:text-purple-300">Artículo</p>
+                <p class="mt-0.5 text-base font-bold leading-snug text-slate-900 dark:text-white" x-text="articuloSel.nombre"></p>
+                <p class="text-sm font-semibold tabular-nums text-slate-500 dark:text-slate-400" x-text="articuloSel.codigo"></p>
+                <p x-show="yaContadoActual" x-cloak
+                   class="mt-2 rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                    Ya contado: <strong class="tabular-nums" x-text="cantidadPrevia"></strong>. Corregí la cifra y confirmá.
+                </p>
+            </div>
+        </template>
+
+        {# Estado vacío: instrucción para el operario #}
+        <div x-show="!articuloSel && !scannerActivo" x-cloak class="px-3 py-6 text-center">
+            <span class="material-icons text-5xl text-slate-300 dark:text-slate-700" aria-hidden="true">qr_code_scanner</span>
+            <p class="mt-2 text-sm font-bold text-slate-700 dark:text-slate-200">Escaneá el código del artículo</p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                O usá <strong class="font-semibold">Manual</strong> para buscar por EAN o nombre.
+            </p>
+            <p x-show="ultimaAccion" x-cloak class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+                Última acción: <span class="font-semibold tabular-nums" x-text="ultimaAccion"></span>
+            </p>
+        </div>
+    </div>
+
+    {# ===== Zona de cantidad: pad numérico + registrar ===== #}
+    <template x-if="articuloSel">
+        <div class="shrink-0 border-t border-slate-200 bg-white px-2 pt-2 dark:border-slate-800 dark:bg-slate-900">
+            <label class="flex items-center gap-2">
+                <span class="w-20 shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cantidad</span>
+                <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
+                       x-model="cantidadInput"
+                       x-ref="cantidadInputEl"
+                       maxlength="6"
+                       @input="sanitizarCantidad()"
+                       @keydown="onKeydownCantidad($event)"
+                       @keydown.enter.prevent="confirmarConteo()"
+                       aria-label="Cantidad contada"
+                       class="min-w-0 flex-1 rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-right text-2xl font-black tabular-nums text-slate-900 focus:border-purple-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
+            </label>
+            <p x-show="avisoCantidad" x-cloak
+               class="mt-1 rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-100"
+               x-text="avisoCantidad"></p>
+
+            <div class="mt-2 grid grid-cols-3 gap-1.5" aria-label="Teclado numérico para cantidad">
+                <template x-for="digito in ['1', '2', '3', '4', '5', '6', '7', '8', '9']" :key="digito">
+                    <button type="button" @click="agregarDigitoCantidad(digito)"
+                            class="conteo-pwa-tecla rounded-xl border border-slate-300 bg-slate-50 text-xl font-black tabular-nums text-slate-900 active:bg-purple-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                            :aria-label="'Agregar ' + digito"
+                            x-text="digito"></button>
+                </template>
+                <button type="button" @click="limpiarCantidad()"
+                        class="conteo-pwa-tecla rounded-xl border border-slate-300 bg-slate-200 text-sm font-bold text-slate-700 active:bg-slate-300 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-100"
+                        aria-label="Limpiar cantidad">C</button>
+                <button type="button" @click="agregarDigitoCantidad('0')"
+                        class="conteo-pwa-tecla rounded-xl border border-slate-300 bg-slate-50 text-xl font-black tabular-nums text-slate-900 active:bg-purple-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        aria-label="Agregar 0">0</button>
+                <button type="button" @click="borrarDigitoCantidad()"
+                        class="conteo-pwa-tecla inline-flex items-center justify-center rounded-xl border border-slate-300 bg-slate-50 text-slate-800 active:bg-purple-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        aria-label="Borrar último dígito">
+                    <span class="material-icons text-2xl" aria-hidden="true">backspace</span>
+                </button>
+            </div>
+
+            <button type="button" @click="confirmarConteo()"
+                    class="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-base font-black uppercase tracking-wide text-white shadow-sm active:bg-emerald-700">
+                <span class="material-icons text-xl" aria-hidden="true">check</span>
+                <span x-text="yaContadoActual ? 'Corregir conteo' : 'Registrar conteo'"></span>
+            </button>
+        </div>
+    </template>
+
+    {# ===== Barra inferior: historial colapsable ===== #}
+    <div class="conteo-pwa-bottom shrink-0 border-t border-slate-200 bg-white px-2 pt-1 dark:border-slate-800 dark:bg-slate-900">
+        <button type="button" @click="mostrarHistorial = true"
+                class="flex w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-bold text-slate-700 active:bg-slate-100 dark:text-slate-200 dark:active:bg-slate-800"
+                :aria-label="'Ver artículos contados: ' + historialConteos.length">
+            <span class="material-icons text-xl text-slate-400" aria-hidden="true">expand_less</span>
+            <span class="min-w-0 flex-1">Artículos contados</span>
+            <span class="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-black tabular-nums text-slate-700 dark:bg-slate-700 dark:text-slate-100"
+                  x-text="historialConteos.length"></span>
+        </button>
+    </div>
+
+    {# ===== Sheet inferior: artículos contados ===== #}
+    <div x-show="mostrarHistorial" x-cloak
+         class="fixed inset-0 z-50 flex items-end bg-black/50"
+         role="dialog" aria-modal="true" aria-labelledby="historial-titulo"
+         @click.self="mostrarHistorial = false">
+        <div class="conteo-pwa-bottom flex max-h-[85dvh] w-full flex-col rounded-t-2xl bg-white dark:bg-slate-900">
+            <div class="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+                <h2 id="historial-titulo" class="min-w-0 flex-1 text-base font-bold text-slate-900 dark:text-white">
+                    Artículos contados
+                    <span class="ml-1 text-sm font-black tabular-nums text-purple-700 dark:text-purple-300" x-text="historialConteos.length"></span>
+                </h2>
+                <button type="button" @click="cargarHistorialConteos()"
+                        class="inline-flex w-11 items-center justify-center rounded-lg text-slate-500 active:bg-slate-100 dark:active:bg-slate-800"
+                        aria-label="Actualizar listado">
+                    <span class="material-icons text-xl" aria-hidden="true">refresh</span>
+                </button>
+                <button type="button" @click="mostrarHistorial = false"
+                        class="inline-flex w-11 items-center justify-center rounded-lg text-slate-500 active:bg-slate-100 dark:active:bg-slate-800"
+                        aria-label="Cerrar listado">
+                    <span class="material-icons text-xl" aria-hidden="true">close</span>
+                </button>
+            </div>
+            <div class="px-3 pt-2">
+                <label class="block">
+                    <span class="sr-only">Filtrar artículos contados</span>
+                    <input type="search" x-model="filtroHistorial" placeholder="Filtrar por código o nombre…"
+                           class="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-purple-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
+                </label>
+            </div>
+            <p x-show="!historialConteos.length" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                Todavía no registraste artículos en este depósito.
+            </p>
+            <p x-show="historialConteos.length && !historialFiltrado.length" x-cloak
+               class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                Ningún artículo coincide con el filtro.
+            </p>
+            <ul x-show="historialFiltrado.length" x-cloak
+                class="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 py-2">
+                <template x-for="item in historialFiltrado" :key="item.id_articulo">
+                    <li>
+                        <button type="button"
+                                @click="editarConteo(item); mostrarHistorial = false"
+                                class="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-left active:bg-slate-100 dark:border-slate-700 dark:active:bg-slate-800">
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-bold text-slate-900 dark:text-white" x-text="item.nombre"></p>
+                                <p class="truncate text-xs tabular-nums text-slate-500 dark:text-slate-400" x-text="item.codigo"></p>
+                            </div>
+                            <span class="shrink-0 rounded-lg bg-slate-900 px-2.5 py-1 text-sm font-black tabular-nums text-white dark:bg-slate-700">
+                                Cant. <span x-text="item.cantidad"></span>
+                            </span>
+                            <span class="material-icons shrink-0 text-lg text-purple-600 dark:text-purple-400" aria-hidden="true">edit</span>
+                        </button>
+                    </li>
+                </template>
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ===== Modal Synap: confirmar reemplazo ===== #}
+    <div x-show="confirmOpen" x-cloak
+         class="fixed inset-0 z-[60] flex items-end bg-black/50 backdrop-blur-sm"
+         role="dialog" aria-modal="true" aria-labelledby="confirm-titulo">
+        <div class="conteo-pwa-bottom w-full rounded-t-2xl bg-white px-4 pt-4 dark:bg-slate-900">
+            <h2 id="confirm-titulo" class="text-lg font-bold text-slate-900 dark:text-white">Reemplazar conteo</h2>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300" x-text="confirmMensaje"></p>
+            <div class="mt-4 flex gap-2">
+                <button type="button" @click="confirmOpen = false"
+                        class="flex-1 rounded-xl border-2 border-slate-300 py-3 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200">
+                    Cancelar
+                </button>
+                <button type="button" @click="ejecutarConteoConfirmado()"
+                        class="flex-1 rounded-xl bg-purple-600 py-3 text-sm font-bold text-white">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ===== Modal Synap: ingreso manual ===== #}
+    <div x-show="mostrarManual" x-cloak
+         class="fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900"
+         role="dialog" aria-modal="true" aria-labelledby="manual-titulo">
+        <div class="conteo-pwa-top flex items-center gap-2 border-b border-slate-200 bg-slate-900 px-2 pb-2 dark:border-slate-800">
+            <button type="button" @click="cerrarIngresoManual()"
+                    class="inline-flex w-11 shrink-0 items-center justify-center rounded-lg text-slate-300 active:bg-slate-800"
+                    aria-label="Cancelar ingreso manual">
+                <span class="material-icons text-2xl" aria-hidden="true">arrow_back</span>
+            </button>
+            <h2 id="manual-titulo" class="min-w-0 flex-1 text-base font-bold text-white">Ingreso manual</h2>
+        </div>
+        <div class="px-3 pt-3">
+            <label for="codigo-manual-modal" class="sr-only">EAN o nombre de artículo</label>
+            <input id="codigo-manual-modal" type="text" x-ref="codigoManualModalInput" x-model="codigoManual"
+                   inputmode="text" autocomplete="off"
+                   placeholder="EAN o nombre de artículo"
+                   @input="indiceSugerencia = -1; buscarPredictivoDebounce()"
+                   @keydown.down.prevent="navegarSugerencias(1)"
+                   @keydown.up.prevent="navegarSugerencias(-1)"
+                   @keydown.enter.prevent="onEnterIngresoManual()"
+                   @keydown.escape.prevent="cerrarIngresoManual()"
+                   x-effect="if (mostrarManual) { $nextTick(() => $refs.codigoManualModalInput && $refs.codigoManualModalInput.focus()) }"
+                   class="w-full rounded-xl border-2 border-slate-300 px-3 py-3 text-base dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                   role="combobox" :aria-expanded="resultadosBusqueda.length > 0" aria-autocomplete="list"
+                   aria-controls="lista-ingreso-manual"
+                   :aria-activedescendant="indiceSugerencia >= 0 ? ('sugerencia-manual-' + indiceSugerencia) : null">
+            <p x-show="totalCatalogo === 0" x-cloak class="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                Catálogo no cargado. Conectate y recargá la página, o usá una sesión con prefetch previo.
+            </p>
+        </div>
+        <ul id="lista-ingreso-manual" x-show="resultadosBusqueda.length" x-cloak
+            class="conteo-pwa-bottom mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto px-3"
+            role="listbox" aria-label="Sugerencias">
+            <template x-for="(art, idx) in resultadosBusqueda" :key="art.id_articulo">
+                <li :id="'sugerencia-manual-' + idx" role="option" :aria-selected="indiceSugerencia === idx">
+                    <button type="button" @click="seleccionarArticulo(art)"
+                            :class="indiceSugerencia === idx
+                              ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                              : 'border-slate-200 dark:border-slate-700'"
+                            class="flex w-full flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left">
+                        <span class="text-sm font-bold text-slate-900 dark:text-white" x-text="art.nombre"></span>
+                        <span class="text-xs tabular-nums text-slate-500 dark:text-slate-400"
+                              x-text="(art.ean && art.ean.length) ? ('EAN: ' + art.ean.join(' · ')) : 'Sin EAN'"></span>
+                    </button>
+                </li>
+            </template>
+        </ul>
+    </div>
+</section>
+
+{% include "stock/conteo/includes/_conteo_alpine.html" %}
+{% csrf_token %}
+{% endblock %}

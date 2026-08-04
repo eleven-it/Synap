@@ -102,6 +102,23 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 - Si la cámara falla (HTTPS, permisos, sin dispositivo), se abre el modal de ingreso manual.
 - Offline: en `init()`, si no hay red, `totalCatalogo` se obtiene con `InvFisicoOffline.contarCatalogo()` del catálogo ya prefetched; la búsqueda no depende de API.
 - Si `totalCatalogo === 0` (catálogo no descargado), el modal muestra aviso para conectar y recargar (o sesión con prefetch previo).
+- **Cantidad blindada contra el lector (wedge):** el campo **Cantidad** solo acepta dígitos (`sanitizarCantidad`, `maxlength=6`). `validarCantidad` rechaza valores con largo típico de código de barras (**8, 12, 13 o 14 dígitos**) y cualquier cifra de más de **6 dígitos**, con mensaje en español. Además, tras `onScan` / `seleccionarArticulo` hay un **bloqueo de ~400 ms** (`bloquearWedgeCantidad`): durante esa ventana `onKeydownCantidad` descarta las teclas del lector y el Enter final, y solo se admite el **pad numérico en pantalla**. Esto evita el bug de registrar el EAN como cantidad.
+
+### Shell PWA mobile (operario)
+
+Las pantallas de conteo tienen **templates mobile dedicados** seleccionados por `get_template_for_device` (`request.is_mobile`), con la convención `stock/conteo/X.html` → `stock/conteo/mobile/X.html`:
+
+| Ruta | Desktop | Mobile |
+|------|---------|--------|
+| `/stock/conteo/` | `stock/conteo/mis_conteos.html` | `stock/conteo/mobile/mis_conteos.html` |
+| `/stock/conteo/<id>/` | `stock/conteo/conteo.html` | `stock/conteo/mobile/conteo.html` |
+
+- **Chrome Synap oculto:** `stock/conteo/includes/_pwa_shell.html` (incluido en `{% block extra_css %}`) oculta el navbar fijo (`header.w-full.fixed`) y la barra de estado (`#status-bar`), y cancela el `pt-14 / md:pt-16`, `pb-8 / md:pb-12` y el padding de `.app-content > div` que reserva `base_app.html`. Se activa con `document.body.classList.add('conteo-pwa')` al inicio del bloque `content`.
+- **Fullscreen real:** `{% block extra_meta %}` agrega `viewport-fit=cover`; el contenedor `.conteo-pwa-root` usa `100dvh` con `env(safe-area-inset-*)` (top, bottom, left, right). Layout de tres zonas: header compacto (fijo), cuerpo scrolleable (`.conteo-pwa-scroll`) y zona de acciones inferior.
+- **Targets táctiles:** botones, enlaces e inputs con `min-height: 2.75rem` (teclas del pad, `3rem`); inputs a `16px` para evitar el zoom automático de iOS.
+- **Layout de conteo:** header (volver a «Mis conteos», campaña, depósito, chip En línea/Offline) → KPIs en una línea (contados/total, pendientes de sync, botón **Sincronizar**) + barra de avance → CTAs **Escanear** / **Manual** → cámara o artículo seleccionado → **Cantidad + pad numérico + Registrar conteo** siempre visibles cuando hay artículo → barra inferior **Artículos contados (N)** que abre un **sheet** con filtro y listado (cada ítem muestra `Cant. N` explícito y el código aparte). El historial nunca empuja el flujo de escaneo.
+- **Mis conteos mobile:** tarjetas grandes por campaña con estado, depósitos y CTA **Contar** a ancho completo; estado vacío explícito.
+- **Lógica compartida:** el Alpine `conteoInvFisico()` vive en `stock/conteo/includes/_conteo_alpine.html` y lo incluyen desktop y mobile; no debe duplicarse (test `test_logica_alpine_extraida_a_include_compartido`).
 
 ### Seguridad / no-filtración
 
@@ -157,6 +174,9 @@ Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`,
 - [ ] Prefetch catálogo ciego (sin saldo/diferencia visible).
 - [ ] Scan EAN (HTTPS/localhost) o ingreso manual por EAN/nombre → cantidad en **&lt; 8 s** con catálogo ya prefetched; el foco pasa a Cantidad y aparece el teclado numérico en pantalla.
 - [ ] En HTTP por IP: aviso de cámara no disponible; ingreso manual funciona con catálogo cargado.
+- [ ] En móvil: **sin navbar ni barra de estado**; la pantalla ocupa todo el viewport y el pad + «Registrar conteo» quedan visibles sin scroll.
+- [ ] Escanear con lector wedge: la cantidad **no** se completa con el EAN; si se pega un código de barras, aparece el aviso «parece un código de barras».
+- [ ] Barra inferior «Artículos contados (N)» abre el sheet y cada ítem muestra `Cant. N`.
 - [ ] Modo offline 30+ min: conteos en cola local; banner «N pendientes».
 - [ ] Al reconectar: sync completo o conflictos explícitos en español (no pérdida silenciosa).
 

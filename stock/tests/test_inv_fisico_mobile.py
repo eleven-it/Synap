@@ -97,6 +97,95 @@ class InvFisicoMobileViewTests(SimpleTestCase):
         self.assertEqual(reverse('stock:conteo_campana', kwargs={'id_campana': 5}), '/stock/conteo/5/')
 
 
+@override_settings(
+    SESSION_ENGINE='django.contrib.sessions.backends.cache',
+    CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'inv-fisico-mobile-shell-tests',
+        }
+    },
+)
+class InvFisicoShellPwaTests(SimpleTestCase):
+    """Con UA móvil se usan los templates dedicados y se oculta el chrome Synap."""
+
+    def test_selector_devuelve_templates_mobile(self):
+        from core.utils.template_selector import get_template_for_device
+
+        request = _mobile_request('/stock/conteo/5/')
+        self.assertTrue(request.is_mobile)
+        self.assertEqual(
+            get_template_for_device(request, 'stock/conteo/conteo.html'),
+            'stock/conteo/mobile/conteo.html',
+        )
+        self.assertEqual(
+            get_template_for_device(request, 'stock/conteo/mis_conteos.html'),
+            'stock/conteo/mobile/mis_conteos.html',
+        )
+
+    @patch('stock.mobile_views.obtener_campana', return_value=_CAMPANA_ACTIVA)
+    @patch('stock.mobile_views.usuario_asignado_a_campana', return_value=True)
+    @patch('stock.mobile_views.listar_depositos_elegibles', return_value=[
+        {'id_deposito': 1, 'nombre': 'Dep A', 'tipo_mpr': 'Terminado'},
+    ])
+    def test_conteo_movil_usa_template_mobile(self, _deps, _asignado, _campana):
+        from stock.mobile_views import conteo_campana_view
+
+        request = _mobile_request('/stock/conteo/5/?deposito=1')
+        with patch('stock.mobile_views.render') as mock_render:
+            mock_render.return_value = HttpResponse()
+            conteo_campana_view(request, id_campana=5)
+        self.assertEqual(mock_render.call_args[0][1], 'stock/conteo/mobile/conteo.html')
+
+    @patch('stock.mobile_views.listar_campanas_para_contador', return_value=[_CAMPANA_ACTIVA])
+    @patch('stock.mobile_views.listar_depositos_elegibles', return_value=[
+        {'id_deposito': 1, 'nombre': 'Dep A', 'tipo_mpr': 'Terminado'},
+    ])
+    def test_mis_conteos_usa_template_mobile(self, _deps, _campanas):
+        from stock.mobile_views import conteo_mis_view
+
+        request = _mobile_request('/stock/conteo/')
+        with patch('stock.mobile_views.render') as mock_render:
+            mock_render.return_value = HttpResponse()
+            conteo_mis_view(request)
+        self.assertEqual(mock_render.call_args[0][1], 'stock/conteo/mobile/mis_conteos.html')
+
+    @patch('stock.mobile_views.obtener_campana', return_value=_CAMPANA_ACTIVA)
+    @patch('stock.mobile_views.usuario_asignado_a_campana', return_value=True)
+    @patch('stock.mobile_views.listar_depositos_elegibles', return_value=[
+        {'id_deposito': 1, 'nombre': 'Dep A', 'tipo_mpr': 'Terminado'},
+    ])
+    def test_conteo_movil_oculta_chrome_y_es_fullscreen(self, _deps, _asignado, _campana):
+        from stock.mobile_views import conteo_campana_view
+
+        request = _mobile_request('/stock/conteo/5/?deposito=1')
+        content = conteo_campana_view(request, id_campana=5).content.decode('utf-8')
+        self.assertIn("classList.add('conteo-pwa')", content)
+        self.assertIn('viewport-fit=cover', content)
+        self.assertIn('100dvh', content)
+        self.assertIn('env(safe-area-inset-top)', content)
+        self.assertIn('body.conteo-pwa header.w-full.fixed { display: none !important; }', content)
+        self.assertIn('body.conteo-pwa #status-bar { display: none !important; }', content)
+        # Flujo operario: pad numérico, registrar y cantidad explícita en el historial
+        self.assertIn('agregarDigitoCantidad', content)
+        self.assertIn('Registrar conteo', content)
+        self.assertIn('Cant.', content)
+        self.assertIn('Mis conteos', content)
+
+    @patch('stock.mobile_views.listar_campanas_para_contador', return_value=[_CAMPANA_ACTIVA])
+    @patch('stock.mobile_views.listar_depositos_elegibles', return_value=[
+        {'id_deposito': 1, 'nombre': 'Dep A', 'tipo_mpr': 'Terminado'},
+    ])
+    def test_mis_conteos_movil_oculta_chrome(self, _deps, _campanas):
+        from stock.mobile_views import conteo_mis_view
+
+        content = conteo_mis_view(_mobile_request('/stock/conteo/')).content.decode('utf-8')
+        self.assertIn("classList.add('conteo-pwa')", content)
+        self.assertIn('viewport-fit=cover', content)
+        self.assertIn('body.conteo-pwa #status-bar { display: none !important; }', content)
+        self.assertIn('Contar', content)
+
+
 class ListarCampanasParaContadorTests(SimpleTestCase):
     @patch('stock.services.inventario_fisico.listar_campanas')
     def test_filtra_por_contador_y_estado_en_conteo(self, mock_listar):
