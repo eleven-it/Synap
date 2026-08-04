@@ -18,7 +18,7 @@ La vista POS/carrito (`?vista=pos`, plantilla `armado_surtido.html`) quedó **de
 
 1. **Chrome:** toggle 1ra/2da, búsqueda, **fecha realizado**, Actualizar, **Ejecutar armado**.
 2. **Fecha en URL:** `fecha_realizado=dd/MM/yyyy` se conserva al **Actualizar**, al cambiar 1ra/2da/presentación y tras el POST de armado. Cambiar la fecha en el chrome recarga la vista con esa fecha.
-3. **Panel «Ya armado el dd/MM/yyyy»:** lista packs armados del día **consolidados por artículo** (suma de packs por `id_articulo_pack`; sin columna comprobante ni código manual junto al nombre). Colapsable con el botón del panel. La grilla de abajo sigue siendo capacidad/demanda **actual** para armar, no el historial.
+3. **Panel «Ya armado»:** tarjeta colapsable al estilo Contexto comercial (eyebrow + chevron). Compacto por defecto (resumen fecha/artículos/packs); expandido muestra packs del día **consolidados por artículo** (sin comprobante ni código). La grilla de abajo sigue siendo capacidad/demanda **actual** para armar, no el historial.
 4. **Grilla:** cantidades en columna Armar (BOM fija) → POST `vista=tablero` con `fecha_realizado` (dd/MM/yyyy).
 5. **Resultado:** modal Synap corto (éxito / parcial / error).
 
