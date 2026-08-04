@@ -318,6 +318,8 @@ class TestServiciosRoster(TestCase):
         ) as mock_op, patch(
             "mpr.repositories.turno_roster.turno_del_operario_dia", side_effect=[None, self.turno.id]
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
+            "mpr.repositories.parte.migrar_lineas_operario_entre_turnos", return_value=(True, None, {})
+        ), patch(
             "mpr.repositories.turno_roster.upsert_roster"
         ) as mock_upsert:
             mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Operario Uno"}
@@ -481,7 +483,7 @@ class TestAsignarTurnoRosterRango(TestCase):
             )
 
         self.assertFalse(ok)
-        self.assertIn("parte o control de calidad", error)
+        self.assertIn("parte aprobado/físico o control de calidad", error)
         self.assertEqual(resumen["aplicados"], 0)
         self.assertEqual(resumen["omitidos_bloqueados"], 1)
 
