@@ -47,6 +47,31 @@ class CamposProhibidosConteoTest(SimpleTestCase):
         for campo in self.PROHIBIDOS:
             self.assertNotIn(f'"{campo}"', texto)
 
+    def test_serializar_conteos_registrados_sin_claves_prohibidas(self):
+        payload = svc.serializar_conteos_registrados(
+            {
+                "id_campana": 4,
+                "id_deposito": 6,
+                "contados": [
+                    {
+                        "id_articulo": 10,
+                        "codigo": "906800-00",
+                        "nombre": "Puma",
+                        "cantidad_contada": Decimal("2"),
+                        "saldo_snapshot": Decimal("-42"),
+                        "diferencia": Decimal("44"),
+                        "updated_at": "2026-08-03 23:00:00",
+                    }
+                ],
+            }
+        )
+        texto = json.dumps(payload, default=str)
+        for campo in self.PROHIBIDOS:
+            self.assertNotIn(f'"{campo}"', texto)
+        self.assertEqual(payload["total_contados"], 1)
+        self.assertEqual(payload["contados"][0]["cantidad"], "2")
+        self.assertEqual(payload["contados"][0]["id_articulo"], 10)
+
     def test_buscar_claves_prohibidas_en_anidado(self):
         payload = {"articulos": [{"id_articulo": 1, "nested": {"diferencia": 1}}]}
         encontradas = svc.buscar_claves_prohibidas_conteo(payload)

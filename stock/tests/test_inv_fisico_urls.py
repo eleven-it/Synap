@@ -25,6 +25,9 @@ class InvFisicoURLTests(SimpleTestCase):
     def test_api_conteo_sync_url(self):
         self.assertEqual(reverse("stock:api_conteo_sync"), "/stock/api/conteo/sync/")
 
+    def test_api_conteo_registrados_url(self):
+        self.assertEqual(reverse("stock:api_conteo_registrados"), "/stock/api/conteo/registrados/")
+
     def test_api_campana_autorizar_url(self):
         self.assertEqual(
             reverse("stock:api_campana_autorizar", kwargs={"id_campana": 7}),

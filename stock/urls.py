@@ -57,6 +57,7 @@ urlpatterns = [
     path("api/ingreso/limpiar-temporales/", api_views.api_ingreso_limpiar_temporales, name="api_ingreso_limpiar_temporales"),
     # API inventario físico / conteo (stubs Fase 1)
     path("api/conteo/prefetch/", api_views.api_conteo_prefetch, name="api_conteo_prefetch"),
+    path("api/conteo/registrados/", api_views.api_conteo_registrados, name="api_conteo_registrados"),
     path("api/conteo/sync/", api_views.api_conteo_sync, name="api_conteo_sync"),
     path("api/campana/<int:id_campana>/autorizar/", api_views.api_campana_autorizar, name="api_campana_autorizar"),
 ]

@@ -68,6 +68,9 @@ class InvFisicoMobilePathAllowedTests(SimpleTestCase):
     def test_api_conteo_sync_permitido(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/stock/api/conteo/sync/'))
 
+    def test_api_conteo_registrados_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/stock/api/conteo/registrados/'))
+
     def test_stock_alta_movimiento_bloqueado(self):
         self.assertFalse(mobile_path_allowed_for_level_a('/stock/ingreso-movimiento/'))
 

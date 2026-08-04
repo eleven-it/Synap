@@ -121,6 +121,7 @@ def conteo_campana_view(request, id_campana: int):
         "nombre_usuario": session.get("nombre_usuario") or "",
         "url_prefetch": reverse("stock:api_conteo_prefetch"),
         "url_sync": reverse("stock:api_conteo_sync"),
+        "url_registrados": reverse("stock:api_conteo_registrados"),
         "url_mis_conteos": reverse("stock:conteo_mis"),
     }
     template = get_template_for_device(request, "stock/conteo/conteo.html")

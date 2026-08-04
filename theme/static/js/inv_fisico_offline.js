@@ -136,6 +136,62 @@
     return count || 0;
   }
 
+  function claveConteosLocales(idCampana, idDeposito) {
+    return 'conteos_local_c' + String(idCampana) + '_d' + String(idDeposito);
+  }
+
+  async function listarConteosLocales(idCampana, idDeposito) {
+    var db = await openDB();
+    var tx = db.transaction(STORE_META, 'readonly');
+    var store = tx.objectStore(STORE_META);
+    var row = await promisifyRequest(store.get(claveConteosLocales(idCampana, idDeposito)));
+    await txDone(tx);
+    db.close();
+    var mapa = (row && row.valor) || {};
+    var lista = Object.keys(mapa).map(function (k) {
+      return Object.assign({}, mapa[k], { id_articulo: Number(k) });
+    });
+    lista.sort(function (a, b) {
+      return String(b.ts || '').localeCompare(String(a.ts || ''));
+    });
+    return lista;
+  }
+
+  async function obtenerConteoLocal(idCampana, idDeposito, idArticulo) {
+    var db = await openDB();
+    var tx = db.transaction(STORE_META, 'readonly');
+    var store = tx.objectStore(STORE_META);
+    var row = await promisifyRequest(store.get(claveConteosLocales(idCampana, idDeposito)));
+    await txDone(tx);
+    db.close();
+    var mapa = (row && row.valor) || {};
+    var key = String(idArticulo);
+    return mapa[key] ? Object.assign({}, mapa[key], { id_articulo: Number(idArticulo) }) : null;
+  }
+
+  async function guardarConteoLocal(idCampana, idDeposito, registro) {
+    if (!registro || registro.id_articulo == null) {
+      throw new Error('id_articulo obligatorio para conteo local.');
+    }
+    var db = await openDB();
+    var tx = db.transaction(STORE_META, 'readwrite');
+    var store = tx.objectStore(STORE_META);
+    var clave = claveConteosLocales(idCampana, idDeposito);
+    var prev = await promisifyRequest(store.get(clave));
+    var mapa = (prev && prev.valor) ? Object.assign({}, prev.valor) : {};
+    var key = String(registro.id_articulo);
+    mapa[key] = {
+      cantidad: String(registro.cantidad),
+      codigo: String(registro.codigo || '-'),
+      nombre: String(registro.nombre || '-'),
+      ts: registro.ts || new Date().toISOString(),
+    };
+    store.put({ clave: clave, valor: mapa });
+    await txDone(tx);
+    db.close();
+    return mapa[key];
+  }
+
   async function encolarEvento(evento) {
     if (!evento || !evento.client_event_id) {
       throw new Error('client_event_id obligatorio.');
@@ -143,6 +199,17 @@
     var db = await openDB();
     var tx = db.transaction(STORE_COLA, 'readwrite');
     var store = tx.objectStore(STORE_COLA);
+    var all = await promisifyRequest(store.getAll());
+    var idCampana = Number(evento.id_campana);
+    var idDeposito = Number(evento.id_deposito);
+    var idArticulo = Number(evento.id_articulo);
+    (all || []).forEach(function (ev) {
+      if (!ev || ev.estado !== 'pendiente') return;
+      if (Number(ev.id_campana) !== idCampana) return;
+      if (Number(ev.id_deposito) !== idDeposito) return;
+      if (Number(ev.id_articulo) !== idArticulo) return;
+      store.delete(ev.client_event_id);
+    });
     var row = Object.assign({}, evento, {
       estado: evento.estado || 'pendiente',
       client_ts: evento.client_ts || new Date().toISOString(),
@@ -275,5 +342,8 @@
     syncBatch: syncBatch,
     marcarAceptados: marcarAceptados,
     contarPendientes: contarPendientes,
+    listarConteosLocales: listarConteosLocales,
+    obtenerConteoLocal: obtenerConteoLocal,
+    guardarConteoLocal: guardarConteoLocal,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

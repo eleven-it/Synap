@@ -611,6 +611,34 @@ def api_conteo_prefetch(request):
 
 
 @tiene_permiso("stock.inventario_fisico.contar")
+@require_http_methods(["GET"])
+def api_conteo_registrados(request):
+    """GET: artículos ya contados del depósito (ciego, para control del operario)."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        id_campana = int(request.GET.get("id_campana", 0))
+        id_deposito = int(request.GET.get("id_deposito", 0))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Parámetros id_campana e id_deposito obligatorios."}, status=400)
+    if not id_campana or not id_deposito:
+        return JsonResponse({"error": "Parámetros id_campana e id_deposito obligatorios."}, status=400)
+
+    from stock.services.inventario_fisico import listar_conteos_registrados_ciego
+
+    ok, payload = listar_conteos_registrados_ciego(
+        ctx["base_empresa"],
+        id_campana,
+        id_deposito,
+        ctx["id_usuario"],
+    )
+    if not ok:
+        return JsonResponse({"error": payload.get("error", "Registro no disponible.")}, status=400)
+    return JsonResponse(payload)
+
+
+@tiene_permiso("stock.inventario_fisico.contar")
 @require_http_methods(["POST"])
 def api_conteo_sync(request):
     """POST: sync batch de eventos de conteo."""

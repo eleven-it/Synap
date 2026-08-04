@@ -191,6 +191,37 @@ def serializar_prefetch_ciego(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def serializar_conteo_registrado(fila: Dict[str, Any]) -> Dict[str, Any]:
+    """Ítem de registro de conteo para el operario (sin saldo ni diferencia)."""
+    cantidad = to_decimal_or_none(fila.get("cantidad") if "cantidad" in fila else fila.get("cantidad_contada"))
+    cantidad_txt = ""
+    if cantidad is not None:
+        if cantidad == cantidad.to_integral_value():
+            cantidad_txt = str(int(cantidad))
+        else:
+            cantidad_txt = format(cantidad.normalize(), "f")
+    ts = fila.get("ts") or fila.get("updated_at") or ""
+    if hasattr(ts, "strftime"):
+        ts = ts.strftime("%Y-%m-%dT%H:%M:%S")
+    return {
+        "id_articulo": to_int_or_none(fila.get("id_articulo")),
+        "codigo": str_or_default(fila.get("codigo"), "-"),
+        "nombre": str_or_default(fila.get("nombre"), "-"),
+        "cantidad": cantidad_txt,
+        "ts": str_or_default(ts, ""),
+    }
+
+
+def serializar_conteos_registrados(data: Dict[str, Any]) -> Dict[str, Any]:
+    items = [serializar_conteo_registrado(x) for x in (data.get("contados") or [])]
+    return {
+        "id_campana": to_int_or_none(data.get("id_campana")),
+        "id_deposito": to_int_or_none(data.get("id_deposito")),
+        "total_contados": len(items),
+        "contados": items,
+    }
+
+
 def serializar_respuesta_sync(
     aceptados: List[Dict[str, Any]],
     conflictos: List[Dict[str, Any]],
@@ -636,6 +667,57 @@ def prefetch_catalogo_ciego(
     except Exception as exc:
         logger.exception("prefetch_catalogo_ciego %s: %s", base_empresa, exc)
         return False, {"error": "No se pudo obtener el catálogo."}
+
+
+def listar_conteos_registrados_ciego(
+    base_empresa: str,
+    id_campana: int,
+    id_deposito: int,
+    id_usuario: int,
+) -> Tuple[bool, Dict[str, Any]]:
+    """Líneas ya contadas del depósito (ciego: sin saldo/diferencia) para control del operario."""
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana:
+        return False, {"error": "Campaña no encontrada."}
+    if campana["estado"] not in (ESTADO_EN_CONTEO, ESTADO_EN_REVISION, ESTADO_BORRADOR):
+        return False, {"error": "La campaña no admite consulta de conteos."}
+    if not usuario_asignado_a_campana(campana, id_usuario):
+        return False, {"error": "No está asignado a esta campaña."}
+    dep = to_int_or_none(id_deposito)
+    if dep is None or dep not in campana.get("depositos", []):
+        return False, {"error": "Depósito no pertenece a la campaña."}
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_art = _nombre_tabla(cursor, "articulo")
+            if not tbl_art:
+                return False, {"error": "Tabla articulo no encontrada."}
+            ta = tbl_art.replace("`", "``")
+            filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
+            cursor.execute(
+                f"SELECT l.id_articulo, "
+                f"COALESCE(a.id_manual, '-') AS codigo, "
+                f"COALESCE(a.NombreArticulo, '') AS nombre, "
+                f"l.cantidad_contada AS cantidad, "
+                f"l.updated_at AS updated_at "
+                f"FROM inv_fisico_linea l "
+                f"INNER JOIN `{ta}` a ON a.IDArt = l.id_articulo "
+                f"WHERE l.id_campana = %s AND l.id_deposito = %s "
+                f"AND l.cantidad_contada IS NOT NULL AND {filtro_art} "
+                f"ORDER BY l.updated_at DESC, a.NombreArticulo",
+                [id_campana, dep, *params_art],
+            )
+            contados = [dict(r) for r in cursor.fetchall()]
+            return True, serializar_conteos_registrados(
+                {
+                    "id_campana": id_campana,
+                    "id_deposito": dep,
+                    "contados": contados,
+                }
+            )
+    except Exception as exc:
+        logger.exception("listar_conteos_registrados_ciego %s: %s", base_empresa, exc)
+        return False, {"error": "No se pudo obtener el registro de conteos."}
 
 
 def _proyectar_linea(

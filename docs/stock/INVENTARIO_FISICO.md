@@ -54,6 +54,7 @@ Reconteo ciego: `EnRevision → EnConteo`.
 | `/stock/inventario-fisico/<id>/linea/<id_linea>/` | gestionar | Detalle eventos por línea |
 | `/stock/conteo/` | `stock.inventario_fisico.contar` | PWA operario |
 | `/stock/api/conteo/prefetch/` | contar | Catálogo ciego |
+| `/stock/api/conteo/registrados/` | contar | Artículos ya contados del depósito (ciego) |
 | `/stock/api/conteo/sync/` | contar | Sync batch |
 | `/stock/api/campana/<id>/autorizar/` | `stock.inventario_fisico.autorizar` | Autorizar + MSTOCK |
 
@@ -95,7 +96,8 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 ### Escáner y búsqueda manual (conteo móvil)
 
 - **Cámara / escáner:** `getUserMedia` exige **contexto seguro** (HTTPS o `localhost`). En HTTP por IP (ej. `http://181.x.x.x:8100`) el botón «Escanear» muestra un aviso en español y enfoca el ingreso manual; no hay acceso a la cámara.
-- **Ingreso manual:** botón «Ingreso manual» abre un modal con búsqueda **predictiva** (debounce ~250 ms) sobre IndexedDB (`InvFisicoOffline.buscarPorEanONombre`, máx. ~40 sugerencias): coincidencia exacta por EAN o contiene en nombre. **No** busca por código manual ni ID de sistema. Click en sugerencia o Enter (EAN exacto → directo; si hay lista → primero) cierra el modal y deja el artículo listo para cantidad. Sin campo de búsqueda en la pantalla principal.
+- **Ingreso manual:** botón «Ingreso manual» abre un modal con búsqueda **predictiva** (debounce ~250 ms) sobre IndexedDB (`InvFisicoOffline.buscarPorEanONombre`, máx. ~40 sugerencias): coincidencia exacta por EAN o contiene en nombre. **No** busca por código manual ni ID de sistema. En desktop el modal es más ancho (`sm:max-w-xl` … `lg:max-w-3xl`). Flecha abajo/arriba navega la lista; Enter confirma la sugerencia resaltada (o EAN exacto / primer hit). Click en sugerencia también selecciona. Sin campo de búsqueda en la pantalla principal.
+- **Corregir conteo:** panel **Artículos contados** (siempre visible) lista lo registrado en el depósito: carga desde API `GET /stock/api/conteo/registrados/` + IndexedDB local, con filtro por código/nombre. Tocá un ítem para reabrir y corregir (modal de confirmación). Re-escanear o rebuscar el mismo artículo también precompleta la cantidad anterior. El mismo operario puede sobrescribir en sync (`evaluar_resultado_evento_sync`); al encolar una corrección se reemplaza el evento pendiente previo del mismo artículo/depósito.
 - Si la cámara falla (HTTPS, permisos, sin dispositivo), se abre el modal de ingreso manual.
 - Offline: en `init()`, si no hay red, `totalCatalogo` se obtiene con `InvFisicoOffline.contarCatalogo()` del catálogo ya prefetched; la búsqueda no depende de API.
 - Si `totalCatalogo === 0` (catálogo no descargado), el modal muestra aviso para conectar y recargar (o sesión con prefetch previo).
