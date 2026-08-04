@@ -5,7 +5,7 @@
 
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="{% static 'js/inv_fisico_offline.js' %}"></script>
+<script src="{% static 'js/inv_fisico_offline.js' %}?v=inv3"></script>
 
 <section class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pb-32"
          x-data="conteoInvFisico()"
@@ -143,33 +143,41 @@
                          :style="'width:' + porcentajeAvance + '%'"></div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <template x-if="articuloSel">
-                <div class="rounded-xl border border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900/50 dark:bg-purple-900/10">
+    {# Ingreso: artículo + cantidad + botón (fila única en desktop) #}
+    <template x-if="articuloSel">
+        <div class="mt-3 rounded-xl border border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900/50 dark:bg-purple-900/10">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
+                <div class="min-w-0 flex-1">
                     <p class="text-xs uppercase tracking-wide text-purple-600 dark:text-purple-300">Artículo</p>
-                    <p class="mt-0.5 text-base font-semibold text-slate-900 dark:text-white" x-text="articuloSel.nombre"></p>
+                    <p class="mt-0.5 text-base font-semibold text-slate-900 dark:text-white lg:truncate" x-text="articuloSel.nombre" :title="articuloSel.nombre"></p>
                     <p class="text-sm text-slate-600 dark:text-slate-300" x-text="articuloSel.codigo"></p>
                     <p x-show="yaContadoActual" x-cloak
-                       class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100">
+                       class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100 lg:mt-1.5">
                         Ya contado: <strong class="tabular-nums" x-text="cantidadPrevia"></strong>. Corregí la cifra y confirmá.
                     </p>
-                    <label class="mt-4 block">
-                        <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Cantidad contada</span>
-                        <input type="number" inputmode="numeric" min="0" step="1" x-model="cantidadInput"
-                               x-ref="cantidadInputEl"
-                               class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
-                    </label>
-                    <button type="button" @click="confirmarConteo()"
-                            class="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 active:scale-[0.98]">
-                        <span x-text="yaContadoActual ? 'Corregir conteo' : 'Registrar conteo'"></span>
-                    </button>
                 </div>
-            </template>
-
-            <div x-show="ultimaAccion" x-cloak class="text-center text-xs text-slate-500 dark:text-slate-400">
-                Última acción: <span x-text="ultimaAccion"></span>
+                <label class="block w-full shrink-0 lg:w-40">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Cantidad</span>
+                    <input type="number" inputmode="numeric" min="0" step="1" x-model="cantidadInput"
+                           x-ref="cantidadInputEl"
+                           @keydown.enter.prevent="confirmarConteo()"
+                           class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+                </label>
+                <button type="button" @click="confirmarConteo()"
+                        class="w-full shrink-0 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 active:scale-[0.98] lg:w-auto lg:min-w-[11rem]">
+                    <span x-text="yaContadoActual ? 'Corregir conteo' : 'Registrar conteo'"></span>
+                </button>
             </div>
+            <p x-show="ultimaAccion" x-cloak class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                Última acción: <span x-text="ultimaAccion"></span>
+            </p>
         </div>
+    </template>
+    <div x-show="!articuloSel && ultimaAccion" x-cloak class="mt-2 text-center text-xs text-slate-500 dark:text-slate-400 lg:text-left">
+        Última acción: <span x-text="ultimaAccion"></span>
     </div>
 
     {# Registro de control — ancho completo #}
@@ -375,11 +383,54 @@ function conteoInvFisico() {
       await this.cargarHistorialConteos();
     },
 
+    async guardarConteoLocalSafe(registro) {
+      var off = window.InvFisicoOffline;
+      if (off && typeof off.guardarConteoLocal === 'function') {
+        await off.guardarConteoLocal(cfg.idCampana, cfg.idDeposito, registro);
+        return;
+      }
+      // Fallback memoria si el JS estático está cacheado sin la API nueva
+      var lista = (this.historialConteos || []).slice();
+      var idx = lista.findIndex(function (it) { return Number(it.id_articulo) === Number(registro.id_articulo); });
+      var row = {
+        id_articulo: registro.id_articulo,
+        cantidad: String(registro.cantidad),
+        codigo: registro.codigo || '-',
+        nombre: registro.nombre || '-',
+        ts: registro.ts || new Date().toISOString(),
+      };
+      if (idx >= 0) lista[idx] = row;
+      else lista.unshift(row);
+      lista.sort(function (a, b) { return String(b.ts || '').localeCompare(String(a.ts || '')); });
+      this.historialConteos = lista;
+      this.contadosLocal.add(registro.id_articulo);
+      this.contados = this.contadosLocal.size;
+    },
+
+    async listarConteosLocalesSafe() {
+      var off = window.InvFisicoOffline;
+      if (off && typeof off.listarConteosLocales === 'function') {
+        return await off.listarConteosLocales(cfg.idCampana, cfg.idDeposito);
+      }
+      return (this.historialConteos || []).slice();
+    },
+
+    async obtenerConteoLocalSafe(idArticulo) {
+      var off = window.InvFisicoOffline;
+      if (off && typeof off.obtenerConteoLocal === 'function') {
+        return await off.obtenerConteoLocal(cfg.idCampana, cfg.idDeposito, idArticulo);
+      }
+      var hit = (this.historialConteos || []).find(function (it) {
+        return Number(it.id_articulo) === Number(idArticulo);
+      });
+      return hit || null;
+    },
+
     async cargarHistorialConteos() {
       if (!window.InvFisicoOffline || !cfg.idDeposito) return;
       var mapa = {};
       try {
-        var locales = await window.InvFisicoOffline.listarConteosLocales(cfg.idCampana, cfg.idDeposito);
+        var locales = await this.listarConteosLocalesSafe();
         (locales || []).forEach(function (it) {
           if (!it || it.id_articulo == null) return;
           mapa[String(it.id_articulo)] = {
@@ -421,11 +472,11 @@ function conteoInvFisico() {
                 mapa[key] = row;
               }
             });
-            // Sembrar IndexedDB con lo del servidor (corrige tras refresh / otro dispositivo)
-            for (var k of Object.keys(mapa)) {
-              var reg = mapa[k];
+            var keys = Object.keys(mapa);
+            for (var i = 0; i < keys.length; i++) {
+              var reg = mapa[keys[i]];
               try {
-                await window.InvFisicoOffline.guardarConteoLocal(cfg.idCampana, cfg.idDeposito, {
+                await this.guardarConteoLocalSafe({
                   id_articulo: reg.id_articulo,
                   cantidad: reg.cantidad,
                   codigo: reg.codigo,
@@ -677,9 +728,7 @@ function conteoInvFisico() {
       this.mensajeError = '';
       this.mensajeOk = '';
       try {
-        var prev = await window.InvFisicoOffline.obtenerConteoLocal(
-          cfg.idCampana, cfg.idDeposito, art.id_articulo
-        );
+        var prev = await this.obtenerConteoLocalSafe(art.id_articulo);
         if (prev && prev.cantidad != null && prev.cantidad !== '') {
           this.cantidadPrevia = String(prev.cantidad);
           this.cantidadInput = String(prev.cantidad);
@@ -756,7 +805,7 @@ function conteoInvFisico() {
 
       try {
         await window.InvFisicoOffline.encolarEvento(evento);
-        await window.InvFisicoOffline.guardarConteoLocal(cfg.idCampana, cfg.idDeposito, {
+        await this.guardarConteoLocalSafe({
           id_articulo: this.articuloSel.id_articulo,
           cantidad: qty,
           codigo: this.articuloSel.codigo,
