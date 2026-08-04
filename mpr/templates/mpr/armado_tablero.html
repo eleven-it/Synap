@@ -41,7 +41,7 @@ tr.armado-inicio-maquina > td {
         <div class="sticky top-14 z-40 mb-4 flex-shrink-0 space-y-2 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16"
              x-data="{ abiertoYaArmado: false }">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
-                <header class="flex flex-nowrap items-center gap-x-2 overflow-x-auto">
+                <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div class="flex shrink-0 items-center gap-2">
                         <div class="inline-flex h-9 rounded-lg border p-0.5 {% if modo == '1ra' %}border-emerald-500/60 bg-emerald-950/30{% else %}border-amber-500/60 bg-amber-950/25{% endif %}"
                              role="group"
@@ -53,19 +53,19 @@ tr.armado-inicio-maquina > td {
                                {% if modo != '1ra' %}aria-current="true"{% endif %}
                                class="inline-flex h-full items-center rounded-md px-2.5 text-xs font-bold transition-colors {% if modo != '1ra' %}bg-amber-500 text-amber-950{% else %}text-amber-300 hover:bg-amber-900/35{% endif %}">2da</a>
                         </div>
-                        <h1 class="whitespace-nowrap text-base font-bold tracking-tight text-white sm:text-lg"
+                        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl"
                             title="{{ nombre_deposito_origen }} → {{ nombre_deposito_destino }}">{{ modo_label }}</h1>
                     </div>
 
-                    <div class="relative w-40 min-w-[7.5rem] max-w-[12rem] shrink grow-0 sm:w-48">
-                        <span class="material-icons pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
+                    <div class="relative min-w-[8rem] max-w-[14rem] flex-1 sm:max-w-xs">
+                        <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
                         <input type="search"
                                x-model="busqueda"
                                @keydown.enter.prevent
                                autocomplete="off"
                                placeholder="Buscar…"
                                aria-label="Filtrar artículo por código o descripción en la grilla"
-                               class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 py-0 pl-8 pr-8 text-sm text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"/>
+                               class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 py-0 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"/>
                         <button type="button"
                                 x-show="busqueda.trim() !== ''"
                                 x-cloak
@@ -76,12 +76,12 @@ tr.armado-inicio-maquina > td {
                         </button>
                     </div>
 
-                    <div class="ml-auto flex shrink-0 flex-nowrap items-center gap-1.5">
+                    <div class="ml-auto flex flex-wrap items-center gap-2">
                         {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="dark" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
 
                         <label class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-900/80 px-2 text-xs font-medium text-slate-200"
                                title="Fecha del movimiento de stock y consulta de armados de ese día">
-                            <span class="hidden whitespace-nowrap text-slate-400 xl:inline">Fecha</span>
+                            <span class="hidden whitespace-nowrap text-slate-400 sm:inline">Fecha</span>
                             <input type="date"
                                    id="fecha-realizado-tablero"
                                    x-model="fechaIso"
@@ -94,16 +94,16 @@ tr.armado-inicio-maquina > td {
                            aria-label="Actualizar vista"
                            class="group relative inline-flex h-9 items-center gap-1 rounded-lg border border-orange-400/70 bg-orange-500 px-2.5 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                             <span class="material-icons text-base" aria-hidden="true">refresh</span>
-                            <span class="hidden lg:inline">Actualizar</span>
+                            <span class="hidden sm:inline">Actualizar</span>
                             {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Actualizar stock, demanda y armados del día" only %}
                         </a>
 
                         {% if modo == '1ra' %}
                         <button type="button"
                                 @click="abrirModalArmado()"
-                                class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                             <span class="material-icons text-base" aria-hidden="true">build</span>
-                            <span class="whitespace-nowrap">Ejecutar armado</span>
+                            Ejecutar armado
                         </button>
                         {% endif %}
 
