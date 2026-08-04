@@ -113,8 +113,8 @@ Las pantallas de conteo tienen **templates mobile dedicados** seleccionados por 
 | `/stock/conteo/` | `stock/conteo/mis_conteos.html` | `stock/conteo/mobile/mis_conteos.html` |
 | `/stock/conteo/<id>/` | `stock/conteo/conteo.html` | `stock/conteo/mobile/conteo.html` |
 
-- **Chrome Synap oculto:** `stock/conteo/includes/_pwa_shell.html` (incluido en `{% block extra_css %}`) oculta el navbar fijo (`header.w-full.fixed`) y la barra de estado (`#status-bar`), y cancela el `pt-14 / md:pt-16`, `pb-8 / md:pb-12` y el padding de `.app-content > div` que reserva `base_app.html`. Se activa con `document.body.classList.add('conteo-pwa')` al inicio del bloque `content`.
-- **Fullscreen real:** `{% block extra_meta %}` agrega `viewport-fit=cover`; el contenedor `.conteo-pwa-root` usa `100dvh` con `env(safe-area-inset-*)` (top, bottom, left, right). Layout de tres zonas: header compacto (fijo), cuerpo scrolleable (`.conteo-pwa-scroll`) y zona de acciones inferior.
+- **Chrome Synap visible:** igual que `mpr/templates/mpr/mobile/parte_operario.html`, el navbar fijo (hamburguesa, logo y perfil) y la barra de estado permanecen visibles. `stock/conteo/includes/_pwa_shell.html` no altera sus reglas ni el padding vertical que `base_app.html` reserva para ellos. Se activa con `document.body.classList.add('conteo-pwa')` al inicio del bloque `content`.
+- **Fullscreen útil dentro del shell:** `{% block extra_meta %}` agrega `viewport-fit=cover`; el contenedor `.conteo-pwa-root` usa `height: calc(100dvh - 3.5rem - 2rem)` para reservar navbar y barra de estado, además de `env(safe-area-inset-left/right)`. Layout de tres zonas: header interno compacto, cuerpo scrolleable (`.conteo-pwa-scroll`) y zona de acciones inferior. Sheets y modales móviles reservan `bottom-8` para no quedar debajo de la barra de estado.
 - **Targets táctiles:** botones, enlaces e inputs con `min-height: 2.75rem` (teclas del pad, `3rem`); inputs a `16px` para evitar el zoom automático de iOS.
 - **Layout de conteo:** header (volver a «Mis conteos», campaña, depósito, chip En línea/Offline) → KPIs en una línea (contados/total, pendientes de sync, botón **Sincronizar**) + barra de avance → CTAs **Escanear** / **Manual** → cámara o artículo seleccionado → **Cantidad + pad numérico + Registrar conteo** siempre visibles cuando hay artículo → barra inferior **Artículos contados (N)** que abre un **sheet** con filtro y listado (cada ítem muestra `Cant. N` explícito y el código aparte). El historial nunca empuja el flujo de escaneo.
 - **Mis conteos mobile:** tarjetas grandes por campaña con estado, depósitos y CTA **Contar** a ancho completo; estado vacío explícito.
@@ -174,7 +174,7 @@ Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`,
 - [ ] Prefetch catálogo ciego (sin saldo/diferencia visible).
 - [ ] Scan EAN (HTTPS/localhost) o ingreso manual por EAN/nombre → cantidad en **&lt; 8 s** con catálogo ya prefetched; el foco pasa a Cantidad y aparece el teclado numérico en pantalla.
 - [ ] En HTTP por IP: aviso de cámara no disponible; ingreso manual funciona con catálogo cargado.
-- [ ] En móvil: **sin navbar ni barra de estado**; la pantalla ocupa todo el viewport y el pad + «Registrar conteo» quedan visibles sin scroll.
+- [ ] En móvil: navbar, perfil y barra de estado Synap permanecen visibles; el layout interno usa todo el alto útil y el pad + «Registrar conteo» quedan visibles sin scroll.
 - [ ] Escanear con lector wedge: la cantidad **no** se completa con el EAN; si se pega un código de barras, aparece el aviso «parece un código de barras».
 - [ ] Barra inferior «Artículos contados (N)» abre el sheet y cada ítem muestra `Cant. N`.
 - [ ] Modo offline 30+ min: conteos en cola local; banner «N pendientes».

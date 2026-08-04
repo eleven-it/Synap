@@ -2,8 +2,8 @@
 {% load static %}
 {% comment %}
 Landing del operario en móvil: campañas asignadas para conteo ciego.
-Mismo shell PWA que la pantalla de conteo (sin navbar ni barra de estado),
-tarjetas grandes por campaña y CTA «Contar» a ancho completo.
+Mantiene el chrome Synap y usa un encabezado interno compacto del módulo,
+con tarjetas grandes por campaña y CTA «Contar» a ancho completo.
 {% endcomment %}
 
 {% block title %}Mis conteos · Synap{% endblock %}
@@ -21,9 +21,11 @@ tarjetas grandes por campaña y CTA «Contar» a ancho completo.
 
 <section class="conteo-pwa-root bg-slate-100 dark:bg-slate-950">
     <header class="conteo-pwa-top shrink-0 bg-slate-900 px-3 pb-2 text-white shadow-md">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Stock · Inventario físico</p>
         <div class="mt-0.5 flex items-center gap-2">
-            <h1 class="min-w-0 flex-1 truncate text-lg font-bold leading-tight">Mis conteos</h1>
+            <div class="min-w-0 flex-1">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock · Inventario físico</p>
+                <h1 class="truncate text-lg font-bold leading-tight">Mis conteos</h1>
+            </div>
             <span class="conteo-pwa-chip inline-flex shrink-0 items-center rounded-full bg-purple-500/20 px-2.5 text-xs font-bold text-purple-200 tabular-nums">
                 {{ filas|length }} campaña{{ filas|length|pluralize }}
             </span>

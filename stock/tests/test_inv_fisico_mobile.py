@@ -107,7 +107,7 @@ class InvFisicoMobileViewTests(SimpleTestCase):
     },
 )
 class InvFisicoShellPwaTests(SimpleTestCase):
-    """Con UA móvil se usan los templates dedicados y se oculta el chrome Synap."""
+    """Con UA móvil se usan templates dedicados y se conserva el chrome Synap."""
 
     def test_selector_devuelve_templates_mobile(self):
         from core.utils.template_selector import get_template_for_device
@@ -155,7 +155,7 @@ class InvFisicoShellPwaTests(SimpleTestCase):
     @patch('stock.mobile_views.listar_depositos_elegibles', return_value=[
         {'id_deposito': 1, 'nombre': 'Dep A', 'tipo_mpr': 'Terminado'},
     ])
-    def test_conteo_movil_oculta_chrome_y_es_fullscreen(self, _deps, _asignado, _campana):
+    def test_conteo_movil_mantiene_chrome_y_reserva_alto_util(self, _deps, _asignado, _campana):
         from stock.mobile_views import conteo_campana_view
 
         request = _mobile_request('/stock/conteo/5/?deposito=1')
@@ -163,9 +163,11 @@ class InvFisicoShellPwaTests(SimpleTestCase):
         self.assertIn("classList.add('conteo-pwa')", content)
         self.assertIn('viewport-fit=cover', content)
         self.assertIn('100dvh', content)
-        self.assertIn('env(safe-area-inset-top)', content)
-        self.assertIn('body.conteo-pwa header.w-full.fixed { display: none !important; }', content)
-        self.assertIn('body.conteo-pwa #status-bar { display: none !important; }', content)
+        self.assertIn('height: calc(100dvh - 3.5rem - 2rem);', content)
+        self.assertIn('env(safe-area-inset-left)', content)
+        self.assertNotIn('body.conteo-pwa header.w-full.fixed { display: none !important; }', content)
+        self.assertNotIn('body.conteo-pwa #status-bar { display: none !important; }', content)
+        self.assertIn('bottom-8 z-50', content)
         # Flujo operario: pad numérico, registrar y cantidad explícita en el historial
         self.assertIn('agregarDigitoCantidad', content)
         self.assertIn('Registrar conteo', content)
@@ -176,13 +178,16 @@ class InvFisicoShellPwaTests(SimpleTestCase):
     @patch('stock.mobile_views.listar_depositos_elegibles', return_value=[
         {'id_deposito': 1, 'nombre': 'Dep A', 'tipo_mpr': 'Terminado'},
     ])
-    def test_mis_conteos_movil_oculta_chrome(self, _deps, _campanas):
+    def test_mis_conteos_movil_mantiene_chrome_y_layout_pwa(self, _deps, _campanas):
         from stock.mobile_views import conteo_mis_view
 
         content = conteo_mis_view(_mobile_request('/stock/conteo/')).content.decode('utf-8')
         self.assertIn("classList.add('conteo-pwa')", content)
         self.assertIn('viewport-fit=cover', content)
-        self.assertIn('body.conteo-pwa #status-bar { display: none !important; }', content)
+        self.assertIn('conteo-pwa-root', content)
+        self.assertIn('height: calc(100dvh - 3.5rem - 2rem);', content)
+        self.assertNotIn('body.conteo-pwa header.w-full.fixed { display: none !important; }', content)
+        self.assertNotIn('body.conteo-pwa #status-bar { display: none !important; }', content)
         self.assertIn('Contar', content)
 
 
