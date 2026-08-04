@@ -192,28 +192,36 @@
     <div x-show="mostrarManual" x-cloak
          class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center"
          role="dialog" aria-modal="true" aria-labelledby="manual-titulo">
-        <div class="flex max-h-[85vh] w-full max-w-sm flex-col rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-800">
+        <div class="flex max-h-[85vh] w-full max-w-sm flex-col rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-800 sm:max-w-xl md:max-w-2xl lg:max-w-3xl">
             <h2 id="manual-titulo" class="text-lg font-bold text-slate-900 dark:text-white">Ingreso manual</h2>
             <label for="codigo-manual-modal" class="sr-only">EAN o nombre de artículo</label>
             <input id="codigo-manual-modal" type="text" x-ref="codigoManualModalInput" x-model="codigoManual"
                    inputmode="text" autocomplete="off"
                    placeholder="EAN o nombre de artículo"
-                   @input="buscarPredictivoDebounce()"
+                   @input="indiceSugerencia = -1; buscarPredictivoDebounce()"
+                   @keydown.down.prevent="navegarSugerencias(1)"
+                   @keydown.up.prevent="navegarSugerencias(-1)"
                    @keydown.enter.prevent="onEnterIngresoManual()"
+                   @keydown.escape.prevent="cerrarIngresoManual()"
                    x-effect="if (mostrarManual) { $nextTick(() => $refs.codigoManualModalInput && $refs.codigoManualModalInput.focus()) }"
                    class="mt-3 w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-600 dark:bg-slate-900 dark:text-white"
                    role="combobox" :aria-expanded="resultadosBusqueda.length > 0" aria-autocomplete="list"
-                   aria-controls="lista-ingreso-manual">
+                   aria-controls="lista-ingreso-manual"
+                   :aria-activedescendant="indiceSugerencia >= 0 ? ('sugerencia-manual-' + indiceSugerencia) : null">
             <p x-show="totalCatalogo === 0" x-cloak class="mt-2 text-xs text-amber-700 dark:text-amber-300">
                 Catálogo no cargado. Conectate y recargá la página, o usá una sesión con prefetch previo.
             </p>
             <ul id="lista-ingreso-manual" x-show="resultadosBusqueda.length" x-cloak
-                class="mt-3 max-h-56 flex-1 space-y-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-600"
+                class="mt-3 max-h-72 flex-1 space-y-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-600 sm:max-h-80"
                 role="listbox" aria-label="Sugerencias">
-                <template x-for="art in resultadosBusqueda" :key="art.id_articulo">
-                    <li>
+                <template x-for="(art, idx) in resultadosBusqueda" :key="art.id_articulo">
+                    <li :id="'sugerencia-manual-' + idx" role="option" :aria-selected="indiceSugerencia === idx">
                         <button type="button" @click="seleccionarArticulo(art)"
-                                class="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition-colors hover:bg-purple-50 dark:hover:bg-purple-950/30">
+                                @mouseenter="indiceSugerencia = idx"
+                                :class="indiceSugerencia === idx
+                                  ? 'bg-purple-100 dark:bg-purple-900/40'
+                                  : 'hover:bg-purple-50 dark:hover:bg-purple-950/30'"
+                                class="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition-colors">
                             <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="art.nombre"></span>
                             <span class="text-xs text-slate-500 dark:text-slate-400"
                                   x-text="(art.ean && art.ean.length) ? ('EAN: ' + art.ean.join(' · ')) : 'Sin EAN'"></span>
@@ -255,6 +263,7 @@ function conteoInvFisico() {
     cantidadInput: '',
     codigoManual: '',
     resultadosBusqueda: [],
+    indiceSugerencia: -1,
     mostrarManual: false,
     confirmOpen: false,
     confirmMensaje: '',
@@ -300,6 +309,7 @@ function conteoInvFisico() {
       this.mostrarManual = true;
       this.codigoManual = '';
       this.resultadosBusqueda = [];
+      this.indiceSugerencia = -1;
       this.mensajeError = '';
     },
 
@@ -311,6 +321,7 @@ function conteoInvFisico() {
       this.mostrarManual = false;
       this.codigoManual = '';
       this.resultadosBusqueda = [];
+      this.indiceSugerencia = -1;
     },
 
     buscarPredictivoDebounce() {
@@ -324,21 +335,38 @@ function conteoInvFisico() {
     async buscarPredictivo() {
       if (this.totalCatalogo === 0) {
         this.resultadosBusqueda = [];
+        this.indiceSugerencia = -1;
         return;
       }
       var consulta = String(this.codigoManual || '').trim();
       if (!consulta) {
         this.resultadosBusqueda = [];
+        this.indiceSugerencia = -1;
         return;
       }
       var hits = await window.InvFisicoOffline.buscarPorEanONombre(consulta, 40);
       this.resultadosBusqueda = hits;
+      this.indiceSugerencia = hits.length ? 0 : -1;
+    },
+
+    navegarSugerencias(delta) {
+      var n = this.resultadosBusqueda.length;
+      if (!n) return;
+      if (this.indiceSugerencia < 0) {
+        this.indiceSugerencia = delta > 0 ? 0 : n - 1;
+      } else {
+        this.indiceSugerencia = (this.indiceSugerencia + delta + n) % n;
+      }
+      this.$nextTick(() => {
+        var el = document.getElementById('sugerencia-manual-' + this.indiceSugerencia);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      });
     },
 
     async onEnterIngresoManual() {
       if (this.totalCatalogo === 0) return;
       var consulta = String(this.codigoManual || '').trim();
-      if (!consulta) return;
+      if (!consulta && this.indiceSugerencia < 0) return;
 
       var hits = this.resultadosBusqueda.length
         ? this.resultadosBusqueda
@@ -350,13 +378,14 @@ function conteoInvFisico() {
         return;
       }
 
+      if (this.indiceSugerencia >= 0 && this.indiceSugerencia < hits.length) {
+        this.seleccionarArticulo(hits[this.indiceSugerencia]);
+        return;
+      }
+
       var exactoEan = await window.InvFisicoOffline.buscarPorEan(consulta);
       if (exactoEan) {
         this.seleccionarArticulo(exactoEan);
-        return;
-      }
-      if (hits.length === 1) {
-        this.seleccionarArticulo(hits[0]);
         return;
       }
       this.seleccionarArticulo(hits[0]);
