@@ -83,10 +83,10 @@
           <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
             <td class="px-4 py-2.5 font-mono text-xs text-slate-800 dark:text-slate-100">{{ l.codigo }}</td>
             <td class="px-4 py-2.5 text-slate-700 dark:text-slate-200">{{ l.nombre }}</td>
-            <td class="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{{ l.saldo_snapshot }}</td>
-            <td class="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{{ l.cantidad_contada|default:"—" }}</td>
+            <td class="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{{ l.saldo_snapshot|floatformat:0 }}</td>
+            <td class="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{% if l.cantidad_contada is not None %}{{ l.cantidad_contada|floatformat:0 }}{% else %}—{% endif %}</td>
             <td class="px-4 py-2.5 text-right tabular-nums font-semibold {% if l.diferencia and l.diferencia < 0 %}text-red-600{% elif l.diferencia and l.diferencia > 0 %}text-emerald-600{% else %}text-slate-500{% endif %}">
-              {{ l.diferencia|default:"—" }}
+              {% if l.diferencia is not None %}{{ l.diferencia|floatformat:0 }}{% else %}—{% endif %}
             </td>
             <td class="px-4 py-2.5 text-right">
               <a href="{% url 'stock:inventario_fisico_linea' id_campana=campana.id_campana id_linea=l.id_linea %}"
