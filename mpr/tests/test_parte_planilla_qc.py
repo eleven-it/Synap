@@ -866,6 +866,87 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
         self.assertEqual(estados, {"aprobado"})
         _asiento.assert_called()
 
+    @patch("mpr.repositories.parte.obtener_parte_planilla_directo_supervisor", return_value=None)
+    @patch("mpr.services._registrar_asiento_fisico_opp_parte")
+    @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
+    @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
+    @patch("mpr.repositories.parte.sumar_cantidades_aprobadas_por_articulo")
+    @patch("mpr.services.cupo_fabricando_por_articulo")
+    @patch("mpr.services.obtener_turno")
+    def test_primera_aprobacion_usa_totales_post_merge_no_itera_related_list(
+        self, mock_turno, mock_cupo, mock_sumar, mock_crear, _op, _dep, mock_asiento, _exist
+    ):
+        """Regresión: '_ParteRelatedList' object is not iterable al asiento OPP."""
+        from mpr.repositories.records import ParteLineaRecord, _ParteRelatedList
+        from mpr.services import registrar_parte_produccion
+
+        turno_rec = MagicMock()
+        turno_rec.id_mpr_turno = 1
+        mock_turno.return_value = turno_rec
+        mock_cupo.return_value = {100: 48.0}
+        mock_sumar.return_value = {100: Decimal("12")}
+
+        parte_mock = MagicMock()
+        parte_mock.movimiento_fisico_ok = False
+        parte_mock.id_mpr_parte = 99
+        # Wrapper real (antes sin __iter__ rompía ``for ln in parte.lineas``).
+        parte_mock.lineas = _ParteRelatedList(
+            [
+                ParteLineaRecord(
+                    id_articulo=100,
+                    id_operario=5,
+                    cantidad=Decimal("12"),
+                    operario_nombre="Op",
+                )
+            ]
+        )
+        parte_mock.save = MagicMock()
+        mock_crear.return_value = parte_mock
+
+        partes, warnings = registrar_parte_produccion(
+            EMPRESA,
+            date(2026, 8, 4),
+            None,
+            1,
+            [
+                {
+                    "id_articulo": 100,
+                    "id_operario": 5,
+                    "cantidad": Decimal("12"),
+                    "id_mpr_maquina": 10,
+                    "maquina_nombre": "M1",
+                    "turno_id": 1,
+                }
+            ],
+            modo_planilla=True,
+            accion="aprobar",
+        )
+        self.assertEqual(len(partes), 1)
+        self.assertEqual(warnings, [])
+        mock_asiento.assert_called_once()
+        pack_qty = mock_asiento.call_args.kwargs.get("lineas_pack_qty") or mock_asiento.call_args[1].get(
+            "lineas_pack_qty"
+        )
+        if pack_qty is None:
+            pack_qty = mock_asiento.call_args.kwargs["lineas_pack_qty"]
+        self.assertEqual(pack_qty, [({"id_articulo": 100}, Decimal("12"))])
+        self.assertTrue(parte_mock.movimiento_fisico_ok)
+
+    def test_parte_related_list_es_iterable(self):
+        from mpr.repositories.records import ParteLineaRecord, _ParteRelatedList
+
+        items = _ParteRelatedList(
+            [
+                ParteLineaRecord(
+                    id_articulo=1, id_operario=2, cantidad=Decimal("3"), operario_nombre="A"
+                )
+            ]
+        )
+        self.assertEqual(len(items), 1)
+        self.assertEqual([ln.id_articulo for ln in items], [1])
+        self.assertEqual([ln.id_articulo for ln in items.all()], [1])
+
     @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
     def test_rechaza_cantidad_positiva_sin_operario(self, mock_crear):
         from mpr.services import registrar_parte_produccion

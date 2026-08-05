@@ -17880,11 +17880,25 @@ def _registrar_parte_produccion_planilla(
                 parte.movimiento_fisico_ok = True
                 parte.save(update_fields=["movimiento_fisico_ok"])
             elif not getattr(parte, "movimiento_fisico_ok", False):
+                # Preferir totales post-merge (misma fuente que el delta);
+                # fallback a lineas.all() por si el wrapper no trae cantidades.
                 lineas_creadas = [
-                    ({"id_articulo": ln.id_articulo}, ln.cantidad)
-                    for ln in (parte.lineas or [])
-                    if (to_decimal_or_none(ln.cantidad) or Decimal("0")) > 0
+                    ({"id_articulo": aid}, cant)
+                    for aid, cant in nuevas_por_art.items()
+                    if cant > 0
                 ]
+                if not lineas_creadas:
+                    lineas_rel = getattr(parte, "lineas", None)
+                    lineas_iter = (
+                        lineas_rel.all()
+                        if hasattr(lineas_rel, "all")
+                        else (lineas_rel or [])
+                    )
+                    lineas_creadas = [
+                        ({"id_articulo": ln.id_articulo}, ln.cantidad)
+                        for ln in lineas_iter
+                        if (to_decimal_or_none(ln.cantidad) or Decimal("0")) > 0
+                    ]
                 if deposito_produccion and lineas_creadas:
                     _registrar_asiento_fisico_opp_parte(
                         base_empresa=base_empresa,
