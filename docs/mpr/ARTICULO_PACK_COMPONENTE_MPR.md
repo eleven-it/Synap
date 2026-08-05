@@ -149,6 +149,7 @@ Pantalla: `/mpr/armado-surtido/` · Servicio: `ejecutar_armado_surtido` · SDD: 
 | «No hay artículo armado asociado a este conjunto» | Falta asignar artículo armado en edición del conjunto |
 | Pack no listado en armado surtido | El artículo no tiene `tipo_art_fab = 'Fabricado 2da'` |
 | Máx. armable = Sin stock | Componentes sin saldo en Semi elaborado (OPP no distribuyó) |
+| Pack no aparece en tablero Armado 1ra | `max_armable = 0` (sin stock Semi armable); no es por falta de demanda PED desde 05/08/2026 |
 | Stock en lotes insuficiente | Componente con `Lote='Si'` y saldo FIFO insuficiente |
 
 ---
@@ -158,3 +159,4 @@ Pantalla: `/mpr/armado-surtido/` · Servicio: `ejecutar_armado_surtido` · SDD: 
 | Fecha | Cambio |
 |-------|--------|
 | 01/06/2026 | Documento inicial: criterios pack/componente por flujo MPR, campos `articulo`, implementación y checklist. |
+| 05/08/2026 | Tablero Armado 1ra: aparición por `max_armable > 0`; demanda PED ya no excluye. |

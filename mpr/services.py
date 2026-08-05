@@ -10768,7 +10768,10 @@ def listar_tablero_armado(
     """
     Grilla Armado alineada a PCP Armado.
 
-    Modo 1ra: packs Terminado+BOM con demanda PED y máx. armable en Semi.
+    Modo 1ra: packs Terminado+BOM. Aparecen si hay **máx. armable en Semi > 0**
+    (stock de componentes suficiente), con o sin brecha ``resta_armar``.
+    La demanda PED prioriza el orden (mayor resta primero); no es requisito
+    excluyente para poder armar.
     Modo 2da: packs ``tipo_art_fab = Fabricado 2da`` con capacidad de armado
     (BOM × stock en 2da selección, o composición libre si hay stock Fabricado
     en origen). No exige demanda PED.
@@ -10787,7 +10790,7 @@ def listar_tablero_armado(
 
     filas_demanda = listar_demanda_pack_desde_pedidos(
         base_empresa,
-        limit=limit * 2,
+        limit=max(limit * 2, 400),
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         marcas_incluidos=marcas_incluidos,
@@ -10797,48 +10800,132 @@ def listar_tablero_armado(
         for p in (listar_packs_armado_1ra(base_empresa) or [])
         if to_int_or_none(p.get("id_articulo")) is not None
     }
-    dep_origen = get_deposito_semi_elaborado_mpr(base_empresa)
+    if marcas_incluidos:
+        marcas_set = {
+            int(m) for m in marcas_incluidos if to_int_or_none(m) is not None
+        }
+        if marcas_set:
+            marca_tmp = _fetch_codigo_marca_articulo(base_empresa, list(packs_ok.keys()))
+            packs_ok = {
+                aid: meta
+                for aid, meta in packs_ok.items()
+                if marca_tmp.get(aid) in marcas_set
+            }
+    if not packs_ok:
+        return []
 
-    ids_pack = [
-        int(d["id_articulo"])
+    dep_origen = get_deposito_semi_elaborado_mpr(base_empresa)
+    max_map: Dict[int, int] = {}
+    if dep_origen:
+        max_map = _max_packs_armado_1ra_bulk(
+            base_empresa, list(packs_ok.keys()), int(dep_origen)
+        )
+
+    dem_por_id = {
+        int(d["id_articulo"]): d
         for d in filas_demanda
-        if to_int_or_none(d.get("id_articulo")) in packs_ok
-    ]
+        if to_int_or_none(d.get("id_articulo")) is not None
+    }
+
+    # Candidatos: demanda (prioridad) ∪ packs con stock Semi armable.
+    ids_pack: List[int] = []
+    vistos: set = set()
+    for d in filas_demanda:
+        aid = to_int_or_none(d.get("id_articulo"))
+        if aid is None or aid not in packs_ok or aid in vistos:
+            continue
+        vistos.add(aid)
+        ids_pack.append(aid)
+    for aid, mx in max_map.items():
+        if aid in packs_ok and int(mx or 0) > 0 and aid not in vistos:
+            vistos.add(aid)
+            ids_pack.append(aid)
     if not ids_pack:
         return []
 
-    max_map: Dict[int, int] = {}
-    if dep_origen:
-        max_map = _max_packs_armado_1ra_bulk(base_empresa, ids_pack, int(dep_origen))
+    # Enriquecer stock/reserva para packs solo-Semi (sin fila de demanda).
+    ids_sin_dem = [aid for aid in ids_pack if aid not in dem_por_id]
+    stock_extra: Dict[int, Dict[str, float]] = {}
+    if ids_sin_dem:
+        stock_extra = obtener_pp_ped_y_stock_pack_por_articulos(base_empresa, ids_sin_dem)
+        # Reserva maestro desde catálogo
+        try:
+            with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+                tbl_art = _nombre_tabla(cursor, "articulo")
+                if tbl_art:
+                    ph = ",".join(["%s"] * len(ids_sin_dem))
+                    cursor.execute(
+                        f"""
+                        SELECT IDArt AS id_articulo,
+                               COALESCE(stock_reserva, 0) AS stock_reserva
+                        FROM {tbl_art}
+                        WHERE IDArt IN ({ph})
+                        """,
+                        ids_sin_dem,
+                    )
+                    for row in cursor.fetchall() or []:
+                        aid = to_int_or_none(row.get("id_articulo"))
+                        if aid is None:
+                            continue
+                        stock_extra.setdefault(aid, {})
+                        try:
+                            stock_extra[aid]["stock_reserva"] = float(
+                                row.get("stock_reserva") or 0
+                            )
+                        except (TypeError, ValueError):
+                            stock_extra[aid]["stock_reserva"] = 0.0
+        except Exception as e_res:
+            logger.debug(
+                "No se pudo cargar stock_reserva para tablero armado 1ra: %s", e_res
+            )
 
     marca_map = _fetch_codigo_marca_articulo(base_empresa, ids_pack)
-    dem_por_id = {int(d["id_articulo"]): d for d in filas_demanda}
 
     filas: List[Dict[str, Any]] = []
     for id_art in ids_pack:
         dem = dem_por_id.get(id_art) or {}
+        extra = stock_extra.get(id_art) or {}
         pack_meta = packs_ok.get(id_art) or {}
         try:
-            pedido = int(round(float(dem.get("cantidad_pedida_pedido") or 0)))
+            pedido = int(round(float(
+                dem.get("cantidad_pedida_pedido")
+                if dem
+                else extra.get("cantidad_pedida_pedido")
+                or 0
+            )))
         except (TypeError, ValueError):
             pedido = 0
         try:
-            stock_terminado = int(round(float(dem.get("stock_terminado") or 0)))
+            stock_terminado = int(round(float(
+                dem.get("stock_terminado")
+                if dem
+                else extra.get("stock_terminado")
+                or 0
+            )))
         except (TypeError, ValueError):
             stock_terminado = 0
         try:
-            stock_reserva = int(round(float(dem.get("stock_reserva") or 0)))
+            stock_reserva = int(round(float(
+                dem.get("stock_reserva")
+                if dem
+                else extra.get("stock_reserva")
+                or 0
+            )))
         except (TypeError, ValueError):
             stock_reserva = 0
         try:
-            resta_armar = int(round(float(dem.get("cantidad_a_fabricar") or 0)))
+            if dem:
+                resta_armar = int(round(float(dem.get("cantidad_a_fabricar") or 0)))
+            else:
+                resta_armar = max(0, pedido + stock_reserva - stock_terminado)
         except (TypeError, ValueError):
             resta_armar = max(0, pedido + stock_reserva - stock_terminado)
         resta_urgente = max(0, pedido - stock_terminado)
         max_armable = int(max_map.get(id_art, 0) or 0)
 
-        if solo_resta and resta_armar <= 0:
-            continue
+        # Criterio de aparición modo 1ra: hay stock Semi para armar (máx. > 0).
+        # La demanda (resta_armar) prioriza el orden pero no excluye.
+        # ``solo_resta`` se interpreta en modo 2da como ``solo_armable``.
         if max_armable <= 0:
             continue
 
@@ -10867,7 +10954,13 @@ def listar_tablero_armado(
             ),
         })
 
-    filas.sort(key=lambda x: (-int(x.get("resta_armar") or 0), str(x.get("codigo_manual") or "")))
+    filas.sort(
+        key=lambda x: (
+            -int(x.get("resta_armar") or 0),
+            -int(x.get("max_armable") or 0),
+            str(x.get("codigo_manual") or ""),
+        )
+    )
     return filas[:limit]
 
 

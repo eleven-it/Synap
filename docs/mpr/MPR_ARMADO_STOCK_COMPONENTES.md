@@ -12,6 +12,10 @@
 
 **Conclusión:** OPT y OPP generan movimientos de **artículos componentes** (explosión de la receta BOM de cada pack). La demanda y el pendiente en `lista_produccion_agrupada` siguen expresados en **unidades pack**; lo que se escribe en `stock` y `stock_deposito` son los componentes.
 
+## Tablero Armado 1ra — cuándo aparece un pack (05/08/2026)
+
+En `/mpr/armado/?modo=1ra&vista=tablero`, un pack **Terminado + BOM** se lista si **Máx. armable > 0** (hay stock de componentes en Semi elaborado para armar al menos un pack). **No** exige demanda PED ni `resta_armar > 0`: un pack con stock terminado cubierto y sin pedidos abiertos sigue visible si Semi permite armar. El orden prioriza mayor `resta_armar` y luego mayor `max_armable`. Ver [DISENO_ARMADO_TABLERO_PCP.md](DISENO_ARMADO_TABLERO_PCP.md).
+
 ## Por qué «Máx. armable» puede ser «Sin stock»
 
 En el paso **Armado** (paso 4 del asistente o pantalla **Armado OPT** desde el detalle de la OPT), el sistema calcula **Máx. armable** a partir del **stock de los componentes de la receta (BOM)** en el depósito configurado como **Semi elaborado** (`deposito.tipo_mpr = 'SemiElaborado'`).

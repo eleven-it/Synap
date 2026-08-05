@@ -61,7 +61,7 @@ La pantalla es la **única vista operativa** de armado: grilla densa (`?modo=1ra
 | 4 | **Ejecución masiva:** **Armado 1ra** desde tabla (BOM fija) + **Fecha realizado** en chrome. |
 | 5 | **Armado 2da en tabla:** packs `Fabricado 2da` con stock armable (BOM×2da o composición libre si hay Fabricado en origen). Sin enlace POS. |
 | 6 | **Unidad:** pares enteros; docenas = pares ÷ 12 redondeado (toggle Docenas\|Pares; **default Pares** en Armado, docenas en tablero). |
-| 7 | **Filtro default:** «Solo con resta» (`resta_armar > 0`), análogo a «Solo urgentes» del tablero. |
+| 7 | **Elegibilidad modo 1ra (05/08/2026):** aparece si **Máx. armable > 0** (stock componentes en Semi), **con o sin** brecha `resta_armar`. La demanda PED prioriza el orden (mayor resta primero, luego mayor máx. armable); **no** es requisito excluyente. Modo 2da: filtro «Solo armable» vía `solo_resta`. |
 | 8 | **Input Armar sin precarga:** vacío al abrir; el analista completa solo las filas necesarias. Deshabilitado si `max_armable = 0`. Negativos no permitidos (UI + backend). |
 | 9 | **Sin operario** en cabecera (paridad decisión previa armado unificado). |
 | 10 | **Shell visual:** `slate-800` hero + acento **emerald** (1ra) / **amber** (2da), no `gray-*` legacy. |
@@ -93,11 +93,13 @@ La pantalla es la **única vista operativa** de armado: grilla densa (`?modo=1ra
 
 **Máquina del pack:** se resuelve con componentes BOM + `mpr_maquina_articulo` vigente a la fecha del chrome; si hay varias, se muestra el menor código numérico. Sin asignación → «—» al final. Orden: `_orden_maquina_clasificacion` → `id_articulo` (misma clave que Control de calidad, sin turno/operario).
 
-Columnas de demanda (Pedido, Reserva, Resta urgente/armar, 1er fecha entrega) se calculan en backend para filtrar elegibilidad pero **no** se muestran en la grilla operativa.
+Columnas de demanda (Pedido, Reserva, Resta urgente/armar, 1er fecha entrega) se calculan en backend para ordenar y enriquecer filas pero **no** se muestran en la grilla operativa.
 
 Vacío o 0 en Armar = la fila no se incluye en el lote. Negativos se rechazan (coerce a vacío en UI; `qty <= 0` en POST).
 
-★ Interno: Resta armar = `max(0, pedido + reserva − stock_terminado)` — sigue usándose para el filtro «solo con resta». Si `stock_terminado` es negativo, aumenta la resta (el saldo real se muestra en Terminado).
+★ **Criterio de aparición modo 1ra (05/08/2026):** `max_armable > 0` (BOM × stock Semi). Un pack puede listarse aunque `resta_armar = 0` (sin pedido/reserva pendiente o stock terminado cubierto). Orden: `-resta_armar`, `-max_armable`, código.
+
+★ Interno: Resta armar = `max(0, pedido + reserva − stock_terminado)` — prioriza el sort; no excluye filas en modo 1ra. Si `stock_terminado` es negativo, aumenta la resta (el saldo real se muestra en Terminado).
 
 ★ Presentación (30/07/2026): `stock_terminado` en Armado usa `clamp_negativos=False` (`mpr/presentacion_operativa.py`), paridad Inventario Stock.
 
