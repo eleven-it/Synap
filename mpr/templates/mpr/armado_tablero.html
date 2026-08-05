@@ -38,7 +38,7 @@ tr.armado-inicio-maquina > td {
         {{ resultado_lote|json_script:"resultado-lote-armado" }}
 
         {# Chrome 1 línea + tarjeta Ya armado (estilo Contexto comercial) #}
-        <div class="sticky top-14 z-40 mb-4 flex-shrink-0 space-y-2 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16"
+        <div class="mb-4 flex-shrink-0 space-y-2"
              x-data="{ abiertoYaArmado: false }">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
                 <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -286,7 +286,7 @@ tr.armado-inicio-maquina > td {
             <button type="submit" id="btn-armar-lote-submit" class="sr-only" tabindex="-1">Enviar</button>
         </form>
 
-        {# Modales fuera del sticky del chrome (position: fixed respecto al viewport) #}
+        {# Modales fuera de la grilla (position: fixed respecto al viewport) #}
         <div x-show="armadoModalOpen" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4" @keydown.escape.window="armadoModalOpen = false">
             <div class="fixed inset-0 bg-black/50" @click="armadoModalOpen = false"></div>
             <div class="relative max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-800" @click.stop>
