@@ -352,6 +352,8 @@ class VentasMarcasMensualRunnerResilienceTest(SimpleTestCase):
         sql, params = cursor.execute.call_args.args
         self.assertIn("DATE_FORMAT(cc.Fecha, '%Y-%m-%d')", sql % tuple(params))
         self.assertIn("DATE_FORMAT(cc.Fecha, '%Y%m')", sql % tuple(params))
+        self.assertIn("m.CodMarca = art.CodigoMarca", sql)
+        self.assertNotIn("art.CodMarca", sql)
 
 
 class VentasMarcasMensualExportHeadersTest(SimpleTestCase):

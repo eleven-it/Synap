@@ -117,7 +117,7 @@ def fetch_detalle_renglones(
         INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
         INNER JOIN cliente cl ON cl.Codigo = cc.Codigo
         LEFT JOIN articulo art ON art.IDArt = st.IDArt
-        LEFT JOIN marca m ON m.CodMarca = art.CodMarca
+        LEFT JOIN marca m ON m.CodMarca = art.CodigoMarca
         LEFT JOIN unidmed um ON um.id_unimed = art.id_unimed
         LEFT JOIN viajantes v ON v.CodViajante = cc.CodViajante
         WHERE {where_s}
