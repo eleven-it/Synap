@@ -31,7 +31,7 @@ def _report_defaults():
             "preset_hombre": {
                 "id_manuales": [],
                 "label": "Hombre",
-                "nota": "Lista de id_manual SuperArt; completar con negocio (Best Sox).",
+                "nota": "Lista de id_manual SuperArt; editable en UI (Configurar preset) por supervisor.",
             },
             "filters": {
                 "fecha_inicio_facturacion": {

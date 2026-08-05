@@ -321,6 +321,11 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["detail_urls"] = filter_urls_by_areas(
                 detail_urls, cc_areas, key_to_area=DETAIL_KEY_TO_AREA
             )
+        if report.slug == "ventas-marcas-mensual":
+            context["can_edit_vmm_preset"] = user_has_full_access(self.request.user)
+            context["vmm_preset_hombre_api_url"] = reverse(
+                "reports-api:reports-vmm-preset-hombre"
+            )
         return context
 
 

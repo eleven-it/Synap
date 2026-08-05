@@ -181,7 +181,7 @@ Antes de ejecutar la matriz, el runner valida el alcance comercial de vendedores
 | Sheet filtros móvil (`reports_filters_sheet.js`, opt-in `data-filters-sheet`) | Hecho |
 | Banner / toast U.M. desconocidas (`meta.extra.um_desconocidas`) | Hecho |
 | Filtro PV en UI (tags) | Hecho |
-| Preset SuperArt «Hombre» (`config.preset_hombre`, botón en filtros) | Hecho (lista `id_manuales` pendiente negocio) |
+| Preset SuperArt «Hombre» (`config.preset_hombre`, botón Aplicar + UI Configurar) | Hecho (PATCH `/api/reports/ventas-marcas-mensual/preset-hombre/`, solo supervisor) |
 
 Checklist QA device (P7): [QA_VMM_PWA_P7.md](QA_VMM_PWA_P7.md) — **pendiente ejecución en dispositivo**.
 

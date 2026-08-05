@@ -373,6 +373,221 @@
     return Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
   }
 
+  function writePresetHombreToReportConfig(preset) {
+    const el = document.getElementById("report-config-data");
+    if (!el) return;
+    const cfg = readReportConfig();
+    cfg.preset_hombre = {
+      ...(cfg.preset_hombre && typeof cfg.preset_hombre === "object" ? cfg.preset_hombre : {}),
+      label: preset?.label || "Hombre",
+      id_manuales: Array.isArray(preset?.id_manuales) ? preset.id_manuales.map(String) : [],
+    };
+    if (preset?.updated_by) cfg.preset_hombre.updated_by = preset.updated_by;
+    el.textContent = JSON.stringify(cfg);
+  }
+
+  function updatePresetHombreCountLabel(ids) {
+    const el = document.getElementById("vmm-preset-hombre-count");
+    if (!el) return;
+    const n = Array.isArray(ids) ? ids.length : 0;
+    if (!n) {
+      el.textContent = "Preset «Hombre»: sin SuperArts configurados.";
+      return;
+    }
+    el.textContent = `Preset «Hombre»: ${n} SuperArt${n === 1 ? "" : "s"} configurado${n === 1 ? "" : "s"}.`;
+  }
+
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+    return null;
+  }
+
+  function getPresetApiUrl() {
+    const root = document.getElementById("vmm-preset-hombre-root");
+    return (root?.dataset?.presetApiUrl || "").trim();
+  }
+
+  function canEditPreset() {
+    const root = document.getElementById("vmm-preset-hombre-root");
+    return String(root?.dataset?.canEditPreset || "") === "true";
+  }
+
+  function filtersApiBase() {
+    const root = document.querySelector("#dashboard-root");
+    const api = (root?.dataset?.dashboardUrl || "").trim();
+    if (api) return api.replace(/\/query\/?$/, "/filters/");
+    return "/api/reports/filters/";
+  }
+
+  function setPresetModalOpen(open) {
+    const modal = document.getElementById("vmm-preset-hombre-modal");
+    if (!modal) return;
+    if (open) {
+      modal.hidden = false;
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      document.body.classList.add("overflow-hidden");
+    } else {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+      modal.hidden = true;
+      document.body.classList.remove("overflow-hidden");
+    }
+  }
+
+  function selectedPresetModalIds() {
+    const sel = document.getElementById("vmm_preset_hombre_sa");
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions)
+      .map((o) => String(o.value).trim())
+      .filter(Boolean);
+  }
+
+  async function loadPresetModalSuperArts(selectedIds) {
+    const sel = document.getElementById("vmm_preset_hombre_sa");
+    if (!sel) return false;
+    const idSet = new Set((selectedIds || []).map(String));
+    const resp = await fetch(`${filtersApiBase()}?type=superarts`, {
+      headers: { "X-Requested-With": "XMLHttpRequest", Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    if (!resp.ok) throw new Error("No se pudo cargar el catálogo de SuperArt.");
+    const json = await resp.json();
+    const items = json.superarts || json.id_manuales || [];
+    sel.innerHTML = "";
+    const known = new Set();
+    items.forEach((item) => {
+      const value = String(item.value ?? item.id ?? "").trim();
+      if (!value) return;
+      known.add(value);
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = item.label || value;
+      option.selected = idSet.has(value);
+      sel.appendChild(option);
+    });
+    // Conservar ids del preset que no estén en el catálogo filtrado (visibles como chips).
+    idSet.forEach((id) => {
+      if (known.has(id)) return;
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = id;
+      option.selected = true;
+      sel.appendChild(option);
+    });
+    if (typeof window.initializeTagsFilter === "function") {
+      window.initializeTagsFilter("vmm_preset_hombre_sa", "superarts");
+    }
+    return true;
+  }
+
+  async function openPresetConfigModal() {
+    const statusEl = document.getElementById("vmm-preset-hombre-modal-status");
+    const saveBtn = document.getElementById("vmm-preset-hombre-modal-save");
+    if (statusEl) statusEl.textContent = "Cargando…";
+    if (saveBtn) saveBtn.disabled = true;
+    setPresetModalOpen(true);
+    try {
+      let ids = readPresetHombreIds();
+      const apiUrl = getPresetApiUrl();
+      if (apiUrl) {
+        const resp = await fetch(apiUrl, {
+          headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
+          credentials: "same-origin",
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.detail || "No se pudo leer el preset.");
+        if (data.preset_hombre) {
+          ids = Array.isArray(data.preset_hombre.id_manuales)
+            ? data.preset_hombre.id_manuales.map(String)
+            : [];
+          writePresetHombreToReportConfig(data.preset_hombre);
+          updatePresetHombreCountLabel(ids);
+        }
+      }
+      await loadPresetModalSuperArts(ids);
+      if (statusEl) {
+        statusEl.textContent =
+          ids.length > 0
+            ? `${ids.length} SuperArt${ids.length === 1 ? "" : "s"} en el preset.`
+            : "Preset vacío: buscá y agregá SuperArts.";
+      }
+    } catch (err) {
+      if (statusEl) statusEl.textContent = err?.message || "Error al abrir la configuración.";
+      showSynapAviso(err?.message || "No se pudo abrir la configuración del preset.", "error");
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  async function savePresetConfigModal() {
+    const apiUrl = getPresetApiUrl();
+    if (!apiUrl) {
+      showSynapAviso("URL de configuración no disponible.", "error");
+      return;
+    }
+    const statusEl = document.getElementById("vmm-preset-hombre-modal-status");
+    const saveBtn = document.getElementById("vmm-preset-hombre-modal-save");
+    const ids = selectedPresetModalIds();
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusEl) statusEl.textContent = "Guardando…";
+    try {
+      const csrftoken = getCookie("csrftoken");
+      const headers = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      };
+      if (csrftoken) headers["X-CSRFToken"] = csrftoken;
+      const resp = await fetch(apiUrl, {
+        method: "PATCH",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify({ id_manuales: ids }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || "No se pudo guardar el preset.");
+      const preset = data.preset_hombre || { id_manuales: ids, label: "Hombre" };
+      writePresetHombreToReportConfig(preset);
+      updatePresetHombreCountLabel(preset.id_manuales || ids);
+      setPresetModalOpen(false);
+      showSynapAviso(data.message || "Preset «Hombre» actualizado.", "ok");
+    } catch (err) {
+      if (statusEl) statusEl.textContent = err?.message || "Error al guardar.";
+      showSynapAviso(err?.message || "No se pudo guardar el preset.", "error");
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  function initPresetHombreConfig() {
+    if (!canEditPreset()) return;
+    const openBtn = document.getElementById("vmm-preset-hombre-config-btn");
+    const closeBtn = document.getElementById("vmm-preset-hombre-modal-close");
+    const cancelBtn = document.getElementById("vmm-preset-hombre-modal-cancel");
+    const saveBtn = document.getElementById("vmm-preset-hombre-modal-save");
+    const overlay = document.querySelector("[data-vmm-preset-overlay]");
+    if (!openBtn) return;
+
+    openBtn.addEventListener("click", () => {
+      openPresetConfigModal().catch(() => {});
+    });
+    const close = () => setPresetModalOpen(false);
+    closeBtn?.addEventListener("click", close);
+    cancelBtn?.addEventListener("click", close);
+    overlay?.addEventListener("click", close);
+    saveBtn?.addEventListener("click", () => {
+      savePresetConfigModal().catch(() => {});
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Escape") return;
+      const modal = document.getElementById("vmm-preset-hombre-modal");
+      if (modal && !modal.classList.contains("hidden")) close();
+    });
+  }
+
   function renderUmDesconocidas(extra) {
     const banner = document.getElementById("vmm-aviso-um-desconocidas");
     const ums = extra?.um_desconocidas;
@@ -408,15 +623,16 @@
 
   function initPresetHombre() {
     const btn = document.getElementById("vmm-preset-hombre-btn");
+    updatePresetHombreCountLabel(readPresetHombreIds());
     if (!btn) return;
 
     btn.addEventListener("click", () => {
       const ids = readPresetHombreIds();
       if (!ids.length) {
-        showSynapAviso(
-          "El preset «Hombre» aún no tiene SuperArts configurados en el informe. Contacte al administrador.",
-          "aviso"
-        );
+        const msg = canEditPreset()
+          ? "El preset «Hombre» aún no tiene SuperArts. Usá «Configurar preset» para cargarlos."
+          : "El preset «Hombre» aún no tiene SuperArts configurados en el informe. Contacte al administrador.";
+        showSynapAviso(msg, "aviso");
         return;
       }
       if (!setSuperArtSelection(ids)) {
@@ -433,6 +649,7 @@
       }
       showSynapAviso(`Preset «Hombre» aplicado (${ids.length} SuperArt${ids.length === 1 ? "" : "s"}).`, "ok");
     });
+    initPresetHombreConfig();
   }
 
   function initSortControl() {

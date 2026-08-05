@@ -323,7 +323,7 @@ Implementación v1 entregada (02/08/2026). QA device **pendiente ejecución** �
 | A1 | Smoke Best Sox + acta en docs (números vs SQL Admin) | — | Plantilla [SMOKE_BEST_SOX_VMM.md](SMOKE_BEST_SOX_VMM.md) | **pendiente corrida Staging** |
 | A2 | UI aviso `um_desconocidas` | — | **Hecho** | ☐ device |
 | A3 | Filtro PV en UI VMM | — | **Hecho** | ☐ device |
-| A4 | Preset Hombre (`config` + botón) | — | **Hecho** (lista `id_manuales` negocio abierta) | ☐ device |
+| A4 | Preset Hombre (`config` + botón Aplicar + UI Configurar supervisor) | — | **Hecho** | ☐ device |
 | A5 | Ordenación facturación/unidades | — | **Hecho** | ☐ device |
 | A6 | Export 2.ª hoja detalle renglón | A1 recomendable | **Hecho** | ☐ smoke A1 |
 | A7 | SPEC delta Fase 3 (comparar marcas) | — | **Hecho** (G12–G16) | — |
