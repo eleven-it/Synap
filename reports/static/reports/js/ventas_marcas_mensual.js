@@ -29,8 +29,27 @@
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  /** KPI grandes (facturación / regalías): sin centavos para caber en 5 columnas. */
+  const ARS_KPI = new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    currencyDisplay: "narrowSymbol",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  const ARS_KPI_DEC = new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    currencyDisplay: "narrowSymbol",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   const NUM = new Intl.NumberFormat("es-AR", {
     minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+  const USD_KPI = new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 
@@ -112,9 +131,43 @@
     return Number.isFinite(n) ? ARS.format(n) : "—";
   }
 
+  function fmtMoneyKpi(v, { conDecimales = false } = {}) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+    return (conDecimales ? ARS_KPI_DEC : ARS_KPI).format(n);
+  }
+
+  function fmtUsdKpi(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+    // Prefijo explícito "USD" (palabra) + número es-AR; no confundir con $ ARS.
+    return `USD ${USD_KPI.format(n)}`;
+  }
+
   function fmtNum(v) {
     const n = Number(v);
     return Number.isFinite(n) ? NUM.format(n) : "—";
+  }
+
+  /**
+   * Escribe el KPI sin truncar: baja el tamaño de fuente si el texto es largo
+   * y deja el valor completo en title (hover / accesibilidad).
+   */
+  function setKpiValue(el, text) {
+    if (!el) return;
+    const t = String(text ?? "—");
+    el.textContent = t;
+    el.setAttribute("title", t === "—" ? "" : t);
+    const len = t.replace(/\s/g, "").length;
+    let size = "1.5rem"; // ~text-2xl
+    if (len > 16) size = "1.125rem";
+    if (len > 18) size = "1rem";
+    if (len > 22) size = "0.875rem";
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      size = len > 14 ? "0.95rem" : "1.125rem";
+      if (len > 18) size = "0.8125rem";
+    }
+    el.style.fontSize = size;
   }
 
   function fmtMesYm(ym) {
@@ -225,11 +278,11 @@
     const elRtc = document.getElementById("vmm-kpi-regalias-tc");
     const elUL = document.getElementById("vmm-kpi-unidades-label");
     if (elUL) elUL.textContent = unidadLabel;
-    if (elU) elU.textContent = fmtNum(kpis.unidades);
-    if (elF) elF.textContent = fmtMoney(kpis.facturacion);
-    if (elP) elP.textContent = fmtMoney(kpis.precio_medio);
-    if (elR) elR.textContent = fmtMoney(kpis.regalias);
-    if (elRtc) elRtc.textContent = fmtNum(kpis.regalias_tc);
+    setKpiValue(elU, fmtNum(kpis.unidades));
+    setKpiValue(elF, fmtMoneyKpi(kpis.facturacion));
+    setKpiValue(elP, fmtMoneyKpi(kpis.precio_medio, { conDecimales: true }));
+    setKpiValue(elR, fmtMoneyKpi(kpis.regalias));
+    setKpiValue(elRtc, fmtUsdKpi(kpis.regalias_tc));
   }
 
   function renderCompareKpis(extra) {

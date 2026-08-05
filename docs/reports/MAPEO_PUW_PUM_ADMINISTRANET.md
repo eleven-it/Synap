@@ -155,6 +155,7 @@ En ventas recientes PUM, `articulo.id_unimed` → `P3` y `stock.multiplicador_vt
 | P3 | 4 | `Cantidad/4` |
 | P6 | 2 | `Cantidad/2` |
 | CU | 1 | `Cantidad` |
+| UNIDAD / UNI / UNIDADES | 1 | Misma semántica que CU (unidad suelta AdministraNET); no avisar como U.M. desconocida |
 
 ```text
 docenas_pares = cantidad_neta / factor_canti2(COALESCE(st.nombre_unimed_vta, um.nombre_unimed))

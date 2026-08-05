@@ -38,6 +38,8 @@ class FactorDocenasUnimedTest(SimpleTestCase):
         self.assertEqual(factor_docenas_unimed("P3"), 4.0)
         self.assertEqual(factor_docenas_unimed("P6"), 2.0)
         self.assertEqual(factor_docenas_unimed("CU"), 1.0)
+        self.assertEqual(factor_docenas_unimed("UNIDAD"), 1.0)
+        self.assertEqual(factor_docenas_unimed("unidad"), 1.0)
 
     def test_desconocido_usa_uno(self):
         self.assertEqual(factor_docenas_unimed("XX"), 1.0)

@@ -52,11 +52,13 @@ Sobre el universo filtrado:
 | Facturación | `SUM(signo × PrecioNetoxR)` |
 | Precio medio | Facturación / Unidades (0 si unidades = 0) |
 | **Regalías** | Facturación × tasa_regalia |
-| **Regalías / TC** | Regalías / TC (0 si TC ≈ 0) |
+| **Regalías / TC** | Regalías / TC (0 si TC ≈ 0) — display **USD** |
 
 En `meta.extra.kpis` también: `tasa_regalia`, `tc` (valores efectivos usados).
 
 Grid UI: 5 tarjetas (Unidades, Facturación, Precio medio, Regalías, Regalías / TC).
+
+**Display (05/08/2026):** sin ellipsis/`truncate`. Facturación y Regalías en ARS **sin centavos**; Precio medio con 2 decimales; Regalías/TC con etiqueta `(USD)` y prefijo `USD`. Fuente adaptativa por longitud; valor completo en `title`.
 
 ---
 
