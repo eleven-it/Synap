@@ -95,7 +95,7 @@
                         </svg>
                         <span class="hidden sm:inline">Actualizar</span>
                     </button>
-                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
+                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marcas-mensual' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
                     <button type="button"
                             data-export-excel
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
@@ -914,34 +914,34 @@
                         Marca B
                     </button>
                 </div>
-                <section id="vmm-kpis-section" class="mt-2 mb-4 grid grid-cols-2 gap-2 sm:gap-3 max-lg:landscape:grid-cols-5 max-lg:landscape:gap-2 lg:mb-6 lg:grid-cols-5 lg:gap-6 overflow-x-hidden" aria-label="Resumen ventas marcas">
-                    <div class="rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-6 text-left min-w-0">
+                <section id="vmm-kpis-section" class="mt-2 mb-4 grid grid-cols-2 gap-2 sm:gap-3 max-lg:landscape:grid-cols-5 max-lg:landscape:gap-2 lg:mb-6 lg:grid-cols-5 lg:gap-4 xl:gap-6 overflow-x-hidden" aria-label="Resumen ventas marcas">
+                    <div class="rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-5 xl:p-6 text-left min-w-0">
                         <span id="vmm-kpi-unidades-label" class="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold leading-tight">Unidades</span>
-                        <div id="vmm-kpi-unidades" class="mt-1.5 sm:mt-2 lg:mt-3 text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-slate-900 dark:text-white tabular-nums truncate">
+                        <div id="vmm-kpi-unidades" class="vmm-kpi-value mt-1.5 sm:mt-2 lg:mt-3 font-bold text-slate-900 dark:text-white tabular-nums leading-tight break-words" title="">
                             <span class="animate-pulse text-slate-400">Cargando...</span>
                         </div>
                     </div>
-                    <div class="rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-6 text-left min-w-0">
+                    <div class="rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-5 xl:p-6 text-left min-w-0">
                         <span class="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold leading-tight">Facturación</span>
-                        <div id="vmm-kpi-facturacion" class="mt-1.5 sm:mt-2 lg:mt-3 text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-slate-900 dark:text-white tabular-nums truncate">
+                        <div id="vmm-kpi-facturacion" class="vmm-kpi-value mt-1.5 sm:mt-2 lg:mt-3 font-bold text-slate-900 dark:text-white tabular-nums leading-tight break-words" title="">
                             <span class="animate-pulse text-slate-400">Cargando...</span>
                         </div>
                     </div>
-                    <div class="rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-6 text-left min-w-0">
+                    <div class="rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-5 xl:p-6 text-left min-w-0">
                         <span class="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold leading-tight">Precio medio</span>
-                        <div id="vmm-kpi-precio-medio" class="mt-1.5 sm:mt-2 lg:mt-3 text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-slate-900 dark:text-white tabular-nums truncate">
+                        <div id="vmm-kpi-precio-medio" class="vmm-kpi-value mt-1.5 sm:mt-2 lg:mt-3 font-bold text-slate-900 dark:text-white tabular-nums leading-tight break-words" title="">
                             <span class="animate-pulse text-slate-400">Cargando...</span>
                         </div>
                     </div>
-                    <div class="rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-6 text-left min-w-0">
+                    <div class="rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-5 xl:p-6 text-left min-w-0">
                         <span class="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold leading-tight">Regalías</span>
-                        <div id="vmm-kpi-regalias" class="mt-1.5 sm:mt-2 lg:mt-3 text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-slate-900 dark:text-white tabular-nums truncate">
+                        <div id="vmm-kpi-regalias" class="vmm-kpi-value mt-1.5 sm:mt-2 lg:mt-3 font-bold text-slate-900 dark:text-white tabular-nums leading-tight break-words" title="">
                             <span class="animate-pulse text-slate-400">Cargando...</span>
                         </div>
                     </div>
-                    <div class="col-span-2 max-lg:landscape:col-span-1 rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-6 text-left min-w-0">
-                        <span class="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold leading-tight">Regalías / TC</span>
-                        <div id="vmm-kpi-regalias-tc" class="mt-1.5 sm:mt-2 lg:mt-3 text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-slate-900 dark:text-white tabular-nums truncate">
+                    <div class="col-span-2 max-lg:landscape:col-span-1 rounded-xl lg:rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-md lg:shadow-lg shadow-slate-900/5 p-3 sm:p-4 lg:p-5 xl:p-6 text-left min-w-0">
+                        <span class="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold leading-tight">Regalías / TC (USD)</span>
+                        <div id="vmm-kpi-regalias-tc" class="vmm-kpi-value mt-1.5 sm:mt-2 lg:mt-3 font-bold text-slate-900 dark:text-white tabular-nums leading-tight break-words" title="">
                             <span class="animate-pulse text-slate-400">Cargando...</span>
                         </div>
                     </div>
@@ -5216,7 +5216,7 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 {% if report.slug == 'ventas-marcas-mensual' %}
 <script src="{% static 'reports/js/reports_filters_sheet.js' %}?v=20260802c" defer></script>
-<script src="{% static 'reports/js/ventas_marcas_mensual.js' %}?v=20260802c"></script>
+<script src="{% static 'reports/js/ventas_marcas_mensual.js' %}?v=20260805b"></script>
 {% endif %}
 {% if report.slug == 'cash_flow_detailed_movements' or report.slug == 'cash_flow_waterfall' %}
 <script src="{% static 'reports/js/cash_flow_detailed_movements.js' %}?v=20260602b" defer></script>

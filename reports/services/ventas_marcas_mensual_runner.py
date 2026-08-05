@@ -43,6 +43,10 @@ _FACTOR_DOCENAS_MAP = {
     "P3": 4.0,
     "P6": 2.0,
     "CU": 1.0,
+    # Unidad suelta (AdministraNET): misma semántica que CU / Excel factor 1.
+    "UNIDAD": 1.0,
+    "UNI": 1.0,
+    "UNIDADES": 1.0,
 }
 
 
@@ -60,6 +64,9 @@ def _sql_factor_docenas_expr() -> str:
             WHEN 'P3' THEN 4
             WHEN 'P6' THEN 2
             WHEN 'CU' THEN 1
+            WHEN 'UNIDAD' THEN 1
+            WHEN 'UNI' THEN 1
+            WHEN 'UNIDADES' THEN 1
             ELSE 1
         END
     """
