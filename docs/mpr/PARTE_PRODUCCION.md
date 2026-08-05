@@ -337,6 +337,12 @@ Un POST parcial no reemplaza todo el parte del turno. La cabecera existente se b
 _Nota (04/08/2026): reemplaza el wipe total de líneas y la descripción anterior de
 idempotencia vía `ON DUPLICATE KEY UPDATE` en este flujo planilla._
 
+_Nota (05/08/2026): el asiento OPP de la primera aprobación usa los totales post-merge
+(`sumar_cantidades_aprobadas_por_articulo`), no itera `parte.lineas` a pelo
+(`_ParteRelatedList` exige `.all()` o ser iterable). Evita el error
+«'_ParteRelatedList' object is not iterable» que dejaba un turno aprobado sin
+`movimiento_fisico_ok` y abortaba los turnos siguientes del mismo POST._
+
 La precarga no persiste un snapshot de **Cupo Fabricando**. Al abrir una fila con
 cantidades existentes, el badge de cupo queda oculto. Reaparece y se consulta en vivo
 solo cuando se editan sus docenas, pares u operario; si se restaura exactamente el
