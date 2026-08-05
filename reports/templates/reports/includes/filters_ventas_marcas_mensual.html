@@ -1,16 +1,29 @@
 {% comment %}
-Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle packs/docenas.
+Filtros específicos ventas-marcas-mensual: marcas, SuperArt, toggle packs/docenas.
 {% endcomment %}
-<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 w-full lg:col-span-6 mt-2">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 w-full lg:col-span-6 mt-2"
+     id="vmm-preset-hombre-root"
+     data-preset-api-url="{{ vmm_preset_hombre_api_url|default:'' }}"
+     data-can-edit-preset="{{ can_edit_vmm_preset|yesno:'true,false' }}">
     <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide md:col-span-2 mb-0">Catálogo y unidades</h3>
     <div class="flex flex-col gap-2 md:col-span-2">
         <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Preset SuperArt</span>
-        <button type="button" id="vmm-preset-hombre-btn"
-                class="inline-flex items-center justify-center gap-2 min-h-[44px] w-full sm:w-auto px-4 py-2.5 text-xs font-semibold rounded-xl border border-violet-300 dark:border-violet-600 bg-violet-50 dark:bg-violet-900/20 text-violet-800 dark:text-violet-200 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
-            <span class="material-icons text-base" aria-hidden="true">checkroom</span>
-            <span>Aplicar preset Hombre</span>
-        </button>
-        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Rellena SuperArts del preset «Hombre» sin borrar el resto de filtros (solo reemplaza SuperArt).</span>
+        <div class="flex flex-col sm:flex-row flex-wrap gap-2">
+            <button type="button" id="vmm-preset-hombre-btn"
+                    class="inline-flex items-center justify-center gap-2 min-h-[44px] w-full sm:w-auto px-4 py-2.5 text-xs font-semibold rounded-xl border border-violet-300 dark:border-violet-600 bg-violet-50 dark:bg-violet-900/20 text-violet-800 dark:text-violet-200 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
+                <span class="material-icons text-base" aria-hidden="true">checkroom</span>
+                <span>Aplicar preset Hombre</span>
+            </button>
+            {% if can_edit_vmm_preset %}
+            <button type="button" id="vmm-preset-hombre-config-btn"
+                    class="inline-flex items-center justify-center gap-2 min-h-[44px] w-full sm:w-auto px-4 py-2.5 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+                <span class="material-icons text-base" aria-hidden="true">tune</span>
+                <span>Configurar preset</span>
+            </button>
+            {% endif %}
+        </div>
+        <span id="vmm-preset-hombre-count" class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic" aria-live="polite"></span>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">«Aplicar» rellena SuperArts del preset sin borrar el resto de filtros (solo reemplaza SuperArt).{% if can_edit_vmm_preset %} «Configurar» edita la lista guardada del informe.{% endif %}</span>
     </div>
     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
         Marcas
@@ -26,7 +39,7 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
         </div>
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = todas las marcas.</span>
     </label>
-    <div class="flex flex-col gap-2 md:col-span-2" id="vmm-modo-comparacion-block">
+    <div class="flex flex-col gap-2 min-w-0" id="vmm-modo-comparacion-block">
         <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Modo marcas</span>
         <input type="hidden" name="modo_comparacion" id="vmm_modo_comparacion" value="una">
         <div class="flex flex-wrap gap-2" id="vmm-modo-comparacion-buttons" role="group" aria-label="Modo marcas">
@@ -39,7 +52,7 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
                 Comparar marcas
             </button>
         </div>
-        <div id="vmm-comparar-selectores" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+        <div id="vmm-comparar-selectores" class="hidden grid grid-cols-1 gap-3 mt-1">
             <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-1">
                 Marca A
                 <select name="marca_a" id="vmm_marca_a"
@@ -58,7 +71,7 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Comparar exige dos marcas distintas (ej. PUM vs PUW).</span>
     </div>
     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
-        SuperArt (id_manual)
+        SuperArt
         <div class="relative">
             <select name="superarts_incluidos" id="vmm_superarts_incluidos" multiple class="hidden" data-tags-field="vmm_superarts_incluidos">
                 <option value="">Cargando...</option>
@@ -71,7 +84,7 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
         </div>
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = todos los SuperArt. Se puede filtrar por marcas seleccionadas.</span>
     </label>
-    <div class="flex flex-col gap-2 md:col-span-2">
+    <div class="flex flex-col gap-2 min-w-0">
         <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Unidades</span>
         <input type="hidden" name="modo_unidades" id="modo_unidades" value="packs">
         <div class="flex flex-wrap gap-2" id="vmm-modo-unidades-buttons" role="group" aria-label="Modo de unidades">
@@ -87,22 +100,22 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Packs = cantidad de venta; Docenas = cantidad / factor U.M. (P1→12, P2→6, P3→4, P6→2).</span>
     </div>
 </div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 w-full lg:col-span-6 mt-2">
-    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide md:col-span-2 mb-0">Licencia y proyección</h3>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 w-full lg:col-span-6 mt-2">
+    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide sm:col-span-2 lg:col-span-4 mb-0">Licencia y proyección</h3>
     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
         Tasa regalía (%)
         <input type="number" name="tasa_regalia_pct" id="vmm_tasa_regalia_pct" value="13" min="0" max="100" step="0.01"
                class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300">
-        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Porcentaje sobre facturación neta (13 = 13 %).</span>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Sobre facturación neta (13 = 13 %).</span>
     </label>
     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
         Tipo de cambio (TC)
         <input type="number" name="tc" id="vmm_tc" value="" min="0" step="0.0001" placeholder="Automático (cotización)"
                class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300">
         <span id="vmm_tc_hint" class="text-[10px] font-normal text-sky-600 dark:text-sky-400 italic mt-0.5 hidden" aria-live="polite"></span>
-        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = TC vigente BCRA (cotización id=1). Si falla, se usa 14,5817.</span>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = TC vigente BCRA; si falla, 14,5817.</span>
     </label>
-    <div class="flex flex-col gap-2 md:col-span-2">
+    <div class="flex flex-col gap-2 min-w-0">
         <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Incluir proyección</span>
         <input type="hidden" name="incluir_proyeccion" id="vmm_incluir_proyeccion" value="0">
         <div class="flex flex-wrap gap-2" id="vmm-proyeccion-buttons" role="group" aria-label="Incluir proyección">
@@ -115,12 +128,69 @@ Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle
                 Sí
             </button>
         </div>
-        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Si está activa, la matriz muestra columnas U proy / $ proy (CEILING unidades, redondeo $).</span>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Activa columnas U proy / $ proy.</span>
     </div>
-    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0 md:col-span-2">
+    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
         Coeficiente proyección
         <input type="number" name="coef_proyeccion" id="vmm_coef_proyeccion" value="1.07" min="0" step="0.01"
-               class="w-full max-w-xs px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300">
-        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Solo aplica con proyección activa (default 1,07).</span>
+               class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300">
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Con proyección activa (default 1,07).</span>
     </label>
 </div>
+
+{% if can_edit_vmm_preset %}
+<div id="vmm-preset-hombre-modal"
+     class="fixed inset-0 z-[80] hidden items-center justify-center p-4"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="vmm-preset-hombre-modal-title"
+     hidden>
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" data-vmm-preset-overlay tabindex="-1"></div>
+    <div class="relative w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-5 sm:p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-start gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200">
+                <span class="material-icons text-xl" aria-hidden="true">checkroom</span>
+            </div>
+            <div class="min-w-0 flex-1">
+                <h3 id="vmm-preset-hombre-modal-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    Configurar preset «Hombre»
+                </h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Elegí los SuperArt que se aplican al pulsar «Aplicar preset Hombre». La lista se guarda en el informe para todos los usuarios.
+                </p>
+            </div>
+            <button type="button" id="vmm-preset-hombre-modal-close"
+                    class="shrink-0 rounded-lg p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                    aria-label="Cerrar">
+                <span class="material-icons text-lg" aria-hidden="true">close</span>
+            </button>
+        </div>
+        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
+            SuperArts del preset
+            <div class="relative">
+                <select id="vmm_preset_hombre_sa" multiple class="hidden" data-tags-field="vmm_preset_hombre_sa">
+                    <option value="">Cargando...</option>
+                </select>
+                <div id="vmm_preset_hombre_sa_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                    <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                    <input type="text" id="vmm_preset_hombre_sa_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar SuperArt..." autocomplete="off">
+                    <div id="vmm_preset_hombre_sa_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-[90] mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                </div>
+            </div>
+            <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Vacío = el botón «Aplicar» avisará que el preset no está configurado.</span>
+        </label>
+        <p id="vmm-preset-hombre-modal-status" class="text-[11px] text-slate-500 dark:text-slate-400 min-h-[1rem]" aria-live="polite"></p>
+        <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+            <button type="button" id="vmm-preset-hombre-modal-cancel"
+                    class="inline-flex items-center justify-center min-h-[44px] px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60">
+                Cancelar
+            </button>
+            <button type="button" id="vmm-preset-hombre-modal-save"
+                    class="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2 text-xs font-semibold rounded-xl border border-violet-500 bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                <span class="material-icons text-base" aria-hidden="true">save</span>
+                <span>Guardar preset</span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}

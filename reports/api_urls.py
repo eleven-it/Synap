@@ -31,6 +31,7 @@ from .executive_summary_api_views import (
     PuntoVentaCanalEjecutivoAPIView,
     SucursalCanalEjecutivoAPIView,
 )
+from .ventas_marcas_mensual_api_views import VentasMarcasMensualPresetAPIView
 from .executive_dashboard_api_views import (
     ExecutiveDashboardAPIView,
     ExecutiveDashboardAreasAPIView,
@@ -168,6 +169,11 @@ urlpatterns = [
         "executive-dashboard/areas/",
         ExecutiveDashboardAreasAPIView.as_view(),
         name="reports-executive-dashboard-areas",
+    ),
+    path(
+        "ventas-marcas-mensual/preset-hombre/",
+        VentasMarcasMensualPresetAPIView.as_view(),
+        name="reports-vmm-preset-hombre",
     ),
     path(
         "executive-dashboard/ventas/resumen/",

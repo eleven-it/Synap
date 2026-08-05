@@ -3,7 +3,7 @@
 
 from unittest.mock import MagicMock, Mock, patch
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from reports.models import ReportDefinition
 from reports.services.export_service import ExportService
@@ -707,3 +707,117 @@ class ResolveTcRunnerTest(SimpleTestCase):
         cursor.fetchone.return_value = None
         tc = _resolve_tc(cursor, {}, base_empresa="emp_test", fecha_corte="2026-07-15")
         self.assertAlmostEqual(tc, 14.5817, places=4)
+
+
+class PresetHombreServiceTests(TestCase):
+    def setUp(self):
+        from reports.models import ReportCategory
+
+        ReportDefinition.objects.filter(
+            slug="ventas-marcas-mensual", empresa__isnull=True
+        ).delete()
+        ReportDefinition.objects.create(
+            empresa=None,
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category=ReportCategory.OPERATIONAL,
+            config={"preset_hombre": {"label": "Hombre", "id_manuales": []}},
+            is_active=True,
+            is_visible=True,
+        )
+
+    def test_normalize_dedup_y_trim(self):
+        from reports.services.ventas_marcas_mensual_preset import normalize_id_manuales
+
+        self.assertEqual(
+            normalize_id_manuales([" A ", "A", "b", "", None]),
+            ["A", "b"],
+        )
+
+    def test_set_preset_persiste(self):
+        from reports.services.ventas_marcas_mensual_preset import (
+            read_preset_hombre,
+            set_preset_hombre,
+        )
+
+        user = MagicMock()
+        user.cod_usuario = "supervisor"
+        stored = set_preset_hombre(["SA1", "SA2"], user=user)
+        self.assertEqual(stored["id_manuales"], ["SA1", "SA2"])
+        self.assertEqual(stored["updated_by"], "supervisor")
+        self.assertEqual(read_preset_hombre()["id_manuales"], ["SA1", "SA2"])
+
+
+class PresetHombreApiTests(TestCase):
+    def setUp(self):
+        from reports.models import ReportCategory
+
+        ReportDefinition.objects.filter(
+            slug="ventas-marcas-mensual", empresa__isnull=True
+        ).delete()
+        ReportDefinition.objects.create(
+            empresa=None,
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category=ReportCategory.OPERATIONAL,
+            config={"preset_hombre": {"label": "Hombre", "id_manuales": ["OLD"]}},
+            is_active=True,
+            is_visible=True,
+        )
+
+    def _user(self, *, supervisor=False):
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_superuser = False
+        user.is_admin = MagicMock(return_value=False)
+        user.cod_usuario = "supervisor" if supervisor else "vendedor"
+        user.tiene_permiso = lambda p: p == "reports.view_operational"
+        return user
+
+    @patch("reports.ventas_marcas_mensual_api_views.user_has_full_access", return_value=False)
+    def test_get_sin_edicion(self, _full):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_marcas_mensual_api_views import VentasMarcasMensualPresetAPIView
+
+        factory = APIRequestFactory()
+        request = factory.get("/api/reports/ventas-marcas-mensual/preset-hombre/")
+        force_authenticate(request, user=self._user())
+        response = VentasMarcasMensualPresetAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["can_edit"])
+        self.assertEqual(response.data["preset_hombre"]["id_manuales"], ["OLD"])
+
+    @patch("reports.ventas_marcas_mensual_api_views.user_has_full_access", return_value=False)
+    def test_patch_rechaza_no_supervisor(self, _full):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_marcas_mensual_api_views import VentasMarcasMensualPresetAPIView
+
+        factory = APIRequestFactory()
+        request = factory.patch(
+            "/api/reports/ventas-marcas-mensual/preset-hombre/",
+            {"id_manuales": ["X"]},
+            format="json",
+        )
+        force_authenticate(request, user=self._user())
+        response = VentasMarcasMensualPresetAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 403)
+
+    @patch("reports.ventas_marcas_mensual_api_views.user_has_full_access", return_value=True)
+    def test_patch_supervisor_ok(self, _full):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_marcas_mensual_api_views import VentasMarcasMensualPresetAPIView
+
+        factory = APIRequestFactory()
+        request = factory.patch(
+            "/api/reports/ventas-marcas-mensual/preset-hombre/",
+            {"id_manuales": ["H1", "H2"]},
+            format="json",
+        )
+        force_authenticate(request, user=self._user(supervisor=True))
+        response = VentasMarcasMensualPresetAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["preset_hombre"]["id_manuales"], ["H1", "H2"])
+        self.assertTrue(response.data["can_edit"])
