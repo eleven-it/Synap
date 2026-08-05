@@ -925,14 +925,26 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
                 from reports.services.ventas_marcas_mensual_export import fetch_detalle_for_filters
 
                 where_s_det = " AND ".join(where_parts_base)
-                detalle_rows = fetch_detalle_for_filters(
-                    cursor,
-                    filters,
-                    where_s=where_s_det,
-                    params=list(params_base),
-                    raw_marcas=raw_marcas,
-                    superarts=superarts,
-                )
+                try:
+                    detalle_rows = fetch_detalle_for_filters(
+                        cursor,
+                        filters,
+                        where_s=where_s_det,
+                        params=list(params_base),
+                        raw_marcas=raw_marcas,
+                        superarts=superarts,
+                    )
+                except Exception as ex_det:
+                    logger.exception("ventas_marcas_mensual: error SQL en hoja Detalle")
+                    detalle_rows = []
+                    aviso_detalle = (
+                        f"Error al armar la hoja Detalle: {ex_det}. "
+                        "La matriz se exportó con los datos disponibles."
+                    )
+                    if aviso_meses:
+                        aviso_meses = f"{aviso_meses} {aviso_detalle}"
+                    else:
+                        aviso_meses = aviso_detalle
 
     except Exception as ex:
         logger.exception("ventas_marcas_mensual: error SQL")
