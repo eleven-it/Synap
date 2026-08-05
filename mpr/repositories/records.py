@@ -51,11 +51,22 @@ class TurnoRecord:
 
 
 class _ParteRelatedList:
+    """Compatibilidad tipo RelatedManager: ``.all()`` y también iterable."""
+
     def __init__(self, items: List[Any]):
-        self._items = items
+        self._items = list(items or [])
 
     def all(self) -> List[Any]:
         return list(self._items)
+
+    def __iter__(self):
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __bool__(self) -> bool:
+        return bool(self._items)
 
 
 class ParteLineaRecord:
