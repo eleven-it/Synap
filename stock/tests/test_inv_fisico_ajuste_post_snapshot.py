@@ -66,6 +66,53 @@ class FuncionesPurasAjustePostSnapshotTest(SimpleTestCase):
             )
         )
 
+    def test_saldo_final_actual_mas_diferencia(self):
+        self.assertEqual(
+            svc.calcular_saldo_final_post_mstock(
+                Decimal("11347"),
+                Decimal("5879"),
+                Decimal("5558"),
+                disponible_ajustado=Decimal("5468"),
+            ),
+            Decimal("11437"),
+        )
+
+    def test_saldo_final_sin_descuadre_coincide_con_contado(self):
+        self.assertEqual(
+            svc.calcular_saldo_final_post_mstock(
+                Decimal("11347"),
+                Decimal("5879"),
+                Decimal("5468"),
+                disponible_ajustado=Decimal("5468"),
+            ),
+            Decimal("11347"),
+        )
+
+    def test_saldo_final_none_si_no_contado(self):
+        self.assertIsNone(
+            svc.calcular_saldo_final_post_mstock(
+                None,
+                None,
+                Decimal("100"),
+                disponible_ajustado=Decimal("100"),
+            )
+        )
+
+    def test_enriquecer_linea_incluye_saldo_final(self):
+        linea = svc.enriquecer_linea_analizador(
+            {
+                "saldo_snapshot": Decimal("4853"),
+                "ajuste_sistema": Decimal("615"),
+                "ajuste_manual": None,
+                "cantidad_contada": Decimal("11347"),
+                "saldo_actual_ref": Decimal("5558"),
+            }
+        )
+        self.assertEqual(linea["disponible_ajustado"], Decimal("5468"))
+        self.assertEqual(linea["diferencia_real"], Decimal("5879"))
+        self.assertEqual(linea["saldo_final"], Decimal("11437"))
+        self.assertTrue(linea["descuadre"])
+
 
 class RecalcularAjustePostSnapshotTest(SimpleTestCase):
     def _campana_en_revision(self):

@@ -126,8 +126,16 @@ Las pantallas de analizador y autorización MUST vivir bajo `/stock/inventario-f
 
 El supervisor SHOULD poder identificar líneas con diferencia y acceder al detalle en menos de dos clics desde el resumen de campaña. Confirmaciones destructivas u operativas MUST usar modales Synap.
 
+El analizador MUST mostrar una columna **Saldo final** = `saldo_actual_ref + diferencia_real` (NULL si la línea no fue contada), que indica el saldo previsto en `stock_deposito` tras autorizar el MSTOCK. Esa columna MUST ser solo lectura/UI y MUST NOT alterar conteos, eventos ni escribir stock por sí sola. Sin descuadre, Saldo final MUST coincidir con Contado.
+
 #### Scenario: Acceso rápido a línea con diferencia
 
 - **GIVEN** resumen de campaña con líneas ordenadas por magnitud de diferencia
 - **WHEN** el supervisor selecciona una línea con diferencia
 - **THEN** ve detalle de conteos y snapshot en una acción adicional como máximo
+
+#### Scenario: Saldo final con descuadre
+
+- **GIVEN** línea contada con `saldo_actual_ref` distinto del disponible ajustado y diferencia real ≠ 0
+- **WHEN** el supervisor ve el analizador
+- **THEN** la columna Saldo final muestra `saldo_actual_ref + diferencia_real` (no necesariamente igual a Contado)

@@ -616,7 +616,7 @@ def inventario_fisico_analizador_view(request, id_campana):
         )
 
     filtro = request.GET.get("filtro", "").strip().lower()
-    if filtro not in ("", "faltante", "sobrante", "con_diferencia"):
+    if filtro not in ("", "faltante", "sobrante", "con_diferencia", "no_contados"):
         filtro = ""
 
     marcas_incluidos = parse_marcas_incluidos(request.GET.getlist("marcas_incluidos"))
@@ -659,6 +659,9 @@ def inventario_fisico_analizador_view(request, id_campana):
         ),
         "analizador_qs_con_diferencia": build_analizador_query_string(
             filtro="con_diferencia", marcas_incluidos=marcas_incluidos
+        ),
+        "analizador_qs_no_contados": build_analizador_query_string(
+            filtro="no_contados", marcas_incluidos=marcas_incluidos
         ),
         "puede_autorizar": puede_autorizar,
         "puede_anular": campana["estado"] in (ESTADO_BORRADOR, ESTADO_EN_CONTEO),

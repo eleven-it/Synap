@@ -321,6 +321,57 @@ class ListarLineasAnalizadorTest(SimpleTestCase):
     @patch("stock.services.inventario_fisico.listar_contadores_candidatos")
     @patch("stock.services.inventario_fisico._query_lineas_analizador")
     @patch("stock.services.inventario_fisico.mysql_cursor")
+    def test_filtro_no_contados(self, mock_cursor_ctx, mock_query, mock_candidatos):
+        mock_candidatos.return_value = []
+        cursor = MagicMock()
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        mock_query.return_value = [
+            {
+                "id_linea": 1,
+                "id_articulo": 1,
+                "id_deposito": 3,
+                "saldo_snapshot": Decimal("10"),
+                "cantidad_contada": Decimal("8"),
+                "diferencia_real": Decimal("-2"),
+                "codigo": "X1",
+                "nombre": "Contado",
+                "id_contador": 10,
+                "estado_linea": "Contado",
+            },
+            {
+                "id_linea": 2,
+                "id_articulo": 2,
+                "id_deposito": 3,
+                "saldo_snapshot": Decimal("5"),
+                "cantidad_contada": None,
+                "diferencia_real": None,
+                "codigo": "X2",
+                "nombre": "Sin contar",
+                "id_contador": None,
+                "estado_linea": "Pendiente",
+            },
+            {
+                "id_linea": 3,
+                "id_articulo": 3,
+                "id_deposito": 3,
+                "saldo_snapshot": Decimal("1"),
+                "cantidad_contada": Decimal("0"),
+                "diferencia_real": Decimal("-1"),
+                "codigo": "X3",
+                "nombre": "Contado cero",
+                "id_contador": 10,
+                "estado_linea": "Contado",
+            },
+        ]
+        lineas = svc.listar_lineas_analizador("emp", 1, filtro="no_contados")
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(lineas[0]["id_linea"], 2)
+        self.assertIsNone(lineas[0]["cantidad_contada"])
+
+    @patch("stock.services.inventario_fisico.listar_contadores_candidatos")
+    @patch("stock.services.inventario_fisico._query_lineas_analizador")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
     def test_filtro_marcas_solo_seleccionadas(self, mock_cursor_ctx, mock_query, mock_candidatos):
         mock_candidatos.return_value = []
         cursor = MagicMock()

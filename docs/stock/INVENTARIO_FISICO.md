@@ -5,7 +5,7 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 ## Alcance MVP
 
 - Campañas mensuales en depósitos MPR (`Terminado`, `2daSeleccion`).
-- Solo artículos con `articulo.tipo_art_fab` en **`Terminado`** o **`Fabricado 2da`** (excluye Fabricado, Tercero y vacíos).
+- Solo artículos con `articulo.tipo_art_fab` en **`Terminado`**, **`Tercero`** o **`Fabricado 2da`** (excluye Fabricado y vacíos). Los `Tercero` son producto final comprado, almacenable y vendible, y se tratan junto a Terminados.
 - Conteo ciego offline-first (PWA Nivel A) con sync idempotente.
 - Analizador supervisor con diferencia `contado − snapshot` (columna UI **Disponible**, campo interno `saldo_snapshot`) y **ajuste post-snapshot** (ver sección siguiente).
 - **Ajuste post-snapshot (implementado):** gap de movimientos posteriores al snapshot; MSTOCK usa **Diferencia real**. Detalle en [`PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md`](PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md).
@@ -57,9 +57,11 @@ Cargado después (ajuste_sistema) = Σ (Entrada − Salida) post-snapshot por ar
 Ajuste efectivo                  = ajuste_manual si existe; si no, ajuste_sistema
 Disponible ajustado              = saldo_snapshot + ajuste_efectivo
 Diferencia real                  = cantidad_contada − disponible_ajustado  (NULL si no contado)
+Saldo final (UI)                 = saldo_actual_ref + diferencia_real  (NULL si no contado)
+                                 → saldo previsto en stock_deposito tras autorizar MSTOCK
 ```
 
-**Control de descuadre:** `saldo_actual_ref` = `stock_deposito.saldo` al recalcular; si difiere de `snapshot + ajuste_sistema`, el analizador muestra aviso (no bloquea).
+**Control de descuadre:** `saldo_actual_ref` = `stock_deposito.saldo` al recalcular; si difiere de `snapshot + ajuste_sistema`, el analizador muestra aviso (no bloquea). Sin descuadre, **Saldo final** coincide con **Contado**.
 
 **Flujo refresh / override / autorizar:**
 
@@ -118,7 +120,7 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 
 `inventario_fisico_crear_view` acepta `contadores` (lista) + `contadores_texto` y `accion` (`crear_abrir`/`crear_borrador`); `inventario_fisico_monitor_view` acepta `accion=reasignar`.
 
-**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia) vía GET `filtro` sobre **Diferencia real**; columnas **Disponible** (`saldo_snapshot`), **Cargado después**, **Disponible ajustado**, **Contado**, **Diferencia real**, **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas.
+**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Disponible** (`saldo_snapshot`), **Cargado después**, **Disponible ajustado**, **Contado**, **Diferencia real**, **Saldo final** (previsto post-MSTOCK), **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. **Saldo final** es solo lectura/UI: no modifica conteos ni escribe stock. Contado **0** no entra en «No contados» (es conteo explícito).
 
 ### Offline (PWA)
 

@@ -26,7 +26,7 @@ Menú Synap → **Stock**.
 Ver, por artículo, el saldo en las etapas de fábrica según el **tipo de artículo**:
 
 - **Fabricados** (componentes / `tipo_art_fab` Fabricado o Fabricado 2da): Producción, Semi elaborado, 2da selección y su consolidado.
-- **Terminados** (producto final / `tipo_art_fab` Terminado): saldo en depósito Terminado y consolidado (= ese saldo).
+- **Terminados** (producto final / `tipo_art_fab` Terminado o Tercero): saldo en depósito Terminado. Los de tercero son comprados pero almacenables y vendibles; figuran en el mismo listado.
 
 También muestra **Talle** y **Color** del artículo, útiles para controlar calidad y surtido.
 

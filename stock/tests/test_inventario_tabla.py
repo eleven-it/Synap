@@ -172,13 +172,13 @@ class ArticuloWhereAmbitoTest(SimpleTestCase):
         self.assertIn("IN", where)
         self.assertEqual(params, ["Fabricado", "Fabricado 2da"])
 
-    def test_terminados_solo_terminado(self):
+    def test_terminados_incluye_terminado_y_tercero(self):
         where, params = _build_articulo_where(
             InventarioTablaFiltros(ambito=AMBITO_TERMINADOS)
         )
         self.assertIn("tipo_art_fab", where)
-        self.assertIn("=", where)
-        self.assertEqual(params, ["Terminado"])
+        self.assertIn("IN", where)
+        self.assertEqual(params, ["Terminado", "Tercero"])
 
     def test_busqueda_incluye_talle_y_color_ce(self):
         where, params = _build_articulo_where(
@@ -188,7 +188,7 @@ class ArticuloWhereAmbitoTest(SimpleTestCase):
         self.assertIn("avce.valor1", where)
         self.assertIn("avce.valor2", where)
         self.assertIn("NombreArticulo", where)
-        self.assertEqual(params[0], "Terminado")
+        self.assertEqual(params[:2], ["Terminado", "Tercero"])
         self.assertEqual(params.count("%Negro%"), 7)
 
 class StockPositivoExprTest(SimpleTestCase):
@@ -268,8 +268,9 @@ class FiltroStockPositivoSqlTest(SimpleTestCase):
         sql_count = next(sql for sql in sqls if "FROM (SELECT a.IDArt" in sql)
         sql_filas = next(sql for sql in sqls if "SELECT a.IDArt AS id_articulo" in sql)
         condicion = "COALESCE(agg.`Terminado`, 0) > 0"
-        self.assertIn(f"WHERE COALESCE(TRIM(a.tipo_art_fab), '') = %s AND ({condicion})", sql_count)
-        self.assertIn(f"WHERE COALESCE(TRIM(a.tipo_art_fab), '') = %s AND ({condicion})", sql_filas)
+        prefijo = "WHERE COALESCE(TRIM(a.tipo_art_fab), '') IN (%s,%s) AND ({condicion})"
+        self.assertIn(prefijo.format(condicion=condicion), sql_count)
+        self.assertIn(prefijo.format(condicion=condicion), sql_filas)
         self.assertNotIn("HAVING", sql_count)
         self.assertNotIn("HAVING", sql_filas)
         self.assertEqual(resultado["total_registros"], 1)

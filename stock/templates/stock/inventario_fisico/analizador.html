@@ -82,7 +82,7 @@
       </div>
 
       <p class="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
-        Marcas vacías = todas · La búsqueda filtra en vivo sobre las filas cargadas · Diferencia real = contado − (disponible + cargado después).
+        Marcas vacías = todas · La búsqueda filtra en vivo sobre las filas cargadas · Diferencia real = contado − (disponible + cargado después) · Saldo final = saldo actual del depósito + diferencia real (previsto tras autorizar; no modifica el conteo).
       </p>
     </form>
 
@@ -107,6 +107,10 @@
          class="rounded-lg px-3 py-1.5 text-xs font-medium {% if filtro == 'con_diferencia' %}bg-amber-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
         Con diferencia
       </a>
+      <a href="{{ analizador_qs_no_contados }}"
+         class="rounded-lg px-3 py-1.5 text-xs font-medium {% if filtro == 'no_contados' %}bg-slate-700 text-white dark:bg-slate-500{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
+        No contados
+      </a>
       {% if puede_autorizar %}
       <button type="button" @click="confirmOpen = true"
               class="ml-auto inline-flex items-center gap-1 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">
@@ -128,6 +132,7 @@
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Disponible ajustado</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Contado</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Diferencia real</th>
+            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Saldo en stock_deposito tras autorizar MSTOCK (saldo actual + diferencia real). Solo lectura.">Saldo final</th>
             <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Contador</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Detalle</th>
           </tr>
@@ -169,6 +174,9 @@
             <td class="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{% if l.cantidad_contada is not None %}{{ l.cantidad_contada|floatformat:0 }}{% else %}—{% endif %}</td>
             <td class="px-3 py-2.5 text-right tabular-nums font-semibold {% if l.diferencia_real and l.diferencia_real < 0 %}text-red-600{% elif l.diferencia_real and l.diferencia_real > 0 %}text-emerald-600{% else %}text-slate-500{% endif %}">
               {% if l.diferencia_real is not None %}{{ l.diferencia_real|floatformat:0 }}{% else %}—{% endif %}
+            </td>
+            <td class="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-800 dark:text-slate-100" title="Saldo previsto en depósito tras autorizar">
+              {% if l.saldo_final is not None %}{{ l.saldo_final|floatformat:0 }}{% else %}—{% endif %}
             </td>
             <td class="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-300">
               {% if l.contador_etiqueta %}{{ l.contador_etiqueta }}{% elif l.id_contador %}#{{ l.id_contador }}{% else %}—{% endif %}

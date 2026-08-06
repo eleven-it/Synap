@@ -50,6 +50,24 @@ Una campaña MUST limitarse a depósitos cuyo `tipo_mpr` sea **Terminado**, **Se
 
 ---
 
+### Requirement: Artículos elegibles por `tipo_art_fab`
+
+El snapshot y el catálogo de conteo MUST incluir solo artículos con `articulo.tipo_art_fab` en **`Terminado`**, **`Tercero`** o **`Fabricado 2da`**. MUST NOT incluir `Fabricado` ni valores vacíos. `Tercero` MUST incluirse porque es producto final almacenable y vendible.
+
+#### Scenario: Tercero entra al snapshot
+
+- **GIVEN** un depósito Terminado con fila en `stock_deposito` para un artículo `tipo_art_fab=Tercero`
+- **WHEN** el supervisor crea una campaña sobre ese depósito
+- **THEN** se genera línea de campaña para ese artículo con su `saldo_snapshot`
+
+#### Scenario: Fabricado excluido del snapshot
+
+- **GIVEN** un artículo `tipo_art_fab=Fabricado` con saldo en el depósito de la campaña
+- **WHEN** se crea el snapshot
+- **THEN** ese artículo MUST NOT generar línea de campaña
+
+---
+
 ### Requirement: Snapshot de saldo sin freeze
 
 Al iniciar el conteo de una campaña, el sistema MUST capturar `saldo_snapshot` por línea desde `stock_deposito.saldo` en el momento de apertura. El snapshot MUST NOT congelar ni bloquear movimientos de stock; los movimientos posteriores MUST seguir registrándose con normalidad.

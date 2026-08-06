@@ -127,6 +127,24 @@ Si no hay filas tras filtros, MUST mostrarse mensaje: «No hay artículos con lo
 
 Si ningún depósito tiene `tipo_mpr` configurado entre los que suman stock, MUST mostrarse banner informativo en español indicando configurar depósitos MPR.
 
+### REQ-INV-13 — Ámbito Terminados vs Fabricados (`tipo_art_fab`)
+
+The UI MUST ofrecer toggle **Fabricados | Terminados** (`ambito=fabricados|terminados`, default `terminados`).
+
+| Ámbito | `articulo.tipo_art_fab` incluidos |
+|--------|----------------------------------|
+| `terminados` | `Terminado`, `Tercero` |
+| `fabricados` | `Fabricado`, `Fabricado 2da` |
+
+`Tercero` MUST tratarse como producto final almacenable/vendible en el mismo listado que `Terminado`. The system MUST NOT exigir reclasificar el maestro AdministraNET.
+
+#### Scenario: Artículo Tercero visible en Terminados
+
+- **GIVEN** artículo con `tipo_art_fab = 'Tercero'` y saldo en depósito Terminado
+- **WHEN** el usuario abre `/stock/inventario/?ambito=terminados&filtro_stock=todos`
+- **THEN** el artículo aparece en la grilla
+- **AND** MUST NOT aparecer con `ambito=fabricados`
+
 ---
 
 ## REMOVED Requirements

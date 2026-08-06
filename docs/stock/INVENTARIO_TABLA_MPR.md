@@ -16,7 +16,7 @@ El toggle **Tipo de artículo** separa dos universos según `articulo.tipo_art_f
 
 | Ámbito (`ambito`) | Artículos (`tipo_art_fab`) | Columnas de stock | Consolidado |
 |-------------------|----------------------------|-------------------|-------------|
-| **Terminados** (default) | `Terminado` | Terminado | *(sin columna Consolidado; sería idéntica a Terminado)* |
+| **Terminados** (default) | `Terminado`, `Tercero` | Terminado | *(sin columna Consolidado; sería idéntica a Terminado)* |
 | **Fabricados** | `Fabricado`, `Fabricado 2da` | Producción, Semi elaborado, 2da Selección | Suma de esas tres |
 
 | Columna | Origen |

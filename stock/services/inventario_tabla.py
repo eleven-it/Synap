@@ -48,10 +48,10 @@ FILTRO_STOCK_SIN = "sin_stock"
 FILTROS_STOCK_VALIDOS = frozenset({FILTRO_STOCK_TODOS, FILTRO_STOCK_CON, FILTRO_STOCK_SIN})
 FILTRO_STOCK_DEFAULT = FILTRO_STOCK_TODOS
 
-# tipo_art_fab Admin por ámbito (Fabricado 2da = packs/componentes fabricados)
+# tipo_art_fab Admin por ámbito (Tercero = producto final comprado, almacenable/vendible)
 TIPOS_ART_FAB_POR_AMBITO: Dict[str, Tuple[str, ...]] = {
     AMBITO_FABRICADOS: ("Fabricado", "Fabricado 2da"),
-    AMBITO_TERMINADOS: ("Terminado",),
+    AMBITO_TERMINADOS: ("Terminado", "Tercero"),
 }
 
 
