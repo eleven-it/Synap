@@ -49,7 +49,8 @@ TRANSICIONES_ESTADO: Dict[str, frozenset] = {
 
 TIPOS_MPR_ELEGIBLES = frozenset({"Terminado", "2daSeleccion"})
 
-TIPOS_ART_FAB_ELEGIBLES = frozenset({"Terminado", "Fabricado 2da"})
+# Terminado + Tercero (producto final almacenable/vendible) + packs Fabricado 2da
+TIPOS_ART_FAB_ELEGIBLES = frozenset({"Terminado", "Tercero", "Fabricado 2da"})
 
 RESULTADO_ACEPTADO = "aceptado"
 RESULTADO_CONFLICTO = "conflicto"
@@ -137,6 +138,31 @@ def hay_descuadre(
     return actual != snapshot + ajuste
 
 
+def calcular_saldo_final_post_mstock(
+    cantidad_contada: Any,
+    diferencia_real: Any,
+    saldo_actual_ref: Any,
+    *,
+    disponible_ajustado: Any = None,
+) -> Optional[Decimal]:
+    """
+    Saldo esperado en ``stock_deposito`` tras autorizar el MSTOCK de la línea.
+
+    ``saldo_actual_ref + diferencia_real``. Si no hay ``saldo_actual_ref``, asume
+    que el saldo vigente es el disponible ajustado (sin descuadre). Sin conteo → None.
+    Solo lectura/UI: no escribe stock ni altera el conteo.
+    """
+    if to_decimal_or_none(cantidad_contada) is None:
+        return None
+    diff = to_decimal_or_none(diferencia_real)
+    if diff is None:
+        return None
+    actual = to_decimal_or_none(saldo_actual_ref)
+    if actual is None:
+        actual = to_decimal_or_none(disponible_ajustado) or Decimal("0")
+    return actual + diff
+
+
 def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
     """Completa campos derivados de ajuste post-snapshot en una fila del analizador."""
     saldo_snap = to_decimal_or_none(linea.get("saldo_snapshot")) or Decimal("0")
@@ -153,6 +179,12 @@ def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
     linea["disponible_ajustado"] = disp_ajust
     linea["diferencia_real"] = diff_real
     linea["descuadre"] = hay_descuadre(saldo_snap, ajuste_sys, linea.get("saldo_actual_ref"))
+    linea["saldo_final"] = calcular_saldo_final_post_mstock(
+        linea.get("cantidad_contada"),
+        diff_real,
+        linea.get("saldo_actual_ref"),
+        disponible_ajustado=disp_ajust,
+    )
     return linea
 
 
@@ -1597,6 +1629,8 @@ def listar_lineas_analizador(
         return [l for l in lineas if (l.get("diferencia_real") or Decimal("0")) > 0]
     if filtro_norm == "con_diferencia":
         return [l for l in lineas if (l.get("diferencia_real") or Decimal("0")) != 0]
+    if filtro_norm in ("no_contados", "no_contado", "sin_contar"):
+        return [l for l in lineas if to_decimal_or_none(l.get("cantidad_contada")) is None]
     return lineas
 
 

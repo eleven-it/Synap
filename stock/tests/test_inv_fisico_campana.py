@@ -25,12 +25,12 @@ class TiposMprElegiblesTest(SimpleTestCase):
 
 
 class TiposArtFabElegiblesTest(SimpleTestCase):
-    def test_terminado_y_fabricado_2da_son_elegibles(self):
-        for tipo in ("Terminado", "Fabricado 2da"):
+    def test_terminado_tercero_y_fabricado_2da_son_elegibles(self):
+        for tipo in ("Terminado", "Tercero", "Fabricado 2da"):
             self.assertTrue(svc.es_tipo_art_fab_elegible(tipo))
 
-    def test_fabricado_tercero_y_vacio_no_son_elegibles(self):
-        for tipo in ("Fabricado", "Tercero", "", None, "  "):
+    def test_fabricado_y_vacio_no_son_elegibles(self):
+        for tipo in ("Fabricado", "", None, "  "):
             self.assertFalse(svc.es_tipo_art_fab_elegible(tipo))
 
     def test_sql_filtro_tipo_art_fab_incluye_placeholders(self):
