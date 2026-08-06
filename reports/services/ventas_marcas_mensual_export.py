@@ -19,9 +19,7 @@ DETALLE_EXPORT_HEADERS = [
     "fecha",
     "tipo_comprobante",
     "nro_comprobante",
-    "cod_viajante",
     "nombre_vendedor",
-    "codigo_cliente",
     "nombre_cliente",
     "id_manual",
     "nombre_articulo",
@@ -34,9 +32,7 @@ DETALLE_EXPORT_HEADERS = [
 DETALLE_EXPORT_HEADERS_PROY = DETALLE_EXPORT_HEADERS + ["unidades_proy", "facturacion_proy"]
 
 COMPARE_MATRIZ_HEADERS = [
-    "cod_viajante",
     "nombre_vendedor",
-    "codigo_cliente",
     "nombre_cliente",
     "anio_mes",
     "unidades_a",
