@@ -159,11 +159,13 @@
     el.textContent = t;
     el.setAttribute("title", t === "—" ? "" : t);
     const len = t.replace(/\s/g, "").length;
-    let size = "1.5rem"; // ~text-2xl
-    if (len > 16) size = "1.125rem";
-    if (len > 18) size = "1rem";
-    if (len > 22) size = "0.875rem";
-    if (window.matchMedia("(max-width: 1023px)").matches) {
+    // Desktop/md+: 5 KPIs en una fila → tipografía un poco más contenida.
+    let size = "1.25rem";
+    if (len > 12) size = "1.1rem";
+    if (len > 15) size = "0.95rem";
+    if (len > 18) size = "0.85rem";
+    if (len > 22) size = "0.75rem";
+    if (window.matchMedia("(max-width: 767px)").matches) {
       size = len > 14 ? "0.95rem" : "1.125rem";
       if (len > 18) size = "0.8125rem";
     }
