@@ -198,7 +198,7 @@ Desde Fase 4 (02/08/2026): con filtro TC vacío, el runner delega en `core.servi
 
 | Ítem | Estado |
 |------|--------|
-| KPIs móvil (2 cols portrait, 5 cols landscape/desktop, sin overflow ~390px) | Hecho |
+| KPIs móvil (2 cols portrait; desde `md` 5 en una fila, tipografía contenida) | Hecho (05/08/2026: sin `col-span-2` en desktop) |
 | Matriz portrait en tarjetas Ven→Cliente con chips por mes | Hecho |
 | Matriz landscape/desktop en tabla con 1ª columna sticky + scroll horizontal | Hecho |
 | Expand/colapsar vendedor touch ≥44px | Hecho |
