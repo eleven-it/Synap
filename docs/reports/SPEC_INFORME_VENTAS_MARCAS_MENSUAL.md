@@ -36,6 +36,8 @@ Cubre la lógica de las hojas Excel PuW/PuM (plantilla BEST) leyendo **solo Admi
 
 Sección UI: **«Licencia y proyección»** en `filters_ventas_marcas_mensual.html`. Persistencia en `localStorage` como el resto de filtros.
 
+La carga de catálogos inicializa los cuatro tags de clientes y vendedores para esta familia de informe: `clientes_incluir` ↔ `clientes_excluidos` y `vendedores_incluir` ↔ `vendedores_excluidos`. Cada par aplica exclusión mutua en el desplegable para no ofrecer IDs seleccionados en el campo opuesto.
+
 **Fijos (sin UI):** `cc.Anulado='No'`, `cc.CodigoMovimiento<>0`, tipos FA/FB/FC/FE/FM + NC*, `st.Anulado='No'`, `st.TipoComp` ∈ Venta / Venta TPV / Devol - Cliente / ND Anul NC.
 
 **Omitidos:** módulo/comprobante, tabla `mpr_costo_parametro` (fase posterior), depósitos.
