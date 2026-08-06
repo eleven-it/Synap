@@ -247,6 +247,18 @@
     }
   }
 
+  function unidadLabelFromModo(modo) {
+    return modo === "docenas" ? "Docenas" : "Packs";
+  }
+
+  function syncSortUnidadOptions(modo) {
+    const label = unidadLabelFromModo(modo);
+    const optDesc = document.getElementById("vmm-sort-opt-u-desc");
+    const optAsc = document.getElementById("vmm-sort-opt-u-asc");
+    if (optDesc) optDesc.textContent = `${label} ↓`;
+    if (optAsc) optAsc.textContent = `${label} ↑`;
+  }
+
   function renderKpis(extra) {
     const compareOn = isCompareActive(extra);
     const kpisSection = document.getElementById("vmm-kpis-section");
@@ -270,7 +282,8 @@
 
     const kpis = extra?.kpis || {};
     const modo = extra?.modo_unidades || "packs";
-    const unidadLabel = modo === "docenas" ? "Docenas" : "Unidades";
+    const unidadLabel = unidadLabelFromModo(modo);
+    syncSortUnidadOptions(modo);
     const elU = document.getElementById("vmm-kpi-unidades");
     const elF = document.getElementById("vmm-kpi-facturacion");
     const elP = document.getElementById("vmm-kpi-precio-medio");
@@ -292,6 +305,7 @@
     const kpisA = ma.kpis || {};
     const kpisB = mb.kpis || {};
     const delta = cmp.delta_pct_facturacion;
+    syncSortUnidadOptions(extra?.modo_unidades || "packs");
 
     const elDelta = document.getElementById("vmm-compare-delta");
     const elLa = document.getElementById("vmm-compare-label-a");
@@ -677,11 +691,11 @@
 
   function renderCeldasMes(c, proyActiva, proyCls) {
     const base = c || { u: 0, f: 0 };
-    let html = `<td class="px-1 py-1.5 text-right tabular-nums border-l border-slate-100 dark:border-slate-700/60">${fmtNum(base.u)}</td>`;
-    html += `<td class="px-1 py-1.5 text-right tabular-nums">${fmtMoney(base.f)}</td>`;
+    let html = `<td class="px-1.5 py-1.5 text-right tabular-nums text-slate-800 dark:text-slate-100 border-l border-slate-200/80 dark:border-slate-700/70">${fmtNum(base.u)}</td>`;
+    html += `<td class="px-1.5 py-1.5 text-right tabular-nums text-emerald-800 dark:text-emerald-200">${fmtMoney(base.f)}</td>`;
     if (proyActiva) {
-      html += `<td class="px-1 py-1.5 text-right tabular-nums ${proyCls}">${fmtNum(base.pu ?? 0)}</td>`;
-      html += `<td class="px-1 py-1.5 text-right tabular-nums ${proyCls}">${fmtMoney(base.pf ?? 0)}</td>`;
+      html += `<td class="px-1.5 py-1.5 text-right tabular-nums ${proyCls}">${fmtNum(base.pu ?? 0)}</td>`;
+      html += `<td class="px-1.5 py-1.5 text-right tabular-nums ${proyCls}">${fmtMoney(base.pf ?? 0)}</td>`;
     }
     return html;
   }
@@ -696,11 +710,11 @@
 
   function renderCeldasMesCompare(c, side, proyActiva, proyCls, labelSuffix) {
     const base = pickCompareSide(c, side);
-    let html = `<td class="px-1 py-1.5 text-right tabular-nums border-l border-slate-100 dark:border-slate-700/60" title="${escHtml(labelSuffix)}">${fmtNum(base.u)}</td>`;
-    html += `<td class="px-1 py-1.5 text-right tabular-nums">${fmtMoney(base.f)}</td>`;
+    let html = `<td class="px-1.5 py-1.5 text-right tabular-nums text-slate-800 dark:text-slate-100 border-l border-slate-200/80 dark:border-slate-700/70" title="${escHtml(labelSuffix)}">${fmtNum(base.u)}</td>`;
+    html += `<td class="px-1.5 py-1.5 text-right tabular-nums text-emerald-800 dark:text-emerald-200">${fmtMoney(base.f)}</td>`;
     if (proyActiva) {
-      html += `<td class="px-1 py-1.5 text-right tabular-nums ${proyCls}">${fmtNum(base.pu ?? 0)}</td>`;
-      html += `<td class="px-1 py-1.5 text-right tabular-nums ${proyCls}">${fmtMoney(base.pf ?? 0)}</td>`;
+      html += `<td class="px-1.5 py-1.5 text-right tabular-nums ${proyCls}">${fmtNum(base.pu ?? 0)}</td>`;
+      html += `<td class="px-1.5 py-1.5 text-right tabular-nums ${proyCls}">${fmtMoney(base.pf ?? 0)}</td>`;
     }
     return html;
   }
@@ -717,11 +731,12 @@
     meses.forEach((m) => {
       const raw = (valoresMes || {})[m] || { u: 0, f: 0 };
       const c = side ? pickCompareSide(raw, side) : raw;
-      let chip = `<span class="inline-flex flex-col rounded-md bg-slate-100 px-2 py-1 text-[10px] leading-tight text-slate-700 dark:bg-slate-800 dark:text-slate-200">`;
-      chip += `<span class="font-semibold">${escHtml(fmtMesYm(m))}</span>`;
-      chip += `<span>${unidadHdr} ${fmtNum(c.u)} · ${fmtMoney(c.f)}</span>`;
+      let chip = `<span class="inline-flex flex-col rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 text-[10px] leading-tight text-slate-700 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">`;
+      chip += `<span class="font-bold text-sky-700 dark:text-sky-300">${escHtml(fmtMesYm(m))}</span>`;
+      chip += `<span class="mt-0.5"><span class="text-slate-500">${escHtml(unidadHdr)}</span> ${fmtNum(c.u)}</span>`;
+      chip += `<span class="font-semibold text-emerald-700 dark:text-emerald-300">Monto ${fmtMoney(c.f)}</span>`;
       if (proyActiva) {
-        chip += `<span class="text-slate-500 dark:text-slate-400">proy ${fmtNum(c.pu ?? 0)} · ${fmtMoney(c.pf ?? 0)}</span>`;
+        chip += `<span class="text-slate-500 dark:text-slate-400">Proy. ${fmtNum(c.pu ?? 0)} · ${fmtMoney(c.pf ?? 0)}</span>`;
       }
       chip += `</span>`;
       html += chip;
@@ -743,7 +758,7 @@
   }
 
   function renderMatrizCards(extra, filas, meses, expanded, proyActiva) {
-    const unidadHdr = extra?.modo_unidades === "docenas" ? "Doc." : "U.";
+    const unidadHdr = unidadLabelFromModo(extra?.modo_unidades || "packs");
     const side = _activeCompareTab === "b" ? "b" : "a";
     const compareSide = isCompareActive(extra) ? side : null;
     let html = '<div class="vmm-cards-portrait space-y-3 p-3 pb-4">';
@@ -755,19 +770,21 @@
       const totRaw = vend.total || { u: 0, f: 0 };
       const tot = compareSide ? pickCompareSide(totRaw, compareSide) : totRaw;
 
-      html += `<article class="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900/40">`;
-      html += `<button type="button" class="vmm-vend-toggle flex w-full min-h-[44px] items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800/60" data-vend-key="${escHtml(vkey)}" aria-expanded="${isExp}">`;
-      html += `<span class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-base" aria-hidden="true">${chev}</span>`;
+      html += `<article class="rounded-xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-900/5 dark:border-slate-700 dark:bg-slate-900/40 dark:ring-white/5">`;
+      html += `<button type="button" class="vmm-vend-toggle flex w-full min-h-[44px] items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-slate-800 hover:bg-sky-50/60 dark:text-slate-100 dark:hover:bg-slate-800/60" data-vend-key="${escHtml(vkey)}" aria-expanded="${isExp}">`;
+      html += `<span class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg bg-sky-50 text-base text-sky-700 dark:bg-sky-950/40 dark:text-sky-300" aria-hidden="true">${chev}</span>`;
       html += `<span class="min-w-0 flex-1">`;
       html += `<span class="block truncate">${escHtml(vend.nombre || vkey)}</span>`;
-      html += `<span class="block text-[11px] font-normal text-slate-500 dark:text-slate-400">${unidadHdr} ${fmtNum(tot.u)} · ${fmtMoney(tot.f)}</span>`;
-      html += `</span></button>`;
+      html += `<span class="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] font-normal">`;
+      html += `<span class="text-slate-500 dark:text-slate-400">${escHtml(unidadHdr)} <span class="font-semibold tabular-nums text-slate-800 dark:text-slate-100">${fmtNum(tot.u)}</span></span>`;
+      html += `<span class="font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">Monto ${fmtMoney(tot.f)}</span>`;
+      html += `</span></span></button>`;
 
       if (isExp) {
         html += `<div class="space-y-3 border-t border-slate-100 px-3 py-3 dark:border-slate-700">`;
         (vend.clientes || []).forEach((cli) => {
-          html += `<div class="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50">`;
-          html += `<p class="text-xs font-medium text-slate-800 dark:text-slate-100">${escHtml(cli.nombre || cli.cod)}</p>`;
+          html += `<div class="rounded-lg border border-slate-100 bg-slate-50/80 p-2.5 dark:border-slate-700 dark:bg-slate-800/50">`;
+          html += `<p class="text-xs font-semibold text-slate-800 dark:text-slate-100">${escHtml(cli.nombre || cli.cod)}</p>`;
           html += renderMesChips(meses, cli.valores_mes, proyActiva, unidadHdr, compareSide);
           html += `</div>`;
         });
@@ -796,20 +813,25 @@
     const colspanMes = proyActiva ? 4 : 2;
     const colspanBlock = showDual ? colspanMes * 2 : colspanMes;
     const proyCls = "text-slate-500 dark:text-slate-400";
-    const unidadHdr = extra?.modo_unidades === "docenas" ? "Doc." : "U.";
+    const unidadHdr = unidadLabelFromModo(extra?.modo_unidades || "packs");
+    syncSortUnidadOptions(extra?.modo_unidades || "packs");
     const stickyCls =
       "sticky left-0 z-[5] bg-slate-50 dark:bg-slate-800/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]";
+    const stickyCliCls =
+      "sticky left-0 z-[5] bg-white dark:bg-slate-900 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.3)]";
+    const stickyCliZebra =
+      "sticky left-0 z-[5] bg-slate-50/90 dark:bg-slate-900/80 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.3)]";
 
-    let thead = `<thead class="sticky top-0 z-10 bg-slate-100 dark:bg-slate-900"><tr>`;
-    thead += `<th class="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 min-w-[180px] ${stickyCls}">Vendedor / Cliente</th>`;
+    let thead = `<thead class="sticky top-0 z-10 bg-slate-100/95 shadow-sm backdrop-blur-sm dark:bg-slate-900/95"><tr>`;
+    thead += `<th scope="col" class="px-2 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 min-w-[11rem] ${stickyCls}">Vendedor / Cliente</th>`;
     meses.forEach((m) => {
       if (showDual) {
-        thead += `<th colspan="${colspanBlock}" class="px-1 py-2 text-center text-[10px] font-semibold uppercase text-slate-600 dark:text-slate-300 border-l border-slate-200 dark:border-slate-700">${escHtml(fmtMesYm(m))}</th>`;
+        thead += `<th scope="colgroup" colspan="${colspanBlock}" class="px-1 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200 border-l border-sky-200/70 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/20">${escHtml(fmtMesYm(m))}</th>`;
       } else {
-        thead += `<th colspan="${colspanMes}" class="px-1 py-2 text-center text-[10px] font-semibold uppercase text-slate-600 dark:text-slate-300 border-l border-slate-200 dark:border-slate-700">${escHtml(fmtMesYm(m))}</th>`;
+        thead += `<th scope="colgroup" colspan="${colspanMes}" class="px-1 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200 border-l border-sky-200/70 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/20">${escHtml(fmtMesYm(m))}</th>`;
       }
     });
-    thead += `<th colspan="${colspanBlock}" class="px-1 py-2 text-center text-[10px] font-semibold uppercase text-slate-700 dark:text-slate-200 border-l border-slate-300 dark:border-slate-600 bg-slate-200/80 dark:bg-slate-800">Total</th>`;
+    thead += `<th scope="colgroup" colspan="${colspanBlock}" class="px-1 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-100 border-l border-emerald-300/80 dark:border-emerald-800 bg-emerald-100/70 dark:bg-emerald-950/40">Total</th>`;
     thead += `</tr>`;
 
     if (showDual) {
@@ -818,34 +840,43 @@
         thead += `<th colspan="${colspanMes}" class="px-1 py-1 text-center text-[9px] font-semibold text-violet-700 dark:text-violet-300 border-l border-slate-200 dark:border-slate-700">${escHtml(nomA)}</th>`;
         thead += `<th colspan="${colspanMes}" class="px-1 py-1 text-center text-[9px] font-semibold text-indigo-700 dark:text-indigo-300 border-l border-slate-200 dark:border-slate-700">${escHtml(nomB)}</th>`;
       });
-      thead += `<th colspan="${colspanMes}" class="px-1 py-1 text-center text-[9px] font-semibold text-violet-700 dark:text-violet-300 border-l border-slate-300 dark:border-slate-600">${escHtml(nomA)}</th>`;
-      thead += `<th colspan="${colspanMes}" class="px-1 py-1 text-center text-[9px] font-semibold text-indigo-700 dark:text-indigo-300 border-l border-slate-300 dark:border-slate-600">${escHtml(nomB)}</th>`;
+      thead += `<th colspan="${colspanMes}" class="px-1 py-1 text-center text-[9px] font-semibold text-violet-700 dark:text-violet-300 border-l border-emerald-300/80 dark:border-emerald-800">${escHtml(nomA)}</th>`;
+      thead += `<th colspan="${colspanMes}" class="px-1 py-1 text-center text-[9px] font-semibold text-indigo-700 dark:text-indigo-300 border-l border-emerald-300/80 dark:border-emerald-800">${escHtml(nomB)}</th>`;
       thead += `</tr><tr><th class="px-2 py-1 ${stickyCls}"></th>`;
     } else {
       thead += `<tr>`;
       thead += `<th class="px-2 py-1 ${stickyCls}"></th>`;
     }
 
-    const subHdr = (suffix) => {
-      let h = `<th class="px-1 py-1 text-right text-[9px] text-slate-500">${unidadHdr}${suffix ? ` ${suffix}` : ""}</th><th class="px-1 py-1 text-right text-[9px] text-slate-500">$</th>`;
+    const subHdr = (suffix, isTotal) => {
+      const thBase = isTotal
+        ? "px-1.5 py-1.5 text-right text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 bg-emerald-50/80 dark:bg-emerald-950/30"
+        : "px-1.5 py-1.5 text-right text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
+      const thMonto = isTotal
+        ? "px-1.5 py-1.5 text-right text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 bg-emerald-50/80 dark:bg-emerald-950/30"
+        : "px-1.5 py-1.5 text-right text-[9px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80";
+      const suf = suffix ? ` ${suffix}` : "";
+      let h = `<th scope="col" class="${thBase}" title="${escHtml(unidadHdr)}${escHtml(suf)}">${escHtml(unidadHdr)}${escHtml(suf)}</th>`;
+      h += `<th scope="col" class="${thMonto}" title="Monto${escHtml(suf)}">Monto${escHtml(suf)}</th>`;
       if (proyActiva) {
-        h += `<th class="px-1 py-1 text-right text-[9px] text-slate-400">${unidadHdr} proy</th><th class="px-1 py-1 text-right text-[9px] text-slate-400">$ proy</th>`;
+        h += `<th scope="col" class="px-1.5 py-1.5 text-right text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500" title="Proyección ${escHtml(unidadHdr)}">Proy. ${escHtml(unidadHdr)}</th>`;
+        h += `<th scope="col" class="px-1.5 py-1.5 text-right text-[9px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500" title="Proyección monto">Proy. monto</th>`;
       }
       return h;
     };
     meses.forEach(() => {
       if (showDual) {
-        thead += subHdr("A");
-        thead += subHdr("B");
+        thead += subHdr("A", false);
+        thead += subHdr("B", false);
       } else {
-        thead += subHdr(showSingleCompare ? (portraitSide === "b" ? "B" : "A") : "");
+        thead += subHdr(showSingleCompare ? (portraitSide === "b" ? "B" : "A") : "", false);
       }
     });
     if (showDual) {
-      thead += subHdr("A");
-      thead += subHdr("B");
+      thead += subHdr("A", true);
+      thead += subHdr("B", true);
     } else {
-      thead += subHdr(showSingleCompare ? (portraitSide === "b" ? "B" : "A") : "").replace(/text-slate-500/g, "text-slate-600 font-semibold");
+      thead += subHdr(showSingleCompare ? (portraitSide === "b" ? "B" : "A") : "", true);
     }
     thead += `</tr></thead>`;
 
@@ -867,10 +898,15 @@
       } else if (showSingleCompare) {
         rowHtml += renderCeldasMesCompare(tot, portraitSide, proyActiva, `${proyCls} font-semibold`, "");
       } else {
-        rowHtml += renderCeldasMes(tot, proyActiva, `${proyCls} font-semibold`).replace(
-          "border-l border-slate-100",
-          "border-l border-slate-200 dark:border-slate-600 font-semibold"
-        );
+        rowHtml += renderCeldasMes(tot, proyActiva, `${proyCls} font-semibold`)
+          .replace(
+            "border-l border-slate-200/80 dark:border-slate-700/70",
+            "border-l border-emerald-200 dark:border-emerald-800 font-semibold bg-emerald-50/40 dark:bg-emerald-950/20"
+          )
+          .replace(
+            /class="px-1\.5 py-1\.5 text-right tabular-nums text-emerald-800 dark:text-emerald-200"/g,
+            'class="px-1.5 py-1.5 text-right tabular-nums font-semibold text-emerald-900 dark:text-emerald-100 bg-emerald-50/40 dark:bg-emerald-950/20"'
+          );
       }
       return rowHtml;
     };
@@ -880,19 +916,24 @@
       const vkey = String(vend.cod ?? "");
       const isExp = Boolean(expanded[vkey]);
       const chev = isExp ? CHV.expandido : CHV.colapsado;
-      tbody += `<tr class="bg-slate-50 dark:bg-slate-800/80 font-semibold text-xs text-slate-800 dark:text-slate-100 border-t border-slate-200 dark:border-slate-700">`;
+      tbody += `<tr class="bg-slate-50 dark:bg-slate-800/80 font-semibold text-xs text-slate-800 dark:text-slate-100 border-t-2 border-slate-200 dark:border-slate-600">`;
       tbody += `<td class="px-2 py-1.5 ${stickyCls}">`;
       tbody += `<button type="button" class="vmm-vend-toggle inline-flex min-h-[44px] w-full items-center gap-1 text-left hover:text-sky-600 dark:hover:text-sky-400" data-vend-key="${escHtml(vkey)}" aria-expanded="${isExp}">`;
-      tbody += `<span class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center" aria-hidden="true">${chev}</span>`;
+      tbody += `<span class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-sky-600 dark:text-sky-400" aria-hidden="true">${chev}</span>`;
       tbody += `<span class="min-w-0 truncate">${escHtml(vend.nombre || vkey)}</span>`;
       tbody += `</button></td>`;
       tbody += renderRowCells(vend.totales_mes, vend.total);
       tbody += `</tr>`;
 
       if (isExp) {
-        (vend.clientes || []).forEach((cli) => {
-          tbody += `<tr class="text-[11px] text-slate-700 dark:text-slate-300">`;
-          tbody += `<td class="px-2 py-1 pl-8 ${stickyCls} bg-white dark:bg-slate-900">${escHtml(cli.nombre || cli.cod)}</td>`;
+        (vend.clientes || []).forEach((cli, idx) => {
+          const zebra = idx % 2 === 1;
+          const rowBg = zebra
+            ? "bg-slate-50/70 dark:bg-slate-900/40"
+            : "bg-white dark:bg-slate-900";
+          const stickyCli = zebra ? stickyCliZebra : stickyCliCls;
+          tbody += `<tr class="text-[11px] text-slate-700 dark:text-slate-300 ${rowBg}">`;
+          tbody += `<td class="px-2 py-1 pl-8 ${stickyCli}">${escHtml(cli.nombre || cli.cod)}</td>`;
           tbody += renderRowCells(cli.valores_mes, cli.total).replace(/py-1\.5/g, "py-1");
           tbody += `</tr>`;
         });

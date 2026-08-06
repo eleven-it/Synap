@@ -80,21 +80,23 @@ Grid UI: 5 tarjetas (Unidades, Facturación, Precio medio, Regalías, Regalías 
 
 ## 5. Exportación Excel
 
-Hoja plana (no pivot Excel nativo):
+Hojas «Matriz» + «Detalle» (plano, no pivot Excel nativo). Sin columnas de código de vendedor ni de cliente.
 
-| Columna | Origen |
-|---------|--------|
-| Vendedor código | `cod_viajante` |
+| Columna Matriz | Origen |
+|----------------|--------|
 | Vendedor | `nombre_vendedor` |
-| Cliente código | `codigo_cliente` |
 | Cliente | `nombre_cliente` |
 | AñoMes | `anio_mes` |
-| Unidades / Docenas | según `modo_unidades` |
-| Facturación | `facturacion` |
-| Unidades proy | `unidades_proy` (solo si proyección activa) |
-| Facturación proy | `facturacion_proy` (solo si proyección activa) |
+| Packs / Docenas | `unidades` según `modo_unidades` |
+| Monto | `facturacion` |
+| Packs/Docenas proy | `unidades_proy` (solo si proyección activa) |
+| Monto proy | `facturacion_proy` (solo si proyección activa) |
+
+En modo comparar: Packs/Docenas A/B y Monto A/B (y proy si aplica). Detalle: fecha, tipo, n° comprobante, vendedor, cliente, SuperArt, artículo, marca, AñoMes, packs/docenas, monto (± proy).
 
 Nombre archivo: `Ventas_marcas_mensual_{desde}_{hasta}.xlsx` (sin cambio).
+
+Nota (05/08/2026): el estilo de cabecera se escribe en la misma fila que los títulos (antes `ws.append` + estilo en contador `row` desfasado por el bloque de filtros dejaba una franja azul vacía y cabeceras sin alinear visualmente).
 
 ---
 
@@ -159,7 +161,7 @@ Antes de ejecutar la matriz, el runner valida el alcance comercial de vendedores
 - **G3:** Dado `modo_unidades=docenas`, cuando hay renglones con U.M. P3, entonces docenas = cantidad / 4 (factor mapa P1→12, P2→6, P3→4, P6→2, CU→1).
 - **G4:** Dado un vendedor con dos clientes, cuando se expande el vendedor en la matriz, entonces se ven filas cliente con valores por mes y total fila.
 - **G5:** Dado tiempo real desactivado, cuando el usuario cambia un filtro, entonces los datos no se recargan hasta «Actualizar» (política `isInformeQuerySoloManualORealtime`).
-- **G6:** Dado export con los mismos filtros que la consulta en pantalla, entonces el Excel plano tiene columnas Ven / Cliente / AñoMes / Unidades / Facturación coherentes con `data[]`.
+- **G6:** Dado export con los mismos filtros que la consulta en pantalla, entonces el Excel plano tiene columnas Vendedor / Cliente / AñoMes / Packs|Docenas / Monto coherentes con `data[]` (sin Cód. vendedor ni Cód. cliente).
 - **G7:** Dado un período con más de 24 meses distintos, cuando se ejecuta la consulta, entonces `meta.extra.aviso_meses` informa el truncamiento y la matriz muestra como máximo 24 columnas de mes.
 - **G8:** Dado `tasa_regalia_pct=13` y facturación 1000, entonces regalías = 130 y regalías_tc = 130 / TC efectivo.
 - **G9:** Dado `incluir_proyeccion=1` y `coef_proyeccion=1.07`, entonces `ceil(12 × 1.07) = 13` en unidades proy y la matriz muestra 4 subcolumnas por mes.
@@ -182,6 +184,7 @@ Antes de ejecutar la matriz, el runner valida el alcance comercial de vendedores
 | Banner / toast U.M. desconocidas (`meta.extra.um_desconocidas`) | Hecho |
 | Filtro PV en UI (tags) | Hecho |
 | Preset SuperArt «Hombre» (`config.preset_hombre`, botón Aplicar + UI Configurar) | Hecho (PATCH `/api/reports/ventas-marcas-mensual/preset-hombre/`, solo supervisor) |
+| Polish UI matriz/KPIs (Packs/Docenas/Monto, acentos, zebra, alineación) | Hecho (05/08/2026) |
 
 Checklist QA device (P7): [QA_VMM_PWA_P7.md](QA_VMM_PWA_P7.md) — **pendiente ejecución en dispositivo**.
 

@@ -376,15 +376,15 @@ class VentasMarcasMensualExportHeadersTest(SimpleTestCase):
         self.assertEqual(
             h,
             [
-                "cod_viajante",
                 "nombre_vendedor",
-                "codigo_cliente",
                 "nombre_cliente",
                 "anio_mes",
                 "unidades",
                 "facturacion",
             ],
         )
+        self.assertNotIn("cod_viajante", h)
+        self.assertNotIn("codigo_cliente", h)
 
     def test_export_headers_con_proyeccion(self):
         r = ReportDefinition(slug="ventas-marcas-mensual", config={})
@@ -403,9 +403,7 @@ class VentasMarcasMensualExportHeadersTest(SimpleTestCase):
         self.assertEqual(
             h,
             [
-                "cod_viajante",
                 "nombre_vendedor",
-                "codigo_cliente",
                 "nombre_cliente",
                 "anio_mes",
                 "unidades",
@@ -652,6 +650,8 @@ class VentasMarcasMensualExportDetalleTest(SimpleTestCase):
     def test_headers_detalle(self):
         self.assertIn("fecha", DETALLE_EXPORT_HEADERS)
         self.assertIn("nombre_articulo", DETALLE_EXPORT_HEADERS)
+        self.assertNotIn("cod_viajante", DETALLE_EXPORT_HEADERS)
+        self.assertNotIn("codigo_cliente", DETALLE_EXPORT_HEADERS)
 
     def test_headers_detalle_con_proyeccion(self):
         h = resolve_detalle_headers({"unidades_proy": 1, "facturacion_proy": 1})
@@ -679,9 +679,7 @@ class VentasMarcasMensualExportCompareHeadersTest(SimpleTestCase):
         self.assertEqual(
             h,
             [
-                "cod_viajante",
                 "nombre_vendedor",
-                "codigo_cliente",
                 "nombre_cliente",
                 "anio_mes",
                 "unidades_a",

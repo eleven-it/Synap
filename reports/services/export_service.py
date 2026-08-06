@@ -326,11 +326,10 @@ class ExportService:
             return [h for h in preferred if h in available]
 
         if slug == "ventas-marcas-mensual":
+            # Sin Cód. vendedor / Cód. cliente en Excel (siguen en data[] para orden interno).
             if "unidades_a" in available:
                 preferred = [
-                    "cod_viajante",
                     "nombre_vendedor",
-                    "codigo_cliente",
                     "nombre_cliente",
                     "anio_mes",
                     "unidades_a",
@@ -344,9 +343,7 @@ class ExportService:
                     )
                 return [h for h in preferred if h in available]
             preferred = [
-                "cod_viajante",
                 "nombre_vendedor",
-                "codigo_cliente",
                 "nombre_cliente",
                 "anio_mes",
                 "unidades",
@@ -1058,22 +1055,24 @@ class ExportService:
 
         currency_headers = {"facturacion", "facturacion_a", "facturacion_b", "facturacion_proy", "facturacion_proy_a", "facturacion_proy_b"}
         modo = str((payload.get("filters") or {}).get("modo_unidades") or "packs").lower()
-        unidad_label = "DOCENAS" if modo == "docenas" else "UNIDADES"
+        unidad_label = "DOCENAS" if modo == "docenas" else "PACKS"
 
         header_translations = {
-            "cod_viajante": "Cód. vendedor",
             "nombre_vendedor": "Vendedor",
-            "codigo_cliente": "Cód. cliente",
             "nombre_cliente": "Cliente",
             "anio_mes": "AñoMes",
             "unidades": unidad_label,
-            "facturacion": "Facturación",
+            "facturacion": "Monto",
             "unidades_a": f"{unidad_label} A",
-            "facturacion_a": "Facturación A",
+            "facturacion_a": "Monto A",
             "unidades_b": f"{unidad_label} B",
-            "facturacion_b": "Facturación B",
+            "facturacion_b": "Monto B",
             "unidades_proy": f"{unidad_label} proy",
-            "facturacion_proy": "Facturación proy",
+            "facturacion_proy": "Monto proy",
+            "unidades_proy_a": f"{unidad_label} proy A",
+            "facturacion_proy_a": "Monto proy A",
+            "unidades_proy_b": f"{unidad_label} proy B",
+            "facturacion_proy_b": "Monto proy B",
             "fecha": "Fecha",
             "tipo_comprobante": "Tipo",
             "nro_comprobante": "N° comprobante",
@@ -1122,9 +1121,10 @@ class ExportService:
                 headers = self._resolve_export_headers(report, data[0])
 
             translated = [str(header_translations.get(h, h.replace("_", " ").title())).upper() for h in headers]
-            ws.append(translated)
-            for col_num in range(1, len(translated) + 1):
-                c = ws.cell(row=row, column=col_num)
+            # Escribir en `row` (no ws.append): el bloque de filtros deja max_row
+            # desfasado respecto al contador y append + estilo en `row` desalineaba headers.
+            for col_num, label in enumerate(translated, 1):
+                c = ws.cell(row=row, column=col_num, value=label)
                 c.fill = header_fill
                 c.font = header_font
                 c.alignment = Alignment(horizontal="center", vertical="center")
@@ -1132,24 +1132,21 @@ class ExportService:
             row += 1
 
             for data_row in data:
-                vals = []
-                for h in headers:
-                    val = data_row.get(h, "")
+                for col_num, h in enumerate(headers, 1):
+                    raw = data_row.get(h, "")
                     if h in currency_headers:
                         try:
-                            vals.append(float(val) if val not in ("", None) else "")
+                            val = float(raw) if raw not in ("", None) else ""
                         except (TypeError, ValueError):
-                            vals.append("")
+                            val = ""
                     elif h == "unidades" or h.startswith("unidades"):
                         try:
-                            vals.append(float(val) if val not in ("", None) else 0.0)
+                            val = float(raw) if raw not in ("", None) else 0.0
                         except (TypeError, ValueError):
-                            vals.append(0.0)
+                            val = 0.0
                     else:
-                        vals.append(val)
-                ws.append(vals)
-                for col_num, (h, val) in enumerate(zip(headers, vals), 1):
-                    c = ws.cell(row=row, column=col_num)
+                        val = raw
+                    c = ws.cell(row=row, column=col_num, value=val)
                     c.border = border
                     if h in currency_headers and isinstance(val, (int, float)):
                         c.number_format = '"$"#,##0.00'
