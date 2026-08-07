@@ -105,15 +105,35 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         seq = [(1000.0, 5, 2), (1,)]
         cursor.execute = MagicMock(return_value=None)
         cursor.fetchone = MagicMock(side_effect=seq)
+        cursor.fetchall = MagicMock(
+            return_value=[
+                (6, "Terminado", "Terminado", 120),
+                (1, "Produccion", "Produccion", 24),
+            ]
+        )
+        cursor.description = [
+            ("id_deposito",),
+            ("nombre",),
+            ("tipo_mpr",),
+            ("unidades",),
+        ]
         out = fetch_inventario_resumen(cursor, _filters())
         self.assertIn("valor_stock", out)
         sql_valor = cursor.execute.call_args_list[0][0][0]
         self.assertIn("PrecioCosto", sql_valor)
         self.assertNotIn("Precio1V", sql_valor)
+        self.assertIn("suma_stock", sql_valor)
         self.assertIn("productos_bajo_minimo", out)
         self.assertTrue(out["disponible"])
         sql_bajo_min = cursor.execute.call_args_list[1][0][0]
         self.assertIn("cp_res.Fecha >= %s", sql_bajo_min)
+        self.assertIn("suma_stock", sql_bajo_min)
+        self.assertIn("depositos", out)
+        self.assertEqual(len(out["depositos"]), 2)
+        self.assertEqual(out["depositos"][0]["unidades"], 120)
+        self.assertEqual(out["depositos"][0]["docenas"], 10)
+        sql_deps = cursor.execute.call_args_list[2][0][0]
+        self.assertIn("FROM deposito", sql_deps)
 
     def test_fetch_compras_resumen_estructura(self):
         cursor = MagicMock()
@@ -500,6 +520,8 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         out = list_existencias(cursor, _filters())
         self.assertEqual(out["total_registros"], 10)
         self.assertNotIn("total_monto", out)
+        sql_count = cursor.execute.call_args_list[0][0][0]
+        self.assertIn("suma_stock", sql_count)
 
     def test_list_existencias_busqueda_en_sql(self):
         cursor = MagicMock()
@@ -512,6 +534,7 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         sql_count = cursor.execute.call_args_list[0][0][0]
         self.assertIn("NombreArticulo LIKE", sql_count)
         self.assertIn("ESCAPE", sql_count)
+        self.assertIn("suma_stock", sql_count)
 
     def test_resolve_filters_busqueda_minimo_dos_caracteres(self):
         class Q:

@@ -115,8 +115,12 @@ Verificación: `python manage.py uat_tesoreria_cashflow --base <empresa> --fecha
 
 ### Inventario
 
+- **Universo:** artículos `Discontinuo=No`, `disponible_vta=Si`, `tipo_art=Articulo` y depósitos no anulados con **`suma_stock = Si`** (Stock = Sí en config MPR).
 - **`valor_stock`**: `SUM(stock_deposito.saldo × articulo.PrecioCosto)` — valorización a **costo** (paridad AdministraNET Info_Stock con `lista_precio=0`).
+- **`depositos`**: una fila por depósito del universo con `unidades` (`SUM(saldo)`) y `docenas` (`unidades // 12`). Orden: Producción → Semi elaborado → 2da Selección → Terminado → resto.
+- **UI:** la tarjeta Inventario del Command Center muestra los KPIs y el desglose; toggle local (navegador) entre “Unidades” y “Unidades y docenas”.
 - Snapshot de saldo actual; el período del dashboard no altera el valor (sí aplica a reservado / bajo mínimo vía `cp_res.Fecha`).
+- El detalle **existencias** usa el mismo filtro de depósitos Stock=Sí.
 
 ### Ventas por cobro
 

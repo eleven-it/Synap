@@ -145,17 +145,22 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 | Campo | Definición |
 |-------|------------|
 | `valor_stock` | Suma valorizada por `stock_deposito.saldo` × `articulo.PrecioCosto` (paridad Info_Stock `lista_precio=0`) |
-| `productos_con_stock` | Conteo de `IDArt` con saldo > 0 en al menos un depósito |
-| `productos_bajo_minimo` | Conteo donde disponible (`saldo − reservado` por depósito, agregado por artículo) < `articulo.PuntoPedido` y `PuntoPedido > 0` |
-| `productos_sin_stock` | Conteo con stock total 0 y demanda pendiente > 0 (opcional v1: solo conteo con saldo 0) |
+| `productos_con_stock` | Conteo de `IDArt` con saldo > 0 en al menos un depósito del universo |
+| `productos_bajo_minimo` | Conteo donde disponible (`saldo − reservado` por depósito, agregado por artículo) < `GREATEST(stock_min, punto_pedido)` y umbral > 0 |
+| `productos_sin_stock` | Conteo de `IDArt` con al menos una fila de saldo = 0 en el universo (v1) |
+| `depositos` | Lista de depósitos del universo con `id_deposito`, `nombre`, `tipo_mpr`, `unidades` (`SUM(saldo)`), `docenas` (`unidades // 12`) |
 
-- **`valor_stock`**, **`productos_con_stock`**, **`productos_sin_stock`**: snapshot de saldo actual (sin histórico por fecha).
-- **`reservado`** y **`productos_bajo_minimo`**: subconsulta PED **MUST** filtrar `comp_ped.Fecha` en `[fecha_inicio, fecha_fin]`.
+- **Universo de depósitos:** solo `deposito` con `COALESCE(anulado,'No')='No'` y `COALESCE(suma_stock,'Si')='Si'` (Stock = Sí en config MPR).
+- **Artículos:** `Discontinuo='No'`, `disponible_vta='Si'`, `tipo_art='Articulo'`.
+- **`valor_stock`**, **`productos_con_stock`**, **`productos_sin_stock`**, **`depositos`**: snapshot de saldo actual (sin histórico por fecha).
+- **`depositos`** **MUST** incluir una fila por depósito del universo (aunque unidades = 0), ordenada por etapa MPR del CC (`Produccion`, `SemiElaborado`, `2daSeleccion`, `Terminado`, resto) y nombre.
+- **`reservado`** y **`productos_bajo_minimo`**: subconsulta PED **MUST** filtrar `comp_ped.Fecha` en `[fecha_inicio, fecha_fin]` y usar el mismo universo de depósitos.
 - Filtro sucursal: cuando informe base no soporta sucursal en existencias, **`meta.notas_semanticas`** **MUST** indicar que `sucursal` no aplica a inventario en v1.
+- UI Command Center **MUST** mostrar los KPIs y, a continuación, el desglose por depósito; la columna Docenas **MAY** ocultarse según preferencia local del navegador (unidades vs unidades y docenas).
 
 ### REQ-ED-INV-P1-01 — Detalle existencias
 
-- **`GET /api/reports/executive-dashboard/inventario/existencias/`** **MUST** devolver filas paginadas reutilizando criterios del slug `stock-existencias` (sin reimplementar búsqueda predictiva del cliente).
+- **`GET /api/reports/executive-dashboard/inventario/existencias/`** **MUST** devolver filas paginadas con el mismo universo de artículos y depósitos Stock=Sí del resumen (búsqueda predictiva opcional en servidor).
 
 ---
 
