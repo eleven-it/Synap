@@ -394,6 +394,27 @@
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
   /** Persistencia local de filtros (mismo navegador / perfil). */
   const FILTERS_STORAGE_KEY = "synap_cc_filters_v1";
+  /** Presentación unidades / unidades+docenas en tarjeta Inventario. */
+  const INV_PRESENTACION_KEY = "synap_cc_inv_presentacion_v1";
+
+  function readInvPresentacion() {
+    try {
+      const v = String(window.localStorage.getItem(INV_PRESENTACION_KEY) || "").trim();
+      return v === "unidades_docenas" ? "unidades_docenas" : "unidades";
+    } catch (e) {
+      return "unidades";
+    }
+  }
+
+  function persistInvPresentacion(modo) {
+    const m = modo === "unidades_docenas" ? "unidades_docenas" : "unidades";
+    try {
+      window.localStorage.setItem(INV_PRESENTACION_KEY, m);
+    } catch (e) {
+      /* private mode / cuota */
+    }
+    return m;
+  }
 
   function readFilters() {
     const t = todayIso();
@@ -807,6 +828,7 @@
         ["Bajo mínimo", fmtNum.format(a.productos_bajo_minimo || 0)],
         ["Sin stock", fmtNum.format(a.productos_sin_stock || 0)],
       ],
+      afterMetrics: (a) => renderInventarioDepositosBlock(a),
       details: [{ label: "Existencias", urlKey: "existencias" }],
     },
     {
@@ -923,6 +945,59 @@
     },
   ];
 
+  function renderInventarioDepositosBlock(areaData) {
+    const deps = Array.isArray(areaData?.depositos) ? areaData.depositos : [];
+    const modo = readInvPresentacion();
+    const showDocenas = modo === "unidades_docenas";
+    const btnBase =
+      "cc-inv-pres-btn inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2 py-1 text-[11px] font-medium transition-colors";
+    const btnOn = "bg-emerald-600 text-white";
+    const btnOff =
+      "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700";
+
+    const toggle = `
+      <div class="mt-3 flex gap-1 rounded-lg border border-slate-100 p-0.5 dark:border-slate-700" role="group" aria-label="Presentación de cantidades">
+        <button type="button" class="${btnBase} ${modo === "unidades" ? btnOn : btnOff}" data-inv-pres="unidades">Unidades</button>
+        <button type="button" class="${btnBase} ${showDocenas ? btnOn : btnOff}" data-inv-pres="unidades_docenas">Unidades y docenas</button>
+      </div>`;
+
+    if (!deps.length) {
+      return `${toggle}<p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">Sin depósitos con Stock = Sí.</p>`;
+    }
+
+    const headDoc = showDocenas
+      ? `<th class="px-1 py-1.5 text-right font-medium">Docenas</th>`
+      : "";
+    const rows = deps
+      .map((d) => {
+        const nombre = escHtml(d.nombre || `Depósito ${d.id_deposito || ""}`);
+        const uds = fmtNum.format(Number(d.unidades || 0));
+        const doc = showDocenas
+          ? `<td class="px-1 py-1.5 text-right tabular-nums text-slate-800 dark:text-slate-100">${fmtNum.format(Number(d.docenas || 0))}</td>`
+          : "";
+        return `<tr class="border-t border-slate-100 dark:border-slate-800">
+          <td class="max-w-[9rem] truncate py-1.5 pr-2 text-slate-600 dark:text-slate-300" title="${nombre}">${nombre}</td>
+          <td class="px-1 py-1.5 text-right tabular-nums font-medium text-slate-900 dark:text-white">${uds}</td>
+          ${doc}
+        </tr>`;
+      })
+      .join("");
+
+    return `${toggle}
+      <div class="mt-2 max-h-48 overflow-auto rounded-lg border border-slate-100 dark:border-slate-700">
+        <table class="w-full text-[11px]">
+          <thead class="sticky top-0 bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <tr>
+              <th class="py-1.5 pr-2 text-left font-medium">Depósito</th>
+              <th class="px-1 py-1.5 text-right font-medium">Unidades</th>
+              ${headDoc}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
   function areaCard(def, areaData, delayIdx) {
     const unavailable = areaData && areaData.disponible === false;
     const borderColor = {
@@ -939,7 +1014,8 @@
     if (unavailable) {
       body = `<p class="text-sm text-amber-700 dark:text-amber-300">${areaData.error?.mensaje || "Datos no disponibles"}</p>`;
     } else {
-      const rows = def.metrics(areaData || {})
+      const a = areaData || {};
+      const rows = def.metrics(a)
         .map(
           ([k, val]) => `
         <div class="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0 dark:border-slate-800">
@@ -948,7 +1024,8 @@
         </div>`
         )
         .join("");
-      body = `<div class="space-y-0">${rows}</div>`;
+      const extra = typeof def.afterMetrics === "function" ? def.afterMetrics(a) : "";
+      body = `<div class="space-y-0">${rows}</div>${extra || ""}`;
     }
 
     const detailBtns = (def.details || [])
@@ -1023,10 +1100,24 @@
       </article>`;
   }
 
+  function bindInventarioPresentacion(root) {
+    const scope = root || el("cc-areas-grid");
+    if (!scope) return;
+    scope.querySelectorAll(".cc-inv-pres-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        persistInvPresentacion(btn.dataset.invPres);
+        if (!areasCache.inventario) return;
+        updateSingleAreaCard("inventario", areasCache.inventario);
+      });
+    });
+  }
+
   function bindDetailButtons(root) {
-    (root || el("cc-areas-grid"))?.querySelectorAll(".cc-detail-btn").forEach((btn) => {
+    const scope = root || el("cc-areas-grid");
+    scope?.querySelectorAll(".cc-detail-btn").forEach((btn) => {
       btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title));
     });
+    bindInventarioPresentacion(scope);
   }
 
   function renderAreasSkeleton() {
