@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Genera HTML navegable desde los manuales Markdown de MPR, Stock, Ventas (ecom) y Contabilidad.
-Sin dependencias externas. Fuente: docs/mpr|stock|ecom|contabilidad/MANUAL_USUARIO_*.md
+Genera HTML navegable desde los manuales Markdown de MPR, Stock, Ventas (ecom),
+Contabilidad e Informes (reports).
+Sin dependencias externas. Fuente: docs/mpr|stock|ecom|contabilidad|reports/MANUAL_USUARIO_*.md
 
 El HTML de usuario final usa branding administraNET (colores website, Plus Jakarta Sans)
 y el logo del login (`Logo_Signo_administraNET.png` → logo-administranet.png por módulo),
 embebido en base64 para funcionar vía /mpr/manual/, /stock/manual/, /ecom/manual/,
-/contabilidad/manual/ o docs/.
+/contabilidad/manual/, /reports/manual/ o docs/.
 """
 from __future__ import annotations
 
@@ -88,7 +89,17 @@ ECOM_ALIASES: dict[str, str] = {
     "politicas-credito": "11.5. Políticas de crédito (configuración)",
     "plantillas-credito": "11.6. Plantillas de aviso / cobranza",
     "hold-preparacion": "11.7. Preparación de pedidos y hold",
-    "credito-roles": "12. Resumen rápido por rol",
+    "informes-marcas": "12. Informes de marcas (Reports)",
+    "credito-roles": "13. Resumen rápido por rol",
+}
+
+REPORTS_ALIASES: dict[str, str] = {
+    "acceso": "1. Acceso al módulo",
+    "ventas-marcas-mensual": "2. Ventas marcas mensual",
+    "vmm": "2. Ventas marcas mensual",
+    "ventas-mensuales-licenciatarios": "3. Ventas Mensuales Licenciatarios",
+    "vml": "3. Ventas Mensuales Licenciatarios",
+    "roles": "4. Resumen rápido por rol",
 }
 
 CONTABILIDAD_ALIASES: dict[str, str] = {
@@ -117,6 +128,7 @@ ALIASES_BY_MODULE: dict[str, dict[str, str]] = {
     "stock": STOCK_ALIASES,
     "ecom": ECOM_ALIASES,
     "contabilidad": CONTABILIDAD_ALIASES,
+    "reports": REPORTS_ALIASES,
 }
 
 # alias -> título exacto del encabezado en el MD
@@ -181,6 +193,12 @@ MODULE_CONFIG: dict[str, dict[str, str | Path]] = {
         "static_logo": "/static/contabilidad_audit/manuales/logo-administranet.png",
         "logo_path": ROOT / "contabilidad_audit/static/contabilidad_audit/manuales/logo-administranet.png",
         "return_url": "/contabilidad/auditoria/",
+    },
+    "reports": {
+        "module_label": "Informes",
+        "static_logo": "/static/reports/manuales/logo-administranet.png",
+        "logo_path": ROOT / "reports/static/reports/manuales/logo-administranet.png",
+        "return_url": "/reports/",
     },
 }
 
@@ -768,6 +786,12 @@ def main() -> None:
         / "contabilidad_audit/static/contabilidad_audit/manuales/manual_usuario_contabilidad.html",
         ROOT / "docs/contabilidad/manual_usuario_contabilidad.html",
         "contabilidad",
+    )
+    generate_one(
+        ROOT / "docs/reports/MANUAL_USUARIO_REPORTES.md",
+        ROOT / "reports/static/reports/manuales/manual_usuario_reportes.html",
+        ROOT / "docs/reports/manual_usuario_reportes.html",
+        "reports",
     )
 
 

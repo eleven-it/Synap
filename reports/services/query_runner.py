@@ -214,6 +214,8 @@ class QueryRunnerService:
             'ventas-por-vendedor',
             'ventas-por-articulo',
             'ventas-marcas-mensual',
+            'ventas-marca-superart',
+            'ventas-mensuales-licenciatarios',
             'stock-existencias',
             'comprobantes-rutas',
             'mayoristapp-lista-comprobantes-rutas',  # compat. clientes que aún envían slug antiguo
@@ -285,6 +287,8 @@ class QueryRunnerService:
             if report.slug == "ventas-por-articulo"
             else f"{payload_hash}:vmm_v1"
             if report.slug == "ventas-marcas-mensual"
+            else f"{payload_hash}:vmsa_v1"
+            if report.slug == "ventas-marca-superart"
             else payload_hash
         )
 
@@ -326,6 +330,16 @@ class QueryRunnerService:
             from .ventas_marcas_mensual_runner import run_ventas_marcas_mensual
 
             result = run_ventas_marcas_mensual(report, payload, self.user)
+        elif report.slug == "ventas-marca-superart":
+            from .ventas_marca_superart_runner import run_ventas_marca_superart
+
+            result = run_ventas_marca_superart(report, payload, self.user)
+        elif report.slug == "ventas-mensuales-licenciatarios":
+            from .ventas_mensuales_licenciatarios_runner import (
+                run_ventas_mensuales_licenciatarios,
+            )
+
+            result = run_ventas_mensuales_licenciatarios(report, payload, self.user)
         elif report.slug == "stock-existencias":
             result = self._run_stock_existencias(report, payload)
         elif report.slug == "mpr-opt-atrasadas":

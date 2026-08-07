@@ -95,7 +95,7 @@
                         </svg>
                         <span class="hidden sm:inline">Actualizar</span>
                     </button>
-                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marcas-mensual' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
+                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-marcas-mensual' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
                     <button type="button"
                             data-export-excel
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
@@ -343,12 +343,12 @@
                         <!-- Reportes Legacy: Usar templates unificados -->
                         {% if report.slug == 'stock-existencias' %}
                         {% include "reports/includes/filters_stock_existencias.html" %}
-                        {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marcas-mensual' %}
+                        {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-marcas-mensual' %}
                         {% include "reports/includes/filters_period_bo_dual.html" %}
                         {% else %}
                         {% include "reports/includes/filters_period.html" %}
                         {% endif %}
-                        {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marcas-mensual' %}
+                        {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-marcas-mensual' %}
                         {% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
                         {% endif %}
                         {% if report.slug == 'ventas-marcas-mensual' %}
@@ -379,7 +379,7 @@
                 {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
                 <p id="ventas-netas-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-4"></p>
                 {% endif %}
-                {% if report.slug != 'bo-stock-facturacion' and report.slug != 'ventas-objetivos-vs-bo' and report.slug != 'ventas-por-vendedor' and report.slug != 'ventas-por-articulo' and report.slug != 'ventas-marcas-mensual' and report.slug != 'stock-existencias' and report.slug != 'cash_flow_detailed_movements' %}
+                {% if report.slug != 'bo-stock-facturacion' and report.slug != 'ventas-objetivos-vs-bo' and report.slug != 'ventas-por-vendedor' and report.slug != 'ventas-por-articulo' and report.slug != 'ventas-marca-superart' and report.slug != 'ventas-marcas-mensual' and report.slug != 'stock-existencias' and report.slug != 'cash_flow_detailed_movements' %}
                 {% with widget=widgets|first %}
                 {% if widget %}
                 {% with widget_id=widget.id|stringformat:"s" %}
@@ -757,7 +757,7 @@
                 </section>
                 {% endif %}
                 
-                {% if report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' %}
+                {% if report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' %}
                 <style>
                   /* Chevrons ▸/▾: evitar apariencia de “botón” azul/redondo por foco o estilos WebKit */
                   #vo-jerarquia-container .vo-chev,
@@ -836,6 +836,10 @@
                                 {% if report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' %}
                                 <option value="facturacion_periodo" selected>Facturación período</option>
                                 <option value="unidades_periodo">Unidades período</option>
+                                {% elif report.slug == 'ventas-marca-superart' %}
+                                <option value="facturacion_periodo" selected>Facturación período</option>
+                                <option value="packs">Packs</option>
+                                <option value="docenas">Docenas</option>
                                 {% else %}
                                 <option value="objetivo_meta">Objetivo Meta</option>
                                 <option value="objetivo_falta">Objetivo Falta</option>
@@ -856,8 +860,8 @@
                 <section class="mt-1 flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente si no ves todas las columnas.</p>
                     <div class="relative h-[min(75vh,56rem)] min-h-[14rem]">
-                        <div class="h-full overflow-auto overscroll-contain" id="vo-jerarquia-container" role="region" aria-label="{% if report.slug == 'ventas-por-articulo' %}Ventas por artículo{% else %}Objetivos por vendedor y cliente{% endif %}">
-                            <p class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">Cargando objetivos y métricas…</p>
+                        <div class="h-full overflow-auto overscroll-contain" id="vo-jerarquia-container" role="region" aria-label="{% if report.slug == 'ventas-por-articulo' %}Ventas por artículo{% elif report.slug == 'ventas-marca-superart' %}Ventas por marca y SuperArt{% else %}Objetivos por vendedor y cliente{% endif %}">
+                            <p class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">{% if report.slug == 'ventas-marca-superart' %}Cargando ventas por marca y SuperArt…{% elif report.slug == 'ventas-por-articulo' %}Cargando ventas por artículo…{% else %}Cargando objetivos y métricas…{% endif %}</p>
                         </div>
                         {# Overlay local: expandir/colapsar vendedor o jerarquía pesada (no se borra con innerHTML del contenedor). #}
                         <div id="vo-jerarquia-busy-overlay"
@@ -975,7 +979,7 @@
         </div>
     </div>
     {% if not is_declarative %}
-        {% if report.slug == 'stock-existencias' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marcas-mensual' or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
+        {% if report.slug == 'stock-existencias' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-marcas-mensual' or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
         {# Modal de carga compartido (petición API + render): stock, BO, ventas netas, comprobantes en ruta. fixed + z alto; flex desde JS. #}
         <div id="reports-legacy-query-loading-modal"
              class="hidden fixed inset-0 z-[9999] p-4 sm:p-8 bg-slate-950/60 backdrop-blur-sm pointer-events-auto transition-opacity duration-200"
@@ -5213,6 +5217,9 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 {% if report.slug == 'ventas-por-articulo' %}
 <script src="{% static 'reports/js/ventas_por_articulo.js' %}?v=202605202"></script>
+{% endif %}
+{% if report.slug == 'ventas-marca-superart' %}
+<script src="{% static 'reports/js/ventas_marca_superart.js' %}?v=20260807a"></script>
 {% endif %}
 {% if report.slug == 'ventas-marcas-mensual' %}
 <script src="{% static 'reports/js/reports_filters_sheet.js' %}?v=20260802c" defer></script>

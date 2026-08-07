@@ -27,6 +27,7 @@ BUILDER_HYBRID_SLUGS = frozenset(
         "ventas-por-vendedor",
         "ventas-por-articulo",
         "ventas-marcas-mensual",
+        "ventas-marca-superart",
         "bo-stock-facturacion",
         "stock-existencias",
     }
@@ -169,6 +170,18 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             )
 
             ensure_ventas_marcas_mensual_report()
+            report = ReportDefinition.objects.filter(filters).first()
+        if not report and slug == "ventas-mensuales-licenciatarios":
+            from reports.services.ventas_mensuales_licenciatarios_seed import (
+                ensure_ventas_mensuales_licenciatarios_report,
+            )
+
+            ensure_ventas_mensuales_licenciatarios_report()
+            report = ReportDefinition.objects.filter(filters).first()
+        if not report and slug == "ventas-marca-superart":
+            from reports.services.ventas_marca_superart_seed import ensure_ventas_marca_superart_report
+
+            ensure_ventas_marca_superart_report()
             report = ReportDefinition.objects.filter(filters).first()
         if not report:
             raise Http404("Report not found")
@@ -531,3 +544,25 @@ class ReportBuilderDetailView(ReportsLoginRequiredMixin, TemplateView):
         return context
 
 
+
+def manual_usuario_view(request):
+    """Manual de usuario Informes/Reports (HTML estático). Solo requiere sesión activa."""
+    from pathlib import Path
+
+    from django.http import FileResponse, Http404
+
+    if "user" not in request.session or not request.session.get("user"):
+        return redirect("login:login")
+    manual_path = (
+        Path(__file__).resolve().parent
+        / "static"
+        / "reports"
+        / "manuales"
+        / "manual_usuario_reportes.html"
+    )
+    if not manual_path.is_file():
+        raise Http404("Manual de usuario Informes no encontrado.")
+    return FileResponse(
+        manual_path.open("rb"),
+        content_type="text/html; charset=utf-8",
+    )

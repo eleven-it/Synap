@@ -16,6 +16,10 @@ Informe **pivot mensual** de ventas por marca: filas **Vendedor → Cliente**, c
 
 Cubre la lógica de las hojas Excel PuW/PuM (plantilla BEST) leyendo **solo AdministraNET**. Sin históricos Excel.
 
+**Hermano (envío a marcas):** [Ventas Mensuales Licenciatarios](SPEC_INFORME_VENTAS_MENSUALES_LICENCIATARIOS.md) (`ventas-mensuales-licenciatarios`) — plantilla Monthly Reporting + seed híbrido; no reemplaza este informe.
+
+**Manual de usuario:** [MANUAL_USUARIO_REPORTES.md](MANUAL_USUARIO_REPORTES.md) (§2 Ventas marcas mensual).
+
 ---
 
 ## 2. Filtros

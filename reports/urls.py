@@ -8,12 +8,14 @@ from .views import (
     ReportBuilderListView,
     ReportBuilderDetailView,
     DataMapView,
+    manual_usuario_view,
 )
 
 app_name = "reports"
 
 urlpatterns = [
     path("", ReportsCatalogView.as_view(), name="catalog"),
+    path("manual/", manual_usuario_view, name="manual_usuario"),
     path("workspace/", ReportsWorkspaceView.as_view(), name="workspace"),
     # Compatibilidad: slug histórico pending_orders → único slug pedidos-pendientes
     path(
@@ -74,6 +76,14 @@ urlpatterns = [
             permanent=False,
         ),
         name="reports_ventas_marcas_mensual_short_redirect",
+    ),
+    path(
+        "ventas-marca-superart/",
+        RedirectView.as_view(
+            url=reverse_lazy("reports:dashboard_detail", kwargs={"slug": "ventas-marca-superart"}),
+            permanent=False,
+        ),
+        name="reports_ventas_marca_superart_short_redirect",
     ),
     path("dashboard/<slug:slug>/", DashboardDetailView.as_view(), name="dashboard_detail"),
     path("builder/", ReportBuilderListView.as_view(), name="builder_list"),

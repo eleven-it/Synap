@@ -42,6 +42,7 @@ function detectReportType() {
     "ventas-objetivos-vs-bo",
     "ventas-por-vendedor",
     "ventas-por-articulo",
+    "ventas-marca-superart",
     "ventas-marcas-mensual",
     "comprobantes-rutas",
   ];
@@ -78,8 +79,19 @@ function isInformeBoDualPeriodo(slug) {
     slug === "ventas-objetivos-vs-bo" ||
     slug === "ventas-por-vendedor" ||
     slug === "ventas-por-articulo" ||
+    slug === "ventas-marca-superart" ||
     slug === "ventas-marcas-mensual"
   );
+}
+
+/** Informe ventas por marca y SuperArt (jerarquía Marca → SuperArt → Artículo). */
+function isVentasMarcaSuperartSlug(slug) {
+  return slug === "ventas-marca-superart";
+}
+
+/** Jerarquía VO/VPA/VMSA: fetch y render vía handler dedicado. */
+function isJerarquiaVentasQuerySlug(slug) {
+  return isJerarquiaVentasBoFamiliaSlug(slug) || isVentasMarcaSuperartSlug(slug);
 }
 
 /** Informe matriz ventas marcas mensual (PuW/PuM). */
@@ -90,7 +102,9 @@ function isVentasMarcasMensualSlug(slug) {
 /** Familia filtros período facturación + sucursal/clientes (sin backorder obligatorio). */
 function isInformeVentasMarcasFamiliaSlug(slug) {
   return (
-    isJerarquiaVentasBoFamiliaSlug(slug) || isVentasMarcasMensualSlug(slug)
+    isJerarquiaVentasBoFamiliaSlug(slug) ||
+    isVentasMarcasMensualSlug(slug) ||
+    isVentasMarcaSuperartSlug(slug)
   );
 }
 
@@ -104,10 +118,10 @@ function isInformeQuerySoloManualORealtime(slug) {
     slug === "ventas-objetivos-vs-bo" ||
     slug === "ventas-por-vendedor" ||
     slug === "ventas-por-articulo" ||
+    slug === "ventas-marca-superart" ||
     slug === "ventas-marcas-mensual"
   );
 }
-
 /** VO, ventas por vendedor y ventas por artículo: filtros BO y período facturación. */
 function isJerarquiaVentasBoFamiliaSlug(slug) {
   return (
@@ -117,6 +131,8 @@ function isJerarquiaVentasBoFamiliaSlug(slug) {
   );
 }
 
+const VMSA_SUPERART_FILTER_SPECS = [["vmm_superarts_incluidos", "superarts_incluidos"]];
+
 const VMM_FILTER_SPECS = [
   ["vmm_marcas_incluidos", "marcas_incluidos"],
   ["vmm_superarts_incluidos", "superarts_incluidos"],
@@ -124,7 +140,11 @@ const VMM_FILTER_SPECS = [
 
 /** Ventas por artículo / vendedor: filtros rubro/subrubro/marca incluir/excluir. */
 function isVentasCatalogoFiltersSlug(slug) {
-  return slug === "ventas-por-articulo" || slug === "ventas-por-vendedor";
+  return (
+    slug === "ventas-por-articulo" ||
+    slug === "ventas-por-vendedor" ||
+    slug === "ventas-marca-superart"
+  );
 }
 
 const VPA_CATALOG_FILTER_SPECS = [
@@ -151,10 +171,14 @@ function isJerarquiaVentasVendedorSlug(slug) {
 }
 
 function normalizeJerarquiaSortFilters(slug, ordenarPorRaw, ordenFormaRaw) {
-  const allowedOrdenarPor =
-    slug === "ventas-por-vendedor" || slug === "ventas-por-articulo"
-      ? ["facturacion_periodo", "unidades_periodo"]
-      : ["objetivo_meta", "objetivo_falta", "total_ventas_periodo"];
+  let allowedOrdenarPor;
+  if (slug === "ventas-por-vendedor" || slug === "ventas-por-articulo") {
+    allowedOrdenarPor = ["facturacion_periodo", "unidades_periodo"];
+  } else if (isVentasMarcaSuperartSlug(slug)) {
+    allowedOrdenarPor = ["facturacion_periodo", "packs", "docenas"];
+  } else {
+    allowedOrdenarPor = ["objetivo_meta", "objetivo_falta", "total_ventas_periodo"];
+  }
   const ordenarPor = String(ordenarPorRaw || "").trim();
   const ordenForma = String(ordenFormaRaw || "").trim().toLowerCase();
   const normalizedOrdenarPor = allowedOrdenarPor.includes(ordenarPor) ? ordenarPor : allowedOrdenarPor[0];
@@ -4109,7 +4133,7 @@ function syncBoDualSummaryPeriod() {
   const bi = document.getElementById("fecha_inicio")?.value;
   const bf = document.getElementById("fecha_fin")?.value;
   const line =
-    slug === "ventas-por-vendedor" || slug === "ventas-por-articulo" || slug === "ventas-marcas-mensual"
+    slug === "ventas-por-vendedor" || slug === "ventas-por-articulo" || slug === "ventas-marca-superart" || slug === "ventas-marcas-mensual"
       ? `Periodo facturación: ${fmt(fif)} al ${fmt(fff)}`
       : `Facturación y remitos: ${fmt(fif)} al ${fmt(fff)} · Backorder: ${fmt(bi)} al ${fmt(bf)}`;
   if (boPeriodEl) boPeriodEl.textContent = line;
@@ -7061,6 +7085,57 @@ if (dashboardRoot) {
         });
       }
 
+      if (isVentasMarcaSuperartSlug(reportSlug)) {
+        const filterBase = `${apiUrl.replace("/query/", "/filters/")}`;
+        const headers = { "X-Requested-With": "XMLHttpRequest" };
+        const loadVmsaSuperArts = async (extraQuery = "") => {
+          const resp = await fetch(`${filterBase}?type=superarts${extraQuery}`, { headers });
+          if (!resp.ok) return;
+          const json = await resp.json();
+          const items = json.superarts || [];
+          const sel = document.getElementById("vmm_superarts_incluidos");
+          if (!sel) return;
+          sel.innerHTML = "";
+          items.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = String(item.value);
+            option.textContent = item.label;
+            if (
+              savedFilters &&
+              savedFilters.superarts_incluidos &&
+              Array.isArray(savedFilters.superarts_incluidos) &&
+              savedFilters.superarts_incluidos.map(String).includes(String(item.value))
+            ) {
+              option.selected = true;
+            }
+            sel.appendChild(option);
+          });
+          initializeTagsFilter("vmm_superarts_incluidos", "superarts");
+        };
+        const reloadSuperArtsVmsa = async () => {
+          const marcasSel = document.getElementById("vpa_marcas_incluidos");
+          let q = "";
+          if (marcasSel) {
+            const vals = Array.from(marcasSel.selectedOptions)
+              .map((o) => String(o.value))
+              .filter(Boolean);
+            if (vals.length) q = `&marcas=${encodeURIComponent(vals.join(","))}`;
+          }
+          await loadVmsaSuperArts(q);
+        };
+        try {
+          await reloadSuperArtsVmsa();
+          const marcasSel = document.getElementById("vpa_marcas_incluidos");
+          if (marcasSel) {
+            marcasSel.addEventListener("change", () => {
+              reloadSuperArtsVmsa().catch((e) => console.error("Error recargando SuperArt:", e));
+            });
+          }
+        } catch (e) {
+          console.error("Error cargando filtros SuperArt ventas-marca-superart:", e);
+        }
+      }
+
       // Aplicar otros filtros guardados (fechas, mes actual)
       if (savedFilters) {
         applyFilters(savedFilters);
@@ -9103,7 +9178,7 @@ if (dashboardRoot) {
           }, 150);
         }
       }
-      if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
+      if (isJerarquiaVentasBoFamiliaSlug(reportSlug) || isVentasMarcaSuperartSlug(reportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
         const ordenFormaSelect = document.getElementById("orden_forma");
         const sortFilters = normalizeJerarquiaSortFilters(reportSlug, filters.ordenar_por, filters.orden_forma);
@@ -9226,6 +9301,21 @@ if (dashboardRoot) {
           const mb = document.getElementById("vmm_marca_b");
           if (mb) mb.value = String(filters.marca_b);
         }
+      }
+      if (isVentasMarcaSuperartSlug(reportSlug)) {
+        const tagRestoreSa = (arr, selectId) => {
+          if (!arr || !Array.isArray(arr)) return;
+          const sel = document.getElementById(selectId);
+          if (!sel) return;
+          arr.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = sel.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) option.selected = true;
+          });
+          setTimeout(() => sel.dispatchEvent(new Event("change", { bubbles: true })), 150);
+        };
+        tagRestoreSa(filters.superarts_incluidos, "vmm_superarts_incluidos");
       }
       if (reportSlug === "ventas-objetivos-vs-bo") {
         const tagRestoreVoRubro = (arr, selectId) => {
@@ -9660,7 +9750,12 @@ if (dashboardRoot) {
           filters.marca_b = marcaB.value;
         }
       }
-      if (isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
+      if (isVentasMarcaSuperartSlug(currentReportSlug)) {
+        VMSA_SUPERART_FILTER_SPECS.forEach(([selectId, key]) =>
+          appendTagMultiFilter(selectId, filters, key)
+        );
+      }
+      if (isJerarquiaVentasBoFamiliaSlug(currentReportSlug) || isVentasMarcaSuperartSlug(currentReportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
         const ordenFormaSelect = document.getElementById("orden_forma");
         const sortFilters = normalizeJerarquiaSortFilters(
@@ -9770,6 +9865,7 @@ if (dashboardRoot) {
       slug === "ventas-objetivos-vs-bo" ||
       slug === "ventas-por-vendedor" ||
       slug === "ventas-por-articulo" ||
+      slug === "ventas-marca-superart" ||
       slug === "ventas-marcas-mensual"
     ) {
       return true;
@@ -9799,6 +9895,10 @@ if (dashboardRoot) {
     "ventas-por-articulo": {
       title: "Cargando ventas por artículo",
       subtitle: "Consultando facturación por artículo, proveedor y cliente…",
+    },
+    "ventas-marca-superart": {
+      title: "Cargando ventas por marca y SuperArt",
+      subtitle: "Consultando jerarquía Marca → SuperArt → Artículo…",
     },
     "ventas-marcas-mensual": {
       title: "Cargando ventas marcas mensual",
@@ -9869,6 +9969,7 @@ if (dashboardRoot) {
     slug === "ventas-objetivos-vs-bo" ||
     slug === "ventas-por-vendedor" ||
     slug === "ventas-por-articulo" ||
+    slug === "ventas-marca-superart" ||
     slug === "ventas-marcas-mensual" ||
     isLogisticaListaComprobantesRutasSlug(slug);
 
@@ -10063,7 +10164,7 @@ if (dashboardRoot) {
               });
             });
           }
-        } else if (isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
+        } else if (isJerarquiaVentasQuerySlug(currentReportSlug)) {
           try {
             const voResponse = {
               data: payload.data || [],
@@ -10097,6 +10198,16 @@ if (dashboardRoot) {
                 }
               } else {
                 console.error("[dashboard] ventasPorArticuloHandler no está definido; ¿cargó ventas_por_articulo.js?");
+              }
+            } else if (isVentasMarcaSuperartSlug(currentReportSlug)) {
+              if (window.ventasMarcaSuperartHandler && typeof window.ventasMarcaSuperartHandler.processData === "function") {
+                try {
+                  window.ventasMarcaSuperartHandler.processData(voResponse);
+                } catch (e) {
+                  console.error("[dashboard] ventas marca superart processData:", e);
+                }
+              } else {
+                console.error("[dashboard] ventasMarcaSuperartHandler no está definido; ¿cargó ventas_marca_superart.js?");
               }
             } else if (window.objetivosVentasBoHandler && typeof window.objetivosVentasBoHandler.processData === "function") {
               try {
@@ -10629,6 +10740,10 @@ if (dashboardRoot) {
         }
 
         if (reportSlug === "ventas-marcas-mensual" && typeof window.getFilters === "function") {
+          Object.assign(filters, window.getFilters());
+        }
+
+        if (reportSlug === "ventas-marca-superart" && typeof window.getFilters === "function") {
           Object.assign(filters, window.getFilters());
         }
 
