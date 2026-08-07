@@ -38,6 +38,19 @@ ESTADOS_CAMPANA = frozenset(
     }
 )
 
+
+def puede_exportar_informe_campana(estado: Any) -> bool:
+    """Excel de impacto: campañas con snapshot operativo (no borrador/anulada).
+
+    El estado queda explícito en el informe (preliminar vs definitivo Aplicado).
+    """
+    return str_or_default(estado, "") in {
+        ESTADO_EN_CONTEO,
+        ESTADO_EN_REVISION,
+        ESTADO_AUTORIZADO,
+        ESTADO_APLICADO,
+    }
+
 TRANSICIONES_ESTADO: Dict[str, frozenset] = {
     ESTADO_BORRADOR: frozenset({ESTADO_EN_CONTEO, ESTADO_ANULADO}),
     ESTADO_EN_CONTEO: frozenset({ESTADO_EN_REVISION, ESTADO_ANULADO}),
@@ -1844,6 +1857,194 @@ def listar_eventos_linea(
             return [dict(r) for r in cursor.fetchall()]
     except Exception as exc:
         logger.warning("listar_eventos_linea: %s", exc)
+        return []
+
+
+def listar_eventos_campana(
+    base_empresa: str,
+    id_campana: int,
+) -> List[Dict[str, Any]]:
+    """Ledger completo de sync/eventos de la campaña (informe Excel)."""
+    cid = to_int_or_none(id_campana)
+    if cid is None:
+        return []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_art = _nombre_tabla(cursor, "articulo")
+            if not tbl_art:
+                return []
+            ta = tbl_art.replace("`", "``")
+            cursor.execute(
+                f"SELECT e.id_evento, e.client_event_id, e.id_articulo, e.id_deposito, "
+                f"e.id_contador, e.cantidad, e.client_ts, e.server_ts, e.resultado, e.motivo, "
+                f"COALESCE(a.id_manual, '-') AS codigo, "
+                f"COALESCE(a.NombreArticulo, '') AS nombre "
+                f"FROM inv_fisico_evento e "
+                f"INNER JOIN `{ta}` a ON a.IDArt = e.id_articulo "
+                f"WHERE e.id_campana = %s "
+                f"ORDER BY e.server_ts, e.id_evento",
+                [cid],
+            )
+            eventos = [dict(r) for r in cursor.fetchall()]
+    except Exception as exc:
+        logger.warning("listar_eventos_campana %s/%s: %s", base_empresa, id_campana, exc)
+        return []
+
+    candidatos = listar_contadores_candidatos(base_empresa)
+    etiquetas = {
+        c["id_usuario"]: c["etiqueta"]
+        for c in etiquetar_contadores(
+            list({to_int_or_none(e.get("id_contador")) for e in eventos if e.get("id_contador")}),
+            candidatos,
+        )
+    }
+    for ev in eventos:
+        uid = to_int_or_none(ev.get("id_contador"))
+        ev["id_contador"] = uid
+        ev["id_articulo"] = to_int_or_none(ev.get("id_articulo"))
+        ev["id_deposito"] = to_int_or_none(ev.get("id_deposito"))
+        ev["cantidad"] = to_decimal_or_none(ev.get("cantidad"))
+        ev["contador_etiqueta"] = etiquetas.get(uid, "") if uid else ""
+    return eventos
+
+
+def listar_auditoria_ajuste_campana(
+    base_empresa: str,
+    id_campana: int,
+) -> List[Dict[str, Any]]:
+    """Historial de auditoría de ajustes de la campaña (informe Excel)."""
+    cid = to_int_or_none(id_campana)
+    if cid is None:
+        return []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_art = _nombre_tabla(cursor, "articulo")
+            if not tbl_art:
+                return []
+            ta = tbl_art.replace("`", "``")
+            cursor.execute(
+                f"SELECT aud.id_auditoria, aud.created_at, aud.accion, aud.id_usuario, "
+                f"aud.id_linea, aud.id_articulo, aud.id_deposito, "
+                f"aud.ajuste_sistema, aud.ajuste_anterior, aud.ajuste_nuevo, "
+                f"aud.diferencia_real, aud.codigo_movimiento, "
+                f"COALESCE(a.id_manual, '-') AS codigo, "
+                f"COALESCE(a.NombreArticulo, '') AS nombre "
+                f"FROM inv_fisico_ajuste_auditoria aud "
+                f"INNER JOIN `{ta}` a ON a.IDArt = aud.id_articulo "
+                f"WHERE aud.id_campana = %s "
+                f"ORDER BY aud.created_at, aud.id_auditoria",
+                [cid],
+            )
+            filas = []
+            for row in cursor.fetchall():
+                filas.append(
+                    {
+                        "id_auditoria": to_int_or_none(row.get("id_auditoria")),
+                        "created_at": row.get("created_at"),
+                        "accion": str_or_default(row.get("accion"), ""),
+                        "id_usuario": to_int_or_none(row.get("id_usuario")),
+                        "id_linea": to_int_or_none(row.get("id_linea")),
+                        "id_articulo": to_int_or_none(row.get("id_articulo")),
+                        "id_deposito": to_int_or_none(row.get("id_deposito")),
+                        "ajuste_sistema": to_decimal_or_none(row.get("ajuste_sistema")),
+                        "ajuste_anterior": to_decimal_or_none(row.get("ajuste_anterior")),
+                        "ajuste_nuevo": to_decimal_or_none(row.get("ajuste_nuevo")),
+                        "diferencia_real": to_decimal_or_none(row.get("diferencia_real")),
+                        "codigo_movimiento": to_int_or_none(row.get("codigo_movimiento")),
+                        "codigo": str_or_default(row.get("codigo"), "-"),
+                        "nombre": str_or_default(row.get("nombre"), ""),
+                    }
+                )
+            return filas
+    except Exception as exc:
+        logger.warning(
+            "listar_auditoria_ajuste_campana %s/%s: %s", base_empresa, id_campana, exc
+        )
+        return []
+
+
+def listar_movimientos_post_snapshot_campana(
+    base_empresa: str,
+    id_campana: int,
+) -> List[Dict[str, Any]]:
+    """Movimientos legacy post-snapshot de artículos de la campaña (informe Excel)."""
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana or not campana.get("fecha_snapshot"):
+        return []
+    cid = to_int_or_none(id_campana)
+    if cid is None:
+        return []
+    depositos = [
+        d
+        for d in (to_int_or_none(x) for x in (campana.get("depositos") or []))
+        if d is not None
+    ]
+    if not depositos:
+        return []
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            tbl_art = _nombre_tabla(cursor, "articulo")
+            if not tbl_stock or not tbl_art:
+                return []
+            ts = tbl_stock.replace("`", "``")
+            ta = tbl_art.replace("`", "``")
+            tbl_ms = _nombre_tabla(cursor, "movimiento_stock")
+            join_ms = ""
+            select_detalle = "'' AS detalle"
+            if tbl_ms:
+                tms = tbl_ms.replace("`", "``")
+                join_ms = f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
+                select_detalle = "COALESCE(ms.detalle, '') AS detalle"
+            ph = ",".join(["%s"] * len(depositos))
+            cursor.execute(
+                f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, "
+                f"s.FechaControl AS fecha_control, "
+                f"COALESCE(s.Entrada, 0) AS Entrada, COALESCE(s.Salida, 0) AS Salida, "
+                f"COALESCE(s.TipoComp, '-') AS motivo, "
+                f"COALESCE(s.NroComprobante, '-') AS nro, "
+                f"{select_detalle}, "
+                f"COALESCE(a.id_manual, '-') AS codigo, "
+                f"COALESCE(a.NombreArticulo, '') AS nombre "
+                f"FROM `{ts}` s "
+                f"INNER JOIN inv_fisico_linea l "
+                f"  ON l.id_campana = %s AND l.id_articulo = s.IDArt "
+                f" AND l.id_deposito = s.CodDeposito "
+                f"INNER JOIN `{ta}` a ON a.IDArt = s.IDArt "
+                f"{join_ms}"
+                f"WHERE s.CodDeposito IN ({ph}) "
+                f"AND s.FechaControl >= %s AND COALESCE(s.Anulado, 'No') <> 'Si' "
+                f"ORDER BY s.FechaControl, s.id_stock",
+                [cid, *depositos, campana["fecha_snapshot"]],
+            )
+            movimientos: List[Dict[str, Any]] = []
+            for row in cursor.fetchall():
+                entrada = to_decimal_or_none(row.get("Entrada")) or Decimal("0")
+                salida = to_decimal_or_none(row.get("Salida")) or Decimal("0")
+                movimientos.append(
+                    {
+                        "id_articulo": to_int_or_none(row.get("id_articulo")),
+                        "id_deposito": to_int_or_none(row.get("id_deposito")),
+                        "codigo": str_or_default(row.get("codigo"), "-"),
+                        "nombre": str_or_default(row.get("nombre"), ""),
+                        "fecha_control": row.get("fecha_control"),
+                        "entrada": entrada,
+                        "salida": salida,
+                        "neto": entrada - salida,
+                        "motivo": str_or_default(row.get("motivo"), "-"),
+                        "nro": str_or_default(row.get("nro"), "-"),
+                        "detalle": str_or_default(row.get("detalle"), ""),
+                    }
+                )
+            return movimientos
+    except Exception as exc:
+        logger.warning(
+            "listar_movimientos_post_snapshot_campana %s/%s: %s",
+            base_empresa,
+            id_campana,
+            exc,
+        )
         return []
 
 

@@ -70,6 +70,12 @@ class InvFisicoURLTests(SimpleTestCase):
             "/stock/inventario-fisico/3/analizador/",
         )
 
+    def test_inventario_fisico_export_xlsx_url(self):
+        self.assertEqual(
+            reverse("stock:inventario_fisico_export_xlsx", kwargs={"id_campana": 3}),
+            "/stock/inventario-fisico/3/exportar/",
+        )
+
     def test_inventario_fisico_linea_url(self):
         self.assertEqual(
             reverse("stock:inventario_fisico_linea", kwargs={"id_campana": 3, "id_linea": 9}),
