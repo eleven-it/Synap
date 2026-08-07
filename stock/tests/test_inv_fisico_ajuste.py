@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Tests analizador, autorización y MSTOCK inventario físico (Fase 6 — Strict TDD)."""
 import json
+import uuid
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
@@ -585,3 +586,560 @@ class AnalizadorVistaTest(SimpleTestCase):
         self.assertIn("Buscar en tabla", content)
         self.assertIn("-2", content)
         self.assertIn("sincronizar", content.lower())
+
+
+class MarcarNoContadosCeroServicioTest(SimpleTestCase):
+    """Contado cero masivo — servicio (change contado-cero-masivo-analizador)."""
+
+    def _campana(self, estado=svc.ESTADO_EN_REVISION):
+        return {"id_campana": 7, "estado": estado, "depositos": [3]}
+
+    def _lineas_sin_contar(self, cantidad=1, *, saldo=Decimal("0"), id_base=1):
+        return [
+            {
+                "id_linea": id_base + i,
+                "id_articulo": 100 + i,
+                "id_deposito": 3,
+                "saldo_snapshot": saldo,
+                "cantidad_contada": None,
+            }
+            for i in range(cantidad)
+        ]
+
+    def _mock_cursor_con_lineas(self, mock_cursor_ctx, lineas):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = lineas
+        cursor.fetchone.side_effect = [
+            {"cantidad_contada": l.get("cantidad_contada")} for l in lineas
+        ]
+        cursor.rowcount = 1
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        return cursor
+
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_servicio_existe_y_falla_sin_implementacion_minima(
+        self, mock_obtener, mock_recalc
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 0})
+        ok, _result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=1)
+        self.assertIsInstance(ok, bool)
+
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico._insert_auditoria_ajuste")
+    @patch("stock.services.inventario_fisico._proyectar_linea")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_uuid_36_chars_y_motivo_supervisor_es(
+        self,
+        mock_obtener,
+        mock_cursor_ctx,
+        mock_proyectar,
+        mock_auditoria,
+        mock_recalc,
+        mock_desglose,
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 1})
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 1,
+            "lineas_con_snap_ne0": 1,
+            "lineas_con_mov_post": 0,
+        }
+        mock_proyectar.return_value = 1
+        cursor = self._mock_cursor_con_lineas(
+            mock_cursor_ctx, self._lineas_sin_contar(1, saldo=Decimal("3"))
+        )
+
+        ok, result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=99)
+        self.assertTrue(ok)
+        self.assertEqual(result["lineas_marcadas"], 1)
+
+        insert_sql = cursor.execute.call_args_list[2].args[0]
+        insert_params = cursor.execute.call_args_list[2].args[1]
+        self.assertIn("INSERT INTO inv_fisico_evento", insert_sql)
+        client_event_id = insert_params[0]
+        self.assertEqual(len(client_event_id), 36)
+        uuid.UUID(client_event_id)
+        self.assertEqual(insert_params[8], svc.MOTIVO_CONTADO_CERO_SUPERVISOR)
+        self.assertTrue(str(insert_params[8]).strip())
+
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico._insert_auditoria_ajuste")
+    @patch("stock.services.inventario_fisico._proyectar_linea")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_cinco_null_tres_contadas_proyecta_cinco(
+        self,
+        mock_obtener,
+        mock_cursor_ctx,
+        mock_proyectar,
+        mock_auditoria,
+        mock_recalc,
+        mock_desglose,
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 5})
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 5,
+            "lineas_con_snap_ne0": 2,
+            "lineas_con_mov_post": 1,
+        }
+        mock_proyectar.return_value = 1
+        lineas = self._lineas_sin_contar(5)
+        self._mock_cursor_con_lineas(mock_cursor_ctx, lineas)
+
+        ok, result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=1)
+        self.assertTrue(ok)
+        self.assertEqual(result["lineas_marcadas"], 5)
+        self.assertEqual(mock_proyectar.call_count, 5)
+        for call_args in mock_proyectar.call_args_list:
+            self.assertEqual(call_args.args[5], Decimal("0"))
+            self.assertTrue(call_args.kwargs.get("solo_si_sin_contar"))
+
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico._insert_auditoria_ajuste")
+    @patch("stock.services.inventario_fisico._proyectar_linea")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_sync_concurrente_gana_no_marca_linea(
+        self,
+        mock_obtener,
+        mock_cursor_ctx,
+        mock_proyectar,
+        mock_auditoria,
+        mock_recalc,
+        mock_desglose,
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 1})
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 2,
+            "lineas_con_snap_ne0": 0,
+            "lineas_con_mov_post": 0,
+        }
+        mock_proyectar.side_effect = [1, 0]
+        lineas = self._lineas_sin_contar(2)
+        cursor = MagicMock()
+        cursor.fetchall.return_value = lineas
+        cursor.fetchone.side_effect = [
+            {"cantidad_contada": None},
+            {"cantidad_contada": Decimal("4")},
+        ]
+        cursor.rowcount = 1
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+        ok, result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=1)
+        self.assertTrue(ok)
+        self.assertEqual(result["lineas_marcadas"], 1)
+        self.assertEqual(mock_auditoria.call_count, 1)
+
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico._insert_auditoria_ajuste")
+    @patch("stock.services.inventario_fisico._proyectar_linea")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_un_evento_y_una_auditoria_por_linea(
+        self,
+        mock_obtener,
+        mock_cursor_ctx,
+        mock_proyectar,
+        mock_auditoria,
+        mock_recalc,
+        mock_desglose,
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 2})
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 2,
+            "lineas_con_snap_ne0": 0,
+            "lineas_con_mov_post": 0,
+        }
+        mock_proyectar.return_value = 1
+        cursor = self._mock_cursor_con_lineas(
+            mock_cursor_ctx, self._lineas_sin_contar(2)
+        )
+
+        ok, result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=5)
+        self.assertTrue(ok)
+        self.assertEqual(result["lineas_marcadas"], 2)
+
+        evento_inserts = [
+            c
+            for c in cursor.execute.call_args_list
+            if c.args and "INSERT INTO inv_fisico_evento" in c.args[0]
+        ]
+        self.assertEqual(len(evento_inserts), 2)
+        self.assertEqual(mock_auditoria.call_count, 2)
+        for aud_call in mock_auditoria.call_args_list:
+            self.assertEqual(
+                aud_call.kwargs.get("accion"), svc.ACCION_AUDIT_CONTADO_CERO_MASIVO
+            )
+
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_estados_en_conteo_y_en_revision_ok_aplicada_400(
+        self, mock_obtener, mock_recalc
+    ):
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 0})
+
+        for estado_ok in (svc.ESTADO_EN_CONTEO, svc.ESTADO_EN_REVISION):
+            with self.subTest(estado=estado_ok):
+                with patch(
+                    "stock.services.inventario_fisico.contar_desglose_no_contados",
+                    return_value={
+                        "lineas_no_contadas": 0,
+                        "lineas_con_snap_ne0": 0,
+                        "lineas_con_mov_post": 0,
+                    },
+                ), patch("stock.services.inventario_fisico.mysql_cursor") as mock_cursor_ctx:
+                    mock_obtener.return_value = self._campana(estado=estado_ok)
+                    cursor = MagicMock()
+                    cursor.fetchall.return_value = []
+                    mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+                    mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+                    ok, result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=1)
+                    self.assertTrue(ok, result)
+                    self.assertEqual(result["lineas_marcadas"], 0)
+
+        mock_obtener.return_value = self._campana(estado=svc.ESTADO_APLICADO)
+        ok, result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=1)
+        self.assertFalse(ok)
+        self.assertIn("error", result)
+
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_idempotencia_sin_null_restantes(
+        self, mock_obtener, mock_cursor_ctx, mock_recalc, mock_desglose
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 0})
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 0,
+            "lineas_con_snap_ne0": 0,
+            "lineas_con_mov_post": 0,
+        }
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+        cursor.fetchone.return_value = None
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+        ok, result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=1)
+        self.assertTrue(ok)
+        self.assertEqual(result["lineas_marcadas"], 0)
+
+    @patch("core.services.administranet_stock.alta_movimiento")
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico._insert_auditoria_ajuste")
+    @patch("stock.services.inventario_fisico._proyectar_linea")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_no_invoca_mstock(
+        self,
+        mock_obtener,
+        mock_cursor_ctx,
+        mock_proyectar,
+        mock_auditoria,
+        mock_recalc,
+        mock_desglose,
+        mock_alta,
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 1})
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 1,
+            "lineas_con_snap_ne0": 1,
+            "lineas_con_mov_post": 0,
+        }
+        mock_proyectar.return_value = 1
+        self._mock_cursor_con_lineas(mock_cursor_ctx, self._lineas_sin_contar(1))
+
+        ok, _result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=1)
+        self.assertTrue(ok)
+        mock_alta.assert_not_called()
+
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico._proyectar_linea")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_recalc_pisar_overrides_false(
+        self,
+        mock_obtener,
+        mock_cursor_ctx,
+        mock_proyectar,
+        mock_recalc,
+        mock_desglose,
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 1,
+            "lineas_con_snap_ne0": 0,
+            "lineas_con_mov_post": 0,
+        }
+        mock_proyectar.return_value = 1
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 1})
+        self._mock_cursor_con_lineas(mock_cursor_ctx, self._lineas_sin_contar(1))
+
+        svc.marcar_no_contados_como_cero("emp", 7, id_usuario=42)
+        mock_recalc.assert_called_once_with(
+            "emp", 7, id_usuario=42, pisar_overrides=False
+        )
+
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico._insert_auditoria_ajuste")
+    @patch("stock.services.inventario_fisico._proyectar_linea")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_recalc_falla_ok_con_advertencia_sin_rollback(
+        self,
+        mock_obtener,
+        mock_cursor_ctx,
+        mock_proyectar,
+        mock_auditoria,
+        mock_recalc,
+        mock_desglose,
+    ):
+        mock_obtener.return_value = self._campana()
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 1,
+            "lineas_con_snap_ne0": 0,
+            "lineas_con_mov_post": 0,
+        }
+        mock_proyectar.return_value = 1
+        mock_recalc.return_value = (
+            False,
+            {"error": "No se pudo recalcular el ajuste post-snapshot."},
+        )
+        self._mock_cursor_con_lineas(mock_cursor_ctx, self._lineas_sin_contar(1))
+
+        ok, result = svc.marcar_no_contados_como_cero("emp", 7, id_usuario=1)
+        self.assertTrue(ok)
+        self.assertEqual(result["lineas_marcadas"], 1)
+        self.assertIsNotNone(result.get("advertencia"))
+        self.assertEqual(mock_auditoria.call_count, 1)
+
+    @patch("stock.services.inventario_fisico.calcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    def test_desglose_snap_ne0_y_mov_post_coherentes(
+        self, mock_cursor_ctx, mock_netos
+    ):
+        mock_netos.return_value = {(100, 3): Decimal("2"), (101, 3): Decimal("0")}
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {"id_articulo": 100, "id_deposito": 3, "saldo_snapshot": Decimal("5")},
+            {"id_articulo": 101, "id_deposito": 3, "saldo_snapshot": Decimal("0")},
+            {"id_articulo": 102, "id_deposito": 3, "saldo_snapshot": Decimal("0")},
+        ]
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+        desglose = svc.contar_desglose_no_contados("emp", 7)
+        self.assertEqual(desglose["lineas_no_contadas"], 3)
+        self.assertEqual(desglose["lineas_con_snap_ne0"], 1)
+        self.assertEqual(desglose["lineas_con_mov_post"], 1)
+
+
+@override_settings(
+    SESSION_ENGINE="django.contrib.sessions.backends.cache",
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "inv-fisico-marcar-cero-api-tests",
+        }
+    },
+)
+class ApiCampanaMarcarNoContadosCeroTest(SimpleTestCase):
+    def _request_post(self, id_campana=7, *, is_admin=True, tiene_permiso=True):
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        rf = RequestFactory()
+        request = rf.post(
+            reverse(
+                "stock:api_campana_marcar_no_contados_cero",
+                kwargs={"id_campana": id_campana},
+            ),
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        SessionMiddleware(lambda req: HttpResponse()).process_request(request)
+        request.session["user"] = {
+            "base_empresa": "emp",
+            "id_usuario": 1,
+            "id_puesto": 1,
+            "cod_usuario": "operador",
+        }
+        request.session.save()
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_admin = MagicMock(return_value=is_admin)
+        user.tiene_permiso = MagicMock(return_value=tiene_permiso)
+        user.cod_usuario = "operador"
+        user.roles = MagicMock()
+        user.roles.all.return_value = []
+        request.user = user
+        return request
+
+    @patch("stock.services.inventario_fisico.marcar_no_contados_como_cero")
+    def test_api_exito_200_con_desglose(self, mock_marcar):
+        from stock.api_views import api_campana_marcar_no_contados_cero
+
+        mock_marcar.return_value = (
+            True,
+            {
+                "lineas_marcadas": 10,
+                "lineas_con_snap_ne0": 3,
+                "lineas_con_mov_post": 1,
+                "advertencia": None,
+                "mensaje": "10 líneas marcadas con Contado = 0.",
+            },
+        )
+        resp = api_campana_marcar_no_contados_cero(self._request_post(), id_campana=7)
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.content)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["lineas_marcadas"], 10)
+        self.assertEqual(data["lineas_con_snap_ne0"], 3)
+        self.assertEqual(data["lineas_con_mov_post"], 1)
+        self.assertIsNone(data["advertencia"])
+
+    @patch("stock.services.inventario_fisico.marcar_no_contados_como_cero")
+    def test_api_estado_invalido_400(self, mock_marcar):
+        from stock.api_views import api_campana_marcar_no_contados_cero
+
+        mock_marcar.return_value = (False, {"error": "No se puede marcar contado cero."})
+        resp = api_campana_marcar_no_contados_cero(self._request_post(), id_campana=7)
+        self.assertEqual(resp.status_code, 400)
+        data = json.loads(resp.content)
+        self.assertIn("error", data)
+
+    @patch("stock.services.inventario_fisico.marcar_no_contados_como_cero")
+    def test_api_advertencia_recalc_en_respuesta(self, mock_marcar):
+        from stock.api_views import api_campana_marcar_no_contados_cero
+
+        mock_marcar.return_value = (
+            True,
+            {
+                "lineas_marcadas": 2,
+                "lineas_con_snap_ne0": 0,
+                "lineas_con_mov_post": 0,
+                "advertencia": "No se pudo recalcular el ajuste post-snapshot.",
+                "mensaje": "2 líneas marcadas con Contado = 0.",
+            },
+        )
+        resp = api_campana_marcar_no_contados_cero(self._request_post(), id_campana=7)
+        data = json.loads(resp.content)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["lineas_marcadas"], 2)
+        self.assertIn("recalcular", data["advertencia"].lower())
+
+    def test_api_sin_permiso_403(self):
+        from django.core.exceptions import PermissionDenied
+        from stock.api_views import api_campana_marcar_no_contados_cero
+
+        with self.assertRaises(PermissionDenied):
+            api_campana_marcar_no_contados_cero(
+                self._request_post(is_admin=False, tiene_permiso=False),
+                id_campana=7,
+            )
+
+
+@override_settings(
+    SESSION_ENGINE="django.contrib.sessions.backends.cache",
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "inv-fisico-marcar-cero-vista-tests",
+        }
+    },
+)
+class AnalizadorMarcarCeroContextoTest(SimpleTestCase):
+    @patch("stock.views.render")
+    @patch("stock.services.inventario_fisico.contar_desglose_no_contados")
+    @patch("stock.services.inventario_fisico.recalcular_ajuste_post_snapshot")
+    @patch("stock.services.inventario_fisico.listar_lineas_analizador")
+    @patch("stock.services.inventario_fisico.obtener_resumen_monitor")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    @patch("stock.services.inventario_tabla.listar_marcas_catalogo")
+    def test_contexto_counts_globales_ignoran_filtro_marcas(
+        self,
+        mock_marcas,
+        mock_campana,
+        mock_resumen,
+        mock_lineas,
+        mock_recalc,
+        mock_desglose,
+        mock_render,
+    ):
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        from stock.views import inventario_fisico_analizador_view
+
+        mock_marcas.return_value = [{"value": 5, "label": "Marca A"}]
+        mock_recalc.return_value = (True, {"lineas_actualizadas": 0})
+        mock_campana.return_value = {
+            "id_campana": 3,
+            "estado": svc.ESTADO_EN_REVISION,
+            "fecha": "2026-07-23",
+            "depositos": [3],
+        }
+        mock_resumen.return_value = {
+            "conflictos_sync": 0,
+            "bloqueo_autorizar": False,
+            "bloqueo_estado": False,
+            "total": 20,
+            "contados": 8,
+            "pendientes": 12,
+        }
+        mock_desglose.return_value = {
+            "lineas_no_contadas": 12,
+            "lineas_con_snap_ne0": 3,
+            "lineas_con_mov_post": 1,
+        }
+        mock_lineas.side_effect = lambda *args, **kwargs: (
+            [{"id_linea": 1, "id_marca": 5}]
+            if kwargs.get("marcas_incluidos")
+            else [{"id_linea": i} for i in range(1, 6)]
+        )
+        mock_render.return_value = HttpResponse("ok")
+
+        rf = RequestFactory()
+        request = rf.get(
+            reverse("stock:inventario_fisico_analizador", kwargs={"id_campana": 3}),
+            {"marcas_incluidos": "5"},
+        )
+        SessionMiddleware(lambda req: HttpResponse()).process_request(request)
+        request.session["user"] = {
+            "base_empresa": "emp",
+            "id_usuario": 1,
+            "cod_usuario": "supervisor",
+        }
+        request.session.save()
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_admin = MagicMock(return_value=True)
+        request.user = user
+
+        inventario_fisico_analizador_view(request, id_campana=3)
+        context = mock_render.call_args.args[2]
+        self.assertEqual(context["lineas_no_contadas"], 12)
+        self.assertEqual(context["lineas_no_contadas_snap_ne0"], 3)
+        self.assertEqual(context["lineas_no_contadas_mov_post"], 1)
+        self.assertTrue(context["puede_marcar_cero"])
+        mock_desglose.assert_called_once_with("emp", 3)
