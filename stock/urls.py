@@ -29,6 +29,11 @@ urlpatterns = [
         name="inventario_fisico_analizador",
     ),
     path(
+        "inventario-fisico/<int:id_campana>/exportar/",
+        views.inventario_fisico_export_xlsx_view,
+        name="inventario_fisico_export_xlsx",
+    ),
+    path(
         "inventario-fisico/<int:id_campana>/linea/<int:id_linea>/",
         views.inventario_fisico_linea_view,
         name="inventario_fisico_linea",

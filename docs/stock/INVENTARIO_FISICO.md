@@ -88,6 +88,7 @@ Saldo final (UI)                 = saldo_actual_ref + diferencia_real  (NULL si 
 | `/stock/inventario-fisico/nueva/` | gestionar | Alta campaña + snapshot |
 | `/stock/inventario-fisico/<id>/monitor/` | gestionar | Progreso, conflictos, cierre conteo |
 | `/stock/inventario-fisico/<id>/analizador/` | gestionar | Diferencias, filtros faltante/sobrante, marcas y búsqueda en tabla |
+| `/stock/inventario-fisico/<id>/exportar/` | gestionar | Excel impacto de saldos (multi-hoja) |
 | `/stock/inventario-fisico/<id>/linea/<id_linea>/` | gestionar | Detalle eventos por línea |
 | `/stock/conteo/` | `stock.inventario_fisico.contar` | PWA operario |
 | `/stock/api/conteo/prefetch/` | contar | Catálogo ciego |
@@ -121,7 +122,23 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 
 `inventario_fisico_crear_view` acepta `contadores` (lista) + `contadores_texto` y `accion` (`crear_abrir`/`crear_borrador`); `inventario_fisico_monitor_view` acepta `accion=reasignar`.
 
-**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Disponible** (`saldo_snapshot`), **Cargado después**, **Disponible ajustado**, **Contado**, **Diferencia real**, **Saldo final** (previsto post-MSTOCK), **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. **Saldo final** es solo lectura/UI: no modifica conteos ni escribe stock. Contado **0** no entra en «No contados» (es conteo explícito). Chip **`N no contados`** (N = campaña completa, sin filtro de marcas) y acción **Marcar no contados como 0** cuando el supervisor tiene permiso `gestionar` y la campaña está en **EnConteo** o **EnRevision** (ver sección siguiente).
+**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Disponible** (`saldo_snapshot`), **Cargado después**, **Disponible ajustado**, **Contado**, **Diferencia real**, **Saldo final** (previsto post-MSTOCK), **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); enlace **Exportar Excel** (informe multi-hoja de impacto de saldos); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. **Saldo final** es solo lectura/UI: no modifica conteos ni escribe stock. Contado **0** no entra en «No contados» (es conteo explícito). Chip **`N no contados`** (N = campaña completa, sin filtro de marcas) y acción **Marcar no contados como 0** cuando el supervisor tiene permiso `gestionar` y la campaña está en **EnConteo** o **EnRevision** (ver sección siguiente).
+
+### Exportación Excel (impacto de saldos)
+
+GET `/stock/inventario-fisico/<id>/exportar/` (permiso `gestionar`, nombre de ruta `stock:inventario_fisico_export_xlsx`) genera un `.xlsx` `InventarioFisico_Campana_<id>_<ddMMyyyy>.xlsx`. Servicio: `stock/services/inventario_fisico_export.py` → `exportar_campana_xlsx()`.
+
+**Disponibilidad:** campañas en **EnConteo**, **EnRevision**, **Autorizado** o **Aplicado** (no Borrador ni Anulado). El Excel deja el **estado bien determinado**: título con `ESTADO: …`, fila **ESTADO DE LA CAMPAÑA**, **Naturaleza del informe** (Preliminar vs Definitivo si Aplicado) y el nombre de archivo incluye el estado (`…_EnRevision_…xlsx`). Helper: `puede_exportar_informe_campana(estado)`.
+
+| Hoja | Contenido |
+|------|-----------|
+| **Resumen** | Metadatos de campaña, progreso, contadores, depósitos, código MSTOCK si hubo autorización, KPIs de diferencias/overrides/descuadres/conflictos |
+| **Lineas** | Artículo×depósito: snapshot, ajustes, contado, diferencia real, **saldo final** previsto, tipo (Faltante/Sobrante/…), motivo y cantidad MSTOCK |
+| **Eventos** | Ledger `inv_fisico_evento` (incl. marca masiva Contado=0) |
+| **Movimientos post-snapshot** | Renglones legacy `stock` posteriores al snapshot |
+| **Auditoria ajustes** | Overrides, autorización y `contado_cero_masivo` |
+
+Fechas en dd/MM/yyyy. Útil para enviar a gerencia el impacto previsto/real sobre saldos antes o después de autorizar.
 
 #### Marcar no contados como 0 (masivo)
 

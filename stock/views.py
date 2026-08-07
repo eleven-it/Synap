@@ -519,6 +519,7 @@ def inventario_fisico_monitor_view(request, id_campana):
         obtener_progreso_campana,
         obtener_resumen_monitor,
         parse_ids_contadores,
+        puede_exportar_informe_campana,
         transicionar_campana,
     )
 
@@ -573,6 +574,7 @@ def inventario_fisico_monitor_view(request, id_campana):
         "resumen": resumen,
         "contadores_disponibles": contadores_disponibles,
         "contadores_detalle": contadores_detalle,
+        "puede_exportar": puede_exportar_informe_campana(campana.get("estado")),
     }
     return render(request, "stock/inventario_fisico/monitor.html", context)
 
@@ -598,6 +600,7 @@ def inventario_fisico_analizador_view(request, id_campana):
         obtener_resumen_monitor,
         listar_lineas_analizador,
         parse_marcas_incluidos,
+        puede_exportar_informe_campana,
         recalcular_ajuste_post_snapshot,
     )
     from stock.services.inventario_tabla import listar_marcas_catalogo
@@ -675,8 +678,51 @@ def inventario_fisico_analizador_view(request, id_campana):
         "lineas_no_contadas_snap_ne0": desglose_no_contados["lineas_con_snap_ne0"],
         "lineas_no_contadas_mov_post": desglose_no_contados["lineas_con_mov_post"],
         "puede_marcar_cero": campana["estado"] in (ESTADO_EN_CONTEO, ESTADO_EN_REVISION),
+        "puede_exportar": puede_exportar_informe_campana(campana.get("estado")),
     }
     return render(request, "stock/inventario_fisico/analizador.html", context)
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+def inventario_fisico_export_xlsx_view(request, id_campana):
+    """Descarga Excel multi-hoja; estado de campaña queda explícito en el informe."""
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+
+    from stock.services.inventario_fisico import (
+        obtener_campana,
+        puede_exportar_informe_campana,
+    )
+    from stock.services.inventario_fisico_export import exportar_campana_xlsx
+
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana:
+        messages.error(request, "Campaña no encontrada.")
+        return redirect("stock:inventario_fisico_list")
+    if not puede_exportar_informe_campana(campana.get("estado")):
+        messages.error(
+            request,
+            "El Excel no está disponible para campañas en borrador o anuladas. "
+            "El informe requiere una campaña abierta o cerrada (EnConteo, EnRevision o Aplicado).",
+        )
+        return redirect("stock:inventario_fisico_analizador", id_campana=id_campana)
+
+    usuario_exportador = (
+        str(session_user.get("nombre") or session_user.get("cod_usuario") or "").strip()
+        or str(session_user.get("id_usuario") or "")
+    )
+    response = exportar_campana_xlsx(
+        base_empresa,
+        id_campana,
+        usuario_exportador=usuario_exportador,
+    )
+    if response is None:
+        messages.error(request, "Campaña no encontrada.")
+        return redirect("stock:inventario_fisico_list")
+    return response
 
 
 @tiene_permiso("stock.inventario_fisico.gestionar")

@@ -95,6 +95,14 @@
          class="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200">
         Monitor
       </a>
+      {% if puede_exportar %}
+      <a href="{% url 'stock:inventario_fisico_export_xlsx' id_campana=campana.id_campana %}"
+         class="inline-flex items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-950/70"
+         title="Descargar informe Excel. El archivo indica el ESTADO de la campaña (preliminar o definitivo si Aplicado).">
+        <span class="material-icons text-base" aria-hidden="true">file_download</span>
+        Exportar Excel
+      </a>
+      {% endif %}
       <a href="{{ analizador_qs_todas }}"
          class="rounded-lg px-3 py-1.5 text-xs font-medium {% if not filtro %}bg-purple-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
         Todas
