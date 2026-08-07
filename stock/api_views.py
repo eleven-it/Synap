@@ -800,6 +800,38 @@ def api_campana_linea_ajuste(request, id_campana, id_linea):
 
 
 @tiene_permiso("stock.inventario_fisico.gestionar")
+@require_http_methods(["POST"])
+def api_campana_marcar_no_contados_cero(request, id_campana):
+    """POST: marcar masivamente Contado=0 en líneas sin contar (toda la campaña)."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+
+    from stock.services.inventario_fisico import marcar_no_contados_como_cero
+
+    ok, result = marcar_no_contados_como_cero(
+        ctx["base_empresa"],
+        id_campana,
+        ctx["id_usuario"],
+    )
+    if not ok:
+        return JsonResponse(
+            {"error": result.get("error", "No se pudo marcar contado cero.")},
+            status=400,
+        )
+    return JsonResponse(
+        {
+            "ok": True,
+            "lineas_marcadas": result.get("lineas_marcadas", 0),
+            "lineas_con_snap_ne0": result.get("lineas_con_snap_ne0", 0),
+            "lineas_con_mov_post": result.get("lineas_con_mov_post", 0),
+            "mensaje": result.get("mensaje", ""),
+            "advertencia": result.get("advertencia"),
+        }
+    )
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
 @require_http_methods(["GET"])
 def api_campana_linea_movimientos(request, id_campana, id_linea):
     """GET: desglose de movimientos post-snapshot para una línea."""

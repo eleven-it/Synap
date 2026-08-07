@@ -55,6 +55,15 @@ class InvFisicoURLTests(SimpleTestCase):
             "/stock/api/campana/7/linea/9/movimientos/",
         )
 
+    def test_api_campana_marcar_no_contados_cero_url(self):
+        self.assertEqual(
+            reverse(
+                "stock:api_campana_marcar_no_contados_cero",
+                kwargs={"id_campana": 7},
+            ),
+            "/stock/api/campana/7/marcar-no-contados-cero/",
+        )
+
     def test_inventario_fisico_analizador_url(self):
         self.assertEqual(
             reverse("stock:inventario_fisico_analizador", kwargs={"id_campana": 3}),

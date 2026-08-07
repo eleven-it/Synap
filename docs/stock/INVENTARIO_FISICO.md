@@ -78,6 +78,7 @@ Saldo final (UI)                 = saldo_actual_ref + diferencia_real  (NULL si 
 | `/stock/api/campana/<id>/ajuste/recalcular/` | POST | Recalcular ajustes (`pisar_overrides` opcional) |
 | `/stock/api/campana/<id>/linea/<id_linea>/ajuste/` | POST / DELETE | Guardar / quitar override |
 | `/stock/api/campana/<id>/linea/<id_linea>/movimientos/` | GET | Desglose movimientos post-snapshot |
+| `/stock/api/campana/<id>/marcar-no-contados-cero/` | POST | Marcar masivamente **Contado = 0** en líneas sin contar (toda la campaña) |
 
 ### Rutas
 
@@ -120,7 +121,100 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 
 `inventario_fisico_crear_view` acepta `contadores` (lista) + `contadores_texto` y `accion` (`crear_abrir`/`crear_borrador`); `inventario_fisico_monitor_view` acepta `accion=reasignar`.
 
-**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Disponible** (`saldo_snapshot`), **Cargado después**, **Disponible ajustado**, **Contado**, **Diferencia real**, **Saldo final** (previsto post-MSTOCK), **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. **Saldo final** es solo lectura/UI: no modifica conteos ni escribe stock. Contado **0** no entra en «No contados» (es conteo explícito).
+**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Disponible** (`saldo_snapshot`), **Cargado después**, **Disponible ajustado**, **Contado**, **Diferencia real**, **Saldo final** (previsto post-MSTOCK), **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. **Saldo final** es solo lectura/UI: no modifica conteos ni escribe stock. Contado **0** no entra en «No contados» (es conteo explícito). Chip **`N no contados`** (N = campaña completa, sin filtro de marcas) y acción **Marcar no contados como 0** cuando el supervisor tiene permiso `gestionar` y la campaña está en **EnConteo** o **EnRevision** (ver sección siguiente).
+
+#### Marcar no contados como 0 (masivo)
+
+Acción supervisora en el analizador para asignar **Contado = 0** a todas las líneas con `cantidad_contada IS NULL` que aún no fueron contadas. Cierra el gap operativo cuando el equipo confirma que los artículos no encontrados deben registrarse como cero antes de autorizar MSTOCK.
+
+**Alcance:** **toda la campaña**. El chip «N no contados», el desglose del modal y la marca masiva **ignoran** el filtro de marcas activo en la tabla del analizador. El modal aclara explícitamente que la acción aplica a **toda la campaña**, no solo a las filas visibles.
+
+**Precondiciones:**
+
+| Condición | Comportamiento |
+|-----------|----------------|
+| Permiso `stock.inventario_fisico.gestionar` | Obligatorio; sin él la API responde 403 y el botón no se muestra |
+| Estado campaña **EnConteo** o **EnRevision** | Permitido; otros estados → 400 en español, sin cambios |
+| Líneas ya contadas (`cantidad_contada IS NOT NULL`) | No se modifican (incluye Contado = 0 explícito) |
+| Sync móvil concurrente | Si un operario sincroniza cantidad &gt; 0 antes de proyectar, la línea **no** queda en 0 (condición `IS NULL` prevalece) |
+
+**Qué hace (por línea marcada):**
+
+1. `_proyectar_linea(..., cantidad=0, solo_si_sin_contar=True)` → `cantidad_contada=0`, `estado_linea='Contado'`, recálculo de diferencia cruda.
+2. Un `inv_fisico_evento` append-only con `client_event_id` = UUID canónico (**36 caracteres**, `str(uuid.uuid4())`), `cantidad=0`, `resultado=aceptado`, `motivo` fijo en español: **`Supervisor: no encontrado / contado 0`**.
+3. Una fila en `inv_fisico_ajuste_auditoria` con `accion='contado_cero_masivo'`.
+
+**Qué no hace:** no ejecuta MSTOCK, no recrea snapshot, no altera líneas ya contadas, no cambia el estado de la campaña a Aplicada/Autorizado.
+
+**UI (modal Synap, sin `alert`/`confirm`/`prompt`):**
+
+- Título: «Marcar líneas sin contar como 0».
+- Texto: asignará Contado = 0 a **N** línea(s) de **toda la campaña**; no modifica lo ya contado; no aplica MSTOCK.
+- **Desglose previo:** total no contados; cuántas tienen `saldo_snapshot ≠ 0`; cuántas tienen movimiento post-snapshot neto ≠ 0 (`lineas_con_snap_ne0`, `lineas_con_mov_post` en contexto/API).
+- Si hay líneas con snapshot ≠ 0, advertencia en español de posible faltante/diferencia al autorizar MSTOCK más adelante.
+- **Checkbox obligatorio:** «Entiendo que no hay deshacer en pantalla» — el CTA **Marcar como 0** permanece deshabilitado hasta marcarlo.
+- Tras confirmar: POST vacío `{}` → toast de éxito; si la respuesta trae `advertencia`, toast **warning** adicional; reload del analizador.
+
+**Post-marca — recálculo ajuste post-snapshot:** fuera de la transacción de marcado se invoca `recalcular_ajuste_post_snapshot(..., pisar_overrides=False)`. Si el recálculo **falla**, el marcado **ya quedó confirmado** (sin rollback): la API responde `ok: true` con campo `advertencia` en español; la UI muestra warning y un reload posterior recalcula al abrir el analizador.
+
+**API:** `POST /stock/api/campana/<id>/marcar-no-contados-cero/` · permiso `gestionar` · body `{}`.
+
+```jsonc
+// 200
+{
+  "ok": true,
+  "lineas_marcadas": 192,
+  "lineas_con_snap_ne0": 30,
+  "lineas_con_mov_post": 5,
+  "mensaje": "192 líneas marcadas con Contado = 0.",
+  "advertencia": null  // o string si falló el recalc post-commit
+}
+```
+
+**Idempotencia:** segunda ejecución sin líneas `IS NULL` → `lineas_marcadas: 0`, sin nuevos eventos ni auditorías.
+
+**Servicio:** `marcar_no_contados_como_cero`, `contar_desglose_no_contados` / `contar_lineas_no_contadas` en `stock/services/inventario_fisico.py`. Constantes: `ACCION_AUDIT_CONTADO_CERO_MASIVO`, `MOTIVO_CONTADO_CERO_SUPERVISOR`.
+
+**Corrección operativa (sin botón revertir en v1):** revertir manualmente en MySQL acotando por auditoría `contado_cero_masivo` (patrón validado en corrida manual campaña 3):
+
+```sql
+-- 1) Identificar líneas de la corrida
+SELECT id_linea, id_articulo, id_deposito, created_at
+FROM inv_fisico_ajuste_auditoria
+WHERE id_campana = :id_campana
+  AND accion = 'contado_cero_masivo'
+  AND created_at >= :fecha_hora_corrida;  -- acotar por ventana temporal
+
+-- 2) UUID de eventos supervisor (36 chars) de la misma corrida
+SELECT client_event_id
+FROM inv_fisico_evento
+WHERE id_campana = :id_campana
+  AND motivo = 'Supervisor: no encontrado / contado 0'
+  AND client_ts >= :fecha_hora_corrida;
+
+-- 3) Rollback transaccional (solo líneas que siguen en cantidad_contada = 0)
+START TRANSACTION;
+UPDATE inv_fisico_linea
+SET cantidad_contada = NULL,
+    diferencia = NULL,
+    id_contador = NULL,
+    estado_linea = 'Pendiente',
+    diferencia_real = NULL
+WHERE id_campana = :id_campana
+  AND cantidad_contada = 0
+  AND id_linea IN (:ids_desde_auditoria);
+DELETE FROM inv_fisico_evento
+WHERE id_campana = :id_campana
+  AND client_event_id IN (:uuids_desde_paso_2);
+DELETE FROM inv_fisico_ajuste_auditoria
+WHERE id_campana = :id_campana
+  AND accion = 'contado_cero_masivo'
+  AND id_linea IN (:ids_desde_auditoria);
+COMMIT;
+-- 4) Recalcular ajustes post-snapshot desde el analizador o vía servicio
+```
+
+Ejemplo concreto de corrida campaña 3: `tmp_exports/rollback_campana3_contado_cero_20260807_092218.sql`.
 
 ### Offline (PWA)
 
@@ -189,6 +283,7 @@ Decorador: `@tiene_permiso` en vistas/API.
 | Estado | Acción | MSTOCK |
 |--------|--------|--------|
 | Borrador / EnConteo / EnRevision | Anular (modal Synap) | No |
+| EnConteo / EnRevision | Revertir «contado cero masivo» (SQL manual por auditoría; ver sección analizador) | No |
 | Autorizado (error parcial) | Revisión manual | Según trazas |
 | Aplicado | Compensación manual | Fuera de MVP automatizado |
 

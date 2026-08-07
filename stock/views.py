@@ -591,7 +591,9 @@ def inventario_fisico_analizador_view(request, id_campana):
         ESTADO_ANULADO,
         ESTADO_BORRADOR,
         ESTADO_EN_CONTEO,
+        ESTADO_EN_REVISION,
         build_analizador_query_string,
+        contar_desglose_no_contados,
         obtener_campana,
         obtener_resumen_monitor,
         listar_lineas_analizador,
@@ -636,6 +638,7 @@ def inventario_fisico_analizador_view(request, id_campana):
         1 for l in todas_lineas if l.get("ajuste_manual") is not None
     )
     resumen = obtener_resumen_monitor(base_empresa, id_campana)
+    desglose_no_contados = contar_desglose_no_contados(base_empresa, id_campana)
     puede_autorizar = (
         campana["estado"] == "EnRevision"
         and not resumen.get("bloqueo_autorizar")
@@ -668,6 +671,10 @@ def inventario_fisico_analizador_view(request, id_campana):
         "puede_recalcular": puede_recalcular,
         "hay_overrides": cantidad_overrides > 0,
         "cantidad_overrides": cantidad_overrides,
+        "lineas_no_contadas": desglose_no_contados["lineas_no_contadas"],
+        "lineas_no_contadas_snap_ne0": desglose_no_contados["lineas_con_snap_ne0"],
+        "lineas_no_contadas_mov_post": desglose_no_contados["lineas_con_mov_post"],
+        "puede_marcar_cero": campana["estado"] in (ESTADO_EN_CONTEO, ESTADO_EN_REVISION),
     }
     return render(request, "stock/inventario_fisico/analizador.html", context)
 

@@ -828,7 +828,9 @@ def _proyectar_linea(
     id_deposito: int,
     id_contador: int,
     cantidad: Decimal,
-) -> None:
+    *,
+    solo_si_sin_contar: bool = False,
+) -> int:
     cursor.execute(
         "SELECT saldo_snapshot FROM inv_fisico_linea "
         "WHERE id_campana = %s AND id_articulo = %s AND id_deposito = %s",
@@ -837,12 +839,18 @@ def _proyectar_linea(
     snap_row = cursor.fetchone()
     saldo = to_decimal_or_none(snap_row.get("saldo_snapshot") if snap_row else None) or Decimal("0")
     diff = calcular_diferencia(cantidad, saldo)
-    cursor.execute(
+    sql = (
         "UPDATE inv_fisico_linea SET cantidad_contada = %s, diferencia = %s, "
         "id_contador = %s, estado_linea = 'Contado', updated_at = NOW() "
-        "WHERE id_campana = %s AND id_articulo = %s AND id_deposito = %s",
+        "WHERE id_campana = %s AND id_articulo = %s AND id_deposito = %s"
+    )
+    if solo_si_sin_contar:
+        sql += " AND cantidad_contada IS NULL"
+    cursor.execute(
+        sql,
         [cantidad, diff, id_contador, id_campana, id_articulo, id_deposito],
     )
+    return int(cursor.rowcount or 0)
 
 
 def sync_eventos(
@@ -1018,6 +1026,9 @@ ACCION_AUDIT_OVERRIDE_GUARDADO = "override_guardado"
 ACCION_AUDIT_OVERRIDE_QUITADO = "override_quitado"
 ACCION_AUDIT_OVERRIDE_PISADO = "override_pisado"
 ACCION_AUDIT_AUTORIZACION = "autorizacion"
+ACCION_AUDIT_CONTADO_CERO_MASIVO = "contado_cero_masivo"
+
+MOTIVO_CONTADO_CERO_SUPERVISOR = "Supervisor: no encontrado / contado 0"
 
 
 def _insert_auditoria_ajuste(
@@ -1632,6 +1643,176 @@ def listar_lineas_analizador(
     if filtro_norm in ("no_contados", "no_contado", "sin_contar"):
         return [l for l in lineas if to_decimal_or_none(l.get("cantidad_contada")) is None]
     return lineas
+
+
+def contar_desglose_no_contados(
+    base_empresa: str,
+    id_campana: int,
+) -> Dict[str, int]:
+    """Conteos de líneas sin contar en toda la campaña (sin filtro de marcas)."""
+    cid = to_int_or_none(id_campana)
+    vacio = {
+        "lineas_no_contadas": 0,
+        "lineas_con_snap_ne0": 0,
+        "lineas_con_mov_post": 0,
+    }
+    if cid is None:
+        return vacio
+
+    total = 0
+    snap_ne0 = 0
+    mov_post = 0
+    netos = calcular_ajuste_post_snapshot(base_empresa, cid)
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                "SELECT id_articulo, id_deposito, saldo_snapshot "
+                "FROM inv_fisico_linea "
+                "WHERE id_campana = %s AND cantidad_contada IS NULL",
+                [cid],
+            )
+            for row in cursor.fetchall():
+                total += 1
+                saldo = to_decimal_or_none(row.get("saldo_snapshot")) or Decimal("0")
+                if saldo != Decimal("0"):
+                    snap_ne0 += 1
+                id_art = to_int_or_none(row.get("id_articulo"))
+                id_dep = to_int_or_none(row.get("id_deposito"))
+                if id_art is not None and id_dep is not None:
+                    neto = netos.get((id_art, id_dep), Decimal("0"))
+                    if neto != Decimal("0"):
+                        mov_post += 1
+    except Exception as exc:
+        logger.warning("contar_desglose_no_contados %s/%s: %s", base_empresa, id_campana, exc)
+        return vacio
+
+    return {
+        "lineas_no_contadas": total,
+        "lineas_con_snap_ne0": snap_ne0,
+        "lineas_con_mov_post": mov_post,
+    }
+
+
+def contar_lineas_no_contadas(base_empresa: str, id_campana: int) -> int:
+    return contar_desglose_no_contados(base_empresa, id_campana)["lineas_no_contadas"]
+
+
+def marcar_no_contados_como_cero(
+    base_empresa: str,
+    id_campana: int,
+    id_usuario: int,
+) -> Tuple[bool, Dict[str, Any]]:
+    """Marca masivamente Contado=0 las líneas sin contar (supervisor)."""
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana:
+        return False, {"error": "Campaña no encontrada."}
+
+    if campana["estado"] not in (ESTADO_EN_CONTEO, ESTADO_EN_REVISION):
+        return False, {
+            "error": (
+                f"No se puede marcar contado cero en el estado {campana['estado']}."
+            ),
+        }
+
+    uid = to_int_or_none(id_usuario)
+    cid = to_int_or_none(id_campana)
+    if uid is None:
+        return False, {"error": "Usuario inválido."}
+    if cid is None:
+        return False, {"error": "Campaña inválida."}
+
+    desglose = contar_desglose_no_contados(base_empresa, cid)
+    lineas_marcadas = 0
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                "SELECT id_linea, id_articulo, id_deposito "
+                "FROM inv_fisico_linea "
+                "WHERE id_campana = %s AND cantidad_contada IS NULL",
+                [cid],
+            )
+            lineas = [dict(r) for r in cursor.fetchall()]
+
+            for linea in lineas:
+                id_linea = to_int_or_none(linea.get("id_linea"))
+                id_art = to_int_or_none(linea.get("id_articulo"))
+                id_dep = to_int_or_none(linea.get("id_deposito"))
+                if id_linea is None or id_art is None or id_dep is None:
+                    continue
+
+                cursor.execute(
+                    "SELECT cantidad_contada FROM inv_fisico_linea WHERE id_linea = %s",
+                    [id_linea],
+                )
+                check = cursor.fetchone()
+                if check and to_decimal_or_none(check.get("cantidad_contada")) is not None:
+                    continue
+
+                filas = _proyectar_linea(
+                    cursor,
+                    cid,
+                    id_art,
+                    id_dep,
+                    uid,
+                    Decimal("0"),
+                    solo_si_sin_contar=True,
+                )
+                if filas == 0:
+                    continue
+
+                client_event_id = str(uuid.uuid4())
+                client_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute(
+                    "INSERT INTO inv_fisico_evento "
+                    "(client_event_id, id_campana, id_articulo, id_deposito, id_contador, "
+                    "cantidad, client_ts, resultado, motivo) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    [
+                        client_event_id,
+                        cid,
+                        id_art,
+                        id_dep,
+                        uid,
+                        Decimal("0"),
+                        client_ts,
+                        RESULTADO_ACEPTADO,
+                        MOTIVO_CONTADO_CERO_SUPERVISOR,
+                    ],
+                )
+                _insert_auditoria_ajuste(
+                    cursor,
+                    id_campana=cid,
+                    id_linea=id_linea,
+                    id_articulo=id_art,
+                    id_deposito=id_dep,
+                    accion=ACCION_AUDIT_CONTADO_CERO_MASIVO,
+                    id_usuario=uid,
+                )
+                lineas_marcadas += 1
+    except Exception as exc:
+        logger.exception("marcar_no_contados_como_cero %s/%s: %s", base_empresa, id_campana, exc)
+        return False, {"error": "No se pudieron marcar las líneas sin contar."}
+
+    advertencia = None
+    ok_recalc, recalc_info = recalcular_ajuste_post_snapshot(
+        base_empresa,
+        cid,
+        id_usuario=uid,
+        pisar_overrides=False,
+    )
+    if not ok_recalc:
+        advertencia = recalc_info.get("error") or (
+            "No se pudo recalcular el ajuste post-snapshot."
+        )
+
+    return True, {
+        "lineas_marcadas": lineas_marcadas,
+        "lineas_con_snap_ne0": desglose["lineas_con_snap_ne0"],
+        "lineas_con_mov_post": desglose["lineas_con_mov_post"],
+        "advertencia": advertencia,
+        "mensaje": f"{lineas_marcadas} líneas marcadas con Contado = 0.",
+    }
 
 
 def obtener_linea_analizador(

@@ -71,6 +71,11 @@ urlpatterns = [
         name="api_campana_linea_ajuste",
     ),
     path(
+        "api/campana/<int:id_campana>/marcar-no-contados-cero/",
+        api_views.api_campana_marcar_no_contados_cero,
+        name="api_campana_marcar_no_contados_cero",
+    ),
+    path(
         "api/campana/<int:id_campana>/linea/<int:id_linea>/movimientos/",
         api_views.api_campana_linea_movimientos,
         name="api_campana_linea_movimientos",

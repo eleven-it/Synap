@@ -139,3 +139,85 @@ El analizador MUST mostrar una columna **Saldo final** = `saldo_actual_ref + dif
 - **GIVEN** línea contada con `saldo_actual_ref` distinto del disponible ajustado y diferencia real ≠ 0
 - **WHEN** el supervisor ve el analizador
 - **THEN** la columna Saldo final muestra `saldo_actual_ref + diferencia_real` (no necesariamente igual a Contado)
+
+---
+
+### Requirement: Marcar no contados como cero (masivo)
+
+Un supervisor con permiso `stock.inventario_fisico.gestionar` MUST poder marcar masivamente como **Contado = 0** todas las líneas de campaña con `cantidad_contada IS NULL`, desde el analizador, solo si la campaña está en **EnConteo** o **EnRevision**. El alcance MUST ser **toda la campaña** (MUST NOT limitarse al filtro de marcas activo en la tabla). El sistema MUST NOT aplicar MSTOCK, MUST NOT recrear snapshot y MUST NOT alterar líneas ya contadas. Por cada línea marcada: un `inv_fisico_evento` con `client_event_id` UUID de **36 caracteres**, `cantidad=0`, `motivo` en español fijo de supervisor (`Supervisor: no encontrado / contado 0`) y un `inv_fisico_ajuste_auditoria` con `accion=contado_cero_masivo`. Tras marcar MUST intentar recalcular ajuste post-snapshot sin MSTOCK (`pisar_overrides=False`); si el recálculo falla MUST NOT revertir el marcado y MUST devolver `advertencia` en español. La UI MUST mostrar chip «N no contados» (N = campaña completa), desglose en modal (total, snap≠0, mov. post), checkbox de acuse «Entiendo que no hay deshacer en pantalla» que habilita el CTA, y confirmación modal Synap (MUST NOT `alert`/`confirm`/`prompt`). La operación MUST ser idempotente.
+
+#### Scenario: Marca masiva exitosa
+
+- **GIVEN** campaña EnRevision con 5 líneas sin contar y 3 ya contadas
+- **WHEN** el supervisor confirma con checkbox marcado
+- **THEN** 5 líneas quedan con Contado=0; las 3 contadas permanecen intactas; respuesta `{ok, lineas_marcadas:5}`; analizador se recarga
+
+#### Scenario: Alcance campaña completa (ignora filtro marcas)
+
+- **GIVEN** filtro de marcas activo que oculta parte de no contados, pero la campaña tiene 12 líneas con `cantidad_contada IS NULL`
+- **WHEN** el supervisor abre el analizador o confirma el modal
+- **THEN** chip y modal muestran 12 (toda la campaña) y la acción marca las 12
+
+#### Scenario: Desglose y checkbox antes de confirmar
+
+- **GIVEN** 10 líneas sin contar de las cuales 3 con `saldo_snapshot ≠ 0` y 1 con movimiento post-snapshot neto ≠ 0
+- **WHEN** el supervisor abre el modal
+- **THEN** ve desglose 10/3/1; el CTA permanece deshabilitado hasta marcar «Entiendo que no hay deshacer en pantalla»
+
+#### Scenario: Advertencia snapshot distinto de cero
+
+- **GIVEN** al menos una línea sin contar con `saldo_snapshot ≠ 0`
+- **WHEN** el supervisor abre el modal
+- **THEN** ve advertencia en español de posible faltante/diferencia al autorizar MSTOCK más adelante
+
+#### Scenario: Recálculo post-snapshot falla sin deshacer marcado
+
+- **GIVEN** marcado exitoso y `recalcular_ajuste_post_snapshot` lanza error
+- **WHEN** termina la API
+- **THEN** las líneas quedan con Contado=0; respuesta `ok` con `advertencia`; MUST NOT rollback del marcado
+
+#### Scenario: Sync móvil prevalece
+
+- **GIVEN** línea con `cantidad_contada IS NULL` y sync concurrente que registra cantidad &gt; 0
+- **WHEN** se ejecuta la marca masiva
+- **THEN** esa línea MUST NOT quedar en 0 (condición `IS NULL`)
+
+#### Scenario: Idempotencia
+
+- **GIVEN** no quedan líneas con `cantidad_contada IS NULL`
+- **WHEN** el supervisor repite la acción
+- **THEN** `lineas_marcadas=0`; MUST NOT crear nuevos eventos ni auditorías
+
+#### Scenario: Estado inválido
+
+- **GIVEN** campaña Aplicada o Anulada
+- **WHEN** POST a la API
+- **THEN** HTTP 400 con mensaje en español; MUST NOT modificar datos
+
+#### Scenario: Sin permiso
+
+- **GIVEN** usuario sin `stock.inventario_fisico.gestionar`
+- **WHEN** accede a la API o al analizador
+- **THEN** API responde 403; botón de acción MUST NOT mostrarse
+
+#### Scenario: No ejecuta MSTOCK
+
+- **GIVEN** líneas marcadas con `diferencia_real ≠ 0` tras contado cero masivo
+- **WHEN** se inspecciona movimientos MSTOCK
+- **THEN** MUST NOT existir MSTOCK ni transición a Aplicada por esta acción
+
+#### Scenario: UUID canónico y motivo español
+
+- **GIVEN** N líneas marcadas en una ejecución
+- **THEN** cada evento tiene `client_event_id` de longitud 36 (UUID); `motivo` = texto fijo en español de supervisor contado 0
+
+#### Scenario: Auditoría contado_cero_masivo
+
+- **GIVEN** N líneas marcadas en una ejecución
+- **THEN** existen N filas en `inv_fisico_ajuste_auditoria` con `accion=contado_cero_masivo`
+
+#### Scenario: Chip, botón y modal Synap
+
+- **GIVEN** 12 líneas sin contar y permiso `gestionar`
+- **WHEN** el supervisor abre el analizador
+- **THEN** ve chip «12 no contados», botón de acción y modal Synap; si la respuesta incluye `advertencia`, toast warning además del éxito/reload
