@@ -227,6 +227,34 @@
       </article>`;
   }
 
+  function ventasMarcaSuperartCardHtml(row) {
+    const nombre =
+      row.nombre_marca || row.nombre_superart || row.nombre_articulo || "—";
+    const packs = row.packs != null ? String(row.packs) : "—";
+    const docenas = row.docenas != null ? String(row.docenas) : "—";
+    const childCount = (row.children || []).length;
+    const sub =
+      row.tipo === "marca"
+        ? `${childCount} SuperArt(s)`
+        : row.tipo === "superart"
+          ? `${childCount} artículo(s)`
+          : "";
+    return `
+      <article class="${CARD_ARTICLE_CLASS}">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-bold text-slate-900 dark:text-white">${escHtml(nombre)}</p>
+            ${sub ? `<p class="text-xs text-slate-500 dark:text-slate-400">${escHtml(sub)}</p>` : ""}
+          </div>
+          <p class="shrink-0 text-sm font-bold tabular-nums text-sky-700 dark:text-sky-300">${fmtMoneyArs(row.facturacion)}</p>
+        </div>
+        <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
+          <div><dt class="font-medium">Packs</dt><dd class="tabular-nums">${escHtml(packs)}</dd></div>
+          <div><dt class="font-medium">Docenas</dt><dd class="tabular-nums">${escHtml(docenas)}</dd></div>
+        </dl>
+      </article>`;
+  }
+
   function ventasArticuloCardHtml(row) {
     return `
       <article class="${CARD_ARTICLE_CLASS}">
@@ -389,6 +417,8 @@
     let cardFn;
     if (variant === "ventas-articulo") {
       cardFn = (row) => ventasArticuloCardHtml(row);
+    } else if (variant === "ventas-marca-superart") {
+      cardFn = (row) => ventasMarcaSuperartCardHtml(row);
     } else if (variant === "objetivos-vendedor") {
       cardFn = (row) => objetivosVendedorCardHtml(row, mobileOpts.compactMetrics);
     } else {

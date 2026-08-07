@@ -74,8 +74,12 @@ Filtros BO/Objetivos BO con layout específico solicitado.
     </div>
     {% endif %}
 
-    {% if report.slug == 'ventas-por-articulo' or report.slug == 'ventas-por-vendedor' %}
+    {% if report.slug == 'ventas-por-articulo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-marca-superart' %}
     {% include "reports/includes/filters_ventas_por_articulo_catalogo.html" %}
+    {% endif %}
+
+    {% if report.slug == 'ventas-marca-superart' %}
+    {% include "reports/includes/filters_superart_tags.html" %}
     {% endif %}
 
     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
@@ -124,7 +128,7 @@ Filtros BO/Objetivos BO con layout específico solicitado.
         </div>
         {% if report.slug == 'ventas-objetivos-vs-bo' %}
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Excluye del informe a los clientes asignados a estos vendedores (facturación, remitos, pedidos en armado, BO, objetivos y unidades).</span>
-        {% elif report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' %}
+        {% elif report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' %}
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Excluye del informe a los clientes asignados a estos vendedores (ventas e importes del período de facturación).</span>
         {% elif report.slug == 'ventas-marcas-mensual' %}
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Excluye del informe a los clientes asignados a estos vendedores (ventas del período de facturación).</span>

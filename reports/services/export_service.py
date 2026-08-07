@@ -185,7 +185,13 @@ class ExportService:
             nro = (filters.get("nro_comprobante_archivo") or "PRE").strip() or "PRE"
             return f"Presupuesto_{nro}_{timestamp}.xlsx"
 
-        if report_slug not in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo", "ventas-marcas-mensual"):
+        if report_slug not in (
+            "ventas-objetivos-vs-bo",
+            "ventas-por-vendedor",
+            "ventas-por-articulo",
+            "ventas-marca-superart",
+            "ventas-marcas-mensual",
+        ):
             return f"{report_slug}_{timestamp}.xlsx"
 
         filters = payload.get("filters") or {}
@@ -209,6 +215,8 @@ class ExportService:
             return f"Ventas_por_vendedor_{a}_{b}.xlsx"
         if report_slug == "ventas-por-articulo":
             return f"Ventas_por_articulo_{a}_{b}.xlsx"
+        if report_slug == "ventas-marca-superart":
+            return f"Ventas_marca_superart_{a}_{b}.xlsx"
         if report_slug == "ventas-marcas-mensual":
             return f"Ventas_marcas_mensual_{a}_{b}.xlsx"
         return f"Ventas_objetivo_vendedores_{a}_{b}.xlsx"
@@ -321,6 +329,17 @@ class ExportService:
                 "codigo_cliente",
                 "nombre_cliente",
                 "cantidades_vendidas",
+                "facturacion",
+            ]
+            return [h for h in preferred if h in available]
+
+        if slug == "ventas-marca-superart":
+            preferred = [
+                "nombre_marca",
+                "nombre_superart",
+                "nombre_articulo",
+                "packs",
+                "docenas",
                 "facturacion",
             ]
             return [h for h in preferred if h in available]
@@ -562,7 +581,13 @@ class ExportService:
                     "ventas_netas",
                     "subtotal_desc",
                 }
-                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo", "ventas-marcas-mensual"):
+                if report.slug in (
+                    "ventas-objetivos-vs-bo",
+                    "ventas-por-vendedor",
+                    "ventas-por-articulo",
+                    "ventas-marca-superart",
+                    "ventas-marcas-mensual",
+                ):
                     currency_headers_data.update(
                         {
                             "objetivo",
@@ -624,6 +649,10 @@ class ExportService:
                     "unidades": "Unidades",
                     "unidades_proy": "Unidades proy",
                     "facturacion_proy": "Facturación proy",
+                    "nombre_marca": "Marca",
+                    "nombre_superart": "SuperArt",
+                    "packs": "Packs",
+                    "docenas": "Docenas",
                     "anio_mes": "AñoMes",
                     "backorder_total": "BO total",
                     "bo_con_stock": "BO c/stock",
@@ -635,7 +664,13 @@ class ExportService:
                     header_translations = {**header_translations, "mes_formato": "Mes"}
                 
                 translated_headers = [header_translations.get(h, h.replace("_", " ").title()) for h in headers]
-                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo", "ventas-marcas-mensual"):
+                if report.slug in (
+                    "ventas-objetivos-vs-bo",
+                    "ventas-por-vendedor",
+                    "ventas-por-articulo",
+                    "ventas-marca-superart",
+                    "ventas-marcas-mensual",
+                ):
                     translated_headers = [str(s).upper() for s in translated_headers]
                 if report.slug == "ventas-marcas-mensual":
                     modo = str((payload.get("filters") or {}).get("modo_unidades") or "packs").lower()
@@ -673,7 +708,7 @@ class ExportService:
                                     row_values.append(float(value))
                             except (ValueError, TypeError):
                                 row_values.append("")
-                        elif h == "cantidades_vendidas":
+                        elif h in ("cantidades_vendidas", "packs", "docenas"):
                             try:
                                 if value == "" or value is None:
                                     row_values.append(0.0)
@@ -695,7 +730,7 @@ class ExportService:
                                 cell.alignment = Alignment(horizontal="right", vertical="center")
                             else:
                                 cell.alignment = Alignment(horizontal="left", vertical="center")
-                        elif h == "cantidades_vendidas" and isinstance(val, (int, float)):
+                        elif h in ("cantidades_vendidas", "packs", "docenas") and isinstance(val, (int, float)):
                             cell.number_format = "#,##0.00"
                             cell.alignment = Alignment(horizontal="right", vertical="center")
                         else:
@@ -714,8 +749,8 @@ class ExportService:
                         ncell = ws.cell(row=ridx, column=name_col_idx)
                         ncell.alignment = Alignment(horizontal="left", vertical="center", indent=max(0, int(name_indent)))
 
-                # Ventas por artículo: export plano (filas ya vienen artículo/proveedor/cliente).
-                if report.slug == "ventas-por-articulo":
+                # Ventas por artículo / marca-SuperArt: export plano.
+                if report.slug in ("ventas-por-articulo", "ventas-marca-superart"):
                     for data_row in query_result.data:
                         _vo_append_data_row(data_row, outline_lvl=0)
                 # Escribir datos (objetivos vs BO: orden por cód. vendedor + cód. cliente, agrupación Excel)

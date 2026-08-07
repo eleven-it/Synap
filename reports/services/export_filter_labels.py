@@ -36,6 +36,7 @@ _FILTER_SPECS: Tuple[Tuple[str, str, str], ...] = (
     ("subrubros_excluidos", "Subrubros excluidos", "subrubros"),
     ("marcas_incluidos", "Marcas incluidas", "marcas"),
     ("marcas_excluidos", "Marcas excluidas", "marcas"),
+    ("superarts_incluidos", "SuperArt incluidos", "texto_lista"),
     ("incluir_stock_cero", "Incluir stock cero", "si_no"),
     ("logistica_estado_entrega", "Estado entrega", "texto"),
     ("logistica_id_cliente", "Cliente logística", "logistica_cliente"),
@@ -52,6 +53,8 @@ _ORDENAR_POR_LABELS = {
     "total_ventas_periodo": "Total ventas período",
     "facturacion_periodo": "Facturación período",
     "unidades_periodo": "Unidades período",
+    "packs": "Packs",
+    "docenas": "Docenas",
 }
 
 _ORDEN_FORMA_LABELS = {"asc": "Creciente", "desc": "Decreciente"}
@@ -333,6 +336,13 @@ def build_export_filter_lines(
             _append(label, "Detallado" if scope == "detallado" else "Resumen")
         elif kind == "texto":
             _append(label, str(raw).strip())
+        elif kind == "texto_lista":
+            if isinstance(raw, list):
+                parts = [str(x).strip() for x in raw if str(x).strip()]
+            else:
+                parts = [str(raw).strip()] if str(raw).strip() else []
+            if parts:
+                _append(label, ", ".join(parts))
         elif kind == "logistica_cliente":
             etiquetas = merged.get("logistica_cliente_etiquetas")
             if isinstance(etiquetas, dict) and etiquetas:
