@@ -60,10 +60,28 @@ TRANSICIONES_ESTADO: Dict[str, frozenset] = {
     ESTADO_ANULADO: frozenset(),
 }
 
-TIPOS_MPR_ELEGIBLES = frozenset({"Terminado", "2daSeleccion"})
+TIPOS_MPR_ELEGIBLES = frozenset({"Terminado", "2daSeleccion", "Produccion", "SemiElaborado"})
 
-# Terminado + Tercero (producto final almacenable/vendible) + packs Fabricado 2da
-TIPOS_ART_FAB_ELEGIBLES = frozenset({"Terminado", "Tercero", "Fabricado 2da"})
+AMBITO_TERMINADOS = "terminados"
+AMBITO_FABRICADOS = "fabricados"
+
+TIPOS_MPR_POR_AMBITO: Dict[str, frozenset] = {
+    AMBITO_TERMINADOS: frozenset({"Terminado", "2daSeleccion"}),
+    AMBITO_FABRICADOS: frozenset({"Produccion", "SemiElaborado"}),
+}
+
+TIPOS_ART_FAB_POR_AMBITO: Dict[str, frozenset] = {
+    AMBITO_TERMINADOS: frozenset({"Terminado", "Tercero"}),
+    AMBITO_FABRICADOS: frozenset({"Fabricado"}),
+}
+
+TIPOS_ART_FAB_ELEGIBLES = frozenset().union(*TIPOS_ART_FAB_POR_AMBITO.values())
+
+ERROR_MEZCLA_AMBITOS = (
+    "No se pueden combinar depósitos de productos terminados (Terminado, 2da Selección) "
+    "y fabricados (Producción, Semi elaborado) en la misma campaña. "
+    "Cree una campaña por ámbito."
+)
 
 RESULTADO_ACEPTADO = "aceptado"
 RESULTADO_CONFLICTO = "conflicto"
@@ -92,15 +110,74 @@ def es_tipo_mpr_elegible(tipo_mpr: Any) -> bool:
     return str_or_default(tipo_mpr, "").strip() in TIPOS_MPR_ELEGIBLES
 
 
-def es_tipo_art_fab_elegible(tipo_art_fab: Any) -> bool:
-    return str_or_default(tipo_art_fab, "").strip() in TIPOS_ART_FAB_ELEGIBLES
+def ambito_de_tipo_mpr(tipo_mpr: Any) -> Optional[str]:
+    tm = str_or_default(tipo_mpr, "").strip()
+    for ambito, tipos in TIPOS_MPR_POR_AMBITO.items():
+        if tm in tipos:
+            return ambito
+    return None
+
+
+def tipos_art_fab_para_ambito(ambito: Any) -> frozenset:
+    return TIPOS_ART_FAB_POR_AMBITO.get(str_or_default(ambito, ""), frozenset())
+
+
+def tipos_art_fab_para_tipo_mpr(tipo_mpr: Any) -> frozenset:
+    ambito = ambito_de_tipo_mpr(tipo_mpr)
+    if ambito is None:
+        return frozenset()
+    return tipos_art_fab_para_ambito(ambito)
+
+
+def es_tipo_art_fab_elegible(
+    tipo_art_fab: Any,
+    *,
+    tipo_mpr: Any = None,
+    ambito: Any = None,
+) -> bool:
+    val = str_or_default(tipo_art_fab, "").strip()
+    if tipo_mpr is not None:
+        return val in tipos_art_fab_para_tipo_mpr(tipo_mpr)
+    if ambito is not None:
+        return val in tipos_art_fab_para_ambito(ambito)
+    return val in TIPOS_ART_FAB_ELEGIBLES
+
+
+def _sql_filtro_tipo_art_fab_para_tipos(
+    tipos: Sequence[str],
+    alias: str = "a",
+) -> Tuple[str, List[Any]]:
+    """Fragmento SQL ``COALESCE(TRIM(alias.tipo_art_fab), '') IN (...)``."""
+    tipos_tuple = tuple(tipos)
+    if not tipos_tuple:
+        return "1 = 0", []
+    ph = ",".join(["%s"] * len(tipos_tuple))
+    return f"COALESCE(TRIM({alias}.tipo_art_fab), '') IN ({ph})", list(tipos_tuple)
 
 
 def _sql_filtro_tipo_art_fab(alias: str = "a") -> Tuple[str, List[Any]]:
-    """Fragmento SQL ``AND COALESCE(TRIM(alias.tipo_art_fab), '') IN (...)``."""
-    tipos = tuple(TIPOS_ART_FAB_ELEGIBLES)
-    ph = ",".join(["%s"] * len(tipos))
-    return f"COALESCE(TRIM({alias}.tipo_art_fab), '') IN ({ph})", list(tipos)
+    """Unión de todos los tipos elegibles (checks genéricos)."""
+    return _sql_filtro_tipo_art_fab_para_tipos(TIPOS_ART_FAB_ELEGIBLES, alias)
+
+
+def _sql_filtro_art_por_ambito_deposito(
+    art_alias: str = "a",
+    dep_alias: str = "dep",
+) -> Tuple[str, List[Any]]:
+    """Filtra artículos según el tipo_mpr del depósito de la línea (JOIN requerido)."""
+    condiciones: List[str] = []
+    params: List[Any] = []
+    for ambito, tipos_mpr in TIPOS_MPR_POR_AMBITO.items():
+        tipos_art = TIPOS_ART_FAB_POR_AMBITO[ambito]
+        ph_mpr = ",".join(["%s"] * len(tipos_mpr))
+        ph_art = ",".join(["%s"] * len(tipos_art))
+        condiciones.append(
+            f"(TRIM(COALESCE({dep_alias}.tipo_mpr, '')) IN ({ph_mpr}) "
+            f"AND COALESCE(TRIM({art_alias}.tipo_art_fab), '') IN ({ph_art}))"
+        )
+        params.extend(tipos_mpr)
+        params.extend(tipos_art)
+    return f"({' OR '.join(condiciones)})", params
 
 
 def calcular_diferencia(
@@ -580,11 +657,21 @@ def crear_campana(
 
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            depositos_validados: List[Dict[str, Any]] = []
             for did in dep_ids:
                 dep = _fetch_deposito(cursor, did)
                 err = _validar_deposito_elegible(dep)
                 if err:
                     return False, {"error": err, "id_deposito": did}
+                depositos_validados.append(dep)
+
+            ambitos = {
+                ambito_de_tipo_mpr(d.get("tipo_mpr"))
+                for d in depositos_validados
+                if ambito_de_tipo_mpr(d.get("tipo_mpr")) is not None
+            }
+            if len(ambitos) > 1:
+                return False, {"error": ERROR_MEZCLA_AMBITOS}
 
             catalogo_version = uuid.uuid4().hex[:16]
             depositos_json = json.dumps(dep_ids)
@@ -604,15 +691,20 @@ def crear_campana(
                 return False, {"error": "Tabla articulo no encontrada."}
             tsd = tbl_sd.replace("`", "``")
             ta = tbl_art.replace("`", "``")
-            filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
             lineas = 0
+            depositos_por_id = {
+                to_int_or_none(d.get("CodDeposito")): d for d in depositos_validados
+            }
             for did in dep_ids:
+                dep_info = depositos_por_id.get(did) or {}
+                tipos_art = tipos_art_fab_para_tipo_mpr(dep_info.get("tipo_mpr"))
+                filtro_dep, params_dep = _sql_filtro_tipo_art_fab_para_tipos(tipos_art, "a")
                 cursor.execute(
                     f"SELECT sd.id_articulo, COALESCE(sd.saldo, 0) AS saldo "
                     f"FROM `{tsd}` sd "
                     f"INNER JOIN `{ta}` a ON a.IDArt = sd.id_articulo "
-                    f"WHERE sd.id_deposito = %s AND {filtro_art}",
-                    [did, *params_art],
+                    f"WHERE sd.id_deposito = %s AND {filtro_dep}",
+                    [did, *params_dep],
                 )
                 for fila in cursor.fetchall():
                     id_art = to_int_or_none(fila.get("id_articulo"))
@@ -743,7 +835,11 @@ def prefetch_catalogo_ciego(
             if not tbl_art:
                 return False, {"error": "Tabla articulo no encontrada."}
             ta = tbl_art.replace("`", "``")
-            filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
+            dep_row = _fetch_deposito(cursor, dep)
+            tipos_art = tipos_art_fab_para_tipo_mpr(
+                dep_row.get("tipo_mpr") if dep_row else None
+            )
+            filtro_art, params_art = _sql_filtro_tipo_art_fab_para_tipos(tipos_art, "a")
             cursor.execute(
                 f"SELECT l.id_articulo, "
                 f"COALESCE(a.id_manual, '-') AS codigo, "
@@ -807,7 +903,11 @@ def listar_conteos_registrados_ciego(
             if not tbl_art:
                 return False, {"error": "Tabla articulo no encontrada."}
             ta = tbl_art.replace("`", "``")
-            filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
+            dep_row = _fetch_deposito(cursor, dep)
+            tipos_art = tipos_art_fab_para_tipo_mpr(
+                dep_row.get("tipo_mpr") if dep_row else None
+            )
+            filtro_art, params_art = _sql_filtro_tipo_art_fab_para_tipos(tipos_art, "a")
             cursor.execute(
                 f"SELECT l.id_articulo, "
                 f"COALESCE(a.id_manual, '-') AS codigo, "
@@ -1551,6 +1651,14 @@ def _query_lineas_analizador(cursor, id_campana: int) -> List[Dict[str, Any]]:
     if not tbl_art:
         return []
     ta = tbl_art.replace("`", "``")
+    tbl_dep = _nombre_tabla(cursor, "deposito")
+    join_dep = ""
+    if tbl_dep:
+        td = tbl_dep.replace("`", "``")
+        join_dep = f"INNER JOIN `{td}` dep ON dep.CodDeposito = l.id_deposito "
+        filtro_art, params_art = _sql_filtro_art_por_ambito_deposito("a", "dep")
+    else:
+        filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
     tbl_marca = _nombre_tabla(cursor, "marca")
     join_marca = ""
     select_marca = "NULL AS id_marca, '' AS nombre_marca"
@@ -1560,7 +1668,6 @@ def _query_lineas_analizador(cursor, id_campana: int) -> List[Dict[str, Any]]:
         select_marca = (
             "a.CodigoMarca AS id_marca, COALESCE(m.NombreMarca, '') AS nombre_marca"
         )
-    filtro_art, params_art = _sql_filtro_tipo_art_fab("a")
     cursor.execute(
         f"SELECT l.id_linea, l.id_articulo, l.id_deposito, l.saldo_snapshot, "
         f"l.cantidad_contada, l.diferencia, l.diferencia_real, "
@@ -1571,6 +1678,7 @@ def _query_lineas_analizador(cursor, id_campana: int) -> List[Dict[str, Any]]:
         f"{select_marca} "
         f"FROM inv_fisico_linea l "
         f"INNER JOIN `{ta}` a ON a.IDArt = l.id_articulo "
+        f"{join_dep}"
         f"{join_marca}"
         f"WHERE l.id_campana = %s AND {filtro_art} "
         f"ORDER BY ABS(COALESCE(l.diferencia_real, 0)) DESC, a.NombreArticulo",

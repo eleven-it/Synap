@@ -4,8 +4,12 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 
 ## Alcance MVP
 
-- Campañas mensuales en depósitos MPR (`Terminado`, `2daSeleccion`).
-- Solo artículos con `articulo.tipo_art_fab` en **`Terminado`**, **`Tercero`** o **`Fabricado 2da`** (excluye Fabricado y vacíos). Los `Tercero` son producto final comprado, almacenable y vendible, y se tratan junto a Terminados.
+- Campañas mensuales en depósitos MPR elegibles: `Terminado`, `2daSeleccion`, `Produccion`, `SemiElaborado` (con `suma_stock='Si'`, no anulados).
+- **Una campaña = un ámbito:** no se pueden mezclar depósitos de terminados y fabricados. Si el usuario selecciona ambos, `crear_campana` falla con mensaje claro en español.
+- Artículos por ámbito de depósito:
+  - **Terminados** (`Terminado`, `2daSeleccion`): `articulo.tipo_art_fab` ∈ **`Terminado`**, **`Tercero`**.
+  - **Fabricados** (`Produccion`, `SemiElaborado`): `articulo.tipo_art_fab` = **`Fabricado`**.
+- Excluye `Fabricado 2da`, vacíos y tipos fuera del ámbito del depósito.
 - Conteo ciego offline-first (PWA Nivel A) con sync idempotente.
 - Analizador supervisor con diferencia `contado − snapshot` (columna UI **Disponible**, campo interno `saldo_snapshot`) y **ajuste post-snapshot** (ver sección siguiente).
 - **Ajuste post-snapshot (implementado):** gap de movimientos posteriores al snapshot; MSTOCK usa **Diferencia real**. Detalle en [`PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md`](PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md).
@@ -40,7 +44,7 @@ Reconteo ciego: `EnRevision → EnConteo`.
 
 `stock/services/inventario_fisico.py`:
 
-- Campañas, snapshot desde `stock_deposito.saldo` con **INNER JOIN** a `articulo` y filtro `tipo_art_fab`, sync batch, analizador.
+- Campañas, snapshot desde `stock_deposito.saldo` con **INNER JOIN** a `articulo` y filtro `tipo_art_fab` según el **ámbito del depósito** (`tipos_art_fab_para_tipo_mpr` / JOIN a `deposito` en analizador y catálogo ciego).
 - `calcular_diferencia(contado, snapshot)` = contado − snapshot (legacy; contador no la ve).
 - **Ajuste post-snapshot:** funciones puras `ajuste_efectivo`, `calcular_disponible_ajustado`, `calcular_diferencia_real`, `hay_descuadre`; persistencia en `inv_fisico_linea`; auditoría en `inv_fisico_ajuste_auditoria`.
 - `autorizar_y_aplicar_campana`: recalc fresco → bloqueo sync → Autorizado → MSTOCK por **diferencia_real** → Aplicado.
@@ -102,7 +106,7 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 
 **Pantalla de alta (`crear.html`)** en una sola vista con secciones:
 
-1. **Fecha y depósitos** — `input[type=date]` (se registra como dd/MM/yyyy) + checkboxes de depósitos MPR elegibles. Al crear se toma el snapshot de saldos por artículo.
+1. **Fecha y depósitos** — `input[type=date]` (se registra como dd/MM/yyyy) + checkboxes de depósitos MPR elegibles. Al crear se toma el snapshot de saldos por artículo. **No mezclar ámbitos:** Terminado/2da Selección (terminados) vs Producción/Semi elaborado (fabricados) en la misma campaña; el servicio responde con `ERROR_MEZCLA_AMBITOS`.
 2. **Asignar contadores** — lista de usuarios con buscador (checkboxes `name=contadores`) obtenida de `listar_contadores_candidatos()` (reutiliza `mpr.services_operario.listar_usuarios`). Fallback: campo `contadores_texto` con IDs AdministraNET separados por coma. El permiso `stock.inventario_fisico.contar` se valida al abrir la app móvil.
 3. **CTA**:
    - **Guardar borrador** (`accion=crear_borrador`) → crea en `Borrador`.
