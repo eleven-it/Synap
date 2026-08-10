@@ -1,0 +1,16 @@
+schema: spec-driven
+change: vmm-dto-pie-facturacion
+mode: hybrid
+execution: auto
+created: 2026-08-10
+archived_at: 2026-08-10
+phase: archive
+status: archived
+completed:
+  - proposal
+  - specs
+  - design
+  - tasks
+  - apply
+  - verify
+  - archive

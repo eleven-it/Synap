@@ -12,7 +12,7 @@ Documento para implementación y pruebas. Referencias: [PLAN_INFORME_VENTAS_MARC
 
 ## 1. Objetivo del producto
 
-Informe **pivot mensual** de ventas por marca: filas **Vendedor → Cliente**, columnas **AñoMes** (`yyyyMM`), celdas con **unidades** (packs o docenas según toggle) y **facturación neta** de renglón (`PrecioNetoxR` con signo FA/NC).
+Informe **pivot mensual** de ventas por marca: filas **Vendedor → Cliente**, columnas **AñoMes** (`yyyyMM`), celdas con **unidades** (packs o docenas según toggle) y **facturación neta post-pie** de renglón (`signo × PrecioNetoxR × factor cabecera`, con signo FA/NC).
 
 Cubre la lógica de las hojas Excel PuW/PuM (plantilla BEST) leyendo **solo AdministraNET**. Sin históricos Excel.
 
@@ -54,11 +54,27 @@ Sobre el universo filtrado:
 
 | KPI | Cálculo |
 |-----|---------|
-| Unidades / Docenas | `SUM(packs)` o `SUM(docenas)` según `modo_unidades` |
-| Facturación | `SUM(signo × PrecioNetoxR)` |
+| Unidades / Docenas | `SUM(packs)` o `SUM(docenas)` según `modo_unidades` (sin factor de pie) |
+| Facturación | `SUM(signo × PrecioNetoxR × factor_cabecera)` — ver §3.1 |
 | Precio medio | Facturación / Unidades (0 si unidades = 0) |
 | **Regalías** | Facturación × tasa_regalia |
 | **Regalías / TC** | Regalías / TC (0 si TC ≈ 0) — display **USD** |
+
+### 3.1 Motor de importe post-pie
+
+En AdministraNET, `stock.PrecioNetoxR` es **pre-pie**; el descuento al pie vive en cabecera (`cuentacliente.SubTotal1`, `SubtotalDesc`, derivado de `PorDesc1`/`ImpDesc1`).
+
+| Componente | Expresión |
+|------------|-----------|
+| Factor cabecera | `SubtotalDesc / SubTotal1` si `|SubTotal1| ≥ ε`; si no, `1`. `SubtotalDesc` nulo → `SubTotal1`. ε = 0,0001 |
+| Importe renglón | `signo(FA/NC) × PrecioNetoxR × factor_cabecera` |
+| Unidades | `signo × Cantidad` (y docenas vía U.M.) — **sin** factor pie |
+
+Helper compartido: `reports/services/comprobante_descuento_cabecera.py` (`factor_descuento_cabecera`, `sql_factor_descuento_cabecera_expr`). SQL VMM: `sql_signo_imp_post_pie_expr()` en `ventas_marcas_mensual_rules.py`.
+
+**Proyección:** `pf = round(f × coef, 2)` sobre facturación post-pie; `pu = CEILING(u × coef)` sin factor pie.
+
+**Filtro marca parcial:** el factor se aplica por `CodigoMovimiento` completo (todas las líneas del FA reciben el mismo factor de cabecera). Al filtrar por una sola marca, la suma de líneas visibles puede diferir de `SubtotalDesc` prorrateado — paridad AdministraNET/DABRA (ADR-4).
 
 En `meta.extra.kpis` también: `tasa_regalia`, `tc` (valores efectivos usados).
 

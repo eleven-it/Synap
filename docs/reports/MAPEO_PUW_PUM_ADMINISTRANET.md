@@ -108,23 +108,31 @@ LEFT JOIN viajantes v ON v.CodViajante = cc.CodViajante
 
 ## 3. Métricas del cuerpo del pivot
 
-### 3.1 Facturación — `SubTot.2`
+### 3.1 Facturación — `SubTot.2` (post-pie)
 
 | Excel | Semántica | AdministraNET | Expresión Synap canónica |
 |-------|-----------|---------------|---------------------------|
-| `SubTot.2` | Neto de línea post descuentos 1/2/3 | `stock.PrecioNetoxR` | `SUM(CASE FA… THEN PrecioNetoxR WHEN NC… THEN -PrecioNetoxR END)` |
+| `SubTot.2` | Neto de línea post descuentos 1/2/3 **y pie de FA** | `stock.PrecioNetoxR` + factor cabecera | `SUM(signo × PrecioNetoxR × factor_cabecera)` |
 
-**Validación:** smoke sobre AdministraNET (misma marca/período): `SUM(PrecioNetoxR con signo)` coherente con totales del informe.  
-**No usar** `cuentacliente.SubtotalDesc` para el grain del pivot (es cabecera; no cuadra con Ven×Cliente×Mes a nivel packs/docenas).
+**Factor cabecera (descuento al pie):** compartido VMM/DABRA en `reports/services/comprobante_descuento_cabecera.py`:
 
-Cadena de descuentos en el extract (solo referencia; ya consolidada en `PrecioNetoxR`):
+- Python: `factor_descuento_cabecera(SubTotal1, SubtotalDesc)` → `SubtotalDesc / SubTotal1` (o 1 si `SubTotal1=0` o `SubtotalDesc` nulo).
+- SQL: `sql_factor_descuento_cabecera_expr()`; importe VMM: `sql_signo_imp_post_pie_expr()` en `ventas_marcas_mensual_rules.py`.
+- DABRA re-importa el helper desde `dabra_consolidado_remitos` (sin cambio funcional).
+
+**Validación:** smoke sobre AdministraNET (misma marca/período): `SUM(signo × PrecioNetoxR × factor)` coherente con totales del informe y con `SubtotalDesc` de cabecera (tolerancia redondeo por línea).
+
+**Filtro marca parcial:** el factor es por `CodigoMovimiento` completo; al filtrar una marca, cada renglón visible recibe el mismo factor del FA (paridad AdministraNET/DABRA). Ver [SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md](SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md) §3.1.
+
+Cadena de descuentos en el extract (referencia):
 
 | Extract | ERP |
 |---------|-----|
 | `PreUni` ≈ `PrecioVentaxU` / lista | `stock.PrecioVentaxU` |
 | `Dto.1` / `Dto.1.$` | `stock.PorDesc` / `stock.ImpDesc` (y/o bonif) |
 | `Dto.2` / `Dto.3` | Descuentos adicionales de línea / promoción |
-| `SubTot.2` | `stock.PrecioNetoxR` |
+| `SubTot.2` | `stock.PrecioNetoxR` (pre-pie) × factor cabecera FA |
+| Pie FA | `cuentacliente.PorDesc1`/`ImpDesc1` → `SubtotalDesc` vs `SubTotal1` |
 
 ### 3.2 Cantidad — PuW vs PuM
 

@@ -36,7 +36,7 @@ Hay informes hermanos que no se reemplazan:
 
 ### Para qué sirve
 
-Ver **ventas por marca** en una matriz: filas **Vendedor → Cliente**, columnas **mes**, celdas con **unidades** (packs o docenas) y **facturación**. Incluye KPIs de regalías y tipo de cambio, comparación entre marcas y exportación Excel para uso interno.
+Ver **ventas por marca** en una matriz: filas **Vendedor → Cliente**, columnas **mes**, celdas con **unidades** (packs o docenas) y **facturación**. La facturación del informe **incluye el descuento al pie de factura** aplicado en cabecera (neto post-pie por renglón). Incluye KPIs de regalías y tipo de cambio, comparación entre marcas y exportación Excel para uso interno.
 
 No es el archivo que se manda a Levi’s / Puma / LW; para eso use **Ventas Mensuales Licenciatarios** (§3).
 
@@ -56,7 +56,7 @@ No es el archivo que se manda a Levi’s / Puma / LW; para eso use **Ventas Mens
 | KPI | Qué muestra |
 |-----|-------------|
 | Unidades / Docenas | Suma según el modo elegido |
-| Facturación | Importe neto de renglón (FA / NC con signo) |
+| Facturación | Importe neto post-pie de renglón (FA / NC con signo, incluye descuento al pie) |
 | Precio medio | Facturación ÷ unidades |
 | Regalías | Facturación × tasa de regalía |
 | Regalías / TC | Regalías convertidas (etiqueta USD) |
