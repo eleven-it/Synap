@@ -14,7 +14,9 @@
           <span class="rounded-full bg-sky-500/20 px-2 py-0.5 text-[11px] font-semibold text-sky-200">Borrador</span>
         </div>
         <p class="mt-1 text-xs leading-snug text-slate-300">
-          Conteo ciego en depósitos MPR elegibles (Terminado, Semi elaborado, 2da Selección).
+          Conteo ciego en depósitos MPR elegibles. Una campaña cubre un solo ámbito:
+          <strong class="font-semibold text-slate-200">terminados</strong> (Terminado, 2da Selección)
+          o <strong class="font-semibold text-slate-200">fabricados</strong> (Producción, Semi elaborado).
         </p>
       </div>
       <div class="ml-auto flex flex-wrap items-center gap-2">
@@ -59,10 +61,10 @@
             </li>
             {% endfor %}
           </ul>
-          <p class="mt-1 text-[11px] text-slate-400">Se tomará una foto (snapshot) del saldo de cada artículo al crear la campaña.</p>
+          <p class="mt-1 text-[11px] text-slate-400">Se tomará una foto (snapshot) del saldo de cada artículo al crear la campaña. No mezcle depósitos de terminados y fabricados en la misma campaña.</p>
           {% else %}
           <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            No hay depósitos MPR elegibles configurados (tipo Terminado / Semi elaborado / 2da Selección con suma de stock).
+            No hay depósitos MPR elegibles configurados (Terminado, 2da Selección, Producción o Semi elaborado con suma de stock).
           </div>
           {% endif %}
         </div>

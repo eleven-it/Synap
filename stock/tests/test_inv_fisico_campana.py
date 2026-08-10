@@ -11,32 +11,74 @@ from stock.services import inventario_fisico as svc
 
 
 class TiposMprElegiblesTest(SimpleTestCase):
-    def test_terminado_y_2da_son_elegibles(self):
-        for tipo in ("Terminado", "2daSeleccion"):
+    def test_tipos_mpr_elegibles_por_ambito(self):
+        for tipo in ("Terminado", "2daSeleccion", "Produccion", "SemiElaborado"):
             self.assertTrue(svc.es_tipo_mpr_elegible(tipo))
 
-    def test_semi_elaborado_no_es_elegible(self):
-        self.assertFalse(svc.es_tipo_mpr_elegible("SemiElaborado"))
+    def test_tipos_mpr_no_elegibles(self):
+        for tipo in ("MateriaPrima", "Otro", "", None):
+            self.assertFalse(svc.es_tipo_mpr_elegible(tipo))
 
-    def test_produccion_no_es_elegible(self):
-        self.assertFalse(svc.es_tipo_mpr_elegible("Produccion"))
-        self.assertFalse(svc.es_tipo_mpr_elegible(""))
-        self.assertFalse(svc.es_tipo_mpr_elegible(None))
+    def test_ambito_de_tipo_mpr(self):
+        self.assertEqual(svc.ambito_de_tipo_mpr("Terminado"), svc.AMBITO_TERMINADOS)
+        self.assertEqual(svc.ambito_de_tipo_mpr("2daSeleccion"), svc.AMBITO_TERMINADOS)
+        self.assertEqual(svc.ambito_de_tipo_mpr("Produccion"), svc.AMBITO_FABRICADOS)
+        self.assertEqual(svc.ambito_de_tipo_mpr("SemiElaborado"), svc.AMBITO_FABRICADOS)
+        self.assertIsNone(svc.ambito_de_tipo_mpr("MateriaPrima"))
 
 
 class TiposArtFabElegiblesTest(SimpleTestCase):
-    def test_terminado_tercero_y_fabricado_2da_son_elegibles(self):
-        for tipo in ("Terminado", "Tercero", "Fabricado 2da"):
-            self.assertTrue(svc.es_tipo_art_fab_elegible(tipo))
+    def test_terminados_acepta_terminado_y_tercero(self):
+        for tipo in ("Terminado", "Tercero"):
+            self.assertTrue(
+                svc.es_tipo_art_fab_elegible(tipo, ambito=svc.AMBITO_TERMINADOS)
+            )
 
-    def test_fabricado_y_vacio_no_son_elegibles(self):
-        for tipo in ("Fabricado", "", None, "  "):
-            self.assertFalse(svc.es_tipo_art_fab_elegible(tipo))
+    def test_fabricados_acepta_solo_fabricado(self):
+        self.assertTrue(
+            svc.es_tipo_art_fab_elegible("Fabricado", ambito=svc.AMBITO_FABRICADOS)
+        )
+        self.assertFalse(
+            svc.es_tipo_art_fab_elegible("Tercero", ambito=svc.AMBITO_FABRICADOS)
+        )
+
+    def test_fabricado_2da_no_es_elegible(self):
+        self.assertFalse(svc.es_tipo_art_fab_elegible("Fabricado 2da"))
+        self.assertFalse(
+            svc.es_tipo_art_fab_elegible("Fabricado 2da", ambito=svc.AMBITO_TERMINADOS)
+        )
+        self.assertFalse(
+            svc.es_tipo_art_fab_elegible("Fabricado 2da", ambito=svc.AMBITO_FABRICADOS)
+        )
+
+    def test_union_generica_sin_fabricado_2da(self):
+        for tipo in ("Terminado", "Tercero", "Fabricado"):
+            self.assertTrue(svc.es_tipo_art_fab_elegible(tipo))
+        self.assertFalse(svc.es_tipo_art_fab_elegible(""))
+
+    def test_tipos_art_fab_por_tipo_mpr_deposito(self):
+        self.assertEqual(
+            svc.tipos_art_fab_para_tipo_mpr("Terminado"),
+            svc.TIPOS_ART_FAB_POR_AMBITO[svc.AMBITO_TERMINADOS],
+        )
+        self.assertEqual(
+            svc.tipos_art_fab_para_tipo_mpr("Produccion"),
+            svc.TIPOS_ART_FAB_POR_AMBITO[svc.AMBITO_FABRICADOS],
+        )
 
     def test_sql_filtro_tipo_art_fab_incluye_placeholders(self):
         sql, params = svc._sql_filtro_tipo_art_fab("a")
         self.assertIn("COALESCE(TRIM(a.tipo_art_fab), '') IN", sql)
         self.assertEqual(set(params), set(svc.TIPOS_ART_FAB_ELEGIBLES))
+        self.assertNotIn("Fabricado 2da", params)
+
+    def test_sql_filtro_art_por_ambito_deposito(self):
+        sql, params = svc._sql_filtro_art_por_ambito_deposito("a", "dep")
+        self.assertIn("dep.tipo_mpr", sql)
+        self.assertIn("a.tipo_art_fab", sql)
+        self.assertIn("Terminado", params)
+        self.assertIn("Fabricado", params)
+        self.assertNotIn("Fabricado 2da", params)
 
 
 class CalcularDiferenciaTest(SimpleTestCase):
@@ -119,7 +161,7 @@ class CrearCampanaServiceTest(SimpleTestCase):
         cursor.fetchall.return_value = tablas
         cursor.fetchone.return_value = {
             "CodDeposito": 5,
-            "tipo_mpr": "Produccion",
+            "tipo_mpr": "MateriaPrima",
             "suma_stock": "Si",
         }
         mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
@@ -135,7 +177,28 @@ class CrearCampanaServiceTest(SimpleTestCase):
         self.assertIn("elegible", result.get("error", "").lower())
 
     @patch("stock.services.inventario_fisico.mysql_cursor")
-    def test_crear_campana_inserta_lineas_snapshot(self, mock_cursor_ctx):
+    def test_crear_campana_rechaza_mezcla_ambitos(self, mock_cursor_ctx):
+        cursor = MagicMock()
+        tablas = [{"Tables_in_x": "deposito"}]
+        cursor.fetchall.return_value = tablas
+        cursor.fetchone.side_effect = [
+            {"CodDeposito": 3, "tipo_mpr": "Terminado", "suma_stock": "Si"},
+            {"CodDeposito": 7, "tipo_mpr": "Produccion", "suma_stock": "Si"},
+        ]
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+        ok, result = svc.crear_campana(
+            "empresa_test",
+            fecha="2026-07-23",
+            depositos_ids=[3, 7],
+            id_usuario_alta=1,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(result.get("error"), svc.ERROR_MEZCLA_AMBITOS)
+
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    def test_crear_campana_inserta_lineas_snapshot_terminados(self, mock_cursor_ctx):
         cursor = MagicMock()
         cursor.fetchone.return_value = {
             "CodDeposito": 3,
@@ -180,7 +243,48 @@ class CrearCampanaServiceTest(SimpleTestCase):
             for c in cursor.execute.call_args_list
             if c.args and "stock_deposito" in c.args[0].lower() and "inner join" in c.args[0].lower()
         )
-        self.assertEqual(set(snapshot_args[1:]), set(svc.TIPOS_ART_FAB_ELEGIBLES))
+        tipos_terminados = svc.TIPOS_ART_FAB_POR_AMBITO[svc.AMBITO_TERMINADOS]
+        self.assertEqual(set(snapshot_args[1:]), set(tipos_terminados))
+
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    def test_crear_campana_inserta_lineas_snapshot_fabricados(self, mock_cursor_ctx):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {
+            "CodDeposito": 8,
+            "tipo_mpr": "SemiElaborado",
+            "suma_stock": "Si",
+        }
+        cursor.lastrowid = 55
+        tablas = [
+            {"Tables_in_x": "deposito"},
+            {"Tables_in_x": "stock_deposito"},
+            {"Tables_in_x": "articulo"},
+        ]
+        cursor.fetchall.side_effect = [
+            tablas,
+            tablas,
+            tablas,
+            [{"id_articulo": 200, "saldo": Decimal("3")}],
+        ]
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+        ok, result = svc.crear_campana(
+            "empresa_test",
+            fecha="2026-07-23",
+            depositos_ids=[8],
+            id_usuario_alta=7,
+        )
+        self.assertTrue(ok, result)
+        snapshot_args = next(
+            c.args[1]
+            for c in cursor.execute.call_args_list
+            if c.args and "stock_deposito" in c.args[0].lower() and "inner join" in c.args[0].lower()
+        )
+        self.assertEqual(
+            set(snapshot_args[1:]),
+            set(svc.TIPOS_ART_FAB_POR_AMBITO[svc.AMBITO_FABRICADOS]),
+        )
 
 
 class InventarioPivoteIntactoTest(SimpleTestCase):
