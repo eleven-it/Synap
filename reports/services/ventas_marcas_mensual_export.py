@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.utils.administranet_types import str_or_default, to_int_or_none
+from reports.services.ventas_marcas_mensual_rules import sql_signo_imp_post_pie_expr
 from reports.services.ventas_marcas_mensual_runner import (
     _parse_coef_proyeccion,
     _parse_incluir_proyeccion,
@@ -52,16 +53,6 @@ def _signo_qty_sql() -> str:
     """
 
 
-def _signo_imp_sql() -> str:
-    return """
-        CASE
-            WHEN cc.TipoComprobante IN ('FA','FB','FC','FE','FM') THEN COALESCE(st.PrecioNetoxR, 0)
-            WHEN cc.TipoComprobante IN ('NCA','NCB','NCC','NCE','NCM') THEN -COALESCE(st.PrecioNetoxR, 0)
-            ELSE 0
-        END
-    """
-
-
 def _cat_sql_for_marcas(
     cursor,
     marcas_incluidos: List[int],
@@ -89,7 +80,7 @@ def fetch_detalle_renglones(
 ) -> List[Dict[str, Any]]:
     """Consulta grano renglón stock/cuentacliente con los mismos filtros que la matriz."""
     signo_qty = _signo_qty_sql()
-    signo_imp = _signo_imp_sql()
+    signo_imp = sql_signo_imp_post_pie_expr()
     factor_sql = _sql_factor_docenas_expr()
     use_docenas = modo_unidades == "docenas"
 

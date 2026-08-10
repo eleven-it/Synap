@@ -821,3 +821,310 @@ class PresetHombreApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["preset_hombre"]["id_manuales"], ["H1", "H2"])
         self.assertTrue(response.data["can_edit"])
+
+
+class VentasMarcasMensualPostPieRunnerTest(SimpleTestCase):
+    """Runner VMM usa importe post-pie (REQ-VMM-PIE-01, REQ-VMM-PIE-04)."""
+
+    def _run_with_mock_rows(self, rows, *, modo_comparacion="una", extra_filters=None):
+        report = ReportDefinition(
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category="operational",
+            version="1.0.0",
+        )
+        filters = {
+            "base_empresa": "administranet1",
+            "fecha_inicio_facturacion": "2026-07-01",
+            "fecha_fin_facturacion": "2026-07-31",
+            "tasa_regalia_pct": 13,
+        }
+        if extra_filters:
+            filters.update(extra_filters)
+        payload = {"filters": filters}
+        captured = {}
+
+        def fake_execute(sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = list(params or [])
+
+        cursor = Mock()
+        cursor.execute = fake_execute
+        cursor.fetchall.return_value = rows
+        cursor.description = [
+            ("ven",),
+            ("vend_nombre",),
+            ("codigo_cliente",),
+            ("nombre_cliente",),
+            ("anio_mes",),
+            ("packs",),
+            ("docenas",),
+            ("facturacion",),
+            ("ums_raw",),
+        ]
+        conn = Mock()
+        conn.cursor.return_value = cursor
+        pool = MagicMock()
+        pool.get_connection.return_value.__enter__.return_value = conn
+
+        patches = [
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.ctx_desde_runner",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.alcance_objetivos_cod_viajante",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.get_mysql_pool",
+                return_value=pool,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner._resolve_tc",
+                return_value=14.5817,
+            ),
+        ]
+        if modo_comparacion == "comparar":
+            patches.append(
+                patch(
+                    "reports.services.ventas_marcas_mensual_runner._resolve_marca_single",
+                    side_effect=[(10, "PUM"), (20, "PUW")],
+                )
+            )
+        else:
+            patches.append(
+                patch(
+                    "reports.services.ventas_marcas_mensual_runner._resolve_marcas_incluidos",
+                    return_value=[10],
+                )
+            )
+
+        from contextlib import ExitStack
+
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            result = run_ventas_marcas_mensual(report, payload, Mock())
+
+        return result, captured
+
+    def test_sql_emitido_usa_expr_post_pie(self):
+        row = (1, "V", "C1", "Cliente", "202607", 10.0, 10.0, 800.0, "CU")
+        _, captured = self._run_with_mock_rows([row])
+        sql = captured.get("sql", "")
+        self.assertIn("SubTotal1", sql)
+        self.assertIn("SubtotalDesc", sql)
+        self.assertIn("0.0001", sql)
+        self.assertIn("PrecioNetoxR", sql)
+
+    def test_fa_dto_pie_20_facturacion_y_regalias(self):
+        """FA SubTotal1=1000, SubtotalDesc=800 → fact=800; regalías = 800 × 13%."""
+        row = (1, "V", "C1", "Cliente", "202607", 10.0, 10.0, 800.0, "CU")
+        result, _ = self._run_with_mock_rows([row])
+        kpis = result.meta["extra"]["kpis"]
+        self.assertAlmostEqual(kpis["facturacion"], 800.0, places=2)
+        self.assertAlmostEqual(kpis["unidades"], 10.0, places=2)
+        self.assertAlmostEqual(kpis["regalias"], 104.0, places=2)
+        self.assertAlmostEqual(kpis["precio_medio"], 80.0, places=2)
+
+    def test_nc_mismo_factor_signo_negativo(self):
+        row = (1, "V", "C1", "Cliente", "202607", -5.0, -5.0, -400.0, "CU")
+        result, _ = self._run_with_mock_rows([row])
+        kpis = result.meta["extra"]["kpis"]
+        self.assertAlmostEqual(kpis["facturacion"], -400.0, places=2)
+        self.assertAlmostEqual(kpis["unidades"], -5.0, places=2)
+
+    def test_sin_pie_paridad_factor_uno(self):
+        row = (1, "V", "C1", "Cliente", "202607", 12.0, 1.0, 1000.0, "P1")
+        result, _ = self._run_with_mock_rows([row])
+        kpis = result.meta["extra"]["kpis"]
+        self.assertAlmostEqual(kpis["facturacion"], 1000.0, places=2)
+        self.assertAlmostEqual(kpis["unidades"], 12.0, places=2)
+
+
+class VentasMarcasMensualComparePostPieTest(SimpleTestCase):
+    def test_modo_comparar_kpis_post_pie(self):
+        report = ReportDefinition(
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category="operational",
+            version="1.0.0",
+        )
+        payload = {
+            "filters": {
+                "base_empresa": "administranet1",
+                "fecha_inicio_facturacion": "2026-01-01",
+                "fecha_fin_facturacion": "2026-01-31",
+                "modo_comparacion": "comparar",
+                "marca_a": "PUM",
+                "marca_b": "PUW",
+            }
+        }
+        call_count = {"n": 0}
+
+        def fake_execute(sql, params=None):
+            call_count["sql"] = sql
+
+        def fake_fetchall():
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return [(1, "V", "C1", "Cliente", "202601", 10.0, 10.0, 800.0, "CU")]
+            return [(1, "V", "C1", "Cliente", "202601", 6.0, 6.0, 480.0, "CU")]
+
+        cursor = Mock()
+        cursor.execute = fake_execute
+        cursor.fetchall = fake_fetchall
+        cursor.description = [
+            ("ven",),
+            ("vend_nombre",),
+            ("codigo_cliente",),
+            ("nombre_cliente",),
+            ("anio_mes",),
+            ("packs",),
+            ("docenas",),
+            ("facturacion",),
+            ("ums_raw",),
+        ]
+        conn = Mock()
+        conn.cursor.return_value = cursor
+        pool = MagicMock()
+        pool.get_connection.return_value.__enter__.return_value = conn
+
+        with (
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.ctx_desde_runner",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.alcance_objetivos_cod_viajante",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.get_mysql_pool",
+                return_value=pool,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner._resolve_tc",
+                return_value=14.5817,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner._resolve_marca_single",
+                side_effect=[(10, "PUM"), (20, "PUW")],
+            ),
+        ):
+            result = run_ventas_marcas_mensual(report, payload, Mock())
+
+        cmp_meta = result.meta["extra"]["compare"]
+        self.assertAlmostEqual(cmp_meta["marca_a"]["kpis"]["facturacion"], 800.0, places=2)
+        self.assertAlmostEqual(cmp_meta["marca_b"]["kpis"]["facturacion"], 480.0, places=2)
+        self.assertIn("SubTotal1", call_count.get("sql", ""))
+        delta = cmp_meta.get("delta_pct_facturacion")
+        if delta is not None:
+            self.assertAlmostEqual(delta, -40.0, places=1)
+
+
+class VentasMarcasMensualUnidadesInvariantesPostPieTest(SimpleTestCase):
+    """Unidades no llevan factor pie (REQ-VMM-PIE-05)."""
+
+    def test_unidades_sin_factor_pie_con_dto_20(self):
+        rows = [
+            {
+                "ven": 1,
+                "vend_nombre": "V",
+                "codigo_cliente": "C1",
+                "nombre_cliente": "Cliente",
+                "anio_mes": "202607",
+                "packs": 10.0,
+                "docenas": 10.0,
+                "facturacion": 800.0,
+            }
+        ]
+        _, kpis = build_filas_matriz(rows, ["202607"], "packs")
+        self.assertAlmostEqual(kpis["unidades"], 10.0)
+        self.assertAlmostEqual(kpis["facturacion"], 800.0)
+
+
+class VentasMarcasMensualExportPostPieTest(SimpleTestCase):
+    def test_detalle_sql_usa_post_pie(self):
+        cursor = Mock()
+        cursor.fetchall.return_value = []
+        cursor.description = []
+
+        fetch_detalle_renglones(
+            cursor,
+            where_s="cc.Fecha BETWEEN %s AND %s",
+            params=["2026-07-01", "2026-07-31"],
+            cat_sql="",
+            cat_params=[],
+            modo_unidades="packs",
+        )
+
+        sql, _ = cursor.execute.call_args.args
+        self.assertIn("SubTotal1", sql)
+        self.assertIn("SubtotalDesc", sql)
+        self.assertNotIn("_signo_imp_sql", sql)
+
+    def test_suma_detalle_coherente_con_kpi(self):
+        cursor = Mock()
+        cursor.fetchall.return_value = [
+            (
+                "2026-07-15",
+                "FA",
+                "1-100",
+                1,
+                "Vendedor",
+                "C1",
+                "Cliente",
+                "SA1",
+                "Art",
+                "PUM",
+                "202607",
+                5.0,
+                5.0,
+                400.0,
+            ),
+            (
+                "2026-07-16",
+                "FA",
+                "1-101",
+                1,
+                "Vendedor",
+                "C1",
+                "Cliente",
+                "SA2",
+                "Art2",
+                "PUM",
+                "202607",
+                5.0,
+                5.0,
+                400.0,
+            ),
+        ]
+        cursor.description = [
+            ("fecha",),
+            ("tipo_comprobante",),
+            ("nro_comprobante",),
+            ("ven",),
+            ("vend_nombre",),
+            ("codigo_cliente",),
+            ("nombre_cliente",),
+            ("id_manual",),
+            ("nombre_articulo",),
+            ("nombre_marca",),
+            ("anio_mes",),
+            ("packs",),
+            ("docenas",),
+            ("facturacion",),
+        ]
+        rows = fetch_detalle_renglones(
+            cursor,
+            where_s="1=1",
+            params=[],
+            cat_sql="",
+            cat_params=[],
+            modo_unidades="packs",
+        )
+        suma_detalle = sum(r["facturacion"] for r in rows)
+        self.assertAlmostEqual(suma_detalle, 800.0, places=2)
+        self.assertAlmostEqual(sum(r["unidades"] for r in rows), 10.0, places=2)

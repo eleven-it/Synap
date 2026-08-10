@@ -20,9 +20,18 @@ from core.utils.administranet_types import (
     to_decimal_or_none,
     to_int_or_none,
 )
+from reports.services.comprobante_descuento_cabecera import (
+    factor_descuento_cabecera,
+    porcentaje_descuento_cabecera,
+)
 from reports.services.connection_pool import get_mysql_pool
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "factor_descuento_cabecera",
+    "porcentaje_descuento_cabecera",
+]
 
 CODIGO_CLIENTE_DABRA = 368
 DOC_TYPE = 1
@@ -128,17 +137,6 @@ def bonificacion_linea(pordesc_bonif: Any, por_desc: Any) -> Decimal:
     return to_decimal_or_none(por_desc) or Decimal("0")
 
 
-def porcentaje_descuento_cabecera(subtotal1: Any, subtotal_desc: Any) -> Decimal:
-    """
-    % de descuento al pie de FA: (SubTotal1 − SubtotalDesc) / SubTotal1 × 100.
-
-    Cubre PorDesc1/ImpDesc1 (y PorDesc2) sin depender solo del porcentaje
-    cargado: si el descuento se cargó como importe, el ratio sigue siendo correcto.
-    """
-    factor = factor_descuento_cabecera(subtotal1, subtotal_desc)
-    return (Decimal("1") - factor) * Decimal("100")
-
-
 def bonificacion_efectiva(
     pordesc_bonif: Any,
     por_desc: Any,
@@ -198,24 +196,6 @@ def _fmt_fecha(value: Any) -> str:
 def _rango_mes(mes: int, anio: int) -> Tuple[str, str]:
     ultimo = calendar.monthrange(anio, mes)[1]
     return f"{anio:04d}-{mes:02d}-01", f"{anio:04d}-{mes:02d}-{ultimo:02d}"
-
-
-def factor_descuento_cabecera(subtotal1: Any, subtotal_desc: Any) -> Decimal:
-    """
-    Factor de descuento de cabecera FA.
-
-    Las líneas de ``stock`` guardan precios predescuento; ``SubTotal1`` es la
-    suma neta predescuento y ``SubtotalDesc`` el neto ya descontado. El IVA de
-    cabecera se recalcula sobre la base descontada, así que el bruto comparable
-    a ``ImporteVenta`` es Σ bruto líneas × (SubtotalDesc / SubTotal1).
-    """
-    cab_neto = _dec(subtotal1)
-    if cab_neto == 0:
-        return Decimal("1")
-    cab_neto_desc = to_decimal_or_none(subtotal_desc)
-    if cab_neto_desc is None:
-        cab_neto_desc = cab_neto
-    return cab_neto_desc / cab_neto
 
 
 def validar_totales_fa(

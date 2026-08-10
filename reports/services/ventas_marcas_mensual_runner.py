@@ -33,43 +33,17 @@ _TC_FALLBACK = Decimal("14.5817")
 _TASA_REGALIA_DEFAULT = 0.13
 _COEF_PROYECCION_DEFAULT = 1.07
 
-_TIPOS_FAC = ("FA", "FB", "FC", "FE", "FM")
-_TIPOS_NC = ("NCA", "NCB", "NCC", "NCE", "NCM")
-_STOCK_TIPO_COMP = ("Venta", "Venta TPV", "Devol - Cliente", "ND Anul NC")
-
-_FACTOR_DOCENAS_MAP = {
-    "P1": 12.0,
-    "P2": 6.0,
-    "P3": 4.0,
-    "P6": 2.0,
-    "CU": 1.0,
-    # Unidad suelta (AdministraNET): misma semántica que CU / Excel factor 1.
-    "UNIDAD": 1.0,
-    "UNI": 1.0,
-    "UNIDADES": 1.0,
-}
-
-
-def factor_docenas_unimed(nombre_unimed: Optional[str]) -> float:
-    """Factor tipo Excel Canti_2: divisor para obtener docenas desde packs."""
-    um = str_or_default(nombre_unimed, "").strip().upper()
-    return _FACTOR_DOCENAS_MAP.get(um, 1.0)
-
-
-def _sql_factor_docenas_expr() -> str:
-    return """
-        CASE COALESCE(st.nombre_unimed_vta, um.nombre_unimed, '')
-            WHEN 'P1' THEN 12
-            WHEN 'P2' THEN 6
-            WHEN 'P3' THEN 4
-            WHEN 'P6' THEN 2
-            WHEN 'CU' THEN 1
-            WHEN 'UNIDAD' THEN 1
-            WHEN 'UNI' THEN 1
-            WHEN 'UNIDADES' THEN 1
-            ELSE 1
-        END
-    """
+from reports.services.ventas_marcas_mensual_rules import (
+    FACTOR_DOCENAS_MAP as _FACTOR_DOCENAS_MAP,
+    STOCK_TIPO_COMP as _STOCK_TIPO_COMP,
+    TIPOS_FAC as _TIPOS_FAC,
+    TIPOS_NC as _TIPOS_NC,
+    factor_docenas_unimed,
+    sql_base_where_clauses,
+    sql_factor_docenas_expr as _sql_factor_docenas_expr,
+    sql_signo_imp_post_pie_expr,
+    sql_signo_qty_expr,
+)
 
 
 def _parse_str_list(raw: Any) -> List[str]:
@@ -722,31 +696,11 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
     fi_sql = _norm_yyyy_mm_dd(fi_fac)
     ff_sql = _norm_yyyy_mm_dd(ff_fac)
 
-    signo_qty = """
-        CASE
-            WHEN cc.TipoComprobante IN ('FA','FB','FC','FE','FM') THEN COALESCE(st.Cantidad, 0)
-            WHEN cc.TipoComprobante IN ('NCA','NCB','NCC','NCE','NCM') THEN -COALESCE(st.Cantidad, 0)
-            ELSE 0
-        END
-    """
-    signo_imp = """
-        CASE
-            WHEN cc.TipoComprobante IN ('FA','FB','FC','FE','FM') THEN COALESCE(st.PrecioNetoxR, 0)
-            WHEN cc.TipoComprobante IN ('NCA','NCB','NCC','NCE','NCM') THEN -COALESCE(st.PrecioNetoxR, 0)
-            ELSE 0
-        END
-    """
+    signo_qty = sql_signo_qty_expr()
+    signo_imp = sql_signo_imp_post_pie_expr()
     factor_sql = _sql_factor_docenas_expr()
 
-    where_parts = [
-        "cc.Fecha >= %s",
-        "cc.Fecha <= %s",
-        "cc.Anulado = 'No'",
-        "cc.CodigoMovimiento <> 0",
-        "cc.TipoComprobante IN ('FA','FB','FC','FE','FM','NCA','NCB','NCC','NCE','NCM')",
-        "st.Anulado = 'No'",
-        "st.TipoComp IN ('Venta','Venta TPV','Devol - Cliente','ND Anul NC')",
-    ]
+    where_parts = sql_base_where_clauses()
     params: List[Any] = [fi_sql, ff_sql]
 
     if sucursales_ints:
