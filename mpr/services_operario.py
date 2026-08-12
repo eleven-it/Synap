@@ -146,7 +146,9 @@ def resolver_linea_operario(
     (si existe) y, en su defecto, la línea habitual vigente."""
     from mpr.repositories import turno_roster as repo_r
     try:
-        override = repo_r.override_linea_roster(base_empresa, fecha, id_operario)
+        override = repo_r.override_linea_roster(
+            base_empresa, fecha, id_operario, id_mpr_turno=id_turno
+        )
         if override is not None:
             return override
     except Exception as e:

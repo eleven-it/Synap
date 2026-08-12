@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS mpr_roster_dia (
     id_mpr_turno BIGINT NOT NULL,
     creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id_mpr_roster_dia),
-    UNIQUE KEY uk_mpr_roster_fecha_operario (fecha, id_operario),
+    UNIQUE KEY uk_mpr_roster_fecha_operario_turno (fecha, id_operario, id_mpr_turno),
     KEY idx_mpr_roster_fecha (fecha),
     CONSTRAINT fk_mpr_roster_turno FOREIGN KEY (id_mpr_turno)
         REFERENCES mpr_turno (id_mpr_turno) ON DELETE RESTRICT ON UPDATE RESTRICT

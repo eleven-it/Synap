@@ -1129,6 +1129,88 @@ def run_mpr_maquina_linea_mysql(conn) -> Dict[str, Any]:
     }
 
 
+def run_mpr_roster_multi_turno_mysql(conn) -> Dict[str, Any]:
+    """
+    Amplía la UK de ``mpr_roster_dia`` a multi-turno:
+    ``(fecha, id_operario, id_mpr_turno)`` reemplaza ``(fecha, id_operario)``.
+
+    Idempotente. **No** ejecuta DELETE/TRUNCATE/UPDATE masivo de filas de roster.
+    Ver ``docs/mpr/DISENO_ROSTER_OVERRIDE_LINEA_Y_MULTI_TURNO.md`` §5.2 y
+    ``mpr/sql/005_mpr_roster_multi_turno_uk.sql``.
+    """
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    try:
+        tbl_r = nombre_tabla_real(cursor, "mpr_roster_dia")
+        if not tbl_r:
+            _append_migration(
+                applied,
+                failed,
+                True,
+                "mpr_roster_dia: tabla ausente (skip)",
+            )
+            conn.commit()
+            return {
+                "success": True,
+                "message": mensaje_final(applied, failed),
+                "migrations_applied": applied,
+                "migrations_failed": failed,
+            }
+
+        tr = tbl_r.replace("`", "``")
+        uk_nueva = "uk_mpr_roster_fecha_operario_turno"
+        uk_vieja = "uk_mpr_roster_fecha_operario"
+
+        if indice_existe(cursor, tbl_r, uk_nueva):
+            _append_migration(
+                applied,
+                failed,
+                True,
+                f"{tbl_r}: UK multi-turno ya presente (no-op)",
+            )
+        elif indice_existe(cursor, tbl_r, uk_vieja):
+            cursor.execute(
+                "ALTER TABLE `{}` DROP INDEX `{}`".format(tr, uk_vieja)
+            )
+            cursor.execute(
+                "ALTER TABLE `{}` ADD UNIQUE KEY `{}` "
+                "(fecha, id_operario, id_mpr_turno)".format(tr, uk_nueva)
+            )
+            _append_migration(
+                applied,
+                failed,
+                True,
+                f"{tbl_r}: UK migrada de (fecha, operario) a multi-turno",
+            )
+        else:
+            cursor.execute(
+                "ALTER TABLE `{}` ADD UNIQUE KEY `{}` "
+                "(fecha, id_operario, id_mpr_turno)".format(tr, uk_nueva)
+            )
+            _append_migration(
+                applied,
+                failed,
+                True,
+                f"{tbl_r}: UK multi-turno creada",
+            )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_mpr_roster_multi_turno_mysql: %s", e)
+        failed.append(str(e))
+    finally:
+        cursor.close()
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 def run_self_checkout_core_tables_mysql(conn) -> Dict[str, Any]:
     """
     Crea las tablas ``self_checkout_*`` (kiosco, carrito, sesión, etc.) si no existen
@@ -2807,6 +2889,19 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "medio",
         "run": run_mpr_maquina_linea_mysql,
+    },
+    {
+        "id": "mpr_roster_multi_turno",
+        "title": "MPR — roster multi-turno (UK fecha+operario+turno)",
+        "description": (
+            "Amplía la unicidad de ``mpr_roster_dia`` a "
+            "``uk_mpr_roster_fecha_operario_turno (fecha, id_operario, id_mpr_turno)`` "
+            "sin borrar ni reescribir filas existentes. "
+            "Equivalente documentado en ``mpr/sql/005_mpr_roster_multi_turno_uk.sql``. "
+            "Ver docs/mpr/DISENO_ROSTER_OVERRIDE_LINEA_Y_MULTI_TURNO.md §5."
+        ),
+        "risk": "medio",
+        "run": run_mpr_roster_multi_turno_mysql,
     },
     {
         "id": "mpr_drop_lista_produccion_legacy",

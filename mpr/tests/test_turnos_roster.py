@@ -10,10 +10,10 @@ from datetime import date, time, timedelta
 
 from django.db import IntegrityError
 from django.db.models import ProtectedError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from mpr.models import MprRosterDia, MprTurno
-from mpr.templatetags.mpr_filters import turno_color
+from mpr.templatetags.mpr_filters import turno_color, roster_ids_turno
 from mpr.services import (
     actualizar_turno,
     asignar_turno_roster,
@@ -189,7 +189,7 @@ class TestServiciosRoster(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=None
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
         ), patch(
             "mpr.services._motivo_bloqueo_cambio_roster", return_value=None
         ), patch("mpr.repositories.turno_roster.upsert_roster"):
@@ -203,10 +203,10 @@ class TestServiciosRoster(TestCase):
         from unittest.mock import patch
 
         with patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia",
-            return_value=self.turno.id,
+            "mpr.repositories.turno_roster.turnos_del_operario_dia",
+            return_value=[self.turno.id],
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
-            "mpr.repositories.turno_roster.eliminar_roster", return_value=1
+            "mpr.repositories.turno_roster.eliminar_roster_turno", return_value=1
         ):
             ok, error = eliminar_asignacion_roster(EMPRESA, self.fecha_ayer_str, 888)
         self.assertTrue(ok, error)
@@ -220,7 +220,7 @@ class TestServiciosRoster(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=None
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=msg):
             mock_op.return_value = {"id_sue_abm_empleado": 501, "nombre_empleado": "Op Bloq"}
             ok, error = asignar_turno_roster(
@@ -240,7 +240,7 @@ class TestServiciosRoster(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno2), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=self.turno.id
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=True
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=msg):
             mock_op.return_value = {"id_sue_abm_empleado": 502, "nombre_empleado": "Op CC"}
             ok, error = asignar_turno_roster(
@@ -255,8 +255,8 @@ class TestServiciosRoster(TestCase):
 
         msg = "No se puede modificar: el operario ya tiene partes registrados en esa fecha y turno."
         with patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia",
-            return_value=self.turno.id,
+            "mpr.repositories.turno_roster.turnos_del_operario_dia",
+            return_value=[self.turno.id],
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=msg):
             ok, error = eliminar_asignacion_roster(
                 EMPRESA, self.fecha_futura_str, 503
@@ -275,8 +275,7 @@ class TestServiciosRoster(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno2), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia",
-            return_value=self.turno.id,
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=msg):
             mock_op.return_value = {"id_sue_abm_empleado": 504, "nombre_empleado": "Op Reasig"}
             ok, error = asignar_turno_roster(
@@ -292,8 +291,7 @@ class TestServiciosRoster(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia",
-            return_value=self.turno.id,
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=True
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
             "mpr.repositories.turno_roster.upsert_roster"
         ) as mock_upsert:
@@ -304,8 +302,8 @@ class TestServiciosRoster(TestCase):
         self.assertTrue(ok, error)
         mock_upsert.assert_called_once()
 
-    def test_asignar_turno_reasignacion_no_duplica(self):
-        """Reasignar mismo operario/fecha actualiza el turno (update_or_create), no duplica."""
+    def test_asignar_turno_segundo_turno_agrega_fila(self):
+        """Agregar otro turno el mismo día invoca upsert para el segundo turno (multi-turno)."""
         from unittest.mock import patch
         fecha_str = self.fecha_futura_str
         id_op = 101
@@ -313,13 +311,15 @@ class TestServiciosRoster(TestCase):
         def _turno_side_effect(base, tid):
             return self.turno if tid == self.turno.id else self.turno2
 
+        def _asignado_side_effect(base, fecha, oid, tid):
+            return tid == self.turno.id
+
         with patch("mpr.services.obtener_turno", side_effect=_turno_side_effect), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", side_effect=[None, self.turno.id]
+            "mpr.repositories.turno_roster.roster_turno_asignado",
+            side_effect=_asignado_side_effect,
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
-            "mpr.repositories.parte.migrar_lineas_operario_entre_turnos", return_value=(True, None, {})
-        ), patch(
             "mpr.repositories.turno_roster.upsert_roster"
         ) as mock_upsert:
             mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Operario Uno"}
@@ -338,7 +338,7 @@ class TestServiciosRoster(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=None
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
             "mpr.repositories.turno_roster.upsert_roster"
         ):
@@ -352,10 +352,10 @@ class TestServiciosRoster(TestCase):
         from unittest.mock import patch
 
         with patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia",
-            return_value=self.turno.id,
+            "mpr.repositories.turno_roster.turnos_del_operario_dia",
+            return_value=[self.turno.id],
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
-            "mpr.repositories.turno_roster.eliminar_roster", return_value=1
+            "mpr.repositories.turno_roster.eliminar_roster_turno", return_value=1
         ):
             ok, error = eliminar_asignacion_roster(EMPRESA, self.fecha_futura_str, 300)
         self.assertTrue(ok, error)
@@ -366,7 +366,7 @@ class TestServiciosRoster(TestCase):
         from unittest.mock import patch
 
         with patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=None
+            "mpr.repositories.turno_roster.turnos_del_operario_dia", return_value=[]
         ):
             ok, error = eliminar_asignacion_roster(EMPRESA, self.fecha_futura_str, 9999)
         self.assertFalse(ok)
@@ -395,7 +395,7 @@ class TestAsignarTurnoRosterRango(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=None
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
             "mpr.repositories.turno_roster.upsert_roster"
         ) as mock_upsert:
@@ -421,7 +421,7 @@ class TestAsignarTurnoRosterRango(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=None
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
             "mpr.repositories.turno_roster.upsert_roster"
         ) as mock_upsert:
@@ -453,7 +453,7 @@ class TestAsignarTurnoRosterRango(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=None
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
         ), patch(
             "mpr.services._motivo_bloqueo_cambio_roster", side_effect=_bloqueo_side_effect
         ), patch("mpr.repositories.turno_roster.upsert_roster") as mock_upsert:
@@ -475,7 +475,7 @@ class TestAsignarTurnoRosterRango(TestCase):
         with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=self.turno.id
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=True
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=msg):
             mock_op.return_value = {"id_sue_abm_empleado": 220, "nombre_empleado": "Op Todo Bloq"}
             ok, error, resumen = asignar_turno_roster_rango(
@@ -522,8 +522,8 @@ class TestAsignarTurnoRosterRango(TestCase):
         self.assertIn("operario", error.lower())
         self.assertEqual(resumen["aplicados"], 0)
 
-    def test_reasignacion_llama_upsert_sobrescribe(self):
-        """Dos llamadas mismo operario/fecha con distinto turno invocan upsert (overwrite)."""
+    def test_rango_agrega_segundo_turno_sin_sobrescribir(self):
+        """Dos llamadas mismo operario/fecha con distinto turno invocan upsert (multi-turno)."""
         from unittest.mock import patch
 
         fecha = self.manana
@@ -535,7 +535,7 @@ class TestAsignarTurnoRosterRango(TestCase):
         with patch("mpr.services.obtener_turno", side_effect=_turno_side_effect), patch(
             "mpr.services.obtener_operario"
         ) as mock_op, patch(
-            "mpr.repositories.turno_roster.turno_del_operario_dia", return_value=None
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
         ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
             "mpr.repositories.turno_roster.upsert_roster"
         ) as mock_upsert:
@@ -554,7 +554,7 @@ class TestAsignarTurnoRosterRango(TestCase):
         self.assertEqual(ultima_llamada[0][3], self.turno2.id)
 
 
-class TestFiltroTurnoColor(TestCase):
+class TestFiltroTurnoColor(SimpleTestCase):
     """Filtro turno_color: slug de color por turno para la grilla de roster."""
 
     def test_heuristica_por_nombre_con_y_sin_acento(self):
@@ -579,3 +579,22 @@ class TestFiltroTurnoColor(TestCase):
     def test_entrada_invalida_no_rompe(self):
         self.assertEqual(turno_color(None), "p0")
         self.assertEqual(turno_color({}), "p0")
+
+
+class TestFiltroRosterIdsTurno(SimpleTestCase):
+    """Filtro roster_ids_turno: ids de turnos en celda multi-turno."""
+
+    def test_extrae_ids_de_lista(self):
+        asigs = [
+            {"id_turno": 1, "nombre_turno": "Mañana"},
+            {"id_turno": 3, "nombre_turno": "Noche"},
+        ]
+        self.assertEqual(roster_ids_turno(asigs), [1, 3])
+
+    def test_none_y_vacio(self):
+        self.assertEqual(roster_ids_turno(None), [])
+        self.assertEqual(roster_ids_turno([]), [])
+
+    def test_ignora_items_sin_id(self):
+        asigs = [{"nombre_turno": "X"}, {"id_turno": "2"}, "ruido"]
+        self.assertEqual(roster_ids_turno(asigs), [2])

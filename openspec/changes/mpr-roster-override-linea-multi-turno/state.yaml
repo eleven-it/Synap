@@ -1,0 +1,16 @@
+change: mpr-roster-override-linea-multi-turno
+status: applied
+created: 2026-08-12
+phase: apply
+next: verify
+note: "Fases 1–5 implementadas (T1–T26): DDL UK, repo/servicios, UI planificación, móvil multi-turno, docs."
+artifact_store: hybrid
+depends_on: []
+artifacts:
+  exploration: skipped
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: pending

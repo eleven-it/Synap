@@ -1,0 +1,28 @@
+{% comment %}
+Selector de turno para carga móvil multi-turno.
+Requiere contexto: turnos_dia (lista), multi_turno (bool), id_turno (activo).
+{% endcomment %}
+{% if multi_turno and turnos_dia %}
+<div class="mb-4">
+    <p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Turnos de hoy</p>
+    <div class="flex flex-wrap gap-2" role="tablist" aria-label="Elegir turno">
+        {% for t in turnos_dia %}
+        <a href="?turno={{ t.id }}"
+           role="tab"
+           aria-selected="{% if t.activo %}true{% else %}false{% endif %}"
+           class="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition
+                  {% if t.activo %}border-purple-500 bg-purple-50 text-purple-800 dark:border-purple-400 dark:bg-purple-900/30 dark:text-purple-200
+                  {% else %}border-gray-200 bg-white text-gray-700 hover:border-purple-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200{% endif %}
+                  {% if t.bloqueado %}opacity-80{% endif %}">
+            {% if t.bloqueado %}
+            <span class="material-icons text-base text-amber-600 dark:text-amber-400" title="Turno bloqueado" aria-hidden="true">lock</span>
+            {% endif %}
+            <span>{{ t.nombre|default:"Turno" }}</span>
+            {% if t.linea_nombre %}
+            <span class="text-xs font-normal text-gray-500 dark:text-gray-400">· {{ t.linea_nombre }}</span>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

@@ -465,12 +465,13 @@ def _operarios_roster_celda_por_linea(
     if not (base_empresa or "").strip() or fecha is None or not lineas_set:
         return vacio
     try:
-        from mpr.repositories.operario_linea import lineas_habituales_vigentes
         from mpr.repositories.turno_roster import listar_roster_rango
 
         filas = listar_roster_rango(base_empresa, fecha, fecha)
         if not filas:
             return vacio
+        from mpr.services_operario import resolver_linea_operario
+
         turnos_por_id = {
             t["id"]: t for t in listar_turnos(base_empresa, solo_activos=False)
         }
@@ -486,14 +487,13 @@ def _operarios_roster_celda_por_linea(
             id_linea: {"manana": set(), "tarde": set(), "noche": set()}
             for id_linea in lineas_set
         }
-        lineas_habituales = lineas_habituales_vigentes(base_empresa, fecha)
         for fila in filas:
             id_operario = _to_int(fila.get("id_operario"))
             if id_operario is None:
                 continue
-            id_linea = (
-                _to_int(fila.get("id_mpr_linea"))
-                or lineas_habituales.get(id_operario)
+            id_turno = _to_int(fila.get("id_mpr_turno"))
+            id_linea = resolver_linea_operario(
+                base_empresa, id_operario, fecha, id_turno
             )
             if id_linea not in lineas_set:
                 continue

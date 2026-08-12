@@ -15,10 +15,10 @@ hasta esa aprobación (modelo de dos etapas).
 - Ruta: `/mpr/mi-parte/` (`mpr:parte_movil_operario`). Permiso: `mpr.parte_operario`.
 - El operario "puro" (con `mpr.parte_operario` y sin `mpr.ver`) aterriza aquí tras el login.
 - El operario con **`mpr.parte_operario` + `mpr.tablero_ver`** (sin `mpr.ver`) también aterriza en `/mpr/mi-parte/`; puede consultar el tablero en solo lectura desde el menú MPR (ítem «Tablero de producción»), sin acceso a enviar, CC, reportes ni resto del escritorio MPR.
-- La pantalla resuelve automáticamente, sin selección manual:
+- La pantalla resuelve automáticamente, sin selección manual salvo multi-turno:
   - **Operario**: mapeo `mpr_operario_usuario` (usuario de login → `sue_abm_empleado`).
-  - **Turno**: `mpr_roster_dia` del día (`turno_del_operario_dia`).
-  - **Línea**: `resolver_linea_operario` = override del roster del día > línea habitual (`mpr_operario_linea`).
+  - **Turno(s)**: `turnos_del_operario_dia` (lista). Si hay **un** turno, se usa directo; si hay **varios**, chips selector (`?turno=<id>`) y campo oculto `id_turno` al guardar.
+  - **Línea**: `resolver_linea_operario(fecha, id_turno)` = override del roster **por turno** > línea habitual.
   - **Máquinas**: `maquinas_de_linea` (pertenencia vigente a la fecha).
   - **Artículos por máquina**: `listar_articulos_vigentes` (habilitación vigente).
 
@@ -54,7 +54,7 @@ hasta esa aprobación (modelo de dos etapas).
   (misma shell que Tablero/Parte de producción: barra de acceso rápido MPR, contenedor
   `mpr-contenedor-pagina` de ancho fluido, migas de pan y **frame de encabezado oscuro**
   con título e ícono). Mantiene el mismo comportamiento y modal de confirmación que el móvil.
-- Estados de borde con mensaje claro: `sin_operario`, `sin_turno`, `sin_linea`, `sin_maquinas`.
+- Estados de borde con mensaje claro: `sin_operario`, `sin_turno`, `sin_linea`, `sin_maquinas`, `turno_bloqueado` (parte aprobado/CC en ese turno; el operario puede elegir otro turno del día).
 
 ### Navegación PWA relacionada
 

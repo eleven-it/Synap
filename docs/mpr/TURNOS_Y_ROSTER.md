@@ -49,16 +49,28 @@ Asignación de turno a un operario en una fecha específica.
 | `creado_en` | DateTimeField (auto_now_add) | Auditoría |
 
 **Constraints e índices:**
-- `UniqueConstraint(base_empresa, fecha, id_operario)` → un operario solo tiene un turno por fecha.
+- `UniqueConstraint(base_empresa, fecha, id_operario, id_mpr_turno)` → un operario puede tener **varios turnos el mismo día** (Mañana + Tarde, etc.).
 - `Index(base_empresa, fecha)` → consultas de roster por empresa y semana.
+
+> **MySQL empresa (`mpr_roster_dia`):** la UK operativa es
+> `uk_mpr_roster_fecha_operario_turno (fecha, id_operario, id_mpr_turno)`, aplicada por el
+> proveedor `mpr_roster_multi_turno` (`core/services/legacy_mysql_schema/catalog.py`).
+> Ver checklist pre/post deploy en
+> [DISENO_ROSTER_OVERRIDE_LINEA_Y_MULTI_TURNO.md](DISENO_ROSTER_OVERRIDE_LINEA_Y_MULTI_TURNO.md) §5.4.
 
 **on_delete=PROTECT:** No se puede eliminar un turno si tiene asignaciones de roster. Primero reasignar o eliminar asignaciones.
 
 ---
 
-## Override de línea por día {#override-de-línea-por-día}
+## Override de línea por día y turno {#override-de-línea-por-día}
 
-**Change:** `mpr-trazabilidad-maquina-linea-operario`.
+> **Implementado (12/08/2026):** UI de override + **multi-turno el mismo día**
+> (UK `(fecha, id_operario, id_mpr_turno)`) — change openspec
+> `mpr-roster-override-linea-multi-turno`.
+> Diseño y checklist deploy:
+> [DISENO_ROSTER_OVERRIDE_LINEA_Y_MULTI_TURNO.md](DISENO_ROSTER_OVERRIDE_LINEA_Y_MULTI_TURNO.md).
+
+**Change:** `mpr-trazabilidad-maquina-linea-operario` + `mpr-roster-override-linea-multi-turno`.
 
 El roster permite fijar, para un día puntual (rotación, refuerzo), una **línea distinta** a la
 habitual del operario. Se implementa con una columna nueva en `mpr_roster_dia` (MySQL):
@@ -70,24 +82,33 @@ habitual del operario. Se implementa con una columna nueva en `mpr_roster_dia` (
 La línea habitual del operario vive versionada en `mpr_operario_linea`
 (`vigencia_desde`/`vigencia_hasta`, NULL = vigente).
 
-**Resolución override > habitual** (`resolver_linea_operario`):
+**Resolución override > habitual** (`resolver_linea_operario` en `mpr/services_operario.py`):
 
 ```
 resolver_linea_operario(id_operario, fecha, id_turno):
-    override = mpr_roster_dia(fecha, id_operario).id_mpr_linea
+    override = mpr_roster_dia(fecha, id_operario, id_turno).id_mpr_linea
     return override or mpr_operario_linea.vigente(id_operario, fecha).id_mpr_linea
 ```
 
-- Si el roster del día trae `id_mpr_linea`, **manda** (override).
+- **MUST** filtrar por `id_turno` al leer el override (Mañana y Tarde son independientes).
+- Si el roster del turno trae `id_mpr_linea`, **manda** (override).
 - Si es NULL, se usa la **línea habitual** vigente a esa fecha.
+
+**UI planificación** (`/mpr/planificacion-turnos/`): chips 0..N turnos por celda; selector de línea
+(`Habitual` | filas) por turno; agregar/quitar turno; candado por `(fecha, operario, turno)`.
+
+**Carga móvil** (`/mpr/mi-parte/`): si el operario tiene varios turnos el día, selector de turno
+(`?turno=<id>`); resolución de línea y parte editable por turno; un turno bloqueado (aprobado/CC)
+no impide cargar el otro.
 
 Con la línea resuelta, la carga móvil del operario lista las máquinas vigentes de esa línea y
 sus artículos habilitados. Detalle del circuito:
 [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md#línea-habitual--override-de-roster).
 
-> DDL aplicado por el proveedor `mpr_maquina_linea_trazabilidad`
-> (`core/services/legacy_mysql_schema/catalog.py`), idempotente. Ver
-> [../general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md](../general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md).
+> DDL override inicial: proveedor `mpr_maquina_linea_trazabilidad`
+> (`core/services/legacy_mysql_schema/catalog.py`), idempotente.
+> UK multi-turno: proveedor `mpr_roster_multi_turno` + `mpr/sql/005_mpr_roster_multi_turno_uk.sql`.
+> Ver [../general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md](../general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md).
 
 ---
 
@@ -130,17 +151,19 @@ listar_roster_semana(base_empresa, fecha_lunes: date) -> dict
 #   {
 #     operarios: [{id, nombre}],
 #     dias: [{fecha, fecha_str (dd/MM/yyyy), dia_nombre}],  # 7 días
-#     asignaciones: {id_operario: {"YYYY-MM-DD": {id_turno, nombre_turno}}},
-#     celdas_bloqueadas: {id_operario: {"YYYY-MM-DD": {bloqueada, motivo}}}
+#     asignaciones: {id_operario: {"YYYY-MM-DD": [{id_turno, nombre_turno, id_linea_override, id_linea_efectiva, ...}]}},
+#     celdas_bloqueadas: {id_operario: {"YYYY-MM-DD": {id_turno: {bloqueada, motivo}}}}
 #   }
 
-asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno) -> Tuple[bool, Optional[str]]
-# Usa update_or_create (reasignación segura, no duplica). Al cambiar turno migra
-# el ledger borrador/pendiente; bloquea parte aprobada/física o CC confirmado.
+set_linea_override_roster(base_empresa, fecha_str, id_operario, id_turno, id_linea|None) -> (ok, error)
+# Override de línea solo para fecha+operario+turno; respeta bloqueos duros.
 
-eliminar_asignacion_roster(base_empresa, fecha_str, id_operario) -> Tuple[bool, Optional[str]]
-# Bloquea parte aprobada/física o CC. Si solo hay borrador/pendiente, exige
-# reasignar hacia otro turno para conservar los datos.
+asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno) -> Tuple[bool, Optional[str]]
+# INSERT si es turno nuevo ese día (multi-turno); upsert idempotente si ya existe la terna.
+# Bloquea parte aprobada/física o CC confirmado del turno afectado.
+
+eliminar_asignacion_roster(base_empresa, fecha_str, id_operario, id_turno=None) -> Tuple[bool, Optional[str]]
+# Si hay varios turnos el día, `id_turno` indica cuál quitar. Bloquea parte aprobada/física o CC.
 ```
 
 ### Asignación masiva (rango)
@@ -247,7 +270,7 @@ El link «Quitar» permanece en rojo/rose (acción destructiva) y no compite con
 | Nombre único por empresa | DB `UniqueConstraint` + captura `IntegrityError` en service |
 | Bloqueo duro por parte aprobada/física o CC confirmado | Repos `operario_estado_produccion_roster`, `set_operarios_bloqueados_roster_en_rango`, `operario_tiene_control_calidad_fecha_turno`; services de roster |
 | Migración T→T' de borrador/pendiente | `migrar_lineas_operario_entre_turnos`: transacción MySQL que mueve/combina líneas, ajustes no físicos y borrador CC; no toca `mpr_transicion_lote`, MSTOCK ni stock físico |
-| Unicidad (empresa, fecha, operario) | DB `UniqueConstraint` + `update_or_create` en service |
+| Unicidad (empresa, fecha, operario, turno) | DB UK `uk_mpr_roster_fecha_operario_turno` + upsert/INSERT en service |
 | Turno no eliminable con asignaciones | DB `on_delete=PROTECT` |
 | Misma asignación T→T permitida con parte/CC | Service `_motivo_bloqueo_cambio_roster` (idempotente) |
 
@@ -269,38 +292,25 @@ Los helpers `listar_empleados_operarios` y `obtener_operario` (ya implementados)
 
 ## Tests
 
-Archivo: `mpr/tests/test_turnos_roster.py`
+Archivos principales:
 
-| Clase | Test | Cubre |
-|---|---|---|
-| TestModeloMprTurno | test_turno_nombre_unico_por_empresa | Constraint unicidad |
-| TestModeloMprTurno | test_turno_nombre_unico_permite_mismo_nombre_otra_empresa | Scope por empresa |
-| TestModeloMprTurno | test_turno_nocturno_valido | Turno nocturno hora_fin < hora_inicio |
-| TestModeloMprTurno | test_str_turno | __str__ |
-| TestModeloMprRosterDia | test_roster_constraint_unico_operario_fecha | Constraint unicidad roster |
-| TestModeloMprRosterDia | test_roster_on_delete_protect | PROTECT delete turno con asignaciones |
-| TestServiciosTurnos | test_crear_turno_valido | Crear turno OK |
-| TestServiciosTurnos | test_crear_turno_hora_inicio_igual_fin | Validación horas |
-| TestServiciosTurnos | test_crear_turno_nombre_duplicado | Nombre duplicado |
-| TestServiciosTurnos | test_crear_turno_nocturno_valido | Turno nocturno via service |
-| TestServiciosTurnos | test_actualizar_turno | Actualización |
-| TestServiciosTurnos | test_toggle_turno_activo | Toggle activo/inactivo |
-| TestServiciosTurnos | test_listar_turnos_solo_activos | Filtro solo_activos |
-| TestServiciosRoster | test_asignar_turno_fecha_pasada_ok_sin_produccion | Pasado editable sin parte/CC |
-| TestServiciosRoster | test_eliminar_asignacion_fecha_pasada_ok_sin_produccion | Eliminar pasado sin parte/CC |
-| TestServiciosRoster | test_asignar_turno_bloqueado_por_parte | Bloqueo por parte |
-| TestServiciosRoster | test_asignar_turno_bloqueado_por_cc | Bloqueo por CC |
-| TestServiciosRoster | test_eliminar_asignacion_bloqueada_por_parte | Eliminar bloqueado |
-| TestServiciosRoster | test_reasignar_bloqueado_turno_destino_con_cc | Reasignar bloqueado en T' |
-| TestServiciosRoster | test_asignar_mismo_turno_idempotente_con_parte | T→T permitido con parte |
-| TestServiciosRoster | test_asignar_turno_reasignacion_no_duplica | update_or_create |
-| TestServiciosRoster | test_asignar_turno_fecha_futura_ok | Asignar OK |
-| TestServiciosRoster | test_eliminar_asignacion_existente | Eliminar OK |
-| TestAsignarTurnoRosterRango | test_rango_incluye_ayer_aplica_tambien_pasado | Rango incluye fechas pasadas |
-| TestAsignarTurnoRosterRango | test_rango_omite_celdas_bloqueadas | Omite celdas con parte/CC |
-| TestAsignarTurnoRosterRango | test_rango_solo_bloqueos_retorna_mensaje | Mensaje si todo bloqueado |
+- `mpr/tests/test_turnos_roster.py` — CRUD turnos, roster, asignación masiva
+- `mpr/tests/test_roster_multi_turno_repo.py` — repo multi-turno, override, `listar_roster_semana`
+- `mpr/tests/test_roster_multi_turno_ddl.py` — proveedor `mpr_roster_multi_turno` (UK idempotente)
+- `mpr/tests/test_roster_migracion_parte.py` — guardrails, migración T→T', bloqueo por turno
+- `mpr/tests/test_parte_movil_multi_turno.py` — carga móvil multi-turno
 
-Ejecutar: `docker exec Synap_app python manage.py test mpr.tests.test_turnos_roster --keepdb --noinput`
+Ejecutar suite roster + móvil:
+
+```bash
+docker exec Synap_app python manage.py test \
+  mpr.tests.test_turnos_roster \
+  mpr.tests.test_roster_multi_turno_repo \
+  mpr.tests.test_roster_multi_turno_ddl \
+  mpr.tests.test_roster_migracion_parte \
+  mpr.tests.test_parte_movil_multi_turno \
+  --keepdb --noinput
+```
 
 ---
 
