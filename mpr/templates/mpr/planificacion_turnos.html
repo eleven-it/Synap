@@ -46,7 +46,7 @@
                         title="Turno(s) de cada operario por fecha. Podés asignar varios turnos el mismo día. No se editan turnos con parte o control de calidad registrado.">Planificación de turnos</h1>
 
                     <div class="flex shrink-0 items-center gap-1.5" role="group" aria-label="Navegación de semana">
-                        <a href="?semana={{ semana_anterior|isoformat }}{% if filtro_roster != 'todos' %}&filtro={{ filtro_roster }}{% endif %}"
+                        <a href="?semana={{ semana_anterior|isoformat }}{% if roster_query %}&{{ roster_query }}{% endif %}"
                            aria-label="Semana anterior"
                            class="group relative inline-flex h-9 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-2 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
                             <span class="material-icons text-base leading-none" aria-hidden="true">chevron_left</span>
@@ -56,24 +56,12 @@
                         <span class="inline-flex h-9 items-center rounded-lg border border-slate-600 bg-slate-900/70 px-2.5 text-xs font-semibold text-slate-200">
                             Semana del {{ fecha_lunes|date:"d/m/Y" }}
                         </span>
-                        <a href="?semana={{ semana_siguiente|isoformat }}{% if filtro_roster != 'todos' %}&filtro={{ filtro_roster }}{% endif %}"
+                        <a href="?semana={{ semana_siguiente|isoformat }}{% if roster_query %}&{{ roster_query }}{% endif %}"
                            aria-label="Semana siguiente"
                            class="group relative inline-flex h-9 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-2 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
                             <span class="hidden sm:inline">Siguiente</span>
                             <span class="material-icons text-base leading-none" aria-hidden="true">chevron_right</span>
                             {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Semana siguiente" only %}
-                        </a>
-                    </div>
-
-                    <div class="flex shrink-0 items-center gap-1" role="group" aria-label="Filtro de operarios">
-                        <a href="?semana={{ fecha_lunes|isoformat }}&filtro=todos"
-                           class="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 {% if filtro_roster == 'todos' %}bg-purple-600 text-white{% else %}border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600{% endif %}">
-                            Todos
-                        </a>
-                        <a href="?semana={{ fecha_lunes|isoformat }}&filtro=excepciones"
-                           class="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 {% if filtro_roster == 'excepciones' %}bg-purple-600 text-white{% else %}border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600{% endif %}"
-                           title="Operarios con override de línea o más de un turno algún día de la semana">
-                            Excepciones
                         </a>
                     </div>
 
@@ -107,6 +95,86 @@
                         </a>
                     </div>
                 </header>
+
+                {% if turnos_activos and operarios_todos %}
+                <form method="get"
+                      action="{% url 'mpr:planificacion_turnos' %}"
+                      class="mt-2 flex flex-wrap items-end gap-2 border-t border-slate-600/60 pt-2"
+                      aria-label="Filtros de operarios">
+                    <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
+                    <input type="hidden" name="filtro" value="{{ filtro_roster }}" id="roster-filtro-hidden"/>
+
+                    <div class="flex min-w-[10rem] flex-1 basis-40 items-center gap-1.5">
+                        <label for="roster-q" class="sr-only">Buscar operario</label>
+                        <span class="material-icons text-base leading-none text-slate-400" aria-hidden="true">search</span>
+                        <input type="search"
+                               id="roster-q"
+                               name="q"
+                               value="{{ q_roster }}"
+                               placeholder="Buscar operario…"
+                               autocomplete="off"
+                               class="h-8 min-w-0 flex-1 rounded-lg border border-slate-500 bg-slate-700 px-2 text-xs text-slate-100 placeholder:text-slate-400 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400/40"/>
+                        <button type="submit"
+                                class="inline-flex h-8 shrink-0 items-center rounded-lg border border-slate-500 bg-slate-700 px-2 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                            Buscar
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <label for="roster-turno" class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Turno</label>
+                        <select id="roster-turno"
+                                name="turno"
+                                onchange="this.form.submit()"
+                                class="h-8 min-w-[8rem] rounded-lg border border-slate-500 bg-slate-700 px-2 text-xs text-slate-100 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400/40">
+                            <option value="">Todos</option>
+                            {% for t in turnos_activos %}
+                            <option value="{{ t.id }}" {% if turno_filtro == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Vista de operarios">
+                        <span class="mr-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Vista</span>
+                        <button type="submit"
+                                name="filtro"
+                                value="todos"
+                                onclick="document.getElementById('roster-filtro-hidden').value='todos'"
+                                class="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 {% if filtro_roster == 'todos' %}bg-purple-600 text-white{% else %}border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600{% endif %}">
+                            Todos
+                        </button>
+                        <button type="submit"
+                                name="filtro"
+                                value="sin_asignar"
+                                onclick="document.getElementById('roster-filtro-hidden').value='sin_asignar'"
+                                title="Operarios con al menos un día sin turno esta semana"
+                                class="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 {% if filtro_roster == 'sin_asignar' %}bg-purple-600 text-white{% else %}border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600{% endif %}">
+                            Sin asignar
+                        </button>
+                        <button type="submit"
+                                name="filtro"
+                                value="excepciones"
+                                onclick="document.getElementById('roster-filtro-hidden').value='excepciones'"
+                                title="Operarios con override de línea o más de un turno algún día de la semana"
+                                class="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 {% if filtro_roster == 'excepciones' %}bg-purple-600 text-white{% else %}border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600{% endif %}">
+                            Excepciones
+                        </button>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+                        <span class="text-xs text-slate-300">
+                            Mostrando <span class="font-semibold text-white">{{ operarios_filtrados_count }}</span>
+                            de <span class="font-semibold text-white">{{ operarios_total_count }}</span> operarios
+                        </span>
+                        {% if filtros_roster_activos %}
+                        <a href="?semana={{ fecha_lunes|isoformat }}"
+                           class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-2 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                            <span class="material-icons text-sm leading-none" aria-hidden="true">filter_alt_off</span>
+                            Limpiar filtros
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+                {% endif %}
             </div>
         </div>
 
@@ -120,19 +188,22 @@
                     <a href="{% url 'mpr:turno_create' %}" class="font-semibold underline hover:no-underline">creá al menos un turno</a>.
                 </p>
             </div>
-            {% elif not operarios %}
+            {% elif not operarios_todos %}
             <div class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/25 dark:text-amber-200">
-                <span class="material-icons text-base leading-none" aria-hidden="true">{% if filtro_roster == 'excepciones' %}filter_alt_off{% else %}group{% endif %}</span>
+                <span class="material-icons text-base leading-none" aria-hidden="true">group</span>
                 <p>
-                    {% if filtro_roster == 'excepciones' %}
-                    <span class="font-semibold">No hay excepciones esta semana.</span>
-                    Ningún operario tiene override de línea ni multi-turno.
-                    <a href="?semana={{ fecha_lunes|isoformat }}&filtro=todos" class="font-semibold underline hover:no-underline">Ver todos</a>.
-                    {% else %}
                     <span class="font-semibold">No hay operarios registrados.</span>
                     Para planificar el roster, primero
                     <a href="{% url 'mpr:operario_create' %}" class="font-semibold underline hover:no-underline">registrá operarios</a>.
-                    {% endif %}
+                </p>
+            </div>
+            {% elif not operarios %}
+            <div class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/25 dark:text-amber-200">
+                <span class="material-icons text-base leading-none" aria-hidden="true">filter_alt_off</span>
+                <p>
+                    <span class="font-semibold">Ningún operario coincide con los filtros.</span>
+                    Probá ampliar la búsqueda o
+                    <a href="?semana={{ fecha_lunes|isoformat }}" class="font-semibold underline hover:no-underline">limpiar filtros</a>.
                 </p>
             </div>
             {% else %}
@@ -213,7 +284,7 @@
                 <span class="mx-0.5 hidden h-4 w-px bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true"></span>
                 <span class="flex items-center gap-1.5"><span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400">lock</span> Turno bloqueado (parte aprobado/físico o CC confirmado)</span>
                 <span>Clic en celda para editar turnos, línea y agregar/quitar.</span>
-                <span>Filtro Excepciones: override de línea o multi-turno en la semana.</span>
+                <span>Vista Sin asignar: al menos un día sin turno. Excepciones: override o multi-turno.</span>
                 <span class="flex items-center gap-1.5"><span class="inline-block h-3.5 w-5 rounded bg-purple-100 dark:bg-purple-900/40"></span> Hoy</span>
             </div>
             {% endif %}
@@ -268,6 +339,8 @@
                                             <input type="hidden" name="id_turno" :value="asig.id_turno"/>
                                             <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
                                             <input type="hidden" name="filtro" value="{{ filtro_roster }}"/>
+                                            {% if q_roster %}<input type="hidden" name="q" value="{{ q_roster }}"/>{% endif %}
+                                            {% if turno_filtro %}<input type="hidden" name="turno" value="{{ turno_filtro }}"/>{% endif %}
                                             <button type="submit"
                                                     class="inline-flex h-7 w-7 items-center justify-center rounded text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500 dark:text-red-400 dark:hover:bg-red-900/20"
                                                     aria-label="Quitar turno">
@@ -284,6 +357,8 @@
                                         <input type="hidden" name="id_turno" :value="asig.id_turno"/>
                                         <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
                                         <input type="hidden" name="filtro" value="{{ filtro_roster }}"/>
+                                        {% if q_roster %}<input type="hidden" name="q" value="{{ q_roster }}"/>{% endif %}
+                                        {% if turno_filtro %}<input type="hidden" name="turno" value="{{ turno_filtro }}"/>{% endif %}
                                         <label class="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Línea</label>
                                         <select name="id_linea"
                                                 class="roster-select-auto h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
@@ -316,6 +391,8 @@
                         <input type="hidden" name="id_operario" :value="editorOperarioId"/>
                         <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
                         <input type="hidden" name="filtro" value="{{ filtro_roster }}"/>
+                        {% if q_roster %}<input type="hidden" name="q" value="{{ q_roster }}"/>{% endif %}
+                        {% if turno_filtro %}<input type="hidden" name="turno" value="{{ turno_filtro }}"/>{% endif %}
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Agregar turno</label>
                         <select name="id_turno"
                                 required
@@ -370,6 +447,8 @@
                     {% csrf_token %}
                     <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
                     <input type="hidden" name="filtro" value="{{ filtro_roster }}"/>
+                    {% if q_roster %}<input type="hidden" name="q" value="{{ q_roster }}"/>{% endif %}
+                    {% if turno_filtro %}<input type="hidden" name="turno" value="{{ turno_filtro }}"/>{% endif %}
 
                     <div>
                         <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Modo de asignación</span>
@@ -391,7 +470,7 @@
                     </div>
 
                     <div>
-                        <div class="mb-1.5 flex items-center justify-between gap-2">
+                        <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                             <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Operarios</span>
                             <div class="flex gap-1">
                                 <button type="button"
@@ -406,10 +485,17 @@
                                 </button>
                             </div>
                         </div>
+                        <label for="filtro-masivo-operarios" class="sr-only">Filtrar operarios por nombre</label>
+                        <input type="search"
+                               id="filtro-masivo-operarios"
+                               x-model="filtroMasivoOperarios"
+                               placeholder="Filtrar por nombre…"
+                               autocomplete="off"
+                               class="mb-2 h-8 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"/>
                         <div class="max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-600 dark:bg-slate-900/40">
                             <ul class="space-y-1">
                                 {% for op in operarios_todos %}
-                                <li>
+                                <li x-show="!filtroMasivoOperarios || '{{ op.nombre|escapejs }}'.toLowerCase().includes(filtroMasivoOperarios.toLowerCase())">
                                     <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm text-slate-800 transition-colors hover:bg-white dark:text-slate-200 dark:hover:bg-slate-800">
                                         <input type="checkbox"
                                                name="ids_operario"
@@ -649,6 +735,7 @@ window.planificacionTurnosState = function () {
         modalMasivoOpen: false,
         modoMasivo: 'agregar',
         alcanceDias: 'todos',
+        filtroMasivoOperarios: '',
         confirmReemplazarOpen: false,
         reemplazarConfirmado: false,
 

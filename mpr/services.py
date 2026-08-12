@@ -16970,6 +16970,119 @@ def filtrar_operarios_roster_excepciones(
     return resultado
 
 
+def _operario_tiene_dia_sin_turno(
+    op_asigs: Dict[str, List[Dict[str, Any]]],
+    dias: List[Dict[str, Any]],
+) -> bool:
+    """True si al menos un día de la semana no tiene turnos (lista ausente o vacía)."""
+    for dia in dias or []:
+        fecha = dia.get("fecha")
+        if hasattr(fecha, "isoformat"):
+            fecha_key = fecha.isoformat()
+        else:
+            fecha_key = str(fecha or "")
+        turnos = (op_asigs or {}).get(fecha_key)
+        if not turnos:
+            return True
+    return False
+
+
+def filtrar_operarios_roster_sin_asignar(
+    operarios: List[Dict[str, Any]],
+    asignaciones: Dict[int, Dict[str, List[Dict[str, Any]]]],
+    dias: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Operarios con al menos un día de la semana sin ningún turno asignado."""
+    resultado: List[Dict[str, Any]] = []
+    for op in operarios or []:
+        op_id = op.get("id")
+        if op_id is None:
+            continue
+        op_asigs = asignaciones.get(op_id) or asignaciones.get(int(op_id)) or {}
+        if _operario_tiene_dia_sin_turno(op_asigs, dias):
+            resultado.append(op)
+    return resultado
+
+
+def filtrar_operarios_roster_por_turno(
+    operarios: List[Dict[str, Any]],
+    asignaciones: Dict[int, Dict[str, List[Dict[str, Any]]]],
+    id_turno: int,
+) -> List[Dict[str, Any]]:
+    """Operarios que tienen el turno indicado al menos un día de la semana."""
+    if id_turno is None:
+        return list(operarios or [])
+    try:
+        id_turno_int = int(id_turno)
+    except (TypeError, ValueError):
+        return list(operarios or [])
+    resultado: List[Dict[str, Any]] = []
+    for op in operarios or []:
+        op_id = op.get("id")
+        if op_id is None:
+            continue
+        op_asigs = asignaciones.get(op_id) or asignaciones.get(int(op_id)) or {}
+        tiene_turno = False
+        for turnos in (op_asigs or {}).values():
+            for turno_item in turnos or []:
+                if int(turno_item.get("id_turno") or 0) == id_turno_int:
+                    tiene_turno = True
+                    break
+            if tiene_turno:
+                break
+        if tiene_turno:
+            resultado.append(op)
+    return resultado
+
+
+def filtrar_operarios_roster_busqueda(
+    operarios: List[Dict[str, Any]],
+    q: str,
+) -> List[Dict[str, Any]]:
+    """Operarios cuyo nombre contiene q (case-insensitive)."""
+    termino = (q or "").strip().lower()
+    if not termino:
+        return list(operarios or [])
+    resultado: List[Dict[str, Any]] = []
+    for op in operarios or []:
+        nombre = (op.get("nombre") or "").lower()
+        if termino in nombre:
+            resultado.append(op)
+    return resultado
+
+
+def aplicar_filtros_roster_grilla(
+    operarios: List[Dict[str, Any]],
+    asignaciones: Dict[int, Dict[str, List[Dict[str, Any]]]],
+    dias: List[Dict[str, Any]],
+    *,
+    filtro: str = "todos",
+    id_turno: Optional[int] = None,
+    q: str = "",
+) -> List[Dict[str, Any]]:
+    """
+    Aplica filtros de grilla en orden: vista (excepciones/sin_asignar) → turno → búsqueda.
+    """
+    filtro_norm = (filtro or "todos").strip().lower()
+    if filtro_norm not in ("todos", "excepciones", "sin_asignar"):
+        filtro_norm = "todos"
+    resultado = list(operarios or [])
+    if filtro_norm == "excepciones":
+        resultado = filtrar_operarios_roster_excepciones(resultado, asignaciones)
+    elif filtro_norm == "sin_asignar":
+        resultado = filtrar_operarios_roster_sin_asignar(resultado, asignaciones, dias)
+    if id_turno is not None:
+        try:
+            id_turno_int = int(id_turno)
+        except (TypeError, ValueError):
+            id_turno_int = None
+        if id_turno_int is not None:
+            resultado = filtrar_operarios_roster_por_turno(resultado, asignaciones, id_turno_int)
+    if (q or "").strip():
+        resultado = filtrar_operarios_roster_busqueda(resultado, q)
+    return resultado
+
+
 def _franja_horaria_turno(nombre_turno: str, hora_inicio: Optional[str]) -> Optional[str]:
     """
     Clasifica un turno en franja 'manana' / 'tarde' / 'noche' para la planilla CQ.

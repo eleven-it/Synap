@@ -16,10 +16,15 @@ from mpr.models import MprRosterDia, MprTurno
 from mpr.templatetags.mpr_filters import turno_color, roster_ids_turno
 from mpr.services import (
     actualizar_turno,
+    aplicar_filtros_roster_grilla,
     asignar_turno_roster,
     asignar_turno_roster_rango,
     crear_turno,
     eliminar_asignacion_roster,
+    filtrar_operarios_roster_busqueda,
+    filtrar_operarios_roster_excepciones,
+    filtrar_operarios_roster_por_turno,
+    filtrar_operarios_roster_sin_asignar,
     listar_turnos,
     obtener_turno,
     toggle_turno_activo,
@@ -792,3 +797,69 @@ class TestFiltroRosterIdsTurno(SimpleTestCase):
     def test_ignora_items_sin_id(self):
         asigs = [{"nombre_turno": "X"}, {"id_turno": "2"}, "ruido"]
         self.assertEqual(roster_ids_turno(asigs), [2])
+
+
+class TestFiltrosRosterGrilla(SimpleTestCase):
+    """Helpers de filtro de grilla de planificación (mock, sin MySQL)."""
+
+    def setUp(self):
+        self.operarios = [
+            {"id": 1, "nombre": "Ana García"},
+            {"id": 2, "nombre": "Bruno López"},
+            {"id": 3, "nombre": "Carlos ana"},
+        ]
+        self.dias = [
+            {"fecha": date(2026, 8, 3)},
+            {"fecha": date(2026, 8, 4)},
+        ]
+        self.asignaciones = {
+            1: {
+                "2026-08-03": [{"id_turno": 10, "nombre_turno": "Mañana"}],
+                "2026-08-04": [{"id_turno": 10, "nombre_turno": "Mañana"}],
+            },
+            2: {
+                "2026-08-03": [
+                    {"id_turno": 10, "nombre_turno": "Mañana"},
+                    {"id_turno": 20, "nombre_turno": "Tarde"},
+                ],
+                "2026-08-04": [],
+            },
+            3: {
+                "2026-08-03": [],
+                "2026-08-04": [{"id_turno": 20, "nombre_turno": "Tarde", "id_linea_override": 5}],
+            },
+        }
+
+    def test_busqueda_case_insensitive_contiene(self):
+        resultado = filtrar_operarios_roster_busqueda(self.operarios, "ana")
+        ids = [op["id"] for op in resultado]
+        self.assertEqual(ids, [1, 3])
+
+    def test_por_turno_al_menos_un_dia(self):
+        resultado = filtrar_operarios_roster_por_turno(self.operarios, self.asignaciones, 20)
+        ids = [op["id"] for op in resultado]
+        self.assertEqual(sorted(ids), [2, 3])
+
+    def test_sin_asignar_dia_vacio(self):
+        resultado = filtrar_operarios_roster_sin_asignar(
+            self.operarios, self.asignaciones, self.dias
+        )
+        ids = [op["id"] for op in resultado]
+        self.assertEqual(sorted(ids), [2, 3])
+
+    def test_excepciones_multi_turno_o_override(self):
+        resultado = filtrar_operarios_roster_excepciones(self.operarios, self.asignaciones)
+        ids = [op["id"] for op in resultado]
+        self.assertEqual(sorted(ids), [2, 3])
+
+    def test_aplicar_filtros_orquestador(self):
+        resultado = aplicar_filtros_roster_grilla(
+            self.operarios,
+            self.asignaciones,
+            self.dias,
+            filtro="sin_asignar",
+            id_turno=10,
+            q="bruno",
+        )
+        self.assertEqual(len(resultado), 1)
+        self.assertEqual(resultado[0]["id"], 2)

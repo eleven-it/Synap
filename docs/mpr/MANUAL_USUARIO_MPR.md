@@ -495,7 +495,7 @@ Defina los turnos (por ejemplo Mañana, Tarde, Noche) con su horario. Solo los *
 
 Asigne el turno de cada operario **día a día**. Puede usar **asignación masiva** para varios operarios y un rango de fechas, con modos: **Agregar turno** (no quita otros del mismo día), **Solo si no tiene turno ese día**, o **Reemplazar día** (avanzado; quita turnos no bloqueados). En masiva puede elegir **plantilla de días** (todos, solo lun–vie o personalizado) y el atajo **Semana visible Lun–Vie**.
 
-La pantalla usa la **barra densa de producción**: navegación de semana, filtros **Todos** / **Excepciones** (operarios con override de línea o más de un turno en la semana), **Asignación masiva**, **Gestionar turnos** y atajos al Tablero, Parte y Control de calidad.
+La pantalla usa la **barra densa de producción**: navegación de semana, **Asignación masiva**, **Gestionar turnos** y atajos al Tablero, Parte y Control de calidad. Debajo hay **filtros de grilla**: buscar operario por nombre, filtrar por **turno**, y vistas **Todos** / **Sin asignar** (días sin turno) / **Excepciones** (override de línea o multi-turno). Se muestra cuántos operarios coinciden; **Limpiar filtros** restaura la vista completa.
 
 La **grilla es compacta**: cada celda muestra chips de turno (y candado si está bloqueada). **Hacé clic en una celda** para abrir el editor: cambiar línea, quitar o agregar turnos. Al quitar un turno o usar «Reemplazar día» en masiva, Synap pide confirmación en un modal (no ventanas del navegador).
 

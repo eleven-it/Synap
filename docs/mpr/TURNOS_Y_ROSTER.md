@@ -99,6 +99,7 @@ resolver_linea_operario(id_operario, fecha, id_turno):
 - **Grilla compacta (P0):** cada celda muestra solo chips de turno (color por franja), texto corto de línea override si aplica, candado si bloqueada, o «Asignar» si vacía. Clic en celda abre **modal editor** (no formularios inline en la grilla).
 - **Editor de celda:** lista turnos del día con quitar (modal Synap), selector de línea por turno (POST `roster_linea_override`) y «Agregar turno» si quedan franjas libres.
 - **Filtro excepciones (P1):** query `?filtro=excepciones` muestra operarios con override de línea o 2+ turnos algún día de la semana.
+- **Filtros de grilla (P2):** barra en el chrome con búsqueda por nombre (`q`), turno activo (`turno=<id>`) y vista (`filtro=todos|sin_asignar|excepciones`). Contador «Mostrando N de M operarios»; botón **Limpiar filtros** si hay alguno activo. Los params se preservan en navegación de semana, POST de asignar/eliminar/línea/masivo y hidden fields del editor. La asignación masiva sigue listando todos los operarios (`operarios_todos`); el modal incluye filtro client-side por nombre.
 - **Asignación masiva:** modos `agregar` (default), `solo_vacio`, `reemplazar` (con confirmación Synap); línea override opcional (`id_linea`); plantilla de días (`alcance_dias`: todos | lun_vie | personalizado con checkboxes Lu–Do); atajo **Semana visible Lun–Vie**.
 
 **Carga móvil** (`/mpr/mi-parte/`): si el operario tiene varios turnos el día, selector de turno
@@ -168,6 +169,14 @@ asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno) -> Tuple[bo
 
 eliminar_asignacion_roster(base_empresa, fecha_str, id_operario, id_turno=None) -> Tuple[bool, Optional[str]]
 # Si hay varios turnos el día, `id_turno` indica cuál quitar. Bloquea parte aprobada/física o CC.
+
+# Filtros de grilla (planificación, sin MySQL):
+filtrar_operarios_roster_excepciones(operarios, asignaciones) -> list
+filtrar_operarios_roster_sin_asignar(operarios, asignaciones, dias) -> list
+filtrar_operarios_roster_por_turno(operarios, asignaciones, id_turno) -> list
+filtrar_operarios_roster_busqueda(operarios, q) -> list
+aplicar_filtros_roster_grilla(operarios, asignaciones, dias, *, filtro, id_turno, q) -> list
+# Orden: vista (excepciones/sin_asignar) → turno → búsqueda por nombre.
 ```
 
 ### Asignación masiva (rango)
