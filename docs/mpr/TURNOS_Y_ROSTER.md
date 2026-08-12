@@ -94,8 +94,12 @@ resolver_linea_operario(id_operario, fecha, id_turno):
 - Si el roster del turno trae `id_mpr_linea`, **manda** (override).
 - Si es NULL, se usa la **línea habitual** vigente a esa fecha.
 
-**UI planificación** (`/mpr/planificacion-turnos/`): chips 0..N turnos por celda; selector de línea
-(`Habitual` | filas) por turno; agregar/quitar turno; candado por `(fecha, operario, turno)`.
+**UI planificación** (`/mpr/planificacion-turnos/`):
+
+- **Grilla compacta (P0):** cada celda muestra solo chips de turno (color por franja), texto corto de línea override si aplica, candado si bloqueada, o «Asignar» si vacía. Clic en celda abre **modal editor** (no formularios inline en la grilla).
+- **Editor de celda:** lista turnos del día con quitar (modal Synap), selector de línea por turno (POST `roster_linea_override`) y «Agregar turno» si quedan franjas libres.
+- **Filtro excepciones (P1):** query `?filtro=excepciones` muestra operarios con override de línea o 2+ turnos algún día de la semana.
+- **Asignación masiva:** modos `agregar` (default), `solo_vacio`, `reemplazar` (con confirmación Synap); línea override opcional (`id_linea`); plantilla de días (`alcance_dias`: todos | lun_vie | personalizado con checkboxes Lu–Do); atajo **Semana visible Lun–Vie**.
 
 **Carga móvil** (`/mpr/mi-parte/`): si el operario tiene varios turnos el día, selector de turno
 (`?turno=<id>`); resolución de línea y parte editable por turno; un turno bloqueado (aprobado/CC)
@@ -178,13 +182,20 @@ asignar_turno_roster_rango(
     fecha_desde: Any,
     fecha_hasta: Any,
     id_linea: Optional[int] = None,
+    modo: str = "agregar",
+    dias_semana: Optional[List[Any]] = None,
 ) -> Tuple[bool, Optional[str], Dict[str, Any]]
 ```
 
 - **URL:** `planificacion-turnos/asignar-masivo/` (`roster_asignar_masivo`), vista `AsignarTurnoRosterMasivoView` (POST).
-- **Campos del formulario:** `ids_operario` (lista), `id_turno`, `fecha_desde`, `fecha_hasta` (ISO `YYYY-MM-DD` desde inputs HTML), `semana` (redirect).
-- **Reglas:** valida empresa, operarios y turno; recorre el rango con `_iter_dias_rango`; **omite celdas con parte aprobada/física o CC confirmado** (`omitidos_bloqueados`); al reasignar celdas con borrador/pendiente migra sus líneas antes del `upsert_roster`. Retorna resumen `{aplicados, omitidos_pasados (siempre 0), omitidos_bloqueados, errores}`; éxito parcial si `aplicados > 0`.
-- **Helper UI:** `mensaje_flash_asignacion_masiva(resumen)` construye el mensaje de éxito en español.
+- **Campos del formulario:** `ids_operario` (lista), `id_turno`, `fecha_desde`, `fecha_hasta` (ISO `YYYY-MM-DD` desde inputs HTML), `semana` (redirect), `modo` (`agregar` | `solo_vacio` | `reemplazar`), `id_linea` (opcional), `alcance_dias` (`todos` | `lun_vie` | `personalizado`), `dias_semana` (lista `0`–`6` si personalizado; convención Python weekday).
+- **Plantilla de días:** `alcance_dias=todos` (default) aplica cada día del rango; `lun_vie` omite sábado y domingo aunque el rango los incluya; `personalizado` filtra por los checkboxes enviados. Helper `_normalizar_dias_semana_roster(dias) -> Optional[set[int]]`. Contador `omitidos_plantilla` en resumen (celdas saltadas por plantilla); mencionado en flash si `> 0`. Atajo UI **Semana visible Lun–Vie** setea fechas lunes–viernes de la grilla visible y alcance `lun_vie`.
+- **Modos:**
+  - `agregar` (default): upsert del turno; no quita otros turnos del mismo día.
+  - `solo_vacio`: omite días donde el operario ya tiene cualquier turno (`omitidos_con_turno`).
+  - `reemplazar`: quita turnos no bloqueados del día y deja el turno objetivo; UI pide confirmación Synap antes del POST.
+- **Reglas:** valida empresa, operarios y turno; recorre el rango con `_iter_dias_rango`; **omite celdas con parte aprobada/física o CC confirmado** (`omitidos_bloqueados`); **omite días fuera de la plantilla** (`omitidos_plantilla`); al reasignar celdas con borrador/pendiente migra sus líneas antes del `upsert_roster`. Retorna resumen `{aplicados, omitidos_pasados (siempre 0), omitidos_bloqueados, omitidos_con_turno, omitidos_plantilla, errores}`; éxito parcial si `aplicados > 0`.
+- **Helper UI:** `mensaje_flash_asignacion_masiva(resumen, modo=...)` construye el mensaje de éxito en español.
 
 ---
 
@@ -216,22 +227,18 @@ Sigue el mismo patrón que `operarios_list.html`:
 
 ### Grilla Semanal (planificacion_turnos.html)
 
-> **UI:** la pantalla usa el **chrome denso MPR** (barra `slate-800`, sin migas de pan) descrito en
-> [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1: navegación de semana,
-> **Asignación masiva**, **Gestionar turnos**, atajos `chrome_nav_flujo` (`current=roster`) y ayuda al manual.
-> El chrome permanece en el flujo del contenedor: la grilla es el único scrollport, evitando que la barra
-> cubra su cabecera o sus primeras filas.
+> **UI refactor P0+P1 (12/08/2026):** grilla **compacta** (solo chips + override corto + candado / «Asignar»);
+> edición en **modal de celda** (`celdaEditorOpen`); filtro **Excepciones** en chrome (`?filtro=excepciones`);
+> asignación masiva con modos `agregar` / `solo_vacio` / `reemplazar`.
 
-- Tabla con sticky-left en columna Operario; `thead` compacto (`text-[10px]`) con fondo opaco.
-- 7 columnas de días (lunes a domingo).
-- Celdas **bloqueadas** (parte aprobada/con movimiento físico o CC confirmado en operario+fecha+turno asignado): badge + ícono candado + `title` con motivo; sin select ni quitar.
-- Celdas con solo **borrador/pendiente** permanecen editables: una reasignación migra su ledger no físico al turno destino; quitar el turno se rechaza para no perder la relación con el turno.
-- Celdas **editables** (sin bloqueo duro): badge + botón "Quitar" si hay asignación; `<select>` + confirmar si está vacía. Aplica a pasado, hoy y futuro por igual.
-- Columna **hoy** resaltada en púrpura (solo visual; no define editabilidad).
-- `<select>` con JS `onchange` dispara el form automáticamente.
-- Fechas en cabecera: `"Lu dd/MM/yyyy"`.
-- **Quitar turno** abre un **modal Synap** de confirmación (Alpine `confirmOpen`); no se usan
-  `confirm()` / `alert()` nativos (ver `.cursor/rules/modales-sin-dialogos-nativos.mdc`).
+> **Chrome:** barra `slate-800` según [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1.
+
+- Tabla con sticky-left en columna Operario; `thead` compacto (`text-[10px]`).
+- Celdas clicables abren modal editor (quitar, línea, agregar turno); forms POST server-rendered dentro del modal.
+- Celdas **bloqueadas**: chip + candado; sin edición inline en grilla.
+- Celdas vacías: texto tenue «Asignar».
+- Filtro **Todos** / **Excepciones** (servidor): operarios con override de línea o multi-turno en la semana.
+- **Quitar turno** y **reemplazar día (masiva)** usan modales Synap (`bg-black/50 backdrop-blur-sm`); sin diálogos nativos.
 
 #### Color por turno (diferenciación visual) {#color-por-turno}
 

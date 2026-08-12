@@ -6229,22 +6229,54 @@ class PartePendienteDetailView(MprLoginRequiredMixin, MprPermisoMixin, TemplateV
         return redirect("mpr:parte_pendiente_detail", id_parte=id_parte)
 
 
+def _redirect_planificacion_turnos(request=None, semana=None, filtro=None):
+    """Redirect a planificación de turnos preservando semana y filtro de grilla."""
+    from django.urls import reverse
+    from urllib.parse import urlencode
+
+    if request is not None:
+        if semana is None:
+            semana = (request.POST.get("semana") or request.GET.get("semana") or "").strip()
+        if filtro is None:
+            filtro = (request.POST.get("filtro") or request.GET.get("filtro") or "").strip().lower()
+    if filtro not in ("todos", "excepciones"):
+        filtro = "todos"
+    params = {}
+    if semana:
+        params["semana"] = semana
+    if filtro and filtro != "todos":
+        params["filtro"] = filtro
+    base_url = reverse("mpr:planificacion_turnos")
+    if params:
+        return redirect(f"{base_url}?{urlencode(params)}")
+    return redirect(base_url)
+
+
 class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """
     Pantalla de planificación semanal (roster): grilla operadores × 7 días.
     GET: muestra grilla de la semana seleccionada (default: semana actual).
-    Query param: semana=YYYY-MM-DD (lunes de la semana).
+    Query param: semana=YYYY-MM-DD (lunes de la semana); filtro=todos|excepciones.
     Multi-turno: cada celda puede tener 0..N turnos; lineas activas para override.
     """
 
     template_name = "mpr/planificacion_turnos.html"
 
     def get_context_data(self, **kwargs):
-        from mpr.services import listar_turnos, listar_roster_semana
+        import json
+
+        from mpr.services import (
+            filtrar_operarios_roster_excepciones,
+            listar_roster_semana,
+            listar_turnos,
+        )
         from mpr.services_maquina_linea import listar_lineas
         from datetime import timedelta
         context = super().get_context_data(**kwargs)
         base_empresa = _get_base_empresa(self.request)
+        filtro = (self.request.GET.get("filtro") or "todos").strip().lower()
+        if filtro not in ("todos", "excepciones"):
+            filtro = "todos"
         semana_str = self.request.GET.get("semana")
         if semana_str:
             try:
@@ -6262,23 +6294,41 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, Temp
         semana_anterior = fecha_lunes - timedelta(days=7)
         semana_siguiente = fecha_lunes + timedelta(days=7)
         fecha_domingo = fecha_lunes + timedelta(days=6)
+        fecha_viernes = fecha_lunes + timedelta(days=4)
         turnos_activos = listar_turnos(base_empresa, solo_activos=True)
         roster_data = listar_roster_semana(base_empresa, fecha_lunes)
         lineas_activas = listar_lineas(base_empresa, solo_activas=True) if base_empresa else []
+        operarios_todos = roster_data["operarios"]
+        operarios = operarios_todos
+        if filtro == "excepciones":
+            operarios = filtrar_operarios_roster_excepciones(
+                operarios_todos, roster_data["asignaciones"]
+            )
         from datetime import date as _date2
         hoy = _date2.today()
         context.update({
             "fecha_lunes": fecha_lunes,
+            "fecha_viernes": fecha_viernes,
             "fecha_domingo": fecha_domingo,
             "semana_anterior": semana_anterior,
             "semana_siguiente": semana_siguiente,
             "turnos_activos": turnos_activos,
             "lineas": lineas_activas,
-            "operarios": roster_data["operarios"],
+            "operarios": operarios,
+            "operarios_todos": operarios_todos,
             "dias": roster_data["dias"],
             "asignaciones": roster_data["asignaciones"],
             "celdas_bloqueadas": roster_data.get("celdas_bloqueadas") or {},
             "hoy": hoy,
+            "filtro_roster": filtro,
+            "turnos_activos_json": json.dumps(
+                [
+                    {"id": t["id"], "nombre": t["nombre"]}
+                    for t in (turnos_activos or [])
+                ],
+                ensure_ascii=False,
+            ),
+            "semana_iso": fecha_lunes.isoformat(),
         })
         return context
 
@@ -6292,22 +6342,20 @@ class AsignarTurnoRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin, View)
 
     def post(self, request, *args, **kwargs):
         from django.contrib import messages
-        from django.urls import reverse
         from mpr.services import asignar_turno_roster
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
-            return redirect("mpr:planificacion_turnos")
+            return _redirect_planificacion_turnos(request)
         fecha_str = (request.POST.get("fecha") or "").strip()
         id_operario_raw = request.POST.get("id_operario", "")
         id_turno_raw = request.POST.get("id_turno", "")
-        semana_param = (request.POST.get("semana") or "").strip()
         try:
             id_operario = int(id_operario_raw)
             id_turno = int(id_turno_raw)
         except (ValueError, TypeError):
             messages.error(request, "Datos inválidos.")
-            return redirect("mpr:planificacion_turnos")
+            return _redirect_planificacion_turnos(request)
         id_linea_raw = (request.POST.get("id_linea") or "").strip()
         id_linea = None
         if id_linea_raw:
@@ -6315,45 +6363,42 @@ class AsignarTurnoRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin, View)
                 id_linea = int(id_linea_raw)
             except (ValueError, TypeError):
                 messages.error(request, "Línea de override inválida.")
-                return redirect("mpr:planificacion_turnos")
+                return _redirect_planificacion_turnos(request)
         ok, error = asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno, id_linea=id_linea)
         if ok:
             messages.success(request, "Turno asignado exitosamente.")
         else:
             messages.error(request, error or "Error al asignar turno.")
-        base_url = reverse("mpr:planificacion_turnos")
-        if semana_param:
-            return redirect(f"{base_url}?semana={semana_param}")
-        return redirect(base_url)
+        return _redirect_planificacion_turnos(request)
 
 
 class AsignarTurnoRosterMasivoView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """
     POST: asignación masiva de turno a varios operarios en un rango de fechas.
-    Params POST: ids_operario (lista), id_turno, fecha_desde/fecha_hasta (YYYY-MM-DD), semana.
+    Params POST: ids_operario (lista), id_turno, fecha_desde/fecha_hasta (YYYY-MM-DD),
+    semana, filtro, modo (agregar|solo_vacio|reemplazar), id_linea opcional,
+    alcance_dias (todos|lun_vie|personalizado), dias_semana (0-6 si personalizado).
     """
 
     def post(self, request, *args, **kwargs):
         from django.contrib import messages
-        from django.urls import reverse
         from mpr.services import asignar_turno_roster_rango, mensaje_flash_asignacion_masiva
 
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
-            return redirect("mpr:planificacion_turnos")
+            return _redirect_planificacion_turnos(request)
 
         ids_operario = request.POST.getlist("ids_operario")
         id_turno_raw = request.POST.get("id_turno", "")
         fecha_desde = (request.POST.get("fecha_desde") or "").strip()
         fecha_hasta = (request.POST.get("fecha_hasta") or "").strip()
-        semana_param = (request.POST.get("semana") or "").strip()
 
         try:
             id_turno = int(id_turno_raw)
         except (ValueError, TypeError):
             messages.error(request, "Turno inválido.")
-            return redirect("mpr:planificacion_turnos")
+            return _redirect_planificacion_turnos(request)
 
         id_linea_raw = (request.POST.get("id_linea") or "").strip()
         id_linea = None
@@ -6362,7 +6407,21 @@ class AsignarTurnoRosterMasivoView(MprLoginRequiredMixin, MprEscritorioVerMixin,
                 id_linea = int(id_linea_raw)
             except (ValueError, TypeError):
                 messages.error(request, "Línea de override inválida.")
-                return redirect("mpr:planificacion_turnos")
+                return _redirect_planificacion_turnos(request)
+
+        modo = (request.POST.get("modo") or "agregar").strip().lower()
+        if modo not in ("agregar", "solo_vacio", "reemplazar"):
+            modo = "agregar"
+
+        alcance_dias = (request.POST.get("alcance_dias") or "todos").strip().lower()
+        dias_semana = None
+        if alcance_dias == "lun_vie":
+            dias_semana = [0, 1, 2, 3, 4]
+        elif alcance_dias == "personalizado":
+            dias_semana = request.POST.getlist("dias_semana")
+            if not dias_semana:
+                messages.error(request, "Seleccioná al menos un día de la semana.")
+                return _redirect_planificacion_turnos(request)
 
         ok, error, resumen = asignar_turno_roster_rango(
             base_empresa,
@@ -6371,44 +6430,41 @@ class AsignarTurnoRosterMasivoView(MprLoginRequiredMixin, MprEscritorioVerMixin,
             fecha_desde,
             fecha_hasta,
             id_linea=id_linea,
+            modo=modo,
+            dias_semana=dias_semana,
         )
         if ok:
-            messages.success(request, mensaje_flash_asignacion_masiva(resumen))
+            messages.success(request, mensaje_flash_asignacion_masiva(resumen, modo=modo))
         else:
             messages.error(request, error or "Error al asignar turnos.")
 
-        base_url = reverse("mpr:planificacion_turnos")
-        if semana_param:
-            return redirect(f"{base_url}?semana={semana_param}")
-        return redirect(base_url)
+        return _redirect_planificacion_turnos(request)
 
 
 class SetLineaOverrideRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """
     POST: fija o limpia el override de línea de un turno del roster.
     Params POST: fecha (dd/MM/yyyy), id_operario, id_turno, id_linea (vacío = habitual/NULL),
-    semana (YYYY-MM-DD para redirect).
+    semana (YYYY-MM-DD para redirect), filtro.
     """
 
     def post(self, request, *args, **kwargs):
         from django.contrib import messages
-        from django.urls import reverse
         from mpr.services import set_linea_override_roster
 
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
-            return redirect("mpr:planificacion_turnos")
+            return _redirect_planificacion_turnos(request)
         fecha_str = (request.POST.get("fecha") or "").strip()
         id_operario_raw = request.POST.get("id_operario", "")
         id_turno_raw = request.POST.get("id_turno", "")
-        semana_param = (request.POST.get("semana") or "").strip()
         try:
             id_operario = int(id_operario_raw)
             id_turno = int(id_turno_raw)
         except (ValueError, TypeError):
             messages.error(request, "Datos inválidos.")
-            return redirect("mpr:planificacion_turnos")
+            return _redirect_planificacion_turnos(request)
         id_linea_raw = (request.POST.get("id_linea") or "").strip()
         id_linea = None
         if id_linea_raw:
@@ -6416,7 +6472,7 @@ class SetLineaOverrideRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin, V
                 id_linea = int(id_linea_raw)
             except (ValueError, TypeError):
                 messages.error(request, "Línea de override inválida.")
-                return redirect("mpr:planificacion_turnos")
+                return _redirect_planificacion_turnos(request)
         ok, error = set_linea_override_roster(
             base_empresa, fecha_str, id_operario, id_turno, id_linea=id_linea
         )
@@ -6427,42 +6483,37 @@ class SetLineaOverrideRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin, V
                 messages.success(request, "Línea de override actualizada.")
         else:
             messages.error(request, error or "Error al actualizar la línea.")
-        base_url = reverse("mpr:planificacion_turnos")
-        if semana_param:
-            return redirect(f"{base_url}?semana={semana_param}")
-        return redirect(base_url)
+        return _redirect_planificacion_turnos(request)
 
 
 class EliminarAsignacionRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """
     POST: elimina la asignación de un turno concreto (fecha + operario + turno).
-    Params POST: fecha (dd/MM/yyyy), id_operario, id_turno, semana (YYYY-MM-DD para redirect).
+    Params POST: fecha (dd/MM/yyyy), id_operario, id_turno, semana, filtro.
     """
 
     def post(self, request, *args, **kwargs):
         from django.contrib import messages
-        from django.urls import reverse
         from mpr.services import eliminar_asignacion_roster
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
-            return redirect("mpr:planificacion_turnos")
+            return _redirect_planificacion_turnos(request)
         fecha_str = (request.POST.get("fecha") or "").strip()
         id_operario_raw = request.POST.get("id_operario", "")
         id_turno_raw = (request.POST.get("id_turno") or "").strip()
-        semana_param = (request.POST.get("semana") or "").strip()
         try:
             id_operario = int(id_operario_raw)
         except (ValueError, TypeError):
             messages.error(request, "Datos inválidos.")
-            return redirect("mpr:planificacion_turnos")
+            return _redirect_planificacion_turnos(request)
         id_turno = None
         if id_turno_raw:
             try:
                 id_turno = int(id_turno_raw)
             except (ValueError, TypeError):
                 messages.error(request, "Turno inválido.")
-                return redirect("mpr:planificacion_turnos")
+                return _redirect_planificacion_turnos(request)
         ok, error = eliminar_asignacion_roster(
             base_empresa, fecha_str, id_operario, id_turno=id_turno
         )
@@ -6470,10 +6521,7 @@ class EliminarAsignacionRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin,
             messages.success(request, "Asignación eliminada exitosamente.")
         else:
             messages.error(request, error or "Error al eliminar asignación.")
-        base_url = reverse("mpr:planificacion_turnos")
-        if semana_param:
-            return redirect(f"{base_url}?semana={semana_param}")
-        return redirect(base_url)
+        return _redirect_planificacion_turnos(request)
 
 
 class MprConsultaPartesMixin:

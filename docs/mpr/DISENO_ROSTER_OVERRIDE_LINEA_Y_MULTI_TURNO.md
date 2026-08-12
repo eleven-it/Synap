@@ -80,13 +80,18 @@ resolver_linea_operario(id_operario, fecha, id_turno):
 
 ## 4. UI / UX (planificación de turnos)
 
+> **Refactor UX P0+P1 (12/08/2026):** grilla compacta + modal editor de celda; filtro excepciones;
+> asignación masiva con modos agregar / solo_vacio / reemplazar. Ver [TURNOS_Y_ROSTER.md](TURNOS_Y_ROSTER.md).
+
 ### 4.1 Grilla semanal
 
-- Celda operario × día puede mostrar **0..N turnos** asignados (chips Mañana / Tarde / Noche).
-- Acciones por turno asignado:
+- Celda operario × día muestra **chips** de turnos (0..N); override de línea como texto corto bajo el chip.
+- **Clic en celda** abre modal editor (no formularios densos inline en la grilla).
+- Acciones por turno (en el modal):
   - Quitar turno (con confirmación Synap; mismos bloqueos que hoy).
   - Override de línea: `Habitual` | Fila 1..N (solo ese `fecha+operario+turno`).
 - Acción “Agregar turno”: elegir turno aún no asignado ese día.
+- Filtro **Excepciones** en chrome: operarios con override o multi-turno en la semana.
 
 ### 4.2 Bloqueos por integridad (por celda = fecha + operario + turno)
 

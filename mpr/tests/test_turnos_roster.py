@@ -553,6 +553,200 @@ class TestAsignarTurnoRosterRango(TestCase):
         ultima_llamada = mock_upsert.call_args_list[-1]
         self.assertEqual(ultima_llamada[0][3], self.turno2.id)
 
+    def test_solo_vacio_omite_si_ya_hay_turno(self):
+        """Modo solo_vacio omite días que ya tienen cualquier turno."""
+        from unittest.mock import patch
+
+        fecha = self.manana
+        id_op = 401
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch(
+            "mpr.repositories.turno_roster.turnos_del_operario_dia", return_value=[self.turno2.id]
+        ), patch("mpr.repositories.turno_roster.upsert_roster") as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Op Solo Vacio"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA, [id_op], self.turno.id, fecha, fecha, modo="solo_vacio"
+            )
+
+        self.assertFalse(ok)
+        self.assertIn("ya tenían turno", error)
+        self.assertEqual(resumen["aplicados"], 0)
+        self.assertEqual(resumen["omitidos_con_turno"], 1)
+        mock_upsert.assert_not_called()
+
+    def test_solo_vacio_aplica_si_dia_vacio(self):
+        """Modo solo_vacio aplica upsert si el día no tiene turnos."""
+        from unittest.mock import patch
+
+        fecha = self.manana
+        id_op = 402
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch(
+            "mpr.repositories.turno_roster.turnos_del_operario_dia", return_value=[]
+        ), patch(
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
+        ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
+            "mpr.repositories.turno_roster.upsert_roster"
+        ) as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Op Vacio OK"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA, [id_op], self.turno.id, fecha, fecha, modo="solo_vacio"
+            )
+
+        self.assertTrue(ok, error)
+        self.assertEqual(resumen["aplicados"], 1)
+        self.assertEqual(resumen["omitidos_con_turno"], 0)
+        mock_upsert.assert_called_once()
+
+    def test_reemplazar_elimina_turno_previo_no_bloqueado(self):
+        """Modo reemplazar quita turno previo no bloqueado y deja el nuevo."""
+        from unittest.mock import patch
+
+        fecha = self.manana
+        id_op = 501
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch(
+            "mpr.repositories.turno_roster.turnos_del_operario_dia", return_value=[self.turno2.id]
+        ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
+        ), patch("mpr.repositories.turno_roster.eliminar_roster_turno") as mock_del, patch(
+            "mpr.repositories.turno_roster.upsert_roster"
+        ) as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Op Reemplazo"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA, [id_op], self.turno.id, fecha, fecha, modo="reemplazar"
+            )
+
+        self.assertTrue(ok, error)
+        self.assertEqual(resumen["aplicados"], 1)
+        mock_del.assert_called_once_with(EMPRESA, fecha, id_op, self.turno2.id)
+        mock_upsert.assert_called_once()
+
+    def test_reemplazar_no_borra_turno_bloqueado(self):
+        """Modo reemplazar no elimina turnos bloqueados; aplica el target si no está bloqueado."""
+        from unittest.mock import patch
+
+        fecha = self.manana
+        id_op = 502
+        msg = "No se puede modificar: el operario ya tiene partes registrados en esa fecha y turno."
+
+        def _bloqueo_side_effect(base, f, oid, actual, nuevo):
+            if actual == self.turno2.id and nuevo is None:
+                return msg
+            return None
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch(
+            "mpr.repositories.turno_roster.turnos_del_operario_dia", return_value=[self.turno2.id]
+        ), patch(
+            "mpr.services._motivo_bloqueo_cambio_roster", side_effect=_bloqueo_side_effect
+        ), patch(
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
+        ), patch("mpr.repositories.turno_roster.eliminar_roster_turno") as mock_del, patch(
+            "mpr.repositories.turno_roster.upsert_roster"
+        ) as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Op Bloq"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA, [id_op], self.turno.id, fecha, fecha, modo="reemplazar"
+            )
+
+        self.assertTrue(ok, error)
+        self.assertEqual(resumen["aplicados"], 1)
+        mock_del.assert_not_called()
+        mock_upsert.assert_called_once()
+
+    def test_plantilla_lun_vie_omite_fin_de_semana(self):
+        """Rango Lun–Dom con dias_semana=[0..4] aplica solo 5 días por operario."""
+        from unittest.mock import patch
+
+        lunes = date(2026, 8, 3)
+        domingo = lunes + timedelta(days=6)
+        id_op = 601
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch(
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
+        ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
+            "mpr.repositories.turno_roster.upsert_roster"
+        ) as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Op Lun Vie"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA,
+                [id_op],
+                self.turno.id,
+                lunes,
+                domingo,
+                dias_semana=[0, 1, 2, 3, 4],
+            )
+
+        self.assertTrue(ok, error)
+        self.assertEqual(resumen["aplicados"], 5)
+        self.assertEqual(resumen["omitidos_plantilla"], 2)
+        self.assertEqual(mock_upsert.call_count, 5)
+
+    def test_sin_dias_semana_aplica_todos(self):
+        """Sin dias_semana sigue aplicando todos los días del rango."""
+        from unittest.mock import patch
+
+        lunes = date(2026, 8, 3)
+        domingo = lunes + timedelta(days=6)
+        id_op = 602
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch(
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
+        ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
+            "mpr.repositories.turno_roster.upsert_roster"
+        ) as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Op Todos"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA, [id_op], self.turno.id, lunes, domingo
+            )
+
+        self.assertTrue(ok, error)
+        self.assertEqual(resumen["aplicados"], 7)
+        self.assertEqual(resumen.get("omitidos_plantilla", 0), 0)
+        self.assertEqual(mock_upsert.call_count, 7)
+
+    def test_plantilla_personalizado_solo_miercoles(self):
+        """Plantilla personalizado solo miércoles (2) aplica 1 día."""
+        from unittest.mock import patch
+
+        lunes = date(2026, 8, 3)
+        domingo = lunes + timedelta(days=6)
+        id_op = 603
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch(
+            "mpr.repositories.turno_roster.roster_turno_asignado", return_value=False
+        ), patch("mpr.services._motivo_bloqueo_cambio_roster", return_value=None), patch(
+            "mpr.repositories.turno_roster.upsert_roster"
+        ) as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Op Mie"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA,
+                [id_op],
+                self.turno.id,
+                lunes,
+                domingo,
+                dias_semana=[2],
+            )
+
+        self.assertTrue(ok, error)
+        self.assertEqual(resumen["aplicados"], 1)
+        self.assertEqual(resumen["omitidos_plantilla"], 6)
+        mock_upsert.assert_called_once()
+
 
 class TestFiltroTurnoColor(SimpleTestCase):
     """Filtro turno_color: slug de color por turno para la grilla de roster."""

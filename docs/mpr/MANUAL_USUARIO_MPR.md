@@ -432,12 +432,32 @@ Catálogo de **máquinas** y a qué línea pertenecen. Al cambiar la línea se c
 Desde Máquinas o desde **Producción diaria → Asignar artículo a máquina**:
 
 1. Filtre por línea o busque la máquina.
-2. Habilite o quite los artículos que cada máquina puede producir.
-3. Elija la **fecha** de vigencia de la asignación (un día pasado aplica solo ese día; no reescribe el futuro).
+2. Elija la **fecha** en el selector (por defecto es **hoy**).
+3. Habilite o quite los artículos que cada máquina puede producir **en esa fecha**.
 4. En la grilla verá **Talle** y **Color** del artículo.
 5. Pulse **Imprimir Control de Calidad**, elija la **fecha** de la planilla y confirme. Se imprime la hoja horizontal con artículos vigentes a esa fecha, cantidades del parte en **1ra** por turno y una fila vacía debajo de cada artículo para anotar la clasificación a mano.
 
 Si no hay filas con artículos según el filtro, el sistema avisa en pantalla.
+
+##### Fecha: cómo queda guardado el seteo (importante)
+
+La grilla muestra los artículos **vigentes en la fecha elegida**. Lo que se guarda depende de si esa fecha es **hoy** o un **día pasado**:
+
+| Si asigna con fecha… | Qué ocurre | ¿Sigue al día siguiente? |
+|----------------------|------------|---------------------------|
+| **Hoy** (fecha del día) | La asignación queda **persistente**: el artículo sigue habilitado mañana, pasado mañana, etc., hasta que alguien lo quite. | **Sí** |
+| **Un día pasado** | La asignación (o el quitar) aplica **solo ese día**. Aparece el aviso amarillo en pantalla. No cambia lo que verá mañana ni lo ya seteado hacia adelante. | **No** |
+
+**Regla práctica:** para que el seteo **persista** (que mañana y los días siguientes lo vean en Parte, planilla y esta pantalla), debe asignar con la fecha en **hoy**.
+
+**Casos de uso:**
+
+- **Armar o corregir la programación del día actual** → deje la fecha en **hoy**, asigne o quite artículos. Eso es lo que “queda” para la planta.
+- **Completar o corregir un día ya pasado** (por ejemplo, para poder cargar un parte atrasado o imprimir la planilla de ese día) → elija ese día pasado. El cambio **no** se copia al día de hoy ni al futuro; si también lo necesita hoy, vuelva a poner la fecha en **hoy** y asigne de nuevo.
+
+**Error frecuente:** entrar al día siguiente, poner el selector en el día de ayer, “cargar de nuevo” los artículos y esperar que eso quede para hoy. Eso solo deja rastro en el día pasado. Para persistir, hay que cargar con **hoy**.
+
+Desde cada máquina puede abrir **Histórico** para ver las fechas en las que estuvo habilitado cada artículo.
 
 ### 8.3 Config. Depósitos
 
@@ -473,9 +493,11 @@ Defina los turnos (por ejemplo Mañana, Tarde, Noche) con su horario. Solo los *
 
 **Menú:** Producción diaria → Planificación de turnos.
 
-Asigne el turno de cada operario **día a día** (hoy y fechas futuras). Puede usar asignación masiva para varios operarios y un rango de fechas.
+Asigne el turno de cada operario **día a día**. Puede usar **asignación masiva** para varios operarios y un rango de fechas, con modos: **Agregar turno** (no quita otros del mismo día), **Solo si no tiene turno ese día**, o **Reemplazar día** (avanzado; quita turnos no bloqueados). En masiva puede elegir **plantilla de días** (todos, solo lun–vie o personalizado) y el atajo **Semana visible Lun–Vie**.
 
-La pantalla usa la **barra densa de producción**: en la barra superior están la navegación de semana (Anterior / Siguiente), **Asignación masiva**, **Gestionar turnos** y los atajos al Tablero, Parte y Control de calidad. La grilla ocupa el resto de la pantalla y se desplaza sola. Al **quitar** un turno se pide confirmación en una ventana de Synap.
+La pantalla usa la **barra densa de producción**: navegación de semana, filtros **Todos** / **Excepciones** (operarios con override de línea o más de un turno en la semana), **Asignación masiva**, **Gestionar turnos** y atajos al Tablero, Parte y Control de calidad.
+
+La **grilla es compacta**: cada celda muestra chips de turno (y candado si está bloqueada). **Hacé clic en una celda** para abrir el editor: cambiar línea, quitar o agregar turnos. Al quitar un turno o usar «Reemplazar día» en masiva, Synap pide confirmación en un modal (no ventanas del navegador).
 
 Sin turno del día, el operario no podrá cargar su parte.
 
@@ -515,6 +537,7 @@ Sin turno del día, el operario no podrá cargar su parte.
 - **Perdí la carga a mitad de Control de calidad:** use **Guardar borrador**; al volver se precarga. El borrador no bloquea el parte.
 - **No puedo armar:** stock insuficiente en el depósito origen o el pack no tiene lista de materiales (1ra).
 - **Nada para imprimir en la planilla:** no hay máquinas con artículos según el filtro; asigne artículos o cambie el filtro.
+- **Ayer asigné artículos y hoy no aparecen / tuve que cargar de nuevo:** casi seguro se cargó con el selector en un **día pasado** (solo aplica ese día). La persistencia se logra asignando con la fecha en **hoy**. Ver §8.2.
 - **Empresa incorrecta:** cambie de empresa en la sesión e intente de nuevo.
 
 ---
