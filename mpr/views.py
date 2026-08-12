@@ -6229,23 +6229,55 @@ class PartePendienteDetailView(MprLoginRequiredMixin, MprPermisoMixin, TemplateV
         return redirect("mpr:parte_pendiente_detail", id_parte=id_parte)
 
 
-def _redirect_planificacion_turnos(request=None, semana=None, filtro=None):
-    """Redirect a planificación de turnos preservando semana y filtro de grilla."""
-    from django.urls import reverse
-    from urllib.parse import urlencode
-
+def _params_planificacion_turnos(
+    request=None,
+    *,
+    semana=None,
+    filtro=None,
+    q=None,
+    turno=None,
+    incluir_semana=True,
+):
+    """Arma querystring de planificación de turnos preservando filtros activos."""
     if request is not None:
         if semana is None:
             semana = (request.POST.get("semana") or request.GET.get("semana") or "").strip()
         if filtro is None:
             filtro = (request.POST.get("filtro") or request.GET.get("filtro") or "").strip().lower()
-    if filtro not in ("todos", "excepciones"):
+        if q is None:
+            q = (request.POST.get("q") or request.GET.get("q") or "").strip()
+        if turno is None:
+            turno = (request.POST.get("turno") or request.GET.get("turno") or "").strip()
+    if filtro not in ("todos", "excepciones", "sin_asignar"):
         filtro = "todos"
     params = {}
-    if semana:
+    if incluir_semana and semana:
         params["semana"] = semana
     if filtro and filtro != "todos":
         params["filtro"] = filtro
+    if q:
+        params["q"] = q
+    if turno:
+        try:
+            params["turno"] = str(int(turno))
+        except (TypeError, ValueError):
+            pass
+    return params
+
+
+def _redirect_planificacion_turnos(request=None, semana=None, filtro=None, q=None, turno=None):
+    """Redirect a planificación de turnos preservando semana y filtros de grilla."""
+    from django.urls import reverse
+    from urllib.parse import urlencode
+
+    params = _params_planificacion_turnos(
+        request,
+        semana=semana,
+        filtro=filtro,
+        q=q,
+        turno=turno,
+        incluir_semana=True,
+    )
     base_url = reverse("mpr:planificacion_turnos")
     if params:
         return redirect(f"{base_url}?{urlencode(params)}")
@@ -6256,7 +6288,8 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, Temp
     """
     Pantalla de planificación semanal (roster): grilla operadores × 7 días.
     GET: muestra grilla de la semana seleccionada (default: semana actual).
-    Query param: semana=YYYY-MM-DD (lunes de la semana); filtro=todos|excepciones.
+    Query param: semana=YYYY-MM-DD (lunes de la semana); filtro=todos|sin_asignar|excepciones;
+    q (búsqueda por nombre); turno (id int).
     Multi-turno: cada celda puede tener 0..N turnos; lineas activas para override.
     """
 
@@ -6264,9 +6297,10 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, Temp
 
     def get_context_data(self, **kwargs):
         import json
+        from urllib.parse import urlencode
 
         from mpr.services import (
-            filtrar_operarios_roster_excepciones,
+            aplicar_filtros_roster_grilla,
             listar_roster_semana,
             listar_turnos,
         )
@@ -6275,8 +6309,16 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, Temp
         context = super().get_context_data(**kwargs)
         base_empresa = _get_base_empresa(self.request)
         filtro = (self.request.GET.get("filtro") or "todos").strip().lower()
-        if filtro not in ("todos", "excepciones"):
+        if filtro not in ("todos", "excepciones", "sin_asignar"):
             filtro = "todos"
+        q_roster = (self.request.GET.get("q") or "").strip()
+        turno_filtro_raw = (self.request.GET.get("turno") or "").strip()
+        turno_filtro = None
+        if turno_filtro_raw:
+            try:
+                turno_filtro = int(turno_filtro_raw)
+            except (TypeError, ValueError):
+                turno_filtro = None
         semana_str = self.request.GET.get("semana")
         if semana_str:
             try:
@@ -6299,11 +6341,28 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, Temp
         roster_data = listar_roster_semana(base_empresa, fecha_lunes)
         lineas_activas = listar_lineas(base_empresa, solo_activas=True) if base_empresa else []
         operarios_todos = roster_data["operarios"]
-        operarios = operarios_todos
-        if filtro == "excepciones":
-            operarios = filtrar_operarios_roster_excepciones(
-                operarios_todos, roster_data["asignaciones"]
-            )
+        operarios = aplicar_filtros_roster_grilla(
+            operarios_todos,
+            roster_data["asignaciones"],
+            roster_data["dias"],
+            filtro=filtro,
+            id_turno=turno_filtro,
+            q=q_roster,
+        )
+        roster_query_params = _params_planificacion_turnos(
+            self.request,
+            semana=fecha_lunes.isoformat(),
+            filtro=filtro,
+            q=q_roster,
+            turno=turno_filtro,
+            incluir_semana=False,
+        )
+        roster_query = urlencode(roster_query_params) if roster_query_params else ""
+        filtros_roster_activos = bool(
+            q_roster
+            or turno_filtro is not None
+            or filtro != "todos"
+        )
         from datetime import date as _date2
         hoy = _date2.today()
         context.update({
@@ -6321,6 +6380,12 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, Temp
             "celdas_bloqueadas": roster_data.get("celdas_bloqueadas") or {},
             "hoy": hoy,
             "filtro_roster": filtro,
+            "q_roster": q_roster,
+            "turno_filtro": turno_filtro,
+            "operarios_total_count": len(operarios_todos),
+            "operarios_filtrados_count": len(operarios),
+            "roster_query": roster_query,
+            "filtros_roster_activos": filtros_roster_activos,
             "turnos_activos_json": json.dumps(
                 [
                     {"id": t["id"], "nombre": t["nombre"]}
