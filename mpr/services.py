@@ -16855,7 +16855,11 @@ def listar_roster_semana(
         Dict con:
         - operarios: [{"id": int, "nombre": str}]
         - dias: [{"fecha": date, "fecha_str": "dd/MM/yyyy", "dia_nombre": "Lu"}] (7 días)
-        - asignaciones: {id_operario: {"YYYY-MM-DD": {"id_turno": int, "nombre_turno": str}}}
+        - asignaciones: {id_operario: {"YYYY-MM-DD": [
+              {"id_turno", "nombre_turno", "id_linea_override", "id_linea_efectiva",
+               "nombre_linea_override", "bloqueada", "motivo_bloqueo"?}, ...
+          ]}}
+        - celdas_bloqueadas: {id_operario: {"YYYY-MM-DD": {id_turno: {"bloqueada", "motivo"}}}}
     """
     from datetime import timedelta
 
@@ -16874,24 +16878,58 @@ def listar_roster_semana(
     fecha_fin = fecha_lunes + timedelta(days=6)
     try:
         from mpr.repositories.turno_roster import listar_roster_rango
+        from mpr.services_operario import resolver_linea_operario
 
-        asignaciones_dict: Dict[int, Dict[str, Any]] = {}
+        asignaciones_dict: Dict[int, Dict[str, List[Dict[str, Any]]]] = {}
         for asig in listar_roster_rango(base_empresa, fecha_lunes, fecha_fin):
             op_id = int(asig["id_operario"])
             fecha_asig = asig.get("fecha")
             if hasattr(fecha_asig, "isoformat"):
                 fecha_key = fecha_asig.isoformat()
+                fecha_obj = fecha_asig
             else:
-                fecha_key = str(to_date_or_none(str(fecha_asig)) or fecha_asig)
+                fecha_obj = to_date_or_none(str(fecha_asig)) or fecha_asig
+                fecha_key = (
+                    fecha_obj.isoformat()
+                    if hasattr(fecha_obj, "isoformat")
+                    else str(fecha_obj)
+                )
+            id_turno = int(asig["id_mpr_turno"])
+            id_linea_override = to_int_or_none(asig.get("id_mpr_linea"))
             if op_id not in asignaciones_dict:
                 asignaciones_dict[op_id] = {}
-            asignaciones_dict[op_id][fecha_key] = {
-                "id_turno": int(asig["id_mpr_turno"]),
+            asignaciones_dict[op_id].setdefault(fecha_key, []).append({
+                "id_turno": id_turno,
                 "nombre_turno": str(asig.get("nombre_turno") or ""),
-            }
+                "id_linea_override": id_linea_override,
+                "nombre_linea_override": (
+                    str(asig.get("nombre_linea") or "") if id_linea_override else None
+                ),
+                "id_linea_efectiva": resolver_linea_operario(
+                    base_empresa,
+                    op_id,
+                    fecha_obj if isinstance(fecha_obj, date) else fecha_lunes,
+                    id_turno=id_turno,
+                ),
+            })
+        for _op_id, por_fecha in asignaciones_dict.items():
+            for _fecha_key, turnos in por_fecha.items():
+                turnos.sort(key=lambda t: t.get("id_turno") or 0)
         celdas_bloqueadas = _mapa_celdas_bloqueadas_roster(
             base_empresa, fecha_lunes, fecha_fin, asignaciones_dict
         )
+        for op_id, por_fecha in asignaciones_dict.items():
+            bloq_op = celdas_bloqueadas.get(op_id) or {}
+            for fecha_key, turnos in por_fecha.items():
+                bloq_fecha = bloq_op.get(fecha_key) or {}
+                for turno_item in turnos:
+                    tid = turno_item.get("id_turno")
+                    bloq = bloq_fecha.get(tid) if tid is not None else None
+                    if bloq and bloq.get("bloqueada"):
+                        turno_item["bloqueada"] = True
+                        turno_item["motivo_bloqueo"] = bloq.get("motivo")
+                    else:
+                        turno_item["bloqueada"] = False
         return {
             "operarios": [{"id": op["id"], "nombre": op["label"]} for op in operarios_raw],
             "dias": dias_semana,
@@ -17123,8 +17161,8 @@ def _mapa_celdas_bloqueadas_roster(
     fecha_desde: date,
     fecha_hasta: date,
     asignaciones: Dict[int, Dict[str, Any]],
-) -> Dict[int, Dict[str, Dict[str, Any]]]:
-    """Mapa UI: id_operario → fecha ISO → {bloqueada, motivo} según turno asignado."""
+) -> Dict[int, Dict[str, Dict[int, Dict[str, Any]]]]:
+    """Mapa UI: id_operario → fecha ISO → id_turno → {bloqueada, motivo}."""
     from mpr.repositories.parte import set_operarios_bloqueados_roster_en_rango
     from mpr.repositories.transicion_lote import set_operarios_con_cc_en_rango
 
@@ -17132,7 +17170,7 @@ def _mapa_celdas_bloqueadas_roster(
         return {}
     parte_set = set_operarios_bloqueados_roster_en_rango(base_empresa, fecha_desde, fecha_hasta)
     cc_set = set_operarios_con_cc_en_rango(base_empresa, fecha_desde, fecha_hasta)
-    celdas: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    celdas: Dict[int, Dict[str, Dict[int, Dict[str, Any]]]] = {}
     msg_parte = (
         "No se puede modificar: el operario tiene un parte aprobado o con movimiento físico "
         "en esa fecha y turno."
@@ -17145,21 +17183,28 @@ def _mapa_celdas_bloqueadas_roster(
         oid = to_int_or_none(op_id)
         if oid is None:
             continue
-        for fecha_key, asig in (por_fecha or {}).items():
-            tid = to_int_or_none(asig.get("id_turno"))
-            if tid is None:
+        for fecha_key, turnos_raw in (por_fecha or {}).items():
+            if isinstance(turnos_raw, list):
+                turnos_list = turnos_raw
+            elif isinstance(turnos_raw, dict):
+                turnos_list = [turnos_raw]
+            else:
                 continue
-            clave = (oid, fecha_key, tid)
-            motivo = None
-            if clave in parte_set:
-                motivo = msg_parte
-            elif clave in cc_set:
-                motivo = msg_cc
-            if motivo:
-                celdas.setdefault(oid, {})[fecha_key] = {
-                    "bloqueada": True,
-                    "motivo": motivo,
-                }
+            for asig in turnos_list:
+                tid = to_int_or_none(asig.get("id_turno"))
+                if tid is None:
+                    continue
+                clave = (oid, fecha_key, tid)
+                motivo = None
+                if clave in parte_set:
+                    motivo = msg_parte
+                elif clave in cc_set:
+                    motivo = msg_cc
+                if motivo:
+                    celdas.setdefault(oid, {}).setdefault(fecha_key, {})[tid] = {
+                        "bloqueada": True,
+                        "motivo": motivo,
+                    }
     return celdas
 
 
@@ -17171,11 +17216,13 @@ def asignar_turno_roster(
     id_linea: Optional[int] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
-    Asigna (o reasigna) un turno a un operario en una fecha.
-    Usa update_or_create para garantizar constraint único (no duplica).
-    Validaciones: turno existe, operario existe; migra borrador/pendiente al
-    reasignar y bloquea parte aprobada/física o CC confirmado.
-    `id_linea` es el override de línea del día (None = usar la habitual).
+    Asigna un turno a un operario en una fecha (INSERT si es turno nuevo ese día;
+    upsert idempotente si ya existe la misma terna fecha+operario+turno).
+
+    Multi-turno: agregar un segundo turno el mismo día no reemplaza el primero.
+    Validaciones: turno existe, operario existe; bloqueo por parte aprobada/física
+    o CC confirmado del turno afectado.
+    `id_linea` es override opcional (None conserva override existente en upsert).
     Returns:
         (ok, mensaje_error)
     """
@@ -17204,30 +17251,80 @@ def asignar_turno_roster(
         if not linea.get("activo"):
             return False, "La línea de override está inactiva."
     try:
-        from mpr.repositories.turno_roster import turno_del_operario_dia, upsert_roster
+        from mpr.repositories.turno_roster import roster_turno_asignado, upsert_roster
 
-        turno_actual = turno_del_operario_dia(base_empresa, id_operario, fecha_obj)
+        ya_asignado = roster_turno_asignado(
+            base_empresa, fecha_obj, id_operario, id_turno_norm
+        )
+        turno_actual = id_turno_norm if ya_asignado else None
         motivo = _motivo_bloqueo_cambio_roster(
             base_empresa, fecha_obj, id_operario, turno_actual, id_turno_norm
         )
         if motivo:
             return False, motivo
-        if turno_actual is not None and turno_actual != id_turno_norm:
-            from mpr.repositories.parte import migrar_lineas_operario_entre_turnos
-
-            ok_migracion, error_migracion, _ = migrar_lineas_operario_entre_turnos(
-                base_empresa, fecha_obj, id_operario, turno_actual, id_turno_norm
-            )
-            if not ok_migracion:
-                return False, error_migracion or "No se pudieron migrar los datos de producción."
-        upsert_roster(base_empresa, fecha_obj, id_operario, id_turno_norm, id_mpr_linea=id_linea_norm)
+        upsert_roster(
+            base_empresa, fecha_obj, id_operario, id_turno_norm, id_mpr_linea=id_linea_norm
+        )
         return True, None
     except IntegrityError as e:
         logger.error("IntegrityError al asignar turno roster en %s: %s", base_empresa, e, exc_info=True)
-        return False, "Error de integridad: el operario ya tiene un turno asignado para esta fecha."
+        return False, "Error de integridad al asignar el turno."
     except Exception as e:
         logger.error("Error al asignar turno roster en %s: %s", base_empresa, e, exc_info=True)
         return False, "Error al asignar turno."
+
+
+def set_linea_override_roster(
+    base_empresa: str,
+    fecha_str: str,
+    id_operario: int,
+    id_turno: int,
+    id_linea: Optional[int] = None,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Fija o limpia (``id_linea=None``) el override de línea para fecha+operario+turno.
+    Solo modifica ``id_mpr_linea``; requiere turno ya asignado en el roster.
+    """
+    if not (base_empresa or "").strip():
+        return False, "Empresa inválida."
+    fecha_obj, error = _parse_fecha_ddmmaaaa(fecha_str)
+    if error:
+        return False, error
+    id_turno_norm = to_int_or_none(id_turno)
+    if id_turno_norm is None:
+        return False, "Turno inválido."
+    if not obtener_operario(base_empresa, id_operario):
+        return False, "Operario no encontrado."
+    id_linea_norm = to_int_or_none(id_linea)
+    if id_linea_norm is not None:
+        from mpr.repositories.maquina_linea import obtener_linea
+
+        linea = obtener_linea(base_empresa, id_linea_norm)
+        if not linea:
+            return False, "Línea no encontrada."
+        if not linea.get("activo"):
+            return False, "La línea está inactiva."
+    from mpr.repositories.turno_roster import roster_turno_asignado, update_roster_linea
+
+    if not roster_turno_asignado(base_empresa, fecha_obj, id_operario, id_turno_norm):
+        return False, "El operario no tiene ese turno asignado en esa fecha."
+    motivo = _motivo_bloqueo_roster_celda(
+        base_empresa, fecha_obj, id_operario, id_turno_norm
+    )
+    if motivo:
+        return False, motivo
+    try:
+        filas = update_roster_linea(
+            base_empresa, fecha_obj, id_operario, id_turno_norm, id_linea_norm
+        )
+        if filas == 0:
+            return False, "No se pudo actualizar la línea del roster."
+        return True, None
+    except Exception as e:
+        logger.error(
+            "Error al fijar override línea roster en %s: %s", base_empresa, e, exc_info=True
+        )
+        return False, "Error al actualizar la línea del roster."
 
 
 def _resumen_asignacion_masiva_vacio() -> Dict[str, Any]:
@@ -17345,11 +17442,14 @@ def asignar_turno_roster_rango(
         return False, "Operario no encontrado.", resumen
 
     try:
-        from mpr.repositories.turno_roster import turno_del_operario_dia, upsert_roster
+        from mpr.repositories.turno_roster import roster_turno_asignado, upsert_roster
 
         for d in _iter_dias_rango(desde, hasta):
             for oid in operarios_validos:
-                turno_actual = turno_del_operario_dia(base_empresa, oid, d)
+                ya_asignado = roster_turno_asignado(
+                    base_empresa, d, oid, id_turno_norm
+                )
+                turno_actual = id_turno_norm if ya_asignado else None
                 motivo = _motivo_bloqueo_cambio_roster(
                     base_empresa, d, oid, turno_actual, id_turno_norm
                 )
@@ -17357,22 +17457,6 @@ def asignar_turno_roster_rango(
                     resumen["omitidos_bloqueados"] += 1
                     continue
                 try:
-                    if turno_actual is not None and turno_actual != id_turno_norm:
-                        from mpr.repositories.parte import migrar_lineas_operario_entre_turnos
-
-                        ok_migracion, error_migracion, _ = migrar_lineas_operario_entre_turnos(
-                            base_empresa, d, oid, turno_actual, id_turno_norm
-                        )
-                        if not ok_migracion:
-                            resumen["omitidos_bloqueados"] += 1
-                            resumen["errores"].append(
-                                {
-                                    "operario": oid,
-                                    "fecha": _fmt_fecha_ddmmaaaa(d),
-                                    "msg": error_migracion or "No se pudieron migrar los datos de producción.",
-                                }
-                            )
-                            continue
                     upsert_roster(
                         base_empresa, d, oid, id_turno_norm, id_mpr_linea=id_linea_norm
                     )
@@ -17388,7 +17472,7 @@ def asignar_turno_roster_rango(
                         {
                             "operario": oid,
                             "fecha": _fmt_fecha_ddmmaaaa(d),
-                            "msg": "Error de integridad: el operario ya tiene un turno asignado para esta fecha.",
+                            "msg": "Error de integridad al asignar el turno.",
                         }
                     )
                 except Exception as e:
@@ -17436,9 +17520,12 @@ def eliminar_asignacion_roster(
     base_empresa: str,
     fecha_str: str,
     id_operario: int,
+    id_turno: Optional[int] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
-    Elimina la asignación de turno de un operario en una fecha.
+    Elimina la asignación de un turno concreto (fecha + operario + turno).
+    Si ``id_turno`` es None y hay un solo turno ese día, usa ese turno (compat UI actual).
+    Si hay varios turnos el mismo día, ``id_turno`` es obligatorio.
     Bloquea si hay parte aprobado/físico o CC; con borrador/pendiente exige
     reasignar hacia otro turno para conservar el ledger.
     Returns:
@@ -17450,17 +17537,32 @@ def eliminar_asignacion_roster(
     if error:
         return False, error
     try:
-        from mpr.repositories.turno_roster import eliminar_roster, turno_del_operario_dia
+        from mpr.repositories.turno_roster import (
+            eliminar_roster_turno,
+            turnos_del_operario_dia,
+        )
 
-        turno_actual = turno_del_operario_dia(base_empresa, id_operario, fecha_obj)
-        if turno_actual is None:
+        turnos_dia = turnos_del_operario_dia(base_empresa, id_operario, fecha_obj)
+        id_turno_norm = to_int_or_none(id_turno)
+        if id_turno_norm is None:
+            if not turnos_dia:
+                return False, "No se encontró asignación para eliminar."
+            if len(turnos_dia) > 1:
+                return (
+                    False,
+                    "Hay varios turnos asignados ese día; indicá cuál turno quitar.",
+                )
+            id_turno_norm = turnos_dia[0]
+        elif id_turno_norm not in turnos_dia:
             return False, "No se encontró asignación para eliminar."
         motivo = _motivo_bloqueo_cambio_roster(
-            base_empresa, fecha_obj, id_operario, turno_actual, None
+            base_empresa, fecha_obj, id_operario, id_turno_norm, None
         )
         if motivo:
             return False, motivo
-        deleted = eliminar_roster(base_empresa, fecha_obj, id_operario)
+        deleted = eliminar_roster_turno(
+            base_empresa, fecha_obj, id_operario, id_turno_norm
+        )
         if deleted == 0:
             return False, "No se encontró asignación para eliminar."
         return True, None

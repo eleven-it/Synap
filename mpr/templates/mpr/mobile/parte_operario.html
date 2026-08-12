@@ -43,7 +43,12 @@
         {% include "mpr/mobile/_parte_borde.html" with icono="linear_scale" titulo="Sin línea asignada" detalle="No tenés una línea habitual ni override para hoy. Contactá a tu supervisor." %}
     {% elif estado_borde == "sin_maquinas" %}
         {% include "mpr/mobile/_parte_borde.html" with icono="precision_manufacturing" titulo="Sin máquinas en tu línea" detalle="Tu línea no tiene máquinas activas asignadas. Contactá a tu supervisor." %}
+    {% elif estado_borde == "turno_bloqueado" %}
+        {% include "mpr/includes/parte_movil_selector_turno.html" %}
+        {% include "mpr/mobile/_parte_borde.html" with icono="lock" titulo="Turno bloqueado" detalle=motivo_bloqueo|default:"Este turno ya tiene parte aprobado o control de calidad. Elegí otro turno arriba si corresponde." %}
     {% else %}
+
+    {% include "mpr/includes/parte_movil_selector_turno.html" %}
 
     <div class="mb-4 grid grid-cols-3 gap-2 rounded-2xl border border-gray-200 bg-white p-3 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div>
@@ -101,6 +106,7 @@
     <form method="post" x-ref="form">
         {% csrf_token %}
         <input type="hidden" name="accion" x-ref="accion" value="enviar">
+        {% if id_turno %}<input type="hidden" name="id_turno" value="{{ id_turno }}">{% endif %}
 
         <div class="space-y-3">
             {% for maq in maquinas %}

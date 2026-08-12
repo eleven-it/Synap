@@ -55,21 +55,30 @@
 
         {% if estado_borde and estado_borde != "ok" %}
         <div class="min-h-0 flex-1 overflow-y-auto">
+        {% if estado_borde == "turno_bloqueado" %}
+        {% include "mpr/includes/parte_movil_selector_turno.html" %}
+        {% endif %}
         <div class="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-center dark:border-amber-800 dark:bg-amber-900/20">
-            <span class="material-icons text-4xl text-amber-500" aria-hidden="true">info</span>
+            <span class="material-icons text-4xl text-amber-500" aria-hidden="true">{% if estado_borde == "turno_bloqueado" %}lock{% else %}info{% endif %}</span>
             <p class="mt-3 text-base font-semibold text-amber-900 dark:text-amber-100">
                 {% if estado_borde == "sin_operario" %}Tu usuario no tiene un operario asociado
                 {% elif estado_borde == "sin_turno" %}No tenés un turno asignado hoy
                 {% elif estado_borde == "sin_linea" %}No tenés una línea asignada
                 {% elif estado_borde == "sin_maquinas" %}Tu línea no tiene máquinas activas
+                {% elif estado_borde == "turno_bloqueado" %}Turno bloqueado
                 {% endif %}
             </p>
-            <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">Contactá a tu supervisor de producción.</p>
+            <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">
+                {% if estado_borde == "turno_bloqueado" %}{{ motivo_bloqueo|default:"Este turno ya tiene parte aprobado o control de calidad. Elegí otro turno si corresponde." }}
+                {% else %}Contactá a tu supervisor de producción.{% endif %}
+            </p>
         </div>
         </div>
         {% else %}
         <div class="min-h-0 flex-1 overflow-y-auto">
         <div class="mx-auto w-full max-w-4xl">
+
+            {% include "mpr/includes/parte_movil_selector_turno.html" %}
 
             {% if estado_parte == "pendiente" %}
             <div class="mb-3 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
@@ -113,6 +122,7 @@
             <form method="post" x-ref="form">
                 {% csrf_token %}
                 <input type="hidden" name="accion" x-ref="accion" value="enviar">
+                {% if id_turno %}<input type="hidden" name="id_turno" value="{{ id_turno }}">{% endif %}
                 <div class="space-y-3">
                     {% for maq in maquinas %}
                     <input type="hidden" name="maqnombre_{{ maq.id_maquina }}" value="{{ maq.nombre }}">

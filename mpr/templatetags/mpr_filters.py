@@ -110,3 +110,25 @@ def isoformat(value):
     if isinstance(value, (date, datetime)):
         return value.strftime("%Y-%m-%d")
     return str(value)
+
+
+@register.filter
+def roster_ids_turno(asigs):
+    """
+    Lista de id_turno de una celda multi-turno del roster.
+    Uso: {% with ids=asigs|roster_ids_turno %}{% if t.id not in ids %}...
+    """
+    if not asigs:
+        return []
+    out = []
+    for item in asigs:
+        if not isinstance(item, dict):
+            continue
+        tid = item.get("id_turno")
+        if tid is None:
+            continue
+        try:
+            out.append(int(tid))
+        except (ValueError, TypeError):
+            continue
+    return out

@@ -45,7 +45,7 @@
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
                 <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl"
-                        title="Turno de cada operario por fecha. No se editan celdas con parte o control de calidad registrado.">Planificación de turnos</h1>
+                        title="Turno(s) de cada operario por fecha. Podés asignar varios turnos el mismo día. No se editan turnos con parte o control de calidad registrado.">Planificación de turnos</h1>
 
                     <div class="flex shrink-0 items-center gap-1.5" role="group" aria-label="Navegación de semana">
                         <a href="?semana={{ semana_anterior|isoformat }}"
@@ -146,67 +146,82 @@
                             </td>
                             {% for dia in dias %}
                             {% with fecha_iso=dia.fecha|isoformat %}
-                            {% with asig=op_asigs|dict_get:fecha_iso %}
-                            {% with op_bloqueos=celdas_bloqueadas|dict_get:op.id %}
-                            {% with celda_bloq=op_bloqueos|dict_get:fecha_iso %}
-                            <td class="border-b border-l border-slate-200 px-2 py-1.5 text-center align-middle dark:border-slate-700{% if dia.fecha == hoy %} bg-purple-50/70 dark:bg-purple-950/30{% endif %}">
-                                {% if celda_bloq.bloqueada %}
-                                    {# Celda bloqueada por parte aprobada/física o CC confirmado #}
-                                    {% if asig %}
-                                    <div class="flex items-center justify-center gap-1" title="{{ celda_bloq.motivo }}">
-                                        <span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400" aria-hidden="true">lock</span>
-                                        <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
-                                    </div>
-                                    {% else %}
-                                    <span class="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500" title="{{ celda_bloq.motivo }}">
-                                        <span class="material-icons text-sm leading-none" aria-hidden="true">lock</span>
-                                        <span>—</span>
-                                    </span>
-                                    {% endif %}
-                                {% else %}
-                                    {# Celda editable (pasado, hoy o futuro) #}
-                                    {% if asig %}
-                                    <div class="flex items-center justify-center gap-1">
-                                        <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
-                                        <form method="post" action="{% url 'mpr:roster_eliminar' %}" class="inline">
+                            {% with asigs=op_asigs|dict_get:fecha_iso %}
+                            {% with ids_asignados=asigs|roster_ids_turno %}
+                            <td class="border-b border-l border-slate-200 px-1.5 py-1.5 text-center align-top dark:border-slate-700{% if dia.fecha == hoy %} bg-purple-50/70 dark:bg-purple-950/30{% endif %}">
+                                <div class="flex flex-col items-stretch gap-1">
+                                    {% if asigs %}
+                                    {% for asig in asigs %}
+                                    <div class="rounded-md border border-slate-200/80 bg-slate-50/80 px-1 py-1 dark:border-slate-600/60 dark:bg-slate-900/40">
+                                        {% if asig.bloqueada %}
+                                        <div class="flex items-center justify-center gap-1" title="{{ asig.motivo_bloqueo }}">
+                                            <span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400" aria-hidden="true">lock</span>
+                                            <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
+                                        </div>
+                                        {% if asig.nombre_linea_override %}
+                                        <p class="mt-0.5 truncate text-[10px] text-slate-500 dark:text-slate-400" title="Línea override: {{ asig.nombre_linea_override }}">{{ asig.nombre_linea_override }}</p>
+                                        {% endif %}
+                                        {% else %}
+                                        <div class="flex items-center justify-center gap-0.5">
+                                            <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
+                                            <form method="post" action="{% url 'mpr:roster_eliminar' %}" class="inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="fecha" value="{{ dia.fecha_str }}"/>
+                                                <input type="hidden" name="id_operario" value="{{ op.id }}"/>
+                                                <input type="hidden" name="id_turno" value="{{ asig.id_turno }}"/>
+                                                <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
+                                                <button type="submit"
+                                                        @click.prevent="pedirQuitarTurno($el.closest('form'), '{{ op.nombre|escapejs }}', '{{ dia.fecha_str|escapejs }}', '{{ asig.nombre_turno|escapejs }}')"
+                                                        class="inline-flex h-6 w-6 items-center justify-center rounded text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500 dark:text-red-400 dark:hover:bg-red-900/20"
+                                                        aria-label="Quitar turno {{ asig.nombre_turno }} de {{ op.nombre }} el {{ dia.fecha_str }}"
+                                                        title="Quitar este turno. Si hay borrador o pendiente, reasigná a otro turno para conservar los datos.">
+                                                    <span class="material-icons text-sm leading-none" aria-hidden="true">close</span>
+                                                </button>
+                                            </form>
+                                        </div>
+                                        <form method="post" action="{% url 'mpr:roster_linea_override' %}" class="mt-0.5">
                                             {% csrf_token %}
                                             <input type="hidden" name="fecha" value="{{ dia.fecha_str }}"/>
                                             <input type="hidden" name="id_operario" value="{{ op.id }}"/>
+                                            <input type="hidden" name="id_turno" value="{{ asig.id_turno }}"/>
                                             <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
-                                            <button type="submit"
-                                                    @click.prevent="pedirQuitarTurno($el.closest('form'), '{{ op.nombre|escapejs }}', '{{ dia.fecha_str|escapejs }}', '{{ asig.nombre_turno|escapejs }}')"
-                                                    class="inline-flex h-6 w-6 items-center justify-center rounded text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500 dark:text-red-400 dark:hover:bg-red-900/20"
-                                                    aria-label="Quitar turno de {{ op.nombre }} el {{ dia.fecha_str }}"
-                                                    title="Quitar turno. Si hay borrador o pendiente, reasigná a otro turno para conservar los datos.">
-                                                <span class="material-icons text-sm leading-none" aria-hidden="true">close</span>
-                                            </button>
+                                            <label class="sr-only" for="linea-{{ op.id }}-{{ fecha_iso }}-{{ asig.id_turno }}">Línea de {{ asig.nombre_turno }}</label>
+                                            <select id="linea-{{ op.id }}-{{ fecha_iso }}-{{ asig.id_turno }}"
+                                                    name="id_linea"
+                                                    class="roster-select-auto h-6 w-full max-w-[7.5rem] rounded border border-slate-300 bg-white px-0.5 text-[10px] text-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                                                    title="Override de línea solo para este turno. Si hay borrador, las cantidades ya cargadas no se mueven."
+                                                    aria-label="Línea para {{ asig.nombre_turno }} de {{ op.nombre }} el {{ dia.fecha_str }}">
+                                                <option value=""{% if not asig.id_linea_override %} selected{% endif %}>Habitual</option>
+                                                {% for lin in lineas %}
+                                                <option value="{{ lin.id }}"{% if asig.id_linea_override == lin.id %} selected{% endif %}>{{ lin.nombre }}</option>
+                                                {% endfor %}
+                                            </select>
                                         </form>
+                                        {% endif %}
                                     </div>
-                                    {% else %}
-                                    <form method="post" action="{% url 'mpr:roster_asignar' %}" class="inline-flex items-center justify-center gap-1">
+                                    {% endfor %}
+                                    {% endif %}
+
+                                    {% if ids_asignados|length < turnos_activos|length %}
+                                    <form method="post" action="{% url 'mpr:roster_asignar' %}" class="inline-flex items-center justify-center gap-0.5">
                                         {% csrf_token %}
                                         <input type="hidden" name="fecha" value="{{ dia.fecha_str }}"/>
                                         <input type="hidden" name="id_operario" value="{{ op.id }}"/>
                                         <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
                                         <select name="id_turno"
-                                                class="roster-select h-7 rounded-md border border-slate-300 bg-white px-1 text-[11px] text-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
-                                                aria-label="Seleccionar turno para {{ op.nombre }} el {{ dia.fecha_str }}">
-                                            <option value="">— turno —</option>
+                                                class="roster-select-auto h-7 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-1 text-[11px] text-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                                                aria-label="Agregar turno a {{ op.nombre }} el {{ dia.fecha_str }}">
+                                            <option value="">{% if asigs %}+ turno{% else %}— turno —{% endif %}</option>
                                             {% for t in turnos_activos %}
+                                            {% if t.id not in ids_asignados %}
                                             <option value="{{ t.id }}">{{ t.nombre }}</option>
+                                            {% endif %}
                                             {% endfor %}
                                         </select>
-                                        <button type="submit"
-                                                class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-purple-600 text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-                                                title="Asignar turno"
-                                                aria-label="Asignar turno a {{ op.nombre }} el {{ dia.fecha_str }}">
-                                            <span class="material-icons text-sm leading-none" aria-hidden="true">check</span>
-                                        </button>
                                     </form>
                                     {% endif %}
-                                {% endif %}
+                                </div>
                             </td>
-                            {% endwith %}
                             {% endwith %}
                             {% endwith %}
                             {% endwith %}
@@ -224,7 +239,9 @@
                 <span class="mpr-turno-badge mpr-turno-badge--{{ t|turno_color }}">{{ t.nombre }}</span>
                 {% endfor %}
                 <span class="mx-0.5 hidden h-4 w-px bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true"></span>
-                <span class="flex items-center gap-1.5"><span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400">lock</span> Celda bloqueada (parte aprobada/física o CC confirmado)</span>
+                <span class="flex items-center gap-1.5"><span class="material-icons text-sm leading-none text-slate-500 dark:text-slate-400">lock</span> Turno bloqueado (parte aprobado/físico o CC confirmado)</span>
+                <span>Podés asignar varios turnos el mismo día; usá «+ turno» para agregar.</span>
+                <span>Al cambiar la línea con borrador, las cantidades ya cargadas no se mueven.</span>
                 <span>Los borradores se pueden reasignar y se migran; no se pueden quitar sin reasignarlos.</span>
                 <span class="flex items-center gap-1.5"><span class="inline-block h-3.5 w-5 rounded bg-purple-100 dark:bg-purple-900/40"></span> Hoy</span>
             </div>
@@ -375,7 +392,7 @@
                             para el <span class="font-semibold text-slate-900 dark:text-white" x-text="confirmFecha"></span>?
                         </p>
                         <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-                            El operario quedará sin turno ese día y no podrá cargar su parte.
+                            Solo se elimina ese turno. Si el operario tiene otros turnos el mismo día, se mantienen.
                         </p>
                         <div class="mt-5 flex flex-wrap justify-end gap-2">
                             <button type="button" @click="cerrarConfirm()" :disabled="confirmBusy"
@@ -409,11 +426,12 @@ window.planificacionTurnosState = function () {
         confirmFecha: '',
         confirmTurno: '',
 
-        avisar: function (texto) {
+        avisar: function (texto, tipo) {
+            var t = tipo || 'error';
             if (typeof window.mprShowAviso === 'function') {
-                window.mprShowAviso(texto, 'error');
+                window.mprShowAviso(texto, t);
             } else if (window.SynapMessages && typeof window.SynapMessages.show === 'function') {
-                window.SynapMessages.show(texto, 'error');
+                window.SynapMessages.show(texto, t);
             }
         },
 
@@ -441,12 +459,13 @@ window.planificacionTurnosState = function () {
 };
 
 (function () {
-    document.querySelectorAll('select.roster-select').forEach(function (sel) {
+    document.querySelectorAll('select.roster-select-auto').forEach(function (sel) {
         sel.addEventListener('change', function () {
-            if (this.value) {
-                var form = this.closest('form');
-                if (form) form.submit();
+            if (!this.value && this.name === 'id_turno') {
+                return;
             }
+            var form = this.closest('form');
+            if (form) form.submit();
         });
     });
 })();

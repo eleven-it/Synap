@@ -107,6 +107,7 @@ urlpatterns = [
     path("planificacion-turnos/", views.PlanificacionTurnosView.as_view(), name="planificacion_turnos"),
     path("planificacion-turnos/asignar/", views.AsignarTurnoRosterView.as_view(), name="roster_asignar"),
     path("planificacion-turnos/asignar-masivo/", views.AsignarTurnoRosterMasivoView.as_view(), name="roster_asignar_masivo"),
+    path("planificacion-turnos/linea/", views.SetLineaOverrideRosterView.as_view(), name="roster_linea_override"),
     path("planificacion-turnos/eliminar/", views.EliminarAsignacionRosterView.as_view(), name="roster_eliminar"),
     path("partes-consulta/", views.PartesConsultaView.as_view(), name="partes_consulta"),
     # Etapa 4: Parte de producción (ledger OPP-parte)

@@ -16,6 +16,51 @@ logger = logging.getLogger(__name__)
 PARES_POR_DOCENA = 12
 
 
+def _resolver_id_turno_carga(
+    turnos_dia: List[int],
+    id_turno_solicitado: Optional[int],
+) -> Optional[int]:
+    """Elige el turno activo para la carga móvil entre los asignados ese día."""
+    if not turnos_dia:
+        return None
+    tid = id_turno_solicitado
+    if tid is not None and tid in turnos_dia:
+        return tid
+    return turnos_dia[0]
+
+
+def _armar_turnos_dia_movil(
+    base_empresa: str,
+    id_operario: int,
+    fecha: date,
+    turnos_ids: List[int],
+    id_turno_activo: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Metadatos de turnos del día para selector móvil (línea efectiva y bloqueo por turno)."""
+    from mpr.repositories import maquina_linea as repo_ml
+    from mpr.repositories import turno_roster as repo_r
+    from mpr.services import _motivo_bloqueo_roster_celda
+    from mpr.services_operario import resolver_linea_operario
+
+    turnos: List[Dict[str, Any]] = []
+    for tid in turnos_ids:
+        turno = repo_r.obtener_turno_record(base_empresa, tid)
+        nombre = getattr(turno, "nombre", "") if turno else ""
+        id_linea = resolver_linea_operario(base_empresa, id_operario, fecha, tid)
+        linea = repo_ml.obtener_linea(base_empresa, id_linea) if id_linea else None
+        motivo = _motivo_bloqueo_roster_celda(base_empresa, fecha, id_operario, tid)
+        turnos.append({
+            "id": tid,
+            "nombre": nombre,
+            "id_linea": id_linea,
+            "linea_nombre": linea["nombre"] if linea else "",
+            "bloqueado": bool(motivo),
+            "motivo_bloqueo": motivo,
+            "activo": tid == id_turno_activo,
+        })
+    return turnos
+
+
 def _docenas_pares(cantidad_pares: Decimal) -> Tuple[int, int]:
     total = int(cantidad_pares or 0)
     return total // PARES_POR_DOCENA, total % PARES_POR_DOCENA
@@ -46,10 +91,25 @@ def construir_grilla_carga_movil(
         ctx["estado_borde"] = "sin_operario"
         return ctx
 
-    tid = id_turno or repo_r.turno_del_operario_dia(base, id_operario, hoy)
-    if not tid:
+    turnos_dia_ids = repo_r.turnos_del_operario_dia(base, id_operario, hoy)
+    ctx["turnos_dia"] = []
+    ctx["multi_turno"] = len(turnos_dia_ids) > 1
+    if not turnos_dia_ids:
         ctx["estado_borde"] = "sin_turno"
         return ctx
+
+    tid = _resolver_id_turno_carga(turnos_dia_ids, id_turno)
+    ctx["turnos_dia"] = _armar_turnos_dia_movil(
+        base, id_operario, hoy, turnos_dia_ids, tid
+    )
+    turno_activo = next((t for t in ctx["turnos_dia"] if t["id"] == tid), None)
+    if turno_activo and turno_activo.get("bloqueado"):
+        ctx["estado_borde"] = "turno_bloqueado"
+        ctx["id_turno"] = tid
+        ctx["turno_nombre"] = turno_activo.get("nombre") or ""
+        ctx["motivo_bloqueo"] = turno_activo.get("motivo_bloqueo") or ""
+        return ctx
+
     turno = repo_r.obtener_turno_record(base, tid)
     ctx["id_turno"] = tid
     ctx["turno_nombre"] = getattr(turno, "nombre", "") if turno else ""
@@ -134,9 +194,15 @@ def registrar_parte_movil(
     if not id_operario:
         return False, "No tenés un operario asociado. Contactá al supervisor.", None
     hoy = fecha or date.today()
-    tid = id_turno or repo_r.turno_del_operario_dia(base, id_operario, hoy)
+    turnos_dia = repo_r.turnos_del_operario_dia(base, id_operario, hoy)
+    tid = _resolver_id_turno_carga(turnos_dia, id_turno)
     if not tid:
         return False, "No tenés un turno asignado para hoy. Contactá al supervisor.", None
+    from mpr.services import _motivo_bloqueo_roster_celda
+
+    motivo_bloqueo = _motivo_bloqueo_roster_celda(base, hoy, id_operario, tid)
+    if motivo_bloqueo:
+        return False, motivo_bloqueo, None
 
     lineas: List[Dict[str, Any]] = []
     for cel in celdas or []:
