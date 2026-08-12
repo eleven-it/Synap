@@ -16941,6 +16941,35 @@ def listar_roster_semana(
         return {"operarios": [], "dias": [], "asignaciones": {}, "celdas_bloqueadas": {}}
 
 
+def _operario_tiene_excepcion_semana(
+    asignaciones_op: Dict[str, List[Dict[str, Any]]],
+) -> bool:
+    """True si el operario tiene override de línea o 2+ turnos algún día de la semana."""
+    for turnos in (asignaciones_op or {}).values():
+        if len(turnos) >= 2:
+            return True
+        for turno_item in turnos:
+            if turno_item.get("id_linea_override"):
+                return True
+    return False
+
+
+def filtrar_operarios_roster_excepciones(
+    operarios: List[Dict[str, Any]],
+    asignaciones: Dict[int, Dict[str, List[Dict[str, Any]]]],
+) -> List[Dict[str, Any]]:
+    """Operarios con al menos un día con override de línea o multi-turno en la semana."""
+    resultado: List[Dict[str, Any]] = []
+    for op in operarios or []:
+        op_id = op.get("id")
+        if op_id is None:
+            continue
+        op_asigs = asignaciones.get(op_id) or asignaciones.get(int(op_id)) or {}
+        if _operario_tiene_excepcion_semana(op_asigs):
+            resultado.append(op)
+    return resultado
+
+
 def _franja_horaria_turno(nombre_turno: str, hora_inicio: Optional[str]) -> Optional[str]:
     """
     Clasifica un turno en franja 'manana' / 'tarde' / 'noche' para la planilla CQ.
@@ -17328,7 +17357,30 @@ def set_linea_override_roster(
 
 
 def _resumen_asignacion_masiva_vacio() -> Dict[str, Any]:
-    return {"aplicados": 0, "omitidos_pasados": 0, "omitidos_bloqueados": 0, "errores": []}
+    return {
+        "aplicados": 0,
+        "omitidos_pasados": 0,
+        "omitidos_bloqueados": 0,
+        "omitidos_con_turno": 0,
+        "omitidos_plantilla": 0,
+        "errores": [],
+    }
+
+
+def _normalizar_dias_semana_roster(dias: Optional[List[Any]]) -> Optional[set[int]]:
+    """
+    Normaliza días de semana para plantilla de asignación masiva.
+    Convención Python: 0=lunes … 6=domingo.
+    None o lista vacía → None (aplicar todos los días del rango).
+    """
+    if not dias:
+        return None
+    result: set[int] = set()
+    for raw in dias:
+        n = to_int_or_none(raw)
+        if n is not None and 0 <= n <= 6:
+            result.add(n)
+    return result if result else None
 
 
 def _parse_fecha_roster_input(fecha_raw: Any) -> Tuple[Optional[date], Optional[str]]:
@@ -17358,15 +17410,34 @@ def _parse_fecha_roster_input(fecha_raw: Any) -> Tuple[Optional[date], Optional[
     return _parse_fecha_ddmmaaaa(s)
 
 
-def mensaje_flash_asignacion_masiva(resumen: Dict[str, Any]) -> str:
+def mensaje_flash_asignacion_masiva(
+    resumen: Dict[str, Any], modo: str = "agregar"
+) -> str:
     """Construye mensaje en español para flash messages de asignación masiva."""
     aplicados = int(resumen.get("aplicados") or 0)
     omitidos_bloqueados = int(resumen.get("omitidos_bloqueados") or 0)
+    omitidos_con_turno = int(resumen.get("omitidos_con_turno") or 0)
+    omitidos_plantilla = int(resumen.get("omitidos_plantilla") or 0)
     errores = resumen.get("errores") or []
-    partes = [f"Se asignaron {aplicados} día(s)."]
+    modo_norm = (modo or "agregar").strip().lower()
+    etiquetas_modo = {
+        "agregar": "agregar turno",
+        "solo_vacio": "solo días sin turno",
+        "reemplazar": "reemplazar día",
+    }
+    modo_etiqueta = etiquetas_modo.get(modo_norm, "agregar turno")
+    partes = [f"Asignación masiva ({modo_etiqueta}): se aplicaron {aplicados} día(s)."]
+    if omitidos_con_turno:
+        partes.append(
+            f" Se omitieron {omitidos_con_turno} día(s) que ya tenían turno asignado."
+        )
     if omitidos_bloqueados:
         partes.append(
             f" Se omitieron {omitidos_bloqueados} celda(s) con parte aprobado/físico o control de calidad."
+        )
+    if omitidos_plantilla:
+        partes.append(
+            f" Se omitieron {omitidos_plantilla} celda(s) por la plantilla de días seleccionada."
         )
     if errores:
         partes.append(f" {len(errores)} asignación(es) no se pudieron aplicar.")
@@ -17380,13 +17451,24 @@ def asignar_turno_roster_rango(
     fecha_desde: Any,
     fecha_hasta: Any,
     id_linea: Optional[int] = None,
+    modo: str = "agregar",
+    dias_semana: Optional[List[Any]] = None,
 ) -> Tuple[bool, Optional[str], Dict[str, Any]]:
     """
     Asigna un turno a varios operarios en un rango de fechas (upsert por celda).
     Omite celdas con parte aprobado/físico o control de calidad y migra las
     líneas borrador/pendiente de las reasignaciones aplicables.
+
+    ``modo``:
+    - ``agregar`` (default): upsert del turno; no toca otros turnos del día.
+    - ``solo_vacio``: omite días que ya tengan cualquier turno (``omitidos_con_turno``).
+    - ``reemplazar``: quita turnos no bloqueados del día y deja solo el turno objetivo.
     """
     from django.db import IntegrityError
+
+    modo_norm = (modo or "agregar").strip().lower()
+    if modo_norm not in ("agregar", "solo_vacio", "reemplazar"):
+        modo_norm = "agregar"
 
     resumen = _resumen_asignacion_masiva_vacio()
 
@@ -17441,11 +17523,57 @@ def asignar_turno_roster_rango(
     if not operarios_validos:
         return False, "Operario no encontrado.", resumen
 
+    dias_set = _normalizar_dias_semana_roster(dias_semana)
+
     try:
-        from mpr.repositories.turno_roster import roster_turno_asignado, upsert_roster
+        from mpr.repositories.turno_roster import (
+            eliminar_roster_turno,
+            roster_turno_asignado,
+            turnos_del_operario_dia,
+            upsert_roster,
+        )
 
         for d in _iter_dias_rango(desde, hasta):
             for oid in operarios_validos:
+                if dias_set is not None and d.weekday() not in dias_set:
+                    resumen["omitidos_plantilla"] += 1
+                    continue
+
+                turnos_dia: List[int] = []
+                if modo_norm in ("solo_vacio", "reemplazar"):
+                    turnos_dia = turnos_del_operario_dia(base_empresa, oid, d)
+
+                if modo_norm == "solo_vacio" and turnos_dia:
+                    resumen["omitidos_con_turno"] += 1
+                    continue
+
+                if modo_norm == "reemplazar":
+                    for tid in turnos_dia:
+                        if tid == id_turno_norm:
+                            continue
+                        motivo_quitar = _motivo_bloqueo_cambio_roster(
+                            base_empresa, d, oid, tid, None
+                        )
+                        if motivo_quitar:
+                            continue
+                        try:
+                            eliminar_roster_turno(base_empresa, d, oid, tid)
+                        except Exception as e:
+                            logger.error(
+                                "Error al quitar turno %s en reemplazo masivo roster %s: %s",
+                                tid,
+                                base_empresa,
+                                e,
+                                exc_info=True,
+                            )
+                            resumen["errores"].append(
+                                {
+                                    "operario": oid,
+                                    "fecha": _fmt_fecha_ddmmaaaa(d),
+                                    "msg": "Error al quitar turno previo.",
+                                }
+                            )
+
                 ya_asignado = roster_turno_asignado(
                     base_empresa, d, oid, id_turno_norm
                 )
@@ -17500,6 +17628,7 @@ def asignar_turno_roster_rango(
 
     aplicados = resumen["aplicados"]
     omitidos_bloqueados = int(resumen.get("omitidos_bloqueados") or 0)
+    omitidos_con_turno = int(resumen.get("omitidos_con_turno") or 0)
     errores = resumen["errores"]
 
     if aplicados == 0:
@@ -17507,6 +17636,12 @@ def asignar_turno_roster_rango(
             return (
                 False,
                 "No se aplicó ninguna asignación: todas las celdas tienen parte aprobado/físico o control de calidad.",
+                resumen,
+            )
+        if omitidos_con_turno > 0 and not omitidos_bloqueados and not errores:
+            return (
+                False,
+                "No se aplicó ninguna asignación: todos los días seleccionados ya tenían turno asignado.",
                 resumen,
             )
         if errores:
