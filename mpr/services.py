@@ -20663,3 +20663,12 @@ def transferir_stock_lote(
             resultado["fallidas"] += 1
             resultado["errores"].append((id_art, str(e)))
     return resultado
+
+
+# Kardex artículo (movimiento_stock OPP/OPA) — módulo dedicado por tamaño de services.py
+from mpr.services_kardex_articulo import (  # noqa: E402
+    _calcular_saldo_corrido_movimientos,
+    _clasificar_movimiento_kardex,
+    _consultar_movimientos_kardex_articulo,
+    construir_kardex_articulo,
+)

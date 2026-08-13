@@ -4503,6 +4503,50 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
             data = reporte_mpr_conciliacion_envios_produccion(base_empresa, fd_iso, fh_iso)
             kpis = data.get("kpis") or {}
             filas = data.get("filas") or []
+        elif grupo == "trazabilidad" and reporte == "kardex_articulo":
+            from core.utils.administranet_types import to_int_or_none
+            from mpr.services import construir_kardex_articulo
+
+            id_art = to_int_or_none(self.request.GET.get("id_articulo"))
+            id_dep = to_int_or_none(self.request.GET.get("id_deposito"))
+            try:
+                context["depositos"] = listar_depositos_config(base_empresa)
+            except MprSchemaError as e:
+                _log_mpr_schema_error(e)
+                context["depositos"] = []
+
+            meta = {
+                "id_articulo": id_art,
+                "id_deposito": id_dep,
+                "advertencias": [],
+            }
+            if id_art is not None:
+                data = construir_kardex_articulo(
+                    base_empresa,
+                    id_art,
+                    id_deposito=id_dep,
+                    fecha_desde=fd_iso,
+                    fecha_hasta=fh_iso,
+                )
+                meta["articulo"] = data.get("articulo")
+                meta["bom"] = data.get("bom")
+                meta["deposito"] = data.get("deposito")
+                meta["advertencias"] = data.get("advertencias") or []
+                if data.get("articulo"):
+                    kpis = data.get("kpis") or {}
+                    filas = data.get("movimientos") or []
+                    opp_rows = [
+                        m for m in filas if int(m.get("entrada") or 0) > 0
+                    ]
+                    opa_rows = [
+                        m for m in filas if int(m.get("salida") or 0) > 0
+                    ]
+                    context["renglones_por_movimiento"] = _build_renglones_modal_map(
+                        base_empresa, opp_rows, opa_rows
+                    )
+                else:
+                    filas = []
+                    kpis = {}
 
         from mpr.reportes_presentacion import (
             aplicar_presentacion_reporte,
@@ -5738,6 +5782,26 @@ class MaquinasCargaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, Templat
             base_empresa, fecha, id_lineas_maquinas
         )
         return context
+
+
+class ReportesArticuloBuscarAPIView(MprLoginRequiredMixin, MprReportesVerMixin, View):
+    """API JSON: búsqueda predictiva de artículos para reportes MPR (kardex)."""
+
+    def get(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import buscar_articulos
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"articulos": []})
+        q = (request.GET.get("q") or "").strip()
+        if len(q) < 1:
+            return JsonResponse({"articulos": []})
+        try:
+            limit = int(request.GET.get("limit") or 25)
+        except (ValueError, TypeError):
+            limit = 25
+        articulos = buscar_articulos(base_empresa, q, limit=limit)
+        return JsonResponse({"articulos": articulos})
 
 
 class MaquinaArticuloBuscarAPIView(MprLoginRequiredMixin, MprPermisoMixin, View):

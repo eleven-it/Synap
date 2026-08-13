@@ -55,6 +55,7 @@ Las pantillas siguientes **implementan** los patrones de §2.2 y pueden usarse c
 | Ruta | Plantilla | Uso como referencia |
 |------|-----------|---------------------|
 | `/mpr/parte-produccion/` | `mpr/templates/mpr/parte_produccion.html` | Planilla analista con filtros MPR, columnas sticky, turnos M/T/N, docenas/pares, modales/toast Synap (change `mpr-parte-produccion-grilla-planilla-qc`). Ver `docs/mpr/PARTE_PRODUCCION.md` § planilla QC. |
+| `/mpr/reportes/?grupo=trazabilidad&reporte=kardex_articulo` | `mpr/templates/mpr/reportes/partials/kardex_articulo.html` | Hub reportes MPR: filtros artículo (autocomplete) + depósito + período, panel BOM lateral, KPI strip (`saldo_final`, `max_packs`), tabla kardex sticky con saldo corrido, modal comprobante vía `_modal_comprobante_movimiento.html` (sin `alert`). Ver `docs/mpr/KARDEX_ARTICULO.md`. |
 
 Al copiar patrones desde estas pantallas, MUST mantener `base_mpr.html`, `mpr-contenedor-pagina` y la política de modales sin diálogos nativos (`.cursor/rules/modales-sin-dialogos-nativos.mdc`).
 

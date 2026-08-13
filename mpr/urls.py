@@ -53,6 +53,11 @@ urlpatterns = [
         name="api_armado_surtido_validar_item_lote",
     ),
     path("reportes/", views.ReportesMPRView.as_view(), name="reportes"),
+    path(
+        "reportes/api/articulos/buscar/",
+        views.ReportesArticuloBuscarAPIView.as_view(),
+        name="reportes_articulo_buscar_api",
+    ),
     path("config/depositos/", views.ConfigDepositosView.as_view(), name="config_depositos"),
     path("operarios/", views.OperariosListView.as_view(), name="operarios_list"),
     path("operarios/nuevo/", views.OperarioCreateView.as_view(), name="operario_create"),

@@ -110,12 +110,14 @@ function mprReportesHub() {
             const grupo = form.querySelector('[name="grupo"]');
             const reporte = form.querySelector('[name="reporte"]');
             const idArt = form.querySelector('[name="id_articulo"]');
+            const idDep = form.querySelector('[name="id_deposito"]');
             if (grupo && grupo.value) params.set('grupo', grupo.value);
             if (reporte && reporte.value) params.set('reporte', reporte.value);
             if (this.desde) params.set('desde', this.desde);
             if (this.hasta) params.set('hasta', this.hasta);
             if (this.presentacion) params.set('presentacion', this.presentacion);
             if (idArt && idArt.value) params.set('id_articulo', idArt.value);
+            if (idDep && idDep.value) params.set('id_deposito', idDep.value);
             const opActual = new URLSearchParams(window.location.search).get('op');
             if (opActual) params.set('op', opActual);
             window.location.search = '?' + params.toString();

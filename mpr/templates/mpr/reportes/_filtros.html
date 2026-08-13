@@ -4,6 +4,7 @@
     <input type="hidden" name="reporte" value="{{ reporte }}">
     <input type="hidden" name="presentacion" x-model="presentacion">
     {% if meta.id_articulo %}<input type="hidden" name="id_articulo" value="{{ meta.id_articulo }}">{% endif %}
+    {% if meta.id_deposito %}<input type="hidden" name="id_deposito" value="{{ meta.id_deposito }}">{% endif %}
 
     <div class="flex flex-col gap-0.5">
         <label for="desde" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Desde</label>
@@ -36,7 +37,7 @@
         Actualizar
     </button>
 
-    <a href="?grupo={{ grupo }}&reporte={{ reporte }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}&format=csv"
+    <a href="?grupo={{ grupo }}&reporte={{ reporte }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}{% if meta.id_deposito %}&id_deposito={{ meta.id_deposito }}{% endif %}&format=csv"
        aria-label="Exportar CSV"
        class="group relative inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/60 px-2.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
         <span class="material-icons text-base" aria-hidden="true">download</span>
