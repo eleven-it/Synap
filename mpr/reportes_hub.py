@@ -33,6 +33,7 @@ GRUPOS_REPORTES: Dict[str, Dict[str, Any]] = {
             "timeline": "Línea de tiempo",
             "movimientos": "Movimientos MPR",
             "conciliacion": "Conciliación envíos↔producción",
+            "kardex_articulo": "Kardex artículo",
         },
     },
 }
@@ -63,6 +64,7 @@ PARTIALS: Dict[Tuple[str, str], str] = {
     ("trazabilidad", "timeline"): "mpr/reportes/partials/trazabilidad_timeline.html",
     ("trazabilidad", "movimientos"): "mpr/reportes/partials/movimientos.html",
     ("trazabilidad", "conciliacion"): "mpr/reportes/partials/conciliacion.html",
+    ("trazabilidad", "kardex_articulo"): "mpr/reportes/partials/kardex_articulo.html",
 }
 
 CSV_COLUMNAS: Dict[Tuple[str, str], List[Tuple[str, str]]] = {
@@ -98,6 +100,16 @@ CSV_COLUMNAS: Dict[Tuple[str, str], List[Tuple[str, str]]] = {
         ("enviado", "Enviado"),
         ("producido", "Producido"),
         ("no_respaldado", "No respaldado"),
+    ],
+    ("trazabilidad", "kardex_articulo"): [
+        ("fecha_display", "Fecha"),
+        ("tipo_mov", "Tipo"),
+        ("nro_comprobante", "Comprobante"),
+        ("detalle", "Detalle"),
+        ("entrada", "Entrada"),
+        ("salida", "Salida"),
+        ("saldo_corrido", "Saldo corrido"),
+        ("operario", "Operario"),
     ],
     ("produccion", "cadena"): [
         ("codigo_articulo", "Código"),
