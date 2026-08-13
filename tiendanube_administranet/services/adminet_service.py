@@ -1167,18 +1167,12 @@ class AdministraNETService:
         ``estado_pago_ecom='Si'`` y, si corresponde, REC a cuenta (adelanto) con datos de pago TN.
         """
         import json
+        from datetime import datetime, timedelta
         from decimal import Decimal
-
-        from core.utils.administranet_types import to_decimal_or_none
 
         from .adelanto_recibo_service import (
             allocate_codigo_movimiento,
             registrar_adelanto_tiendanube,
-        )
-        from .order_mysql_write import (
-            normalize_comp_ped_params,
-            normalize_stockp_line_params,
-            resolve_fecha_entrega,
         )
         from .order_payment import parse_tiendanube_order_payment, pago_confirmado
         from ..utils.number_to_words import number_to_words
@@ -1206,10 +1200,10 @@ class AdministraNETService:
             shipping_method = order_data.get('shipping', {})
             products = order_data.get('products', [])
 
-            subtotal = to_decimal_or_none(order_data.get('subtotal')) or Decimal('0')
-            total = to_decimal_or_none(order_data.get('total')) or Decimal('0')
-            discount = to_decimal_or_none(order_data.get('discount')) or Decimal('0')
-            shipping_cost = to_decimal_or_none(order_data.get('shipping_cost')) or Decimal('0')
+            subtotal = Decimal(str(order_data.get('subtotal', 0)))
+            total = Decimal(str(order_data.get('total', 0)))
+            discount = Decimal(str(order_data.get('discount', 0)))
+            shipping_cost = Decimal(str(order_data.get('shipping_cost', 0)))
 
             if shipping_method.get('type') == 'pickup':
                 forma_entrega = 'Retira cliente mostrador'
@@ -1236,7 +1230,7 @@ class AdministraNETService:
                     'method': shipping_method.get('name', ''),
                     'tracking_number': shipping_method.get('tracking_number', ''),
                     'tracking_url': shipping_method.get('tracking_url', ''),
-                    'cost': float(shipping_cost) if shipping_cost is not None else 0.0,
+                    'cost': float(shipping_cost),
                 },
                 'customer': {
                     'name': customer.get('name', ''),
@@ -1247,10 +1241,17 @@ class AdministraNETService:
                 'payment': payment_info.to_info_ped_eco_fragment(),
             }, ensure_ascii=False)
 
-            fecha_entrega_iso = resolve_fecha_entrega(shipping_method)
+            fecha_entrega = datetime.now() + timedelta(days=7)
+            if shipping_method.get('estimated_delivery_date'):
+                try:
+                    fecha_entrega = datetime.fromisoformat(
+                        shipping_method['estimated_delivery_date'].replace('Z', '+00:00')
+                    )
+                except (TypeError, ValueError):
+                    pass
 
             importe_letras = number_to_words(float(total))
-            cliente_id = order_data.get('adminet_customer_id') or 1
+            cliente_id = int(order_data.get('adminet_customer_id') or 1)
 
             payment_method = payment_info.method_label.lower()
             payment_status = payment_info.payment_status
@@ -1303,48 +1304,32 @@ class AdministraNETService:
                         %s, %s, %s
                     )
                     """
-                    params = normalize_comp_ped_params(
-                        nro_comprobante=nro_comprobante,
-                        codigo_movimiento=codigo_movimiento,
-                        estado_pedido=estado_pedido,
-                        cliente_id=cliente_id,
-                        total=total,
-                        importe_letras=importe_letras,
-                        subtotal=subtotal,
-                        subtotal_sin_iva=subtotal_sin_iva,
-                        iva_21=iva_21,
-                        discount=discount,
-                        subtotal_menos_desc=subtotal - discount,
-                        id_condventa=id_condventa,
-                        cond_venta=cond_venta,
-                        cod_viajante=cod_viajante,
-                        user_id=user_id,
-                        sucursal_id=sucursal_id,
-                        deposito_id=deposito_id,
-                        fecha_entrega=fecha_entrega_iso,
-                        forma_entrega=forma_entrega,
-                        carrier=shipping_method.get('carrier', ''),
-                        tiendanube_order_id=order_data.get('id', ''),
-                        ped_eco_number=order_data.get('number', 0),
-                        info_ped_eco=info_ped_eco,
-                        estado_pago_ecom=estado_pago_ecom,
-                        tipo_pedido=TIPO_PEDIDO_ECOM_TN,
-                        punto_venta_id=punto_venta_id,
+                    params = (
+                        nro_comprobante, codigo_movimiento,
+                        estado_pedido, cliente_id, float(total), importe_letras, float(subtotal),
+                        float(subtotal_sin_iva), Decimal(0), float(iva_21), Decimal(0),
+                        Decimal(21.0), Decimal(0), Decimal(0),
+                        float(discount), float(discount), Decimal(0), Decimal(0),
+                        float(subtotal - discount),
+                        id_condventa, cond_venta, cod_viajante,
+                        user_id, sucursal_id, deposito_id,
+                        fecha_entrega.strftime('%Y-%m-%d'), forma_entrega,
+                        shipping_method.get('carrier', ''),
+                        str(order_data.get('id', '')), order_data.get('number', 0),
+                        info_ped_eco, estado_pago_ecom,
+                        fecha_entrega.strftime('%Y-%m-%d'), TIPO_PEDIDO_ECOM_TN, punto_venta_id,
                     )
                     cursor.execute(insert_comp_ped, params)
 
                     for index, product in enumerate(products, 1):
-                        line_params = normalize_stockp_line_params(
-                            product=product,
-                            codigo_movimiento=codigo_movimiento,
-                            deposito_id=deposito_id,
-                            sucursal_id=sucursal_id,
-                            cod_viajante=cod_viajante,
-                            nro_comprobante=nro_comprobante,
-                            orden=index,
-                        )
-                        id_art = line_params[20]
-                        cantidad = line_params[2]
+                        cantidad = Decimal(str(product.get('quantity', 1)))
+                        precio_unitario = Decimal(str(product.get('price', 0)))
+                        precio_total = cantidad * precio_unitario
+                        iva_producto = precio_unitario * Decimal('0.21') / Decimal('1.21')
+                        precio_sin_iva = precio_unitario - iva_producto
+                        precio_total_sin_iva = precio_total - (iva_producto * cantidad)
+                        id_art = int(product.get('adminet_product_id') or 0)
+                        sku = product.get('sku', '')
 
                         cursor.execute(
                             """
@@ -1368,17 +1353,29 @@ class AdministraNETService:
                                 %s, %s, %s
                             )
                             """,
-                            line_params,
+                            (
+                                sku, product.get('name', ''), float(cantidad),
+                                float(cantidad), float(cantidad),
+                                float(precio_unitario), float(precio_sin_iva), float(precio_sin_iva),
+                                float(precio_unitario), float(iva_producto),
+                                Decimal(21.0), Decimal(0), Decimal(0),
+                                float(precio_total), float(precio_total_sin_iva),
+                                float(precio_total_sin_iva), float(precio_total),
+                                float(iva_producto * cantidad),
+                                codigo_movimiento, deposito_id, id_art,
+                                float(cantidad), float(cantidad), index, sucursal_id,
+                                cod_viajante, nro_comprobante, 'PED',
+                            ),
                         )
 
-                        if id_art and id_art > 0:
+                        if id_art > 0:
                             cursor.execute(
                                 """
                                 UPDATE stock_deposito
                                 SET saldo_pedido_cliente = saldo_pedido_cliente + %s
                                 WHERE id_articulo = %s AND id_deposito = %s
                                 """,
-                                (cantidad, id_art, deposito_id),
+                                (float(cantidad), id_art, deposito_id),
                             )
                             affected_articles.append(id_art)
 

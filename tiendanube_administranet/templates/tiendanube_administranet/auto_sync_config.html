@@ -33,10 +33,7 @@
                 {% trans "Automatic Synchronization" %}
             </h1>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {% trans "Intervalos y preferencias de sincronización automática." %}
-                {% if not celery_activo %}
-                {% trans "El drenaje corre con el cron" %} <code class="text-xs">tiendanube_drain_inbox</code> {% trans "hasta que ops active Celery." %}
-                {% endif %}
+                {% trans "Configure automatic synchronization intervals and preferences" %}
             </p>
         </div>
         <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
@@ -247,17 +244,60 @@
     </div>
 </div>
 
-<!-- Sin toast custom: SynapMessages global vía base_app -->
-{% include "tiendanube_administranet/includes/synap_confirm_modal.html" %}
-{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    function showToast(message, type) {
-        if (window.TnSynapMessages) {
-            TnSynapMessages.show(message, type || 'info');
+    // Toast utility
+    function showToast(message, type = 'info', duration = 5000) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        
+        let bgColor, borderColor, textColor, iconColor, icon;
+        switch(type) {
+            case 'success':
+                bgColor = 'bg-green-50 dark:bg-green-900/20';
+                borderColor = 'border-green-200 dark:border-green-700';
+                textColor = 'text-green-800 dark:text-green-200';
+                iconColor = 'text-green-600 dark:text-green-400';
+                icon = 'check_circle';
+                break;
+            case 'error':
+                bgColor = 'bg-red-50 dark:bg-red-900/20';
+                borderColor = 'border-red-200 dark:border-red-700';
+                textColor = 'text-red-800 dark:text-red-200';
+                iconColor = 'text-red-600 dark:text-red-400';
+                icon = 'error';
+                break;
+            default:
+                bgColor = 'bg-blue-50 dark:bg-blue-900/20';
+                borderColor = 'border-blue-200 dark:border-blue-700';
+                textColor = 'text-blue-800 dark:text-blue-200';
+                iconColor = 'text-blue-600 dark:text-blue-400';
+                icon = 'info';
         }
+        
+        toast.className = `${bgColor} ${borderColor} ${textColor} border rounded-lg p-4 shadow-lg transform transition-all duration-300 translate-x-full`;
+        toast.innerHTML = `
+            <div class="flex items-start">
+                <span class="material-icons ${iconColor} mr-3 mt-0.5">${icon}</span>
+                <div class="flex-1">
+                    <p class="text-sm ${textColor}">${message}</p>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <span class="material-icons text-sm">close</span>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(toast);
+        setTimeout(() => toast.classList.remove('translate-x-full'), 100);
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
     }
 
     // Toggle master switch
@@ -329,37 +369,39 @@
     // Initial calculation
     updateNextSyncTime();
 
-    // Test sync button — modal Synap
+    // Test sync button
     document.getElementById('test-sync-btn').addEventListener('click', function() {
-        var btn = this;
-        TnSynapConfirm.show({
-            title: '{% trans "Probar sincronización" %}',
-            message: '{% trans "¿Ejecutar una sincronización de prueba ahora?" %}',
-            confirmLabel: '{% trans "Ejecutar" %}',
-            onConfirm: function () {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="material-icons text-sm mr-2 animate-spin">refresh</span>{% trans "Probando..." %}';
-                showToast('{% trans "Iniciando sincronización de prueba..." %}', 'info');
-                fetch('{% url "tiendanube_administranet:trigger_sync_ajax" %}', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ sync_type: 'full', direction: 'tiendanube' })
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    showToast(data.message, data.success ? 'success' : 'error');
-                })
-                .catch(function() {
-                    showToast('{% trans "Error en sync de prueba" %}', 'error');
-                })
-                .finally(function() {
-                    btn.disabled = false;
-                    btn.innerHTML = '<span class="material-icons text-sm mr-2">play_arrow</span>{% trans "Test Sync Now" %}';
-                });
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons text-sm mr-2 animate-spin">refresh</span>{% trans "Testing..." %}';
+        
+        showToast('{% trans "Starting test synchronization..." %}', 'info');
+        
+        fetch('{% url "tiendanube_administranet:trigger_sync_ajax" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                sync_type: 'full',
+                direction: 'tiendanube'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success', 8000);
+            } else {
+                showToast(data.message, 'error', 8000);
             }
+        })
+        .catch(error => {
+            showToast('{% trans "Error during test sync" %}', 'error');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons text-sm mr-2">play_arrow</span>{% trans "Test Sync Now" %}';
         });
     });
 

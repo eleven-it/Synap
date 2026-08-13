@@ -17,8 +17,6 @@ def push_stock_for_article_ids(
     sync_service: 'TiendanubeAdministraNETSyncService',
     article_ids: Iterable[int],
     deposito_id: Optional[int],
-    *,
-    enqueue_on_failure: bool = True,
 ) -> Dict[str, Any]:
     """
     Publica stock disponible (saldo − reservas) de artículos afectados en TN.
@@ -79,22 +77,10 @@ def push_stock_for_article_ids(
             pushed += 1
     else:
         logger.error('Push stock TN falló: %s', result.get('message'))
-        status_code = result.get('status_code')
-        from .sync_errors import should_retry_webhook_failure
-        from .outbox_service import enqueue_stock_push_outbox
-
-        if should_retry_webhook_failure(http_status=status_code) and enqueue_on_failure:
-            enqueue_stock_push_outbox(
-                tiendanube_config=sync_service.tiendanube_config,
-                adminet_config=sync_service.adminet_config,
-                article_ids=list(article_ids),
-                deposito_id=dep,
-            )
 
     return {
         'success': bool(result.get('success')),
         'message': result.get('message', ''),
         'pushed': pushed,
         'errors': 0 if result.get('success') else len(pending),
-        'status_code': result.get('status_code'),
     }

@@ -262,19 +262,11 @@
 
 <script>
 function retrySync() {
-    if (!window.TnSynapConfirm) return;
-    TnSynapConfirm.show({
-        title: 'Reintentar sincronización',
-        message: '¿Está seguro de que desea reintentar esta sincronización?',
-        confirmLabel: 'Reintentar',
-        onConfirm: function () {
-            if (window.TnSynapMessages) {
-                TnSynapMessages.show('La funcionalidad de reintento se implementará en la próxima versión.', 'info');
-            }
-        }
-    });
+    if (confirm('{% trans "Are you sure you want to retry this synchronization?" %}')) {
+        // Here you would typically make an AJAX call to retry the sync
+        // For now, we'll just show a message
+        alert('{% trans "Retry functionality will be implemented in the next version." %}');
+    }
 }
 </script>
-{% include "tiendanube_administranet/includes/synap_confirm_modal.html" %}
-{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
 {% endblock %} 

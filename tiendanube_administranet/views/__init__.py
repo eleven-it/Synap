@@ -1180,19 +1180,6 @@ class StatusView(TiendanubeAdministranetLoginMixin, PermissionRequiredMixin, Tem
             context['mysql_pool_host'] = ''
             context['mysql_pool_port'] = ''
 
-        # Checklist de readiness (first-run / reconexión)
-        tn = context.get('tiendanube_config')
-        adminet = context.get('adminet_config')
-        context['readiness'] = {
-            'token': bool(tn and tn.access_token),
-            'deposito': bool(adminet and adminet.deposito_tiendanube_id),
-            'punto_venta': bool(adminet and adminet.punto_venta_tiendanube_id),
-            'hmac': bool(tn and tn.webhook_secret),
-            'mapeos_productos': ProductMapping.objects.exists(),
-        }
-        context['readiness_ready'] = all(context['readiness'].values())
-        context['celery_activo'] = False
-
         return context
 
 
@@ -1202,27 +1189,23 @@ class AutoSyncConfigView(TiendanubeAdministranetLoginMixin, PermissionRequiredMi
     """
     template_name = 'tiendanube_administranet/auto_sync_config.html'
     permission_required = 'tiendanube_administranet.change_tiendanubeconfig'
-
-    def dispatch(self, request, *args, **kwargs):
-        config = TiendanubeConfig.objects.filter(is_active=True).first()
-        if not config:
-            messages.info(
-                request,
-                _(
-                    'Configure una tienda Tienda Nube antes de ajustar '
-                    'la sincronización automática.'
-                ),
-            )
-            return redirect('tiendanube_administranet:tiendanube_config_wizard')
-        return super().dispatch(request, *args, **kwargs)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Obtener configuración activa (ya validada en dispatch)
+        # Obtener configuración activa
         config = TiendanubeConfig.objects.filter(is_active=True).first()
+        if not config:
+            # Crear configuración por defecto si no existe
+            config = TiendanubeConfig.objects.create(
+                name="Default Configuration",
+                store_id="default",
+                access_token="",
+                auto_sync=False,
+                sync_interval=30
+            )
+        
         context['config'] = config
-        context['celery_activo'] = False
         
         # Opciones de intervalo
         context['interval_choices'] = [
@@ -1405,41 +1388,6 @@ def test_adminet_connection_ajax(request):
             'success': False,
             'message': str(e)
         })
-
-
-@login_required
-@permission_required('tiendanube_administranet.change_tiendanubeconfig')
-def reconnect_catch_up_ajax(request):
-    """
-    Encola catch-up GET orders tras reconexión (outbox → drain).
-    """
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': _('Método no permitido')})
-
-    tn_config = TiendanubeConfig.objects.filter(is_active=True).first()
-    adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
-    if not tn_config or not adminet_config:
-        return JsonResponse({
-            'success': False,
-            'message': _(
-                'Configure tienda Tienda Nube y AdministraNET antes de reconectar.'
-            ),
-        })
-
-    from ..services.outbox_service import enqueue_catch_up_orders_outbox
-
-    event = enqueue_catch_up_orders_outbox(
-        tiendanube_config=tn_config,
-        adminet_config=adminet_config,
-    )
-    return JsonResponse({
-        'success': True,
-        'message': _(
-            'Catch-up de pedidos encolado. El drenaje corre con '
-            '`tiendanube_drain_inbox` hasta que ops active Celery.'
-        ),
-        'event_id': event.id,
-    })
 
 
 @login_required

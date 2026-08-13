@@ -331,17 +331,12 @@
 
 <script>
 function syncCustomer(customerId) {
-    if (!window.TnSynapConfirm) return;
-    TnSynapConfirm.show({
-        title: 'Sincronizar cliente',
-        message: '¿Está seguro de que desea sincronizar este cliente?',
-        confirmLabel: 'Sincronizar',
-        onConfirm: function () {
-            console.log('Syncing customer:', customerId);
-        }
-    });
+    if (!confirm('{% trans "Are you sure you want to sync this customer?" %}')) {
+        return;
+    }
+    
+    // Implement sync functionality
+    console.log('Syncing customer:', customerId);
 }
 </script>
-{% include "tiendanube_administranet/includes/synap_confirm_modal.html" %}
-{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
 {% endblock %} 

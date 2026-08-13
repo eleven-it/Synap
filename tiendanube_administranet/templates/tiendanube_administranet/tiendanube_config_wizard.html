@@ -215,36 +215,27 @@
         </form>
         {% endif %}
         {% elif step == 5 %}
-        <form method="post" class="space-y-6 animate-fadeIn text-left">
+        <form method="post" class="space-y-6 animate-fadeIn">
             {% csrf_token %}
             <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Preferencias de sincronización" %}</label>
-                <div class="flex items-center mb-3">
-                    <input type="checkbox" id="auto_sync" name="auto_sync" class="rounded border-gray-300 text-orange-600 focus:ring-orange-500" {% if auto_sync %}checked{% endif %}>
-                    <label for="auto_sync" class="ml-2 text-gray-700 dark:text-gray-300">{% trans "Sync automático (programado)" %}</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Synchronization Preferences" %}</label>
+                <div class="flex items-center mb-2 animate-slideUp">
+                    <input type="checkbox" id="auto_sync" name="auto_sync" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500" {% if auto_sync %}checked{% endif %}>
+                    <label for="auto_sync" class="ml-2 text-gray-700 dark:text-gray-300">{% trans "Enable automatic synchronization" %}</label>
                 </div>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                    {% trans "El drenaje periódico corre con el cron" %} <code>tiendanube_drain_inbox</code>
-                    {% trans "hasta que ops active Celery/Beat." %}
-                </p>
-                <div class="mb-4">
-                    <label for="sync_interval" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{% trans "Intervalo (minutos)" %}</label>
-                    <input type="number" id="sync_interval" name="sync_interval" min="5" max="1440" class="w-32 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value="{{ sync_interval|default:30 }}">
+                <div class="mb-2 animate-slideUp">
+                    <label for="sync_interval" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{% trans "Sync Interval (minutes)" %}</label>
+                    <input type="number" id="sync_interval" name="sync_interval" min="5" max="1440" class="w-32 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500" value="{{ sync_interval|default:30 }}">
                 </div>
-                <div class="flex flex-wrap gap-4 mb-4">
-                    <label class="flex items-center"><input type="checkbox" name="sync_products" class="rounded border-gray-300 text-orange-600 mr-2" {% if sync_products %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Productos" %}</span></label>
-                    <label class="flex items-center"><input type="checkbox" name="sync_stock" class="rounded border-gray-300 text-orange-600 mr-2" {% if sync_stock %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Stock" %}</span></label>
-                </div>
-                <div>
-                    <label for="webhook_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Secreto HMAC (webhooks)" %} *</label>
-                    <input type="password" id="webhook_secret" name="webhook_secret" required autocomplete="off" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value="{{ webhook_secret|default:'' }}">
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Obligatorio para validar webhooks en producción." %}</p>
+                <div class="flex flex-wrap gap-4 mt-4">
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_products" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500 mr-2" {% if sync_products %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Sync Products" %}</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_stock" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500 mr-2" {% if sync_stock %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Sync Stock" %}</span></label>
                 </div>
             </div>
-            <div class="mt-8 flex justify-center">
-                <button type="submit" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700">
+            <div class="mt-8 flex justify-center animate-fadeIn">
+                <button type="submit" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition hover:scale-105 hover:shadow-lg">
                     <span class="material-icons text-sm mr-2">check</span>
-                    {% trans "Continuar" %}
+                    {% trans "Finish" %}
                 </button>
             </div>
         </form>
@@ -267,11 +258,10 @@
                 <div><b>{% trans "Store ID:" %}</b> {{ summary.user_id }}</div>
                 <div><b>{% trans "Access Token:" %}</b> <span class="break-all">{{ summary.access_token }}</span></div>
                 <div><b>{% trans "Scopes:" %}</b> {{ summary.scopes|join:', ' }}</div>
-                <div><b>{% trans "Sync automático:" %}</b> {{ summary.auto_sync|yesno:"Sí,No" }}</div>
-                <div><b>{% trans "Intervalo:" %}</b> {{ summary.sync_interval }} {% trans "min" %}</div>
-                <div><b>{% trans "Productos:" %}</b> {{ summary.sync_products|yesno:"Sí,No" }}</div>
-                <div><b>{% trans "Stock:" %}</b> {{ summary.sync_stock|yesno:"Sí,No" }}</div>
-                <div><b>{% trans "HMAC:" %}</b> {{ summary.webhook_secret }}</div>
+                <div><b>{% trans "Auto Sync:" %}</b> {{ summary.auto_sync|yesno:"Yes,No" }}</div>
+                <div><b>{% trans "Sync Interval:" %}</b> {{ summary.sync_interval }} {% trans "min" %}</div>
+                <div><b>{% trans "Sync Products:" %}</b> {{ summary.sync_products|yesno:"Yes,No" }}</div>
+                <div><b>{% trans "Sync Stock:" %}</b> {{ summary.sync_stock|yesno:"Yes,No" }}</div>
             </div>
         </div>
         {% if wizard_error %}

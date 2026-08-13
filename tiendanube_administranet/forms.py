@@ -6,7 +6,6 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 from django.conf import settings
-import os
 
 from .services.tiendanube_service import NUVEMSHOP_API_VERSION
 from .models import (
@@ -26,9 +25,9 @@ class TiendanubeConfigForm(forms.ModelForm):
     class Meta:
         model = TiendanubeConfig
         fields = [
-            'name', 'store_id', 'access_token', 'is_active',
-            'auto_sync', 'sync_interval', 'sync_products', 'sync_customers',
-            'sync_orders', 'sync_stock', 'webhook_secret',
+            'name', 'store_id', 'access_token', 'api_url', 'is_active',
+            'auto_sync', 'sync_interval', 'sync_products', 'sync_customers', 
+            'sync_orders', 'sync_stock', 'webhook_secret'
         ]
         widgets = {
             'name': forms.TextInput(attrs={
@@ -41,8 +40,11 @@ class TiendanubeConfigForm(forms.ModelForm):
             }),
             'access_token': forms.PasswordInput(attrs={
                 'class': 'form-control',
-                'placeholder': _('Token de acceso'),
-                'autocomplete': 'off',
+                'placeholder': _('Token de acceso')
+            }),
+            'api_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': DEFAULT_TIENDANUBE_API_URL
             }),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
@@ -77,7 +79,8 @@ class TiendanubeConfigForm(forms.ModelForm):
             'name': _('Nombre'),
             'store_id': _('ID de Tienda'),
             'access_token': _('Token de Acceso'),
-            'is_active': _('Tienda activa'),
+            'api_url': _('URL de la API'),
+            'is_active': _('Activo'),
             'auto_sync': _('Sincronización Automática'),
             'sync_interval': _('Intervalo de Sincronización (minutos)'),
             'sync_products': _('Sincronizar Productos'),
@@ -89,82 +92,17 @@ class TiendanubeConfigForm(forms.ModelForm):
         help_texts = {
             'store_id': _('ID único de tu tienda en Tiendanube'),
             'access_token': _('Token de acceso para la API de Tiendanube'),
-            'is_active': _('Tienda habilitada en Synap (recibe webhooks y sync)'),
+            'api_url': _('URL base de la API de Tiendanube'),
+            'is_active': _('Activar esta configuración'),
             'auto_sync': _('Habilitar sincronización automática programada'),
             'sync_interval': _('Frecuencia de sincronización en minutos (5-1440)'),
             'sync_products': _('Sincronizar productos entre sistemas'),
             'sync_customers': _('Sincronizar clientes entre sistemas'),
             'sync_orders': _('Sincronizar pedidos entre sistemas'),
             'sync_stock': _('Sincronizar stock entre sistemas'),
-            'webhook_secret': _('Secreto HMAC para verificación de webhooks de Tienda Nube'),
+            'webhook_secret': _('Secret para verificación de webhooks de TiendaNube'),
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['name'].required = True
-        if self.instance.pk:
-            self.fields['access_token'].required = False
-            self.fields['access_token'].widget.attrs['placeholder'] = _(
-                'Dejar vacío para no cambiar'
-            )
-
-    def clean_access_token(self):
-        value = (self.cleaned_data.get('access_token') or '').strip()
-        if self.instance.pk and not value:
-            return self.instance.access_token
-        return value
-
-    def clean_webhook_secret(self):
-        value = (self.cleaned_data.get('webhook_secret') or '').strip()
-        if self.instance.pk and not value:
-            return self.instance.webhook_secret
-        return value
-
-    def clean(self):
-        cleaned_data = super().clean()
-        if cleaned_data is None:
-            return cleaned_data
-
-        environment = (
-            getattr(settings, 'ENVIRONMENT', None)
-            or os.environ.get('ENVIRONMENT', '')
-        ).lower()
-        webhook_secret = (cleaned_data.get('webhook_secret') or '').strip()
-        if environment in ('production', 'produccion'):
-            existing_secret = (
-                self.instance.webhook_secret if self.instance.pk else ''
-            )
-            if not webhook_secret and not existing_secret:
-                self.add_error(
-                    'webhook_secret',
-                    _('Obligatorio en producción para validar webhooks (HMAC).'),
-                )
-
-        if cleaned_data.get('sync_stock'):
-            adminet = AdministraNETConfig.objects.filter(is_active=True).first()
-            if not adminet or not adminet.deposito_tiendanube_id:
-                self.add_error(
-                    'sync_stock',
-                    _(
-                        'Configure un depósito AdministraNET antes de '
-                        'sincronizar stock.'
-                    ),
-                )
-
-        return cleaned_data
-
-    def save(self, commit=True):
-        instance = super().save(commit=False)
-        instance.api_url = DEFAULT_TIENDANUBE_API_URL
-        if self.instance.pk and not (self.cleaned_data.get('access_token') or '').strip():
-            instance.access_token = self.instance.access_token
-        webhook_secret = (self.cleaned_data.get('webhook_secret') or '').strip()
-        if self.instance.pk and not webhook_secret:
-            instance.webhook_secret = self.instance.webhook_secret
-        if commit:
-            instance.save()
-        return instance
-
+    
     def clean_store_id(self):
         """Validar que el store_id sea único si está activo."""
         store_id = self.cleaned_data['store_id']
@@ -378,24 +316,10 @@ class AdministraNETConfigForm(forms.ModelForm):
             existing = AdministraNETConfig.objects.filter(is_active=True)
             if self.instance:
                 existing = existing.exclude(id=self.instance.id)
-
+            
             if existing.exists():
                 raise ValidationError(_('Ya existe una configuración activa de AdministraNET.'))
-
-        tn_active = TiendanubeConfig.objects.filter(is_active=True).first()
-        if tn_active:
-            if not cleaned_data.get('deposito_tiendanube_choice'):
-                if tn_active.sync_stock:
-                    self.add_error(
-                        'deposito_tiendanube_choice',
-                        _('Depósito obligatorio para sincronizar stock.'),
-                    )
-            if not cleaned_data.get('punto_venta_tiendanube_choice'):
-                self.add_error(
-                    'punto_venta_tiendanube_choice',
-                    _('Punto de venta obligatorio para pedidos Tienda Nube.'),
-                )
-
+        
         return cleaned_data
 
 

@@ -271,9 +271,7 @@ function copyToClipboard(text) {
         }, 2000);
     }).catch(err => {
         console.error('Failed to copy: ', err);
-        if (window.TnSynapMessages) {
-            TnSynapMessages.show('No se pudo copiar al portapapeles', 'error');
-        }
+        alert('Failed to copy to clipboard');
     });
 }
 
@@ -325,25 +323,19 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!config || !config.value) {
                 e.preventDefault();
-                if (window.TnSynapMessages) {
-                    TnSynapMessages.show('Seleccione una configuración de Tiendanube', 'warning');
-                }
+                alert('Please select a Tiendanube configuration');
                 return false;
             }
-
+            
             if (!url || !url.value) {
                 e.preventDefault();
-                if (window.TnSynapMessages) {
-                    TnSynapMessages.show('Indique la URL del webhook', 'warning');
-                }
+                alert('Please provide a webhook URL');
                 return false;
             }
-
+            
             if (events.length === 0) {
                 e.preventDefault();
-                if (window.TnSynapMessages) {
-                    TnSynapMessages.show('Seleccione al menos un evento', 'warning');
-                }
+                alert('Please select at least one event');
                 return false;
             }
             
@@ -352,5 +344,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
 {% endblock %}

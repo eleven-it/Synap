@@ -364,8 +364,8 @@ function customerMappingLookup() {
         toast(msg, type) {
             if (typeof window.showMappingToast === 'function') {
                 window.showMappingToast(msg, type);
-            } else if (window.TnSynapMessages) {
-                TnSynapMessages.show(msg, type || 'info');
+            } else {
+                alert(msg);
             }
         },
 
@@ -485,7 +485,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
 {% endblock %}
 
 {% block extra_css %}
