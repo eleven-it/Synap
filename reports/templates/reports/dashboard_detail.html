@@ -80,7 +80,7 @@
                         </svg>
                         <span class="hidden sm:inline">Actualizar</span>
                     </button>
-                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pending_orders' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' %}
+                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pending_orders' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-bom-docenas' %}
                     <button type="button"
                             data-export-excel
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
@@ -325,8 +325,33 @@
                         {% include "reports/includes/filters_period.html" %}
                         {% if report.slug == 'bo-stock-facturacion' %}
                         {% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
-                        {% elif report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
+                        {% elif report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' or report.slug == 'ventas-bom-docenas' %}
                         {% include "reports/includes/filters_sucursal_punto_venta.html" %}
+                        {% if report.slug == 'ventas-bom-docenas' %}
+                        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 lg:col-span-6 mt-4">
+                            Clientes a excluir
+                            <div class="relative">
+                                <select name="clientes_excluidos"
+                                        id="clientes_excluidos"
+                                        multiple
+                                        class="hidden"
+                                        data-tags-field="clientes_excluidos">
+                                    <option value="">Cargando...</option>
+                                </select>
+                                <div id="clientes_excluidos_tags_container"
+                                     class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                                    <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                                    <input type="text"
+                                           id="clientes_excluidos_search"
+                                           class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                                           placeholder="Buscar cliente..."
+                                           autocomplete="off">
+                                    <div id="clientes_excluidos_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Excluidos de la facturación del período</span>
+                        </label>
+                        {% endif %}
                         {% endif %}
                         {% include "reports/includes/filters_interval.html" %}
                         {% comment %}
@@ -346,6 +371,10 @@
                  data-is-declarative="{{ is_declarative|yesno:"true,false" }}">
                 {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
                 <p id="ventas-netas-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-4"></p>
+                {% endif %}
+                {% if report.slug == 'ventas-bom-docenas' %}
+                <p id="ventas-bom-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-4"></p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Packs facturados explosionados por BOM · cantidades en docenas (pares ÷ 12)</p>
                 {% endif %}
                 {% if report.slug != 'bo-stock-facturacion' %}
                 {% with widget=widgets|first %}
@@ -4972,6 +5001,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260211"></script>
 {% if report.slug == 'bo-stock-facturacion' %}
 <script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>
+{% endif %}
+{% if report.slug == 'ventas-bom-docenas' %}
+<script src="{% static 'reports/js/ventas_bom_docenas.js' %}?v=20260313"></script>
 {% endif %}
 {% endif %}
 {% endblock %}

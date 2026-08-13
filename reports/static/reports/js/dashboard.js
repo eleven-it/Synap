@@ -63,6 +63,10 @@ function isVentasNetasSlug(slug) {
   return slug === "ventas_netas" || slug === "ventas-netas";
 }
 
+function isVentasBomDocenasSlug(slug) {
+  return slug === "ventas-bom-docenas";
+}
+
 // ============================================
 // SISTEMA COMÚN: Valores de Intervalo Unificados
 // ============================================
@@ -401,6 +405,10 @@ const translateFieldName = (fieldName) => {
     "ventas brutas": "Ventas Brutas",
     "notas_credito": "Notas de Crédito",
     "notas credito": "Notas de Crédito",
+    "pares": "Pares",
+    "docenas": "Docenas",
+    "articulos_bom": "Artículos BOM",
+    "articulos bom": "Artículos BOM",
   };
   
   const normalized = String(fieldName).toLowerCase().trim();
@@ -2842,14 +2850,20 @@ const renderTable = (widgetElement, data, options = {}) => {
   const headerRow = document.createElement("tr");
 
   // Columnas a excluir
-  const excludedColumns = ["id_sucursal", "id_punto_venta", "mes"];
+  const excludedColumns = ["id_sucursal", "id_punto_venta", "mes", "id_art", "codigo_marca"];
   const allKeys = Object.keys(data[0]).filter((key) => !excludedColumns.includes(key));
 
   // Ventas Netas: orden de columnas y agrupación visual (MES, SUCURSAL, PUNTO DE VENTA, métricas)
   const isVentasNetasTable = data[0].mes_formato !== undefined && data[0].nombre_sucursal !== undefined && data[0].ventas_netas !== undefined;
+  const isVentasBomTable =
+    isVentasBomDocenasSlug(reportSlug) ||
+    (data[0].docenas !== undefined && data[0].pares !== undefined && data[0].codigo_articulo !== undefined);
   const ventasNetasColumnOrder = ["mes_formato", "nombre_sucursal", "nro_punto_venta", "ventas_netas", "notas_credito", "ventas_brutas"];
+  const ventasBomColumnOrder = ["codigo_articulo", "nombre_articulo", "nombre_marca", "pares", "docenas"];
   const fieldKeys = isVentasNetasTable
     ? ventasNetasColumnOrder.filter((k) => allKeys.includes(k))
+    : isVentasBomTable
+    ? ventasBomColumnOrder.filter((k) => allKeys.includes(k))
     : allKeys;
 
   // Ordenar datos para Ventas Netas: mes DESC, sucursal ASC, punto de venta ASC
@@ -2880,7 +2894,12 @@ const renderTable = (widgetElement, data, options = {}) => {
     "cumulative": "ACUMULADO",
     "type": "TIPO",
     "operating_ingresos": "INGRESOS OPERATIVOS",
-    "operating_egresos": "EGRESOS OPERATIVOS"
+    "operating_egresos": "EGRESOS OPERATIVOS",
+    "codigo_articulo": "CÓDIGO BOM",
+    "nombre_articulo": "ARTÍCULO BOM",
+    "nombre_marca": "MARCA",
+    "pares": "PARES",
+    "docenas": "DOCENAS",
   };
   
   fieldKeys.forEach((key) => {
@@ -2909,11 +2928,12 @@ const renderTable = (widgetElement, data, options = {}) => {
   // Calcular totales para columnas monetarias (solo variaciones, no acumulados)
   const totals = {};
   const columnsToTotal = ["operating_flow", "investing_flow", "financing_flow", "cash_variation"];
+  const bomQtyColumns = ["pares", "docenas"];
   
   if (!isCashFlowWaterfall) {
     // Para otros reportes, sumar todas las columnas monetarias
   fieldKeys.forEach((key) => {
-    if (isCurrencyField(key)) {
+    if (isCurrencyField(key) || (isVentasBomTable && bomQtyColumns.includes(key))) {
       totals[key] = 0;
     }
   });
@@ -2987,8 +3007,8 @@ const renderTable = (widgetElement, data, options = {}) => {
           totals[key] += value;
         }
       } else {
-        // Para otros reportes, acumular todas las columnas monetarias
-      if (isCurrency && typeof value === "number") {
+        // Para otros reportes, acumular todas las columnas monetarias / cantidades BOM
+      if ((isCurrency || (isVentasBomTable && bomQtyColumns.includes(key))) && typeof value === "number") {
         totals[key] += value;
         }
       }
@@ -3009,6 +3029,9 @@ const renderTable = (widgetElement, data, options = {}) => {
       if (isCurrency && totals[key] !== undefined) {
         td.className = "px-4 py-3 text-slate-900 dark:text-white text-right font-bold";
         td.textContent = formatCurrency(totals[key]);
+      } else if (isVentasBomTable && bomQtyColumns.includes(key) && totals[key] !== undefined) {
+        td.className = "px-4 py-3 text-slate-900 dark:text-white text-right font-bold";
+        td.textContent = formatNumber(totals[key]);
       } else if (index === 0) {
         // Solo la primera columna muestra "TOTAL"
         td.className = "px-4 py-3 text-slate-900 dark:text-white font-semibold";
@@ -4032,6 +4055,10 @@ const renderSummary = (meta, totals) => {
     const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
     if (vnPeriodEl) vnPeriodEl.textContent = periodText;
   }
+  if (isVentasBomDocenasSlug(reportSlug)) {
+    const bomPeriodEl = document.getElementById("ventas-bom-summary-period");
+    if (bomPeriodEl) bomPeriodEl.textContent = periodText;
+  }
 
   summaryGrid.innerHTML = "";
 
@@ -4049,8 +4076,11 @@ const renderSummary = (meta, totals) => {
   
   // Orden específico: total-consolidado-operativo (4 KPIs verticales), ventas_netas, otros
   const isVentasNetasReport = isVentasNetasSlug(reportSlug);
+  const isVentasBomReport = isVentasBomDocenasSlug(reportSlug);
   const order = isTotalConsolidadoOperativo
     ? ["ventas_netas", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"]
+    : isVentasBomReport
+    ? ["docenas", "pares", "articulos_bom"]
     : isVentasNetasReport
     ? ["ventas_brutas", "notas_credito", "ventas_netas", "saldo_inicial", "operating_flow", "investing_flow", "financing_flow", "cash_variation", "saldo_final", "total_subtotal_desc", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"]
     : ["saldo_inicial", "operating_flow", "investing_flow", "financing_flow", "cash_variation", "saldo_final", "total_subtotal_desc", "ventas_brutas", "notas_credito", "ventas_netas", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"];
@@ -6346,7 +6376,7 @@ if (dashboardRoot) {
     const apiUrl = dashboardRoot.dataset.dashboardUrl;
     const reportSlug = dashboardRoot.dataset.reportSlug;
     
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "bo-stock-facturacion" && reportSlug !== "total-consolidado-operativo") {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "bo-stock-facturacion" && reportSlug !== "total-consolidado-operativo" && !isVentasBomDocenasSlug(reportSlug)) {
       return;
     }
     
@@ -6416,7 +6446,7 @@ if (dashboardRoot) {
       }
       
       // Cargar clientes para "Clientes a excluir" (Ventas Netas, Remitos, Total Consolidado, BO Stock Facturación)
-      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion";
+      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasBomDocenasSlug(reportSlug);
       if (reportShowsClientesExcluir) {
         const clientesResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
           headers: {
@@ -6664,7 +6694,7 @@ if (dashboardRoot) {
     
     // Solo aplicar si existen estos elementos (ventas_netas, cash_flow_*, uninvoiced_remitos, pending_orders, sales_summary, bo-stock-facturacion)
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "pending_orders" && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && reportSlug !== "bo-stock-facturacion") {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "pending_orders" && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && reportSlug !== "bo-stock-facturacion" && !isVentasBomDocenasSlug(reportSlug)) {
       return;
     }
     if (!buttons.length || !periodoTipoSelect || !fechaInicioInput || !fechaFinInput) {
@@ -6755,7 +6785,7 @@ if (dashboardRoot) {
         if (savedViewType === "por_caja") {
           fetchByAccountData();
         }
-      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
+      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders" || isVentasBomDocenasSlug(reportSlug)) {
         // Para estos reportes, recargar datos al cambiar período
         fetchDashboardData();
       }
@@ -6838,7 +6868,7 @@ if (dashboardRoot) {
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
+        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders" || isVentasBomDocenasSlug(reportSlug)) {
           fetchDashboardData();
         }
       }
@@ -6853,7 +6883,7 @@ if (dashboardRoot) {
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
+        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders" || isVentasBomDocenasSlug(reportSlug)) {
           fetchDashboardData();
         }
       }
@@ -7251,7 +7281,8 @@ if (dashboardRoot) {
       reportSlug === "pending_orders" ||
       reportSlug === "sales_summary" ||
       reportSlug === "total-consolidado-operativo" ||
-      reportSlug === "bo-stock-facturacion";
+      reportSlug === "bo-stock-facturacion" ||
+      isVentasBomDocenasSlug(reportSlug);
     if (!allowed) return;
 
     // Aplicar tipo de período y fechas
@@ -7307,8 +7338,8 @@ if (dashboardRoot) {
       }
     }
 
-    // Aplicar filtros específicos de ventas_netas, uninvoiced_remitos, bo-stock-facturacion (punto_venta, sucursales)
-    if (isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion") {
+    // Aplicar filtros específicos de ventas_netas, uninvoiced_remitos, bo-stock-facturacion, ventas-bom-docenas (punto_venta, sucursales)
+    if (isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasBomDocenasSlug(reportSlug)) {
       if (filters.punto_venta && Array.isArray(filters.punto_venta)) {
         const pvSelect = document.getElementById("punto_venta");
         if (pvSelect) {
@@ -7486,7 +7517,11 @@ if (dashboardRoot) {
         const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
         filters.clientes_excluidos = selectedClientes;
       }
-    } else if (currentReportSlug === "uninvoiced_remitos" || currentReportSlug === "total-consolidado-operativo") {
+    } else if (
+      currentReportSlug === "uninvoiced_remitos" ||
+      currentReportSlug === "total-consolidado-operativo" ||
+      isVentasBomDocenasSlug(currentReportSlug)
+    ) {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;
@@ -7950,17 +7985,17 @@ if (dashboardRoot) {
           }
           
           // Obtener otros filtros según el reporte
-          if (isVentasNetasSlug(reportSlug) || reportSlug === 'uninvoiced_remitos' || reportSlug === 'total-consolidado-operativo' || reportSlug === 'bo-stock-facturacion') {
+          if (isVentasNetasSlug(reportSlug) || reportSlug === 'uninvoiced_remitos' || reportSlug === 'total-consolidado-operativo' || reportSlug === 'bo-stock-facturacion' || isVentasBomDocenasSlug(reportSlug)) {
             const puntoVentaSelect = filtersContainer.querySelector('select[name="punto_venta"]');
             const sucursalesSelect = filtersContainer.querySelector('select[name="sucursales"]');
             
-            if (puntoVentaSelect && puntoVentaSelect.value) {
+            if (puntoVentaSelect && puntoVentaSelect.selectedOptions.length) {
               filters.punto_venta = Array.from(puntoVentaSelect.selectedOptions).map(opt => opt.value);
             }
-            if (sucursalesSelect && sucursalesSelect.value) {
+            if (sucursalesSelect && sucursalesSelect.selectedOptions.length) {
               filters.sucursales = Array.from(sucursalesSelect.selectedOptions).map(opt => opt.value);
             }
-            if (reportSlug === 'bo-stock-facturacion') {
+            if (reportSlug === 'bo-stock-facturacion' || isVentasBomDocenasSlug(reportSlug)) {
               const depositosExcluidosSelect = filtersContainer.querySelector('select[name="depositos_excluidos"]');
               const clientesExcluidosSelect = filtersContainer.querySelector('select[name="clientes_excluidos"]');
               if (depositosExcluidosSelect && depositosExcluidosSelect.selectedOptions.length) {

@@ -65,7 +65,7 @@ class ExportService:
         export_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{report_slug}_{timestamp}.xlsx"
+        filename = self._resolve_export_filename(report_slug, payload, timestamp)
         file_path = export_dir / filename
         
         # Generar Excel usando openpyxl
@@ -77,6 +77,26 @@ class ExportService:
             expires_at=None,
             filename=filename,
         )
+
+    def _resolve_export_filename(self, report_slug: str, payload: Dict, timestamp: str) -> str:
+        """Nombre de archivo Excel según informe."""
+        if report_slug == "ventas-bom-docenas":
+            filters = payload.get("filters") or {}
+            fi = filters.get("fecha_inicio") or filters.get("fecha_inicio_facturacion") or ""
+            ff = filters.get("fecha_fin") or filters.get("fecha_fin_facturacion") or ""
+
+            def _ddmmyyyy(raw: str) -> str:
+                try:
+                    y, m, d = str(raw).split("-")
+                    return f"{d}{m}{y}"
+                except Exception:
+                    return ""
+
+            a, b = _ddmmyyyy(fi), _ddmmyyyy(ff)
+            if a and b:
+                return f"Ventas_BOM_docenas_{a}_{b}.xlsx"
+            return f"Ventas_BOM_docenas_{timestamp}.xlsx"
+        return f"{report_slug}_{timestamp}.xlsx"
     
     def _generate_excel(self, file_path: Path, report: ReportDefinition, query_result, payload: Dict):
         """
@@ -121,7 +141,7 @@ class ExportService:
         cell.alignment = Alignment(horizontal='left', vertical='center')
         row += 1
         
-        # 2. Información del período (desde notes)
+        # 2. Información del período / filtros (desde notes)
         if query_result.notes:
             ws.merge_cells(f'A{row}:D{row}')
             cell = ws[f'A{row}']
@@ -129,6 +149,26 @@ class ExportService:
             cell.font = Font(size=10, italic=True)
             cell.alignment = Alignment(horizontal='left', vertical='center')
             row += 1
+
+        if report.slug == "ventas-bom-docenas":
+            filters = payload.get("filters") or {}
+            filter_lines = self._ventas_bom_filter_lines(filters, query_result)
+            if filter_lines:
+                ws.merge_cells(f'A{row}:D{row}')
+                cell = ws[f'A{row}']
+                cell.value = "Filtros aplicados"
+                cell.font = Font(bold=True, size=10)
+                row += 1
+                for label, value in filter_lines:
+                    ws.cell(row=row, column=1).value = label
+                    ws.cell(row=row, column=2).value = value
+                    row += 1
+            for note in (query_result.notes or [])[1:]:
+                ws.merge_cells(f'A{row}:D{row}')
+                cell = ws[f'A{row}']
+                cell.value = note
+                cell.font = Font(size=9, italic=True)
+                row += 1
         
         row += 1  # Espacio
         
@@ -181,6 +221,14 @@ class ExportService:
                     # Ventas Netas: MES, SUCURSAL, PUNTO DE VENTA, VENTAS NETAS, NOTAS CRÉDITO, VENTAS BRUTAS
                     # Excluir id_sucursal e id_punto_venta; usar mes_formato como Mes
                     headers = ["mes_formato", "nombre_sucursal", "nro_punto_venta", "ventas_netas", "notas_credito", "ventas_brutas"]
+                elif report.slug == "ventas-bom-docenas":
+                    headers = [
+                        "codigo_articulo",
+                        "nombre_articulo",
+                        "nombre_marca",
+                        "pares",
+                        "docenas",
+                    ]
                 else:
                     headers = list(query_result.data[0].keys())
                     # Para "uninvoiced_remitos", excluir id_sucursal e id_punto_venta
@@ -205,6 +253,11 @@ class ExportService:
                     "estado": "Estado",
                     "sucursal": "Sucursal",
                     "punto_venta": "Punto de Venta",
+                    "codigo_articulo": "Código BOM",
+                    "nombre_articulo": "Artículo BOM",
+                    "nombre_marca": "Marca",
+                    "pares": "Pares",
+                    "docenas": "Docenas",
                 }
                 # Ventas Netas: etiqueta "Mes" para la primera columna (mes_formato)
                 if report.slug in ("ventas_netas", "ventas-netas"):
@@ -232,7 +285,7 @@ class ExportService:
                     for header in headers:
                         value = data_row.get(header, "")
                         # Si es un campo numérico, convertir a float
-                        if header in ["ventas_brutas", "notas_credito", "ventas_netas", "subtotal_desc"]:
+                        if header in ["ventas_brutas", "notas_credito", "ventas_netas", "subtotal_desc", "pares", "docenas"]:
                             try:
                                 if value == "" or value is None:
                                     row_values.append(0.0)
@@ -250,13 +303,19 @@ class ExportService:
                         cell = ws.cell(row=row, column=col_num)
                         cell.border = border
                         
-                        # Formatear valores numéricos como moneda
+                        # Formatear valores numéricos como moneda o cantidad
                         if header in ["ventas_brutas", "notas_credito", "ventas_netas", "subtotal_desc"]:
                             if isinstance(value, (int, float)):
                                 cell.number_format = '"$"#,##0.00'
                                 cell.alignment = Alignment(horizontal='right', vertical='center')
                             else:
                                 cell.alignment = Alignment(horizontal='left', vertical='center')
+                        elif header in ["pares", "docenas"]:
+                            if isinstance(value, (int, float)):
+                                cell.number_format = '#,##0.00'
+                                cell.alignment = Alignment(horizontal='right', vertical='center')
+                            else:
+                                cell.alignment = Alignment(horizontal='right', vertical='center')
                         else:
                             cell.alignment = Alignment(horizontal='left', vertical='center')
                     
@@ -299,6 +358,7 @@ class ExportService:
                     
                     # Mismo criterio de columnas numéricas que en las filas de datos
                     currency_headers_data = ["ventas_brutas", "notas_credito", "ventas_netas", "subtotal_desc"]
+                    qty_headers_data = ["pares", "docenas"]
                     # Aplicar estilo y formato a la fila de totales (la que acabamos de escribir en row)
                     for col_num in range(1, len(total_row) + 1):
                         if col_num <= len(total_row):
@@ -319,6 +379,11 @@ class ExportService:
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
                                     else:
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
+                                elif header in qty_headers_data:
+                                    value = total_row[col_num - 1]
+                                    if isinstance(value, (int, float)):
+                                        cell.number_format = '#,##0.00'
+                                    cell.alignment = Alignment(horizontal='right', vertical='center')
                                 else:
                                     cell.alignment = Alignment(horizontal='right', vertical='center')
         
@@ -340,6 +405,37 @@ class ExportService:
         # 5. Guardar archivo
         wb.save(file_path)
         logger.info(f"✅ Archivo Excel generado: {file_path}")
+
+    def _ventas_bom_filter_lines(self, filters: Dict, query_result) -> list:
+        """Pares etiqueta/valor para bloque Filtros aplicados (Ventas BOM)."""
+        lines = []
+        meta = getattr(query_result, "meta", None) or {}
+        fi = filters.get("fecha_inicio") or meta.get("fecha_inicio")
+        ff = filters.get("fecha_fin") or meta.get("fecha_fin")
+
+        def _fmt(raw):
+            try:
+                y, m, d = str(raw).split("-")
+                return f"{d}/{m}/{y}"
+            except Exception:
+                return str(raw or "")
+
+        if fi or ff:
+            lines.append(("Período", f"{_fmt(fi)} — {_fmt(ff)}"))
+        for key, label in (
+            ("sucursales", "Sucursales"),
+            ("punto_venta", "Punto de venta"),
+            ("clientes_excluidos", "Clientes excluidos"),
+            ("marcas_incluidos", "Marcas incluir"),
+            ("marcas_excluidos", "Marcas excluir"),
+        ):
+            val = filters.get(key)
+            if val:
+                if isinstance(val, (list, tuple)):
+                    lines.append((label, ", ".join(str(v) for v in val)))
+                else:
+                    lines.append((label, str(val)))
+        return lines
 
     def _generate_excel_bo(self, file_path: Path, report: ReportDefinition, query_result):
         """

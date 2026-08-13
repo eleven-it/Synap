@@ -120,6 +120,13 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
 
     def get_report(self) -> ReportDefinition:
         slug = self.kwargs.get("slug")
+        if slug == "ventas-bom-docenas":
+            try:
+                from reports.services.ventas_bom_docenas_seed import ensure_ventas_bom_docenas_report
+
+                ensure_ventas_bom_docenas_report()
+            except Exception:
+                pass
         empresa = getattr(self.request.user, "empresa_activa", None)
         filters = Q(slug=slug, is_active=True)
         if empresa:

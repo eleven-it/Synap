@@ -159,7 +159,7 @@ class QueryRunnerService:
             return 1800  # 30 minutos
         
         # Reportes de estado (frecuencia media)
-        status_reports = ['uninvoiced_remitos', 'pending_orders', 'bo-stock-facturacion']
+        status_reports = ['uninvoiced_remitos', 'pending_orders', 'bo-stock-facturacion', 'ventas-bom-docenas']
         if report_slug in status_reports:
             return 300  # 5 minutos
         
@@ -216,7 +216,12 @@ class QueryRunnerService:
         filters = payload.get('filters', {})
         payload_hash = self._hash_payload(filters)
         # Cache buster para BO: OC cubre primero faltante reservado (evitar usar caché antiguo)
-        cache_payload_hash = f"{payload_hash}:oc_reservado_v1" if report.slug == "bo-stock-facturacion" else payload_hash
+        if report.slug == "bo-stock-facturacion":
+            cache_payload_hash = f"{payload_hash}:oc_reservado_v1"
+        elif report.slug == "ventas-bom-docenas":
+            cache_payload_hash = f"{payload_hash}:vbd_v1"
+        else:
+            cache_payload_hash = payload_hash
 
         # Intentar obtener del caché con protección contra stampeding (solo si está habilitado)
         if getattr(settings, 'REPORTS_CACHE_ENABLED', False):
@@ -246,6 +251,15 @@ class QueryRunnerService:
             result = self._run_total_consolidado_operativo(report, payload)
         elif report.slug == "bo-stock-facturacion":
             result = self._run_backorder_vs_stock_vs_facturacion(report, payload)
+        elif report.slug == "ventas-bom-docenas":
+            from reports.services.ventas_bom_docenas_runner import run_ventas_bom_docenas
+
+            result = run_ventas_bom_docenas(
+                report,
+                payload,
+                user=self.user,
+                resolve_period_dates=self._resolve_period_dates,
+            )
         else:
             # Para otros reportes, usar datos de muestra por ahora
             meta, data, totals, notes = get_sample_data(report.slug, payload)
