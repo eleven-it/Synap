@@ -16,6 +16,7 @@ from ecom.pedido_masivo_views import (
 from ecom.services.pedido_masivo_import import (
     HOJA_META,
     MARKER_CODIGO,
+    MARKER_IDART,
     generar_plantilla_excel,
     importar_matriz_excel,
 )
@@ -58,7 +59,9 @@ ART_OK = {
 }
 
 
-def _xlsx_plantilla(ids_suc, qtys_por_codigo, id_cliente=368, cod_viajante=30):
+def _xlsx_plantilla(
+    ids_suc, qtys_por_codigo, id_cliente=368, cod_viajante=30, nombres=None
+):
     """ids_suc: lista id domicilio. qtys: {codigo: [q1, q2, ...]}."""
     wb = Workbook()
     ws = wb.active
@@ -73,7 +76,7 @@ def _xlsx_plantilla(ids_suc, qtys_por_codigo, id_cliente=368, cod_viajante=30):
     fila = 3
     for codigo, qtys in qtys_por_codigo.items():
         ws.cell(fila, 1, codigo)
-        ws.cell(fila, 2, "x")
+        ws.cell(fila, 2, (nombres or {}).get(codigo, "x"))
         for i, q in enumerate(qtys):
             if q is not None:
                 ws.cell(fila, 3 + i, q)
@@ -320,6 +323,70 @@ class TestImportarMatrizExcel(TestCase):
         self.assertTrue(res["ok"], res)
         self.assertEqual(d.celdas.get().id_articulo, 101)
 
+    def test_superart_ambiguo_se_desambigua_por_nombre(self):
+        d = _draft()
+        art_a = dict(
+            ART_OK,
+            id_articulo=203,
+            id_manual="3766",
+            nombre="3766 T5 Puma Lifestyle Sock CAI Blanco Logo Negro 1P",
+        )
+        art_b = dict(
+            ART_OK,
+            id_articulo=204,
+            id_manual="3766",
+            nombre="3766 T5 Puma Lifestyle Sock CAI Negro 1P",
+        )
+
+        def lookup(_b, codigos):
+            return {c: [art_a, art_b] for c in codigos}
+
+        raw = _xlsx_plantilla(
+            [10],
+            {"3766": [6]},
+            nombres={"3766": art_a["nombre"]},
+        )
+        res = importar_matriz_excel(d, raw, consultar_arts=lookup)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.get().id_articulo, 203)
+
+    def test_codigo_numerico_prioriza_id_manual_sobre_idart(self):
+        d = _draft()
+        por_manual = dict(
+            ART_OK,
+            id_articulo=500,
+            id_manual="64",
+            nombre="0458 Suede Crew Sock 2P 005 Blanco",
+        )
+        por_idart = dict(
+            ART_OK,
+            id_articulo=64,
+            id_manual="9999",
+            nombre="Otro artículo IDArt 64",
+        )
+
+        def lookup(_b, codigos):
+            return {c: [por_idart, por_manual] for c in codigos}
+
+        raw = _xlsx_plantilla([10], {"64": [6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=lookup)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.get().id_articulo, 500)
+
+    def test_superart_sin_nombre_distinto_sigue_ambiguo(self):
+        d = _draft()
+        art_a = dict(ART_OK, id_articulo=203, id_manual="3766", nombre="Color A")
+        art_b = dict(ART_OK, id_articulo=204, id_manual="3766", nombre="Color B")
+
+        def lookup(_b, codigos):
+            return {c: [art_a, art_b] for c in codigos}
+
+        raw = _xlsx_plantilla([10], {"3766": [6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["errores"][0]["code"], "articulo_ambiguo")
+        self.assertEqual(d.celdas.count(), 0)
+
     def test_qty_cero_no_crea_celda(self):
         d = _draft()
         raw = _xlsx_plantilla([10, 20], {"2401": [6, 0]})
@@ -393,22 +460,27 @@ class TestPlantillaExcel(TestCase):
         ws = wb["Pedido"]
         self.assertEqual(ws.cell(1, 1).value, "Código")
         self.assertEqual(ws.cell(1, 2).value, "Artículo")
+        self.assertEqual(ws.cell(1, 3).value, MARKER_IDART)
+        self.assertTrue(bool(ws.column_dimensions["C"].hidden))
         self.assertFalse(bool(ws.row_dimensions[1].hidden))
         self.assertGreaterEqual(ws.row_dimensions[1].height or 0, 45)
         self.assertFalse(bool(ws.protection.sheet))
-        self.assertEqual(ws.freeze_panes, "C2")
-        self.assertIn("127", str(ws.cell(1, 3).value or ""))
-        self.assertIn("MORÓN", str(ws.cell(1, 3).value or "").replace("\n", " "))
+        self.assertEqual(ws.freeze_panes, "D2")
+        self.assertIn("127", str(ws.cell(1, 4).value or ""))
+        self.assertIn("MORÓN", str(ws.cell(1, 4).value or "").replace("\n", " "))
         self.assertNotIn(
             "precio",
-            " ".join(str(ws.cell(1, c).value or "").lower() for c in range(1, 6)),
+            " ".join(str(ws.cell(1, c).value or "").lower() for c in range(1, 7)),
         )
         self.assertEqual(ws.cell(2, 1).value, "2401")
         self.assertEqual(ws.cell(2, 2).value, "Media pack")
+        self.assertEqual(ws.cell(2, 3).value, 101)
         ws_m = wb[HOJA_META]
-        claves = {ws_m.cell(i, 1).value: ws_m.cell(i, 2).value for i in range(1, 6)}
+        claves = {ws_m.cell(i, 1).value: ws_m.cell(i, 2).value for i in range(1, 8)}
         self.assertEqual(claves.get("id_cliente"), 368)
         self.assertEqual(claves.get("cod_viajante"), 30)
+        self.assertEqual(claves.get("plantilla_version"), 4)
+        self.assertEqual(claves.get("col_primera_sucursal"), 4)
         self.assertEqual(ws_m.cell(6, 1).value, "sucursal_ids")
         self.assertEqual(ws_m.cell(6, 2).value, 10)
         self.assertEqual(ws_m.cell(6, 3).value, 20)
@@ -434,7 +506,7 @@ class TestPlantillaExcel(TestCase):
         },
     )
     @patch("ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo")
-    def test_importa_plantilla_v3_generada(self, _d, _pie, _n, _m, _s):
+    def test_importa_plantilla_v4_generada(self, _d, _pie, _n, _m, _s):
         d = _draft()
         raw = generar_plantilla_excel(
             d,
@@ -445,18 +517,84 @@ class TestPlantillaExcel(TestCase):
         from openpyxl import load_workbook
 
         wb = load_workbook(BytesIO(raw))
-        wb["Pedido"]["C2"] = 6
+        wb["Pedido"]["D2"] = 6
         bio = BytesIO()
         wb.save(bio)
 
-        def lookup(_b, codigos):
-            return {c: [dict(ART_OK)] for c in codigos}
+        def lookup_ids(_b, ids):
+            return {i: dict(ART_OK) for i in ids if i == 101}
 
-        res = importar_matriz_excel(d, bio.getvalue(), consultar_arts=lookup)
+        res = importar_matriz_excel(
+            d, bio.getvalue(), consultar_arts=lambda *_a, **_k: {}, consultar_ids=lookup_ids
+        )
         self.assertTrue(res["ok"], res)
         self.assertEqual(d.celdas.count(), 1)
         self.assertEqual(d.celdas.get().id_articulo, 101)
         self.assertEqual(d.celdas.get().id_cliente_domicilio, 10)
+
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+        return_value=[SUC_A, SUC_B],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+        return_value=[5],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import._nombre_cliente",
+        return_value="Dabra S.A.",
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
+        return_value={
+            "descRenglon": Decimal("0"),
+            "descPie": Decimal("5"),
+            "lista_id": 1,
+        },
+    )
+    @patch("ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo")
+    def test_plantilla_v4_dos_sku_mismo_superart(self, _d, _pie, _n, _m, _s):
+        d = _draft()
+        art_a = dict(ART_OK, id_articulo=203, id_manual="3766", nombre="Blanco")
+        art_b = dict(ART_OK, id_articulo=204, id_manual="3766", nombre="Negro")
+        raw = generar_plantilla_excel(
+            d,
+            articulos=[
+                {"id_articulo": 203, "id_manual": "3766", "nombre": "Blanco"},
+                {"id_articulo": 204, "id_manual": "3766", "nombre": "Negro"},
+            ],
+        )
+        from openpyxl import load_workbook
+
+        wb = load_workbook(BytesIO(raw))
+        ws = wb["Pedido"]
+        self.assertEqual(ws.cell(2, 1).value, "3766")
+        self.assertEqual(ws.cell(3, 1).value, "3766")
+        self.assertEqual(ws.cell(2, 3).value, 203)
+        self.assertEqual(ws.cell(3, 3).value, 204)
+        ws["D2"] = 6
+        ws["D3"] = 12
+        bio = BytesIO()
+        wb.save(bio)
+
+        def lookup_ids(_b, ids):
+            catalog = {203: art_a, 204: art_b}
+            return {i: catalog[i] for i in ids if i in catalog}
+
+        res = importar_matriz_excel(
+            d,
+            bio.getvalue(),
+            consultar_arts=lambda *_a, **_k: {},
+            consultar_ids=lookup_ids,
+        )
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.count(), 2)
+        self.assertEqual(
+            d.celdas.get(id_articulo=203).cantidad_packs, Decimal("6")
+        )
+        self.assertEqual(
+            d.celdas.get(id_articulo=204).cantidad_packs, Decimal("12")
+        )
 
 
 class TestApiImportExcel(TestCase):
