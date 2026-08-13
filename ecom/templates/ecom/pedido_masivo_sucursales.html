@@ -180,14 +180,14 @@
           <input id="pm-vencimiento" type="date"
                  x-model="cabecera.vencimiento"
                  @change="onCabeceraFechaIso('vencimiento')"
-                 :disabled="!puedeEditarCabecera"
-                 :class="!puedeEditarCabecera ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
+                 :disabled="!puedeEditarVencimiento"
+                 :class="!puedeEditarVencimiento ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
         <div class="pm-field-row" x-show="cabecera" x-cloak>
           <label class="pm-label-inline" for="pm-lista">Lista</label>
-          <template x-if="puedeEditarCabecera">
+          <template x-if="puedeEditarLista">
             <select id="pm-lista" x-model.number="cabecera.lista_id"
                     @change="onCabeceraListaChange()"
                     class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
@@ -196,7 +196,7 @@
               </template>
             </select>
           </template>
-          <template x-if="!puedeEditarCabecera">
+          <template x-if="!puedeEditarLista">
             <div class="flex h-8 items-center">
               {% include "ecom/includes/pedidos_lista_badge.html" %}
             </div>
@@ -273,7 +273,7 @@
           <label class="pm-label-inline" for="pm-condicion">Condición</label>
           <select id="pm-condicion" x-model.number="cabecera.id_condventa"
                   @change="onCabeceraCondicionChange()"
-                  :disabled="!puedeEditarCabecera"
+                  :disabled="!puedeEditarCondicion"
                   class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800">
             <template x-for="cv in condicionesVenta" :key="cv.Codigo">
               <option :value="cv.Codigo" x-text="`${cv.Descripcion} (${cv.Dias} días)`"></option>
@@ -440,7 +440,7 @@
                              class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
                              :value="descFila(art.id_articulo)"
                              placeholder="0"
-                             :disabled="!matrizEditable"
+                             :disabled="!matrizEditable || !puedeEditarDescRenglon"
                              @change="onDescFila(art.id_articulo, $event.target.value)"/>
                     </td>
                     <td class="pm-c-stock text-xs tabular-nums">
@@ -697,7 +697,7 @@
                              :value="descFila(art.id_articulo)"
                              placeholder="0"
                              title="% descuento fila"
-                             :disabled="!matrizEditable"
+                             :disabled="!matrizEditable || !puedeEditarDescRenglon"
                              @change="onDescFila(art.id_articulo, $event.target.value)"/>
                     </div>
                     <div class="min-w-0">
@@ -789,7 +789,7 @@
                                :value="descFila(art.id_articulo)"
                                placeholder="0"
                                title="% descuento fila"
-                               :disabled="!matrizEditable"
+                               :disabled="!matrizEditable || !puedeEditarDescRenglon"
                                @change="onDescFila(art.id_articulo, $event.target.value)"/>
                       </div>
                       <div class="min-w-0">
@@ -833,7 +833,7 @@
                  class="pm-input-dense h-8 w-[4.5rem] rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
                  :value="descPiePct || ''"
                  placeholder="0"
-                 :disabled="!matrizEditable"
+                 :disabled="!matrizEditable || !puedeEditarDescPie"
                  @change="onDescPie($event.target.value)"/>
           <button type="button" @click="refrescarPreview()" :disabled="previewCargando"
                   class="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300"
@@ -943,5 +943,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo43"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo44"></script>
 {% endblock %}

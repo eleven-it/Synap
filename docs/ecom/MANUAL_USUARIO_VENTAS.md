@@ -101,7 +101,7 @@ Cargar cantidades para **varias sucursales** del mismo cliente en una sola opera
 ### Pasos básicos
 
 1. Desde el hub de pedidos, elija **Nuevo** → **Masivo sucursales** (o **Pedido simple**) o abra un borrador existente.
-2. En la barra superior verá el título y las acciones (confirmar, hub, etc.). Debajo, la tarjeta **Contexto comercial** (colapsable) concentra cliente, fechas, lista y condición: complete esos datos antes de cargar la matriz.
+2. En la barra superior verá el título y las acciones (confirmar, hub, etc.). Debajo, la tarjeta **Contexto comercial** (colapsable) concentra cliente, fechas, lista y condición: complete esos datos antes de cargar la matriz. La **fecha de entrega** se completa sola la primera vez (10 días después del vencimiento; si cae fin de semana, el lunes siguiente). Lista, condición y descuentos los cambia el supervisor o el vendedor cuyo puesto tenga esos permisos en **Archivo → Permiso en sistema**.
 3. Al elegir **cliente**, revise el **widget de crédito** en el encabezado (semáforo). Ver [§11.2](#112-semáforo-de-crédito-en-la-toma).
 4. Busque artículos por código de sistema, código manual, nombre o **código de barra**; complete cantidades en la grilla (packs / múltiplos de empaque) y confirme el pedido.
    Si ingresa una cantidad inválida, el sistema muestra un aviso con la unidad de empaquetado antes de guardar o confirmar.

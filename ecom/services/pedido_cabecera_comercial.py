@@ -2,7 +2,10 @@
 Cabecera comercial de pedidos e-commerce (fechas, condición, lista).
 
 Resolver único consumido por checkout simple y pedido masivo. Paridad AdministraNET:
-vencimiento = fecha_pedido + cond_venta.Dias; permisos supervisor sobre lista/condición.
+vencimiento = fecha_pedido + cond_venta.Dias.
+Lista/condición/descuentos: supervisor **o** flags de ``permisos_sistema`` del puesto
+(``mod_lista_de_precio``, ``cambia_cv``, ``mod_descuento_pie`` / ``mod_descuento_renglon``).
+Fecha entrega PED (alta): vencimiento + 10 días, lunes si cae sábado o domingo.
 """
 
 from __future__ import annotations
@@ -17,6 +20,14 @@ from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import str_or_default, to_date_or_none, to_int_or_none
 
 from ecom.services.vendedor_operativo import _si_no_supervisor
+
+DIAS_ENTREGA_DESDE_VENCIMIENTO = 10
+
+
+def _es_si_permiso(val: Any) -> bool:
+    if val is None:
+        return False
+    return str(val).strip().lower() in ("si", "sí", "1", "yes", "true")
 
 
 @dataclass
@@ -38,8 +49,58 @@ def es_supervisor_desde_ctx(ctx: Dict[str, Any]) -> bool:
 
 
 def puede_editar_cabecera_comercial(ctx: Dict[str, Any]) -> bool:
-    """Solo supervisor puede editar lista, condición y override de vencimiento."""
+    """Solo supervisor puede override de vencimiento (y, por compat, el flag global)."""
     return es_supervisor_desde_ctx(ctx)
+
+
+def flags_edicion_comercial(
+    ctx: Dict[str, Any],
+    permisos_puesto: Optional[Dict[str, Any]] = None,
+) -> Dict[str, bool]:
+    """Flags UI/API: supervisor **o** permiso de puesto AdministraNET."""
+    es_sup = es_supervisor_desde_ctx(ctx)
+    p = permisos_puesto or {}
+    return {
+        "es_supervisor": es_sup,
+        "puede_editar": es_sup,
+        "puede_editar_vencimiento": es_sup,
+        "puede_editar_lista": es_sup or _es_si_permiso(p.get("mod_lista_de_precio")),
+        "puede_editar_condicion": es_sup or _es_si_permiso(p.get("cambia_cv")),
+        "puede_editar_descuento_pie": es_sup
+        or _es_si_permiso(p.get("mod_descuento_pie")),
+        "puede_editar_descuento_renglon": es_sup
+        or _es_si_permiso(p.get("mod_descuento_renglon")),
+    }
+
+
+def cargar_permisos_puesto(
+    base_empresa: str, id_puesto: Optional[int]
+) -> Optional[Dict[str, Any]]:
+    """Fila ``permisos_sistema`` del puesto; None si no hay datos."""
+    puesto = to_int_or_none(id_puesto)
+    if not (base_empresa or "").strip() or puesto is None:
+        return None
+    try:
+        from core.services.administranet_permisos_sistema import (
+            AdministraNETPermisosSistemaService,
+        )
+
+        return AdministraNETPermisosSistemaService().obtener_permisos_puesto(
+            base_empresa.strip(), int(puesto)
+        )
+    except Exception:
+        return None
+
+
+def flags_edicion_desde_sesion(
+    ctx: Dict[str, Any],
+    *,
+    base_empresa: str,
+    id_puesto: Optional[int],
+) -> Dict[str, bool]:
+    return flags_edicion_comercial(
+        ctx, cargar_permisos_puesto(base_empresa, id_puesto)
+    )
 
 
 def _as_date(value: Any) -> Optional[date]:
@@ -62,6 +123,14 @@ def _as_date(value: Any) -> Optional[date]:
 def calcular_vencimiento(fecha_pedido: date, dias: int) -> date:
     """Vencimiento = fecha pedido + días corridos (paridad AdministraNET)."""
     return fecha_pedido + timedelta(days=int(dias or 0))
+
+
+def calcular_fecha_entrega_desde_vencimiento(vencimiento: date) -> date:
+    """Vencimiento + 10 días; si cae sábado o domingo, el lunes inmediato."""
+    fe = vencimiento + timedelta(days=DIAS_ENTREGA_DESDE_VENCIMIENTO)
+    while fe.isoweekday() >= 6:
+        fe += timedelta(days=1)
+    return fe
 
 
 def _calcular_fecha_entrega_legacy(
@@ -152,12 +221,15 @@ def resolver_cabecera_comercial(
     dias_entrega: int = 0,
     dias_no_laborables: Optional[List[int]] = None,
     tipo_comprobante: str = "PED",
+    puede_editar_lista: Optional[bool] = None,
+    puede_editar_condicion: Optional[bool] = None,
+    prellenar_entrega_desde_vencimiento: bool = False,
 ) -> Tuple[Optional[PedidoCabeceraComercial], Optional[str]]:
     """
     Resuelve cabecera comercial validada.
 
-    Vendedor: ignora overrides de lista/condición/vencimiento.
-    Supervisor: acepta overrides con validación ``vencimiento >= fecha_pedido``.
+    Sin permiso de lista/condición/vencimiento: ignora overrides.
+    Con permiso: acepta overrides (vencimiento ≥ fecha_pedido).
     """
     defaults = cargar_defaults_cliente(base_empresa, id_cliente)
     hoy = date.today()
@@ -166,21 +238,24 @@ def resolver_cabecera_comercial(
     id_cv_ef = defaults["id_cv"]
     lista_ef = int(defaults["lista_id"] or 1)
     editable = False
+    edita_lista = es_supervisor if puede_editar_lista is None else bool(puede_editar_lista)
+    edita_cv = (
+        es_supervisor if puede_editar_condicion is None else bool(puede_editar_condicion)
+    )
 
-    if es_supervisor:
-        if id_condventa is not None:
-            id_cv_nuevo = to_int_or_none(id_condventa)
-            if id_cv_nuevo is not None:
-                row_cv = _fetch_condicion(base_empresa, id_cv_nuevo)
-                if not row_cv:
-                    return None, "La condición de venta seleccionada no es válida."
-                id_cv_ef = id_cv_nuevo
-                editable = True
-        if lista_id is not None:
-            lista_nueva = to_int_or_none(lista_id)
-            if lista_nueva is not None and 1 <= lista_nueva <= 5:
-                lista_ef = lista_nueva
-                editable = True
+    if edita_cv and id_condventa is not None:
+        id_cv_nuevo = to_int_or_none(id_condventa)
+        if id_cv_nuevo is not None:
+            row_cv = _fetch_condicion(base_empresa, id_cv_nuevo)
+            if not row_cv:
+                return None, "La condición de venta seleccionada no es válida."
+            id_cv_ef = id_cv_nuevo
+            editable = True
+    if edita_lista and lista_id is not None:
+        lista_nueva = to_int_or_none(lista_id)
+        if lista_nueva is not None and 1 <= lista_nueva <= 5:
+            lista_ef = lista_nueva
+            editable = True
 
     dias = dias_condicion(base_empresa, id_cv_ef)
     if dias == 0 and defaults.get("dias_condicion"):
@@ -213,6 +288,8 @@ def resolver_cabecera_comercial(
             if fe < fp:
                 return None, "La fecha de entrega no puede ser anterior a la fecha del pedido."
             fe_ent = fe
+        elif prellenar_entrega_desde_vencimiento:
+            fe_ent = calcular_fecha_entrega_desde_vencimiento(venc_ef)
         elif int(dias_entrega or 0) > 0:
             fe_ent = _calcular_fecha_entrega_legacy(fp, dias_entrega, dias_no_laborables)
 
@@ -237,18 +314,32 @@ def cabecera_defaults_json(
     es_supervisor: bool,
     dias_entrega: int = 0,
     dias_no_laborables: Optional[List[int]] = None,
+    fecha_entrega: Optional[date] = None,
+    prellenar_entrega_desde_vencimiento: bool = False,
+    flags: Optional[Dict[str, bool]] = None,
+    puede_editar_lista: Optional[bool] = None,
+    puede_editar_condicion: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Payload JSON para hidratar UI (fechas ISO + flags de permiso)."""
+    fl = dict(flags or {})
     cab, err = resolver_cabecera_comercial(
         base_empresa,
         id_cliente,
         es_supervisor=es_supervisor,
+        fecha_entrega=fecha_entrega,
         dias_entrega=dias_entrega,
         dias_no_laborables=dias_no_laborables,
+        prellenar_entrega_desde_vencimiento=prellenar_entrega_desde_vencimiento,
+        puede_editar_lista=puede_editar_lista
+        if puede_editar_lista is not None
+        else fl.get("puede_editar_lista"),
+        puede_editar_condicion=puede_editar_condicion
+        if puede_editar_condicion is not None
+        else fl.get("puede_editar_condicion"),
     )
     if not cab:
         return {"error": err or "No se pudo resolver la cabecera."}
-    return {
+    out = {
         "fecha_pedido": cab.fecha_pedido.isoformat(),
         "fecha_entrega": cab.fecha_entrega.isoformat() if cab.fecha_entrega else None,
         "vencimiento": cab.vencimiento.isoformat(),
@@ -258,7 +349,23 @@ def cabecera_defaults_json(
         "dias_condicion": dias_condicion(base_empresa, cab.id_condventa),
         "puede_editar": es_supervisor,
         "es_supervisor": es_supervisor,
+        "puede_editar_lista": bool(
+            fl.get("puede_editar_lista", es_supervisor)
+        ),
+        "puede_editar_condicion": bool(
+            fl.get("puede_editar_condicion", es_supervisor)
+        ),
+        "puede_editar_vencimiento": bool(
+            fl.get("puede_editar_vencimiento", es_supervisor)
+        ),
+        "puede_editar_descuento_pie": bool(
+            fl.get("puede_editar_descuento_pie", es_supervisor)
+        ),
+        "puede_editar_descuento_renglon": bool(
+            fl.get("puede_editar_descuento_renglon", es_supervisor)
+        ),
     }
+    return out
 
 
 def parsear_cabecera_desde_body(

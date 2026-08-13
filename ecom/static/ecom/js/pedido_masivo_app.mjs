@@ -133,6 +133,11 @@ function pedidoMasivoCore() {
     _vendedorPendiente: null,
     cabecera: null,
     puedeEditarCabecera: false,
+    puedeEditarLista: false,
+    puedeEditarCondicion: false,
+    puedeEditarVencimiento: false,
+    puedeEditarDescPie: false,
+    puedeEditarDescRenglon: false,
     condicionesVenta: [],
     listasPrecio: [],
     tipo: 'PED',
@@ -741,6 +746,21 @@ function pedidoMasivoCore() {
       this.qCliente = this.clienteNombre;
       if (m.cabecera) {
         this.puedeEditarCabecera = !!m.cabecera.puede_editar;
+        this.puedeEditarLista = m.cabecera.puede_editar_lista != null
+          ? !!m.cabecera.puede_editar_lista
+          : this.puedeEditarCabecera;
+        this.puedeEditarCondicion = m.cabecera.puede_editar_condicion != null
+          ? !!m.cabecera.puede_editar_condicion
+          : this.puedeEditarCabecera;
+        this.puedeEditarVencimiento = m.cabecera.puede_editar_vencimiento != null
+          ? !!m.cabecera.puede_editar_vencimiento
+          : this.puedeEditarCabecera;
+        this.puedeEditarDescPie = m.cabecera.puede_editar_descuento_pie != null
+          ? !!m.cabecera.puede_editar_descuento_pie
+          : this.puedeEditarCabecera;
+        this.puedeEditarDescRenglon = m.cabecera.puede_editar_descuento_renglon != null
+          ? !!m.cabecera.puede_editar_descuento_renglon
+          : this.puedeEditarCabecera;
         this.cabecera = cabeceraConDisplay(m.cabecera);
         this.listaId = Number(this.cabecera?.lista_id || m.lista_id || 1);
         this._cargarCatalogosCabecera();
@@ -862,7 +882,7 @@ function pedidoMasivoCore() {
       const ven = addDaysIso(fp, dias);
       if (ven) {
         this.cabecera.vencimiento = ven;
-        if (!this.puedeEditarCabecera) {
+        if (!this.puedeEditarVencimiento) {
           this.cabecera.vencimiento_display = isoToDisplay(ven);
         }
       }
@@ -878,7 +898,7 @@ function pedidoMasivoCore() {
       if (!iso) return;
       this.cabecera[campo] = iso;
       if (campo === 'fecha_pedido') this._recalcVencimientoDisplay();
-      if (campo === 'vencimiento' && !this.puedeEditarCabecera) {
+      if (campo === 'vencimiento' && !this.puedeEditarVencimiento) {
         this._recalcVencimientoDisplay();
       }
     },
@@ -898,7 +918,7 @@ function pedidoMasivoCore() {
       this.onCabeceraFechaChange(campo);
     },
     onCabeceraCondicionChange() {
-      if (!this.cabecera) return;
+      if (!this.cabecera || !this.puedeEditarCondicion) return;
       const cv = this.condicionesVenta.find(
         (c) => Number(c.Codigo) === Number(this.cabecera.id_condventa),
       );
@@ -909,7 +929,7 @@ function pedidoMasivoCore() {
       this._recalcVencimientoDisplay();
     },
     async onCabeceraListaChange() {
-      if (!this.cabecera || !this.puedeEditarCabecera) return;
+      if (!this.cabecera || !this.puedeEditarLista) return;
       this.listaId = Number(this.cabecera.lista_id || 1);
       // Totales: el estimado FE usa precios ya en memoria; revalidar con el botón
       // «Validar totales» o al confirmar (lista nueva implica reabrir/reprecio al refrescar).
@@ -922,7 +942,12 @@ function pedidoMasivoCore() {
       } catch { /* sessionStorage no disponible */ }
     },
     _payloadCabecera() {
-      return payloadCabeceraApi(this.cabecera, this.puedeEditarCabecera);
+      return payloadCabeceraApi(this.cabecera, {
+        puedeEditar: this.puedeEditarCabecera,
+        puedeEditarLista: this.puedeEditarLista,
+        puedeEditarCondicion: this.puedeEditarCondicion,
+        puedeEditarVencimiento: this.puedeEditarVencimiento,
+      });
     },
     async buscarClientes() {
       if (!this.urls.clientes) return;
@@ -1455,7 +1480,7 @@ function pedidoMasivoCore() {
       this.marcarTotalesEstimados();
     },
     async onDescFila(idArt, raw) {
-      if (this.readonly || !this.matrizEditable) return;
+      if (this.readonly || !this.matrizEditable || !this.puedeEditarDescRenglon) return;
       if (!this.draftId || !this.urls.descuento_fila) return;
       const val = String(raw || '').trim();
       const pct = val === '' ? 0 : Number(val);
@@ -1472,7 +1497,7 @@ function pedidoMasivoCore() {
       this.flashGuardado();
     },
     async onDescPie(raw) {
-      if (this.readonly || !this.matrizEditable) return;
+      if (this.readonly || !this.matrizEditable || !this.puedeEditarDescPie) return;
       if (!this.draftId || !this.urls.descuento_pie) return;
       const val = String(raw || '').trim();
       this.descPiePct = val === '' ? 0 : Number(val);

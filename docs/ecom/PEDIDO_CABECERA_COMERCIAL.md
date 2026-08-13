@@ -8,13 +8,15 @@ Cabecera comercial unificada para checkout mayorista y pedido masivo: fechas edi
 
 ## Reglas de negocio
 
-| Campo | Default | Editable por vendedor | Editable por supervisor |
-|-------|---------|----------------------|-------------------------|
-| Fecha pedido | Hoy (o sesión) | Sí | Sí |
-| Fecha entrega (PED) | `fecha_pedido + dias_entrega` (días hábiles) | Sí | Sí |
-| Vencimiento | `fecha_pedido + cond_venta.Dias` | No (auto) | Sí (≥ fecha pedido) |
-| Condición (`id_condventa`) | `cliente.id_cv` | Solo lectura | Sí |
-| Lista (`lista_id`) | `cliente.ListaPrecio` (1–5) | Solo lectura | Sí |
+| Campo | Default | Editable |
+|-------|---------|----------|
+| Fecha pedido | Hoy | Sí |
+| Fecha entrega (PED) | **Alta:** vencimiento + 10 días (si sáb/dom → lunes inmediato). Si ya hay fecha (PED cargado o valor enviado), se conserva. | Sí |
+| Vencimiento | `fecha_pedido + cond_venta.Dias` | Solo **supervisor de venta** |
+| Condición (`id_condventa`) | `cliente.id_cv` | Supervisor **o** `permisos_sistema.cambia_cv` del puesto |
+| Lista (`lista_id`) | `cliente.ListaPrecio` (1–5) | Supervisor **o** `permisos_sistema.mod_lista_de_precio` |
+| Descuento pie | Default del cliente | Supervisor **o** `mod_descuento_pie` |
+| Descuento renglón | Default del cliente | Supervisor **o** `mod_descuento_renglon` |
 
 - El vencimiento **no** usa offset fijo +30 días.
 - Overrides de lista/condición/vencimiento enviados por vendedor se **ignoran** en servidor.
@@ -25,7 +27,9 @@ Cabecera comercial unificada para checkout mayorista y pedido masivo: fechas edi
 `ecom/services/pedido_cabecera_comercial.py`:
 
 - `resolver_cabecera_comercial()` — resolver único simple + masivo
-- `puede_editar_cabecera_comercial()` — reutiliza `_si_no_supervisor` (`supervisor_venta` / `permiso_supervisor_venta_web`)
+- `puede_editar_cabecera_comercial()` — supervisor (`supervisor_venta` / `permiso_supervisor_venta_web`)
+- `flags_edicion_comercial()` — lista/condición/descuentos: supervisor **o** flags de `permisos_sistema` del puesto (Archivo → Permiso en sistema)
+- `calcular_fecha_entrega_desde_vencimiento()` — vencimiento + 10, lunes si fin de semana
 - `condiciones_venta_relay_json()` en `precio_relays.py` — catálogo `cond_venta` (`Codigo`, `Descripcion`, `Dias`)
 
 ## UI
