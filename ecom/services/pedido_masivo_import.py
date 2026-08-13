@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from django.db import transaction
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Font, PatternFill, Protection
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -48,7 +48,7 @@ HOJA_SUCURSALES = "Sucursales"
 HOJA_INSTRUCCIONES = "Instrucciones"
 HOJA_META = "_Synap"
 MARKER_CODIGO = "codigo_articulo"
-PLANTILLA_VERSION = 2
+PLANTILLA_VERSION = 3
 MAX_BYTES = 8 * 1024 * 1024
 MAX_ERRORES = 200
 MAX_ARTICULOS_PLANTILLA = 5000  # red de seguridad; administranet prod 13/08/2026: 310 ecommerce Terminado
@@ -57,10 +57,10 @@ _FILL_ID = PatternFill("solid", fgColor="E2E8F0")
 _FILL_HDR = PatternFill("solid", fgColor="0F172A")
 _FILL_LOCK = PatternFill("solid", fgColor="F1F5F9")
 _FILL_QTY = PatternFill("solid", fgColor="FFFBEB")
-_FONT_HDR = Font(color="FFFFFF", bold=True, size=10)
+_FONT_HDR = Font(color="FFFFFF", bold=True, size=9)
+_FONT_HDR_SUC = Font(color="FFFFFF", bold=True, size=8)
 _FONT_ID = Font(color="64748B", size=8)
-_PROT_LOCK = Protection(locked=True)
-_PROT_UNLOCK = Protection(locked=False)
+_FONT_ART = Font(size=10)
 
 
 def _err(
@@ -285,6 +285,19 @@ def _etiqueta_suc(s: Dict[str, Any]) -> str:
     return str_or_default(s.get("etiqueta") or s.get("nombre") or s.get("calle"), "")
 
 
+def _rotulo_columna_suc(s: Dict[str, Any]) -> str:
+    """Rótulo corto de columna: nro + calle (legible con ajuste de texto)."""
+    nro = str_or_default(s.get("nro"), "").strip()
+    calle = str_or_default(s.get("calle"), "").strip()
+    if not calle:
+        calle = _etiqueta_suc(s)
+    if len(calle) > 42:
+        calle = calle[:40].rstrip() + "…"
+    if nro and nro != "-":
+        return f"{nro}\n{calle}"
+    return calle
+
+
 def generar_plantilla_excel(
     draft: EcomPedidoMasivoDraft,
     *,
@@ -345,73 +358,71 @@ def generar_plantilla_excel(
     ws_s.sheet_state = "hidden"
 
     ws_m = wb.create_sheet(HOJA_META)
+    ids_suc = [
+        int(s["id_cliente_domicilio"])
+        for s in sucursales
+        if to_int_or_none(s.get("id_cliente_domicilio")) is not None
+    ]
     ws_m.append(["id_cliente", id_cli])
     ws_m.append(["nombre_cliente", nombre_cli])
     ws_m.append(["cod_viajante", cv if cv is not None else ""])
     ws_m.append(["draft_id", draft.pk or 0])
     ws_m.append(["plantilla_version", PLANTILLA_VERSION])
+    ws_m.append(["sucursal_ids", *ids_suc])
     ws_m.sheet_state = "veryHidden"
 
     ws = wb.create_sheet(HOJA_PEDIDO, 0)
     n_suc = len(sucursales)
-    last_col = 2 + max(n_suc, 1)
-    ws.cell(1, 1, MARKER_CODIGO)
-    ws.cell(1, 2, id_cli)
-    ws.cell(2, 1, "Código")
-    ws.cell(2, 2, "Artículo")
+    ws.cell(1, 1, "Código")
+    ws.cell(1, 2, "Artículo")
     for idx, s in enumerate(sucursales):
         col = 3 + idx
-        ws.cell(1, col, int(s["id_cliente_domicilio"]))
-        ws.cell(2, col, _etiqueta_suc(s) or f"Suc {s.get('nro') or s['id_cliente_domicilio']}")
-    for col in range(1, last_col + 1):
+        ws.cell(1, col, _rotulo_columna_suc(s))
+    for col in range(1, 3 + max(n_suc, 1)):
         c1 = ws.cell(1, col)
-        c1.fill = _FILL_ID
-        c1.font = _FONT_ID
-        c1.protection = _PROT_LOCK
-        c2 = ws.cell(2, col)
-        c2.fill = _FILL_HDR
-        c2.font = _FONT_HDR
-        c2.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
-        c2.protection = _PROT_LOCK
+        c1.fill = _FILL_HDR
+        c1.font = _FONT_HDR_SUC if col >= 3 else _FONT_HDR
+        c1.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
 
     for ridx, art in enumerate(articulos):
-        fila = 3 + ridx
+        fila = 2 + ridx
         aid = int(art["id_articulo"])
         codigo = str_or_default(art.get("id_manual"), "") or str(aid)
         ca = ws.cell(fila, 1, codigo)
         ca.fill = _FILL_LOCK
-        ca.protection = _PROT_LOCK
+        ca.font = _FONT_ART
+        ca.alignment = Alignment(vertical="center")
         cn = ws.cell(fila, 2, str_or_default(art.get("nombre"), ""))
         cn.fill = _FILL_LOCK
-        cn.protection = _PROT_LOCK
+        cn.font = _FONT_ART
+        cn.alignment = Alignment(wrap_text=True, vertical="center")
+        ws.row_dimensions[fila].height = 20
         for idx, s in enumerate(sucursales):
             col = 3 + idx
             idd = to_int_or_none(s.get("id_cliente_domicilio"))
             qty = qty_map.get((aid, idd)) if idd is not None else None
             cell = ws.cell(fila, col, qty if qty is not None else None)
             cell.fill = _FILL_QTY
-            cell.protection = _PROT_UNLOCK
-            cell.alignment = Alignment(horizontal="center")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.number_format = "0"
 
     n_arts = len(articulos)
-    last_row = 2 + max(n_arts, 1)
+    last_row = 1 + max(n_arts, 1)
     if n_arts == 0:
         for idx in range(n_suc):
-            cell = ws.cell(3, 3 + idx)
+            cell = ws.cell(2, 3 + idx)
             cell.fill = _FILL_QTY
-            cell.protection = _PROT_UNLOCK
 
-    ws.row_dimensions[1].hidden = True
-    ws.row_dimensions[2].height = 36
-    ws.column_dimensions["A"].width = 18
-    ws.column_dimensions["B"].width = 42
+    ws.row_dimensions[1].height = 56
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 52
     for idx in range(n_suc):
-        ws.column_dimensions[get_column_letter(3 + idx)].width = 14
-    ws.freeze_panes = "C3"
+        ws.column_dimensions[get_column_letter(3 + idx)].width = 16
+    ws.freeze_panes = "C2"
     ws.sheet_view.showGridLines = True
+    ws.sheet_view.zoomScale = 100
     if n_suc:
-        ws.auto_filter.ref = f"A2:{get_column_letter(2 + n_suc)}{last_row}"
+        ws.auto_filter.ref = f"A1:{get_column_letter(2 + n_suc)}{last_row}"
         dv = DataValidation(
             type="decimal",
             operator="greaterThanOrEqual",
@@ -421,14 +432,8 @@ def generar_plantilla_excel(
             errorTitle="Cantidad",
             error="Solo números mayores o iguales a 0 (packs).",
         )
-        dv.add(f"C3:{get_column_letter(2 + n_suc)}{max(last_row, 3)}")
+        dv.add(f"C2:{get_column_letter(2 + n_suc)}{max(last_row, 2)}")
         ws.add_data_validation(dv)
-    ws.protection.sheet = True
-    ws.protection.enable()
-    ws.protection.autoFilter = True
-    ws.protection.sort = True
-    ws.protection.selectLockedCells = True
-    ws.protection.selectUnlockedCells = True
 
     bio = io.BytesIO()
     wb.save(bio)
@@ -446,11 +451,19 @@ def _leer_workbook_import(raw: bytes) -> Tuple[List[Tuple[Any, ...]], Dict[str, 
         meta: Dict[str, Any] = {}
         if HOJA_META in wb.sheetnames:
             ws_m = wb[HOJA_META]
-            for row in ws_m.iter_rows(min_row=1, max_col=2, values_only=True):
+            for row in ws_m.iter_rows(min_row=1, values_only=True):
                 if not row:
                     continue
                 k = _celda_str(row[0]).strip().lower()
-                if k:
+                if not k:
+                    continue
+                if k == "sucursal_ids":
+                    meta[k] = [
+                        i
+                        for i in (to_int_or_none(x) for x in row[1:])
+                        if i is not None
+                    ]
+                else:
                     meta[k] = row[1] if len(row) > 1 else None
         if HOJA_PEDIDO not in wb.sheetnames:
             raise ValueError(
@@ -639,12 +652,18 @@ def importar_matriz_excel(
 
     sucursales, marcas_map = _territorio(draft)
     a1 = _celda_str(rows[0][0] if rows[0] else "").lower()
-    es_plantilla = a1.replace(" ", "_") == MARKER_CODIGO
-    if es_plantilla:
+    es_plantilla_v2 = a1.replace(" ", "_") == MARKER_CODIGO
+    ids_meta = meta.get("sucursal_ids") if isinstance(meta.get("sucursal_ids"), list) else []
+    if es_plantilla_v2:
         headers_id = list(rows[0])
         headers_nom = list(rows[1]) if len(rows) > 1 else []
         data_rows = rows[2:]
         fila_base = 3
+    elif ids_meta:
+        headers_id = ["", ""] + list(ids_meta)
+        headers_nom = list(rows[0])
+        data_rows = rows[1:]
+        fila_base = 2
     else:
         headers_id = list(rows[0])
         headers_nom = list(rows[0])
@@ -652,7 +671,7 @@ def importar_matriz_excel(
         fila_base = 2
 
     id_cli_excel = to_int_or_none(meta.get("id_cliente"))
-    if id_cli_excel is None and es_plantilla and rows and len(rows[0]) > 1:
+    if id_cli_excel is None and es_plantilla_v2 and rows and len(rows[0]) > 1:
         id_cli_excel = to_int_or_none(rows[0][1])
     id_cli_draft = to_int_or_none(draft.id_cliente)
     if id_cli_excel is None:
