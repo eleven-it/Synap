@@ -391,24 +391,72 @@ class TestPlantillaExcel(TestCase):
         self.assertIn("Pedido", wb.sheetnames)
         self.assertIn(HOJA_META, wb.sheetnames)
         ws = wb["Pedido"]
-        self.assertEqual(ws.cell(1, 1).value, MARKER_CODIGO)
-        self.assertEqual(ws.cell(1, 2).value, 368)
-        self.assertEqual(ws.cell(1, 3).value, 10)
-        self.assertEqual(ws.cell(1, 4).value, 20)
-        self.assertIn("MORÓN", str(ws.cell(2, 3).value))
-        self.assertEqual(ws.cell(2, 1).value, "Código")
-        self.assertEqual(ws.cell(2, 2).value, "Artículo")
-        self.assertNotIn("precio", " ".join(str(ws.cell(2, c).value or "").lower() for c in range(1, 6)))
-        self.assertEqual(ws.cell(3, 1).value, "2401")
-        self.assertEqual(ws.cell(3, 2).value, "Media pack")
-        self.assertTrue(ws.cell(3, 1).protection.locked)
-        self.assertTrue(ws.cell(3, 2).protection.locked)
-        self.assertFalse(ws.cell(3, 3).protection.locked)
-        self.assertTrue(ws.protection.sheet)
+        self.assertEqual(ws.cell(1, 1).value, "Código")
+        self.assertEqual(ws.cell(1, 2).value, "Artículo")
+        self.assertFalse(bool(ws.row_dimensions[1].hidden))
+        self.assertGreaterEqual(ws.row_dimensions[1].height or 0, 45)
+        self.assertFalse(bool(ws.protection.sheet))
+        self.assertEqual(ws.freeze_panes, "C2")
+        self.assertIn("127", str(ws.cell(1, 3).value or ""))
+        self.assertIn("MORÓN", str(ws.cell(1, 3).value or "").replace("\n", " "))
+        self.assertNotIn(
+            "precio",
+            " ".join(str(ws.cell(1, c).value or "").lower() for c in range(1, 6)),
+        )
+        self.assertEqual(ws.cell(2, 1).value, "2401")
+        self.assertEqual(ws.cell(2, 2).value, "Media pack")
         ws_m = wb[HOJA_META]
         claves = {ws_m.cell(i, 1).value: ws_m.cell(i, 2).value for i in range(1, 6)}
         self.assertEqual(claves.get("id_cliente"), 368)
         self.assertEqual(claves.get("cod_viajante"), 30)
+        self.assertEqual(ws_m.cell(6, 1).value, "sucursal_ids")
+        self.assertEqual(ws_m.cell(6, 2).value, 10)
+        self.assertEqual(ws_m.cell(6, 3).value, 20)
+
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+        return_value=[SUC_A, SUC_B],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+        return_value=[5],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import._nombre_cliente",
+        return_value="Dabra S.A.",
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
+        return_value={
+            "descRenglon": Decimal("0"),
+            "descPie": Decimal("5"),
+            "lista_id": 1,
+        },
+    )
+    @patch("ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo")
+    def test_importa_plantilla_v3_generada(self, _d, _pie, _n, _m, _s):
+        d = _draft()
+        raw = generar_plantilla_excel(
+            d,
+            articulos=[
+                {"id_articulo": 101, "id_manual": "2401", "nombre": "Media pack"}
+            ],
+        )
+        from openpyxl import load_workbook
+
+        wb = load_workbook(BytesIO(raw))
+        wb["Pedido"]["C2"] = 6
+        bio = BytesIO()
+        wb.save(bio)
+
+        def lookup(_b, codigos):
+            return {c: [dict(ART_OK)] for c in codigos}
+
+        res = importar_matriz_excel(d, bio.getvalue(), consultar_arts=lookup)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.count(), 1)
+        self.assertEqual(d.celdas.get().id_articulo, 101)
+        self.assertEqual(d.celdas.get().id_cliente_domicilio, 10)
 
 
 class TestApiImportExcel(TestCase):
