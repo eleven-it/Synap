@@ -72,6 +72,7 @@ La pantalla de configuración solicita explícitamente `limit=10000` para cargar
 | Pedido masivo — clientes | ≥1 relación activa con viajante efectivo |
 | Pedido masivo — sucursales | Solo domicilios con ≥1 relación (vendedor, cliente) si VCM activo |
 | Pedido masivo / simple — marcas | Con `id_cliente_domicilio`: marcas de esa sucursal; sin domicilio: **unión** de todas las sucursales del par vendedor-cliente |
+| Pedido masivo — import Excel | Cada celda con packs > 0 exige cuaterna activa (vendedor del borrador, cliente, sucursal de la columna, marca del artículo). Sucursal o marca fuera de territorio → error, no se importa. |
 | Carrito simple `agregar_item` | Valida marca contra relaciones; sin domicilio en sesión usa unión |
 
 Ver también `docs/ecom/PEDIDO_MASIVO_SUCURSALES.md`.

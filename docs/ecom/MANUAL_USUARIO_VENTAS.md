@@ -105,6 +105,7 @@ Cargar cantidades para **varias sucursales** del mismo cliente en una sola opera
 3. Al elegir **cliente**, revise el **widget de crédito** en el encabezado (semáforo). Ver [§11.2](#112-semáforo-de-crédito-en-la-toma).
 4. Busque artículos por código de sistema, código manual, nombre o **código de barra**; complete cantidades en la grilla (packs / múltiplos de empaque) y confirme el pedido.
    Si ingresa una cantidad inválida, el sistema muestra un aviso con la unidad de empaquetado antes de guardar o confirmar.
+   Para clientes con muchas sucursales (p. ej. cadenas), use **Descargar plantilla** e **Importar Excel** en el contexto comercial: el archivo ya trae los artículos de su territorio (código y nombre); solo complete cantidades. El descuento al pie y el resto salen del cliente. No suba una plantilla de otro cliente.
 5. Si el semáforo está **ámbar** o **rojo**, al confirmar puede aparecer un **modal de advertencia de crédito**. Puede **continuar** (el pedido se registra igual) o **cancelar** para revisar el carrito / cobranza.
 6. Tras confirmar, puede abrir el **resumen del lote** para revisar lo cargado y, si aplica, el flujo de autorización comercial del lote completo.
 7. Use **Hub pedidos** (o el breadcrumb) para retomar otros pedidos.

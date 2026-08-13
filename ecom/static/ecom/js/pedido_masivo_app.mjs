@@ -163,6 +163,11 @@ function pedidoMasivoCore() {
     articulosSeleccionados: {},
     esperaOperacion: false,
     esperaMensaje: 'Procesando…',
+    importArchivo: null,
+    importNombreArchivo: '',
+    importErrores: [],
+    importErroresTotal: 0,
+    importando: false,
 
     get totalesPie() {
       if (this.previewFuente === 'servidor') {
@@ -287,6 +292,9 @@ function pedidoMasivoCore() {
     },
     get puedeToggleCatalogo() {
       return Boolean(this.matrizEditable && this.idCliente && this.draftId);
+    },
+    get puedeImportarExcel() {
+      return Boolean(this.matrizEditable && this.draftId && this.urls.importar);
     },
     get cantidadSeleccionados() {
       return Object.keys(this.articulosSeleccionados || {}).length;
@@ -604,6 +612,69 @@ function pedidoMasivoCore() {
       });
       const data = await r.json().catch(() => ({}));
       return { status: r.status, data };
+    },
+    abrirImportarExcel() {
+      this.importArchivo = null;
+      this.importNombreArchivo = '';
+      this.importErrores = [];
+      this.importErroresTotal = 0;
+      this.abrirDialogo('masivo_importar', {
+        titulo: 'Importar pedido',
+        mensaje: 'Solo completá cantidades (packs) en la plantilla de este cliente. El archivo reemplaza el borrador. No uses una planilla de otro cliente.',
+        confirmarTexto: 'Importar y reemplazar',
+        cancelarTexto: 'Cancelar',
+      });
+    },
+    onSeleccionarExcel(ev) {
+      const f = ev?.target?.files?.[0] || null;
+      this.importArchivo = f;
+      this.importNombreArchivo = f ? f.name : '';
+      this.importErrores = [];
+      this.importErroresTotal = 0;
+    },
+    descargarPlantillaExcel() {
+      if (!this.draftId || !this.urls.plantilla_excel) return;
+      const u = `${this.urls.plantilla_excel}?draft_id=${encodeURIComponent(this.draftId)}`;
+      window.location.href = u;
+    },
+    async ejecutarImportarExcel() {
+      if (!this.draftId || !this.urls.importar || !this.importArchivo || this.importando) return;
+      this.importando = true;
+      this.esperaOperacion = true;
+      this.esperaMensaje = 'Importando Excel…';
+      this.importErrores = [];
+      try {
+        const fd = new FormData();
+        fd.append('draft_id', String(this.draftId));
+        fd.append('archivo', this.importArchivo);
+        const r = await fetch(this.urls.importar, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'X-CSRFToken': this.csrf(),
+          },
+          body: fd,
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!data.ok) {
+          this.importErrores = Array.isArray(data.errores) ? data.errores : [];
+          this.importErroresTotal = Number(data.errores_total || this.importErrores.length);
+          if (!this.importErrores.length) {
+            this.mostrarAviso(data.error || 'No se pudo importar el Excel.', 'error');
+          }
+          return;
+        }
+        this.cerrarDialogo();
+        if (data.matriz) this.aplicarMatriz(data.matriz);
+        this.catalogoDesplegado = false;
+        this.mostrarAviso(data.message || 'Pedido importado.', 'success');
+      } catch (e) {
+        this.mostrarAviso('No se pudo importar el Excel.', 'error');
+      } finally {
+        this.importando = false;
+        this.esperaOperacion = false;
+      }
     },
     /** Lee NDJSON línea a línea desde un POST (confirmación masiva con progreso). */
     async postNdjsonStream(url, body, onEvent) {

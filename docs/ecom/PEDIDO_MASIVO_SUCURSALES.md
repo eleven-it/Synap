@@ -87,6 +87,7 @@ artículo, el foco cae en el campo realmente pintado y la carga fluye.
 6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador. Con más de una línea de artículo, la matriz muestra fila **Totales** con suma de packs por sucursal (y total packs en la columna Total). Buscador con **multi-select** (checkbox + «Agregar seleccionados»); chip **Mostrar/Ocultar todos** en encabezado Artículo.
 7. **Fecha de entrega** obligatoria al confirmar: si falta, modal de aviso y foco en el campo. Cliente en UI sin `(cod: N)`.  
 8. Confirmar → **1 PED por sucursal** con `cliente_datos_adicionales.id_cliente_domicilio`.
+9. **Importar Excel (13/08/2026, `?v=masivo42`):** con borrador editable, la tarjeta de contexto ofrece **Descargar plantilla** e **Importar Excel**. La plantilla trae el catálogo VCM (SuperArt/`id_manual` + nombre) y columnas de sucursal; **solo las cantidades son editables** (hoja protegida, sin precios ni descuentos). Tope de filas de catálogo: 5000 (red de seguridad; en `administranet` prod al 13/08/2026 hay 310 Terminado con ecommerce). Fila 1 oculta = `id_cliente` + `id_cliente_domicilio`. Hoja `_Synap` (veryHidden) identifica cliente y vendedor: al subir, si no coinciden con el pedido abierto → HTTP 409 y el borrador no cambia. **Reemplazo total** de celdas; pie ← `cliente.Descuento` y renglón ← `descuento_por_cli`. El import **no** valida stock (sí preview/confirmar). Sin cantidades, `.csv`, Excel corrupto o sin hoja `Pedido` → no se modifica el borrador. Modal Synap (`masivo_importar`); sin `alert`/`confirm`.
 
 ### Matriz — layout viewport, scroll y columnas fijas izq./der. (14/07/2026)
 
@@ -210,6 +211,8 @@ Modelos: `EcomPedidoMasivoDraft` + `EcomPedidoMasivoDraftCelda`.
 | GET | `/ecom/api/mayoristapp/pedido-masivo/matriz/?draft_id=` | Releer matriz |
 | POST | `/ecom/api/mayoristapp/pedido-masivo/celda/` | Autoguardado celda |
 | GET | `/ecom/api/mayoristapp/pedido-masivo/articulos/?id_cliente=&q=` | Catálogo filtrado por marcas terna; cada ítem trae `stock_disponible_packs` |
+| GET | `/ecom/api/mayoristapp/pedido-masivo/plantilla-excel/?draft_id=` | Descarga `.xlsx` con catálogo VCM (código + nombre) y sucursales; cantidades editables; identifica cliente |
+| POST | `/ecom/api/mayoristapp/pedido-masivo/importar/` | Multipart `draft_id` + `archivo` (.xlsx). **Reemplaza** el borrador. Exige plantilla del mismo cliente/vendedor. Valida cuaterna VCM. Import ok: `descuento_pie_pct` ← `cliente.Descuento`. Sin cantidades o errores → HTTP 409, no modifica celdas ni pie |
 
 UI: `/ecom/mayoristapp/pedido-masivo-sucursales/?draft=<id>`  
 UI modo simple: `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple` (opcional `&cod_mov=`, `&draft=`, `&id_domicilio=`)

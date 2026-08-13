@@ -1,0 +1,567 @@
+"""Tests importación Excel pedido masivo (matriz + replace + VCM)."""
+
+from decimal import Decimal
+from io import BytesIO
+from unittest.mock import patch
+
+from django.test import TestCase
+from openpyxl import Workbook
+from rest_framework.test import APIRequestFactory, force_authenticate
+
+from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
+from ecom.pedido_masivo_views import (
+    PedidoMasivoImportarAPIView,
+    PedidoMasivoPlantillaExcelAPIView,
+)
+from ecom.services.pedido_masivo_import import (
+    HOJA_META,
+    MARKER_CODIGO,
+    generar_plantilla_excel,
+    importar_matriz_excel,
+)
+
+
+class _User:
+    is_authenticated = True
+    is_superuser = True
+
+    def tiene_permiso(self, _c):
+        return True
+
+
+SUC_A = {
+    "id_cliente_domicilio": 10,
+    "nro": "127",
+    "calle": "MORÓN - 25 de Mayo",
+    "etiqueta": "MORÓN - 25 de Mayo 127",
+    "nombre": "MORÓN - 25 de Mayo 127",
+}
+SUC_B = {
+    "id_cliente_domicilio": 20,
+    "nro": "736",
+    "calle": "MERLO - Av. Libertador",
+    "etiqueta": "MERLO - Av. Libertador 736",
+    "nombre": "MERLO - Av. Libertador 736",
+}
+
+ART_OK = {
+    "id_articulo": 101,
+    "id_manual": "2401",
+    "nombre": "Media pack",
+    "codigo_marca": 5,
+    "cod_art_prov": "902401-02",
+    "codigo_t": "",
+    "discontinuo": "No",
+    "ecommerce": "Si",
+    "tipo_art_fab": "Terminado",
+    "multiplo_cantidad_vta": 6,
+}
+
+
+def _xlsx_plantilla(ids_suc, qtys_por_codigo, id_cliente=368, cod_viajante=30):
+    """ids_suc: lista id domicilio. qtys: {codigo: [q1, q2, ...]}."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Pedido"
+    ws.cell(1, 1, MARKER_CODIGO)
+    ws.cell(1, 2, id_cliente)
+    ws.cell(2, 1, "Código")
+    ws.cell(2, 2, "Artículo")
+    for i, idd in enumerate(ids_suc):
+        ws.cell(1, 3 + i, idd)
+        ws.cell(2, 3 + i, f"Suc {idd}")
+    fila = 3
+    for codigo, qtys in qtys_por_codigo.items():
+        ws.cell(fila, 1, codigo)
+        ws.cell(fila, 2, "x")
+        for i, q in enumerate(qtys):
+            if q is not None:
+                ws.cell(fila, 3 + i, q)
+        fila += 1
+    ws_m = wb.create_sheet(HOJA_META)
+    ws_m.append(["id_cliente", id_cliente])
+    ws_m.append(["cod_viajante", cod_viajante])
+    ws_m.append(["plantilla_version", 2])
+    bio = BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
+
+def _draft(**kwargs):
+    defaults = dict(
+        base_empresa="emp_m",
+        id_usuario=1,
+        id_cliente=368,
+        cod_viajante=30,
+        estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        modo=EcomPedidoMasivoDraft.MODO_MASIVO,
+    )
+    defaults.update(kwargs)
+    return EcomPedidoMasivoDraft.objects.create(**defaults)
+
+
+class TestImportarMatrizExcel(TestCase):
+    def setUp(self):
+        self.p_suc = patch(
+            "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+            return_value=[SUC_A, SUC_B],
+        )
+        self.p_marcas = patch(
+            "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+            side_effect=lambda *a, **k: (
+                [5] if k.get("id_cliente_domicilio") == 10 else [5, 8]
+            ),
+        )
+        self.p_desc = patch(
+            "ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo"
+        )
+        self.p_pie = patch(
+            "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
+            return_value={
+                "descRenglon": Decimal("0"),
+                "descPie": Decimal("5"),
+                "lista_id": 1,
+            },
+        )
+        self.p_nom = patch(
+            "ecom.services.pedido_masivo_import._nombre_cliente",
+            return_value="Dabra S.A.",
+        )
+        self.p_suc.start()
+        self.p_marcas.start()
+        self.p_desc.start()
+        self.p_pie.start()
+        self.p_nom.start()
+
+    def tearDown(self):
+        self.p_suc.stop()
+        self.p_marcas.stop()
+        self.p_desc.stop()
+        self.p_pie.stop()
+        self.p_nom.stop()
+
+    def _lookup(self, _base, codigos):
+        out = {}
+        for c in codigos:
+            if c in ("2401", "902401-02"):
+                out[c] = [dict(ART_OK)]
+            else:
+                out[c] = []
+        return out
+
+    def test_importa_y_reemplaza_celdas(self):
+        d = _draft()
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=999, id_cliente_domicilio=10, cantidad_packs=Decimal("99")
+        )
+        raw = _xlsx_plantilla([10, 20], {"2401": [12, 6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.count(), 2)
+        self.assertFalse(d.celdas.filter(id_articulo=999).exists())
+        self.assertEqual(
+            d.celdas.get(id_articulo=101, id_cliente_domicilio=10).cantidad_packs,
+            Decimal("12"),
+        )
+        self.assertEqual(
+            d.celdas.get(id_articulo=101, id_cliente_domicilio=20).cantidad_packs,
+            Decimal("6"),
+        )
+        d.refresh_from_db()
+        self.assertEqual(d.descuento_pie_pct, Decimal("5"))
+
+    def test_rechaza_sucursal_fuera_territorio(self):
+        d = _draft()
+        raw = _xlsx_plantilla([10, 99], {"2401": [6, 6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        codes = {e["code"] for e in res["errores"]}
+        self.assertIn("sucursal_fuera_territorio", codes)
+        self.assertEqual(d.celdas.count(), 0)
+
+    def test_rechaza_marca_fuera_territorio(self):
+        d = _draft()
+        art_otra = dict(ART_OK, codigo_marca=99)
+
+        def lookup(_b, codigos):
+            return {c: [art_otra] for c in codigos}
+
+        raw = _xlsx_plantilla([10], {"2401": [6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["errores"][0]["code"], "marca_fuera_territorio")
+        self.assertEqual(d.celdas.count(), 0)
+
+    def test_rechaza_articulo_inexistente(self):
+        d = _draft()
+        raw = _xlsx_plantilla([10], {"NO-EXISTE": [6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["errores"][0]["code"], "articulo_no_encontrado")
+
+    def test_rechaza_multiplo(self):
+        d = _draft()
+        raw = _xlsx_plantilla([10], {"2401": [7]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["errores"][0]["code"], "multiplo_empaque")
+        self.assertEqual(d.celdas.count(), 0)
+
+    def test_all_or_nothing_conserva_celdas_previas(self):
+        d = _draft()
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=5, id_cliente_domicilio=10, cantidad_packs=Decimal("3")
+        )
+        raw = _xlsx_plantilla([10], {"2401": [7]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(d.celdas.count(), 1)
+        self.assertEqual(d.celdas.get().id_articulo, 5)
+
+    def test_replace_completa_descuento_pie_desde_cliente(self):
+        d = _draft(descuento_pie_pct=Decimal("7"))
+        raw = _xlsx_plantilla([10], {"2401": [6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertTrue(res["ok"], res)
+        d.refresh_from_db()
+        self.assertEqual(d.descuento_pie_pct, Decimal("5"))
+
+    def test_error_conserva_descuento_pie_previo(self):
+        d = _draft(descuento_pie_pct=Decimal("7"))
+        raw = _xlsx_plantilla([10], {"2401": [7]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        d.refresh_from_db()
+        self.assertEqual(d.descuento_pie_pct, Decimal("7"))
+
+    def test_rechaza_cliente_distinto(self):
+        d = _draft()
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=5, id_cliente_domicilio=10, cantidad_packs=Decimal("3")
+        )
+        raw = _xlsx_plantilla([10], {"2401": [6]}, id_cliente=999)
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["errores"][0]["code"], "cliente_no_coincide")
+        self.assertEqual(d.celdas.count(), 1)
+
+    def test_rechaza_vendedor_distinto(self):
+        d = _draft()
+        raw = _xlsx_plantilla([10], {"2401": [6]}, cod_viajante=99)
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertTrue(any(e["code"] == "vendedor_no_coincide" for e in res["errores"]))
+
+    def test_rechaza_sin_cantidades(self):
+        d = _draft()
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=5, id_cliente_domicilio=10, cantidad_packs=Decimal("3")
+        )
+        raw = _xlsx_plantilla([10], {"2401": [None]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["code"], "sin_cantidades")
+        self.assertEqual(d.celdas.count(), 1)
+
+    def test_rechaza_plantilla_sin_cliente(self):
+        d = _draft()
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Pedido"
+        ws.cell(1, 1, MARKER_CODIGO)
+        ws.cell(1, 2, "nombre")
+        ws.cell(1, 3, 10)
+        ws.cell(2, 1, "Código")
+        ws.cell(2, 3, "Suc 10")
+        ws.cell(3, 1, "2401")
+        ws.cell(3, 3, 6)
+        bio = BytesIO()
+        wb.save(bio)
+        res = importar_matriz_excel(d, bio.getvalue(), consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertTrue(any(e["code"] == "plantilla_sin_cliente" for e in res["errores"]))
+
+    def test_modo_simple_solo_domicilio_fijo(self):
+        d = _draft(
+            modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+            id_domicilio_fijo=10,
+        )
+        raw = _xlsx_plantilla([10, 20], {"2401": [6, 6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertTrue(
+            any(e["code"] == "sucursal_fuera_territorio" for e in res["errores"])
+        )
+
+    def test_columna_extra_vacia_fuera_territorio(self):
+        d = _draft()
+        raw = _xlsx_plantilla([10, 99], {"2401": [6, None]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertTrue(
+            any(e["code"] == "sucursal_fuera_territorio" for e in res["errores"])
+        )
+        self.assertEqual(d.celdas.count(), 0)
+
+    def test_acepta_codigo_barras(self):
+        d = _draft()
+
+        def lookup(_b, codigos):
+            out = {}
+            for c in codigos:
+                if c in ("2401", "7790001112223"):
+                    out[c] = [dict(ART_OK)]
+                else:
+                    out[c] = []
+            return out
+
+        raw = _xlsx_plantilla([10], {"7790001112223": [6]})
+        res = importar_matriz_excel(d, raw, consultar_arts=lookup)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.get().id_articulo, 101)
+
+    def test_qty_cero_no_crea_celda(self):
+        d = _draft()
+        raw = _xlsx_plantilla([10, 20], {"2401": [6, 0]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.count(), 1)
+        self.assertEqual(d.celdas.get().id_cliente_domicilio, 10)
+
+    def test_agrega_varios_errores_sin_tocar_borrador(self):
+        d = _draft()
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=5, id_cliente_domicilio=10, cantidad_packs=Decimal("3")
+        )
+        raw = _xlsx_plantilla([10], {"NO-EXISTE": [6], "2401": [7]})
+        res = importar_matriz_excel(d, raw, consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        codes = {e["code"] for e in res["errores"]}
+        self.assertIn("articulo_no_encontrado", codes)
+        self.assertIn("multiplo_empaque", codes)
+        self.assertEqual(d.celdas.count(), 1)
+        self.assertEqual(d.celdas.get().id_articulo, 5)
+
+    def test_xlsx_corrupto_no_toca_celdas(self):
+        d = _draft()
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=5, id_cliente_domicilio=10, cantidad_packs=Decimal("3")
+        )
+        res = importar_matriz_excel(d, b"no-es-xlsx", consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["code"], "archivo_invalido")
+        self.assertEqual(d.celdas.count(), 1)
+
+    def test_sin_hoja_pedido(self):
+        d = _draft()
+        wb = Workbook()
+        wb.active.title = "Otra"
+        bio = BytesIO()
+        wb.save(bio)
+        res = importar_matriz_excel(d, bio.getvalue(), consultar_arts=self._lookup)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["code"], "archivo_invalido")
+        self.assertIn("Pedido", res["error"])
+
+
+class TestPlantillaExcel(TestCase):
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+        return_value=[SUC_A, SUC_B],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+        return_value=[5],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import._nombre_cliente",
+        return_value="Dabra S.A.",
+    )
+    def test_plantilla_incluye_marker_e_ids(self, _n, _m, _s):
+        d = _draft()
+        raw = generar_plantilla_excel(
+            d,
+            articulos=[
+                {"id_articulo": 101, "id_manual": "2401", "nombre": "Media pack"}
+            ],
+        )
+        from openpyxl import load_workbook
+
+        wb = load_workbook(BytesIO(raw))
+        self.assertIn("Pedido", wb.sheetnames)
+        self.assertIn(HOJA_META, wb.sheetnames)
+        ws = wb["Pedido"]
+        self.assertEqual(ws.cell(1, 1).value, MARKER_CODIGO)
+        self.assertEqual(ws.cell(1, 2).value, 368)
+        self.assertEqual(ws.cell(1, 3).value, 10)
+        self.assertEqual(ws.cell(1, 4).value, 20)
+        self.assertIn("MORÓN", str(ws.cell(2, 3).value))
+        self.assertEqual(ws.cell(2, 1).value, "Código")
+        self.assertEqual(ws.cell(2, 2).value, "Artículo")
+        self.assertNotIn("precio", " ".join(str(ws.cell(2, c).value or "").lower() for c in range(1, 6)))
+        self.assertEqual(ws.cell(3, 1).value, "2401")
+        self.assertEqual(ws.cell(3, 2).value, "Media pack")
+        self.assertTrue(ws.cell(3, 1).protection.locked)
+        self.assertTrue(ws.cell(3, 2).protection.locked)
+        self.assertFalse(ws.cell(3, 3).protection.locked)
+        self.assertTrue(ws.protection.sheet)
+        ws_m = wb[HOJA_META]
+        claves = {ws_m.cell(i, 1).value: ws_m.cell(i, 2).value for i in range(1, 6)}
+        self.assertEqual(claves.get("id_cliente"), 368)
+        self.assertEqual(claves.get("cod_viajante"), 30)
+
+
+class TestApiImportExcel(TestCase):
+    @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+        return_value=[SUC_A],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+        return_value=[5],
+    )
+    @patch("ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo")
+    @patch(
+        "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
+        return_value={
+            "descRenglon": Decimal("0"),
+            "descPie": Decimal("5"),
+            "lista_id": 1,
+        },
+    )
+    def test_post_importar_ok(self, _pie, _d, _m, _s, _b):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        d = _draft(id_usuario=55)
+
+        def lookup(_base, codigos):
+            return {c: [dict(ART_OK)] for c in codigos}
+
+        raw = _xlsx_plantilla([10], {"2401": [6]})
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/pedido-masivo/importar/",
+            {
+                "draft_id": str(d.pk),
+                "archivo": SimpleUploadedFile(
+                    "p.xlsx",
+                    raw,
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ),
+            },
+            format="multipart",
+        )
+        req.session = {"user": {"base_empresa": "emp_m", "id_usuario": 55}}
+        force_authenticate(req, user=_User())
+        with patch(
+            "ecom.services.pedido_masivo_import.consultar_articulos_por_codigos",
+            side_effect=lookup,
+        ):
+            with patch(
+                "ecom.pedido_masivo_views._serializar_matriz_ui",
+                return_value={"draft_id": d.pk, "celdas": {}},
+            ):
+                resp = PedidoMasivoImportarAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200, getattr(resp, "data", None))
+        self.assertTrue(resp.data["ok"])
+        self.assertEqual(d.celdas.count(), 1)
+
+    @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
+    def test_post_csv_rechaza(self, _b):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        d = _draft(id_usuario=55)
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/pedido-masivo/importar/",
+            {
+                "draft_id": str(d.pk),
+                "archivo": SimpleUploadedFile(
+                    "p.csv", b"a,b\n1,2", content_type="text/csv"
+                ),
+            },
+            format="multipart",
+        )
+        req.session = {"user": {"base_empresa": "emp_m", "id_usuario": 55}}
+        force_authenticate(req, user=_User())
+        resp = PedidoMasivoImportarAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data["code"], "archivo_invalido")
+        self.assertEqual(d.celdas.count(), 0)
+
+    @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+        return_value=[SUC_A],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+        return_value=[5],
+    )
+    def test_post_multiplo_invalido_409(self, _m, _s, _b):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        d = _draft(id_usuario=55)
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=5, id_cliente_domicilio=10, cantidad_packs=Decimal("3")
+        )
+
+        def lookup(_base, codigos):
+            return {c: [dict(ART_OK)] for c in codigos}
+
+        raw = _xlsx_plantilla([10], {"2401": [7]})
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/pedido-masivo/importar/",
+            {
+                "draft_id": str(d.pk),
+                "archivo": SimpleUploadedFile(
+                    "p.xlsx",
+                    raw,
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ),
+            },
+            format="multipart",
+        )
+        req.session = {"user": {"base_empresa": "emp_m", "id_usuario": 55}}
+        force_authenticate(req, user=_User())
+        with patch(
+            "ecom.services.pedido_masivo_import.consultar_articulos_por_codigos",
+            side_effect=lookup,
+        ):
+            resp = PedidoMasivoImportarAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 409, getattr(resp, "data", None))
+        self.assertEqual(resp.data["code"], "validacion")
+        self.assertEqual(d.celdas.count(), 1)
+        self.assertEqual(d.celdas.get().id_articulo, 5)
+
+    @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+        return_value=[SUC_A],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+        return_value=[5],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_articulos_plantilla_vcm",
+        return_value=[],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import._nombre_cliente",
+        return_value="Dabra",
+    )
+    def test_get_plantilla(self, _n, _a, _m, _s, _b):
+        d = _draft(id_usuario=55)
+        factory = APIRequestFactory()
+        req = factory.get(
+            f"/ecom/api/mayoristapp/pedido-masivo/plantilla-excel/?draft_id={d.pk}"
+        )
+        req.session = {"user": {"base_empresa": "emp_m", "id_usuario": 55}}
+        force_authenticate(req, user=_User())
+        resp = PedidoMasivoPlantillaExcelAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("spreadsheetml", resp["Content-Type"])
+        self.assertIn(".xlsx", resp["Content-Disposition"])

@@ -60,7 +60,9 @@ from ecom.pedido_masivo_views import (
     PedidoMasivoDescuentoFilaAPIView,
     PedidoMasivoDescuentoPieAPIView,
     PedidoMasivoEliminarFilaAPIView,
+    PedidoMasivoImportarAPIView,
     PedidoMasivoMatrizAPIView,
+    PedidoMasivoPlantillaExcelAPIView,
     PedidoMasivoPreviewAPIView,
     PedidoMasivoSucursalesAPIView,
     PedidoMasivoSucursalesView,
@@ -304,6 +306,16 @@ urlpatterns = [
         "api/mayoristapp/pedido-masivo/anular/",
         PedidoMasivoAnularAPIView.as_view(),
         name="api_pedido_masivo_anular",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/plantilla-excel/",
+        PedidoMasivoPlantillaExcelAPIView.as_view(),
+        name="api_pedido_masivo_plantilla_excel",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/importar/",
+        PedidoMasivoImportarAPIView.as_view(),
+        name="api_pedido_masivo_importar",
     ),
     path(
         "mayoristapp/config/vendedor-cliente-marca/",
