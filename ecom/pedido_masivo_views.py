@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Iterator
 
-from django.http import StreamingHttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.urls import reverse
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
@@ -20,6 +21,7 @@ from ecom.permissions import (
     EcomPedidoCapturaPermission,
     usuario_puede_matriz_multi_columna,
 )
+
 from ecom.services.pedido_masivo_matriz import (
     anular_borrador_masivo_usuario,
     buscar_articulos_filtrados_ternas,
@@ -33,6 +35,11 @@ from ecom.services.pedido_masivo_matriz import (
     listar_sucursales_cliente,
     obtener_o_crear_draft,
     serializar_matriz,
+)
+from ecom.services.pedido_masivo_import import (
+    generar_plantilla_excel,
+    importar_matriz_excel,
+    nombre_archivo_plantilla,
 )
 from ecom.services.pedido_cabecera_relay import (
     cabecera_pedido_relay,
@@ -250,6 +257,10 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
                         "descuento_pie": reverse("ecom:api_pedido_masivo_descuento_pie"),
                         "confirmar": reverse("ecom:api_pedido_masivo_confirmar"),
                         "anular": reverse("ecom:api_pedido_masivo_anular"),
+                        "importar": reverse("ecom:api_pedido_masivo_importar"),
+                        "plantilla_excel": reverse(
+                            "ecom:api_pedido_masivo_plantilla_excel"
+                        ),
                         # Acciones hero PED (reutilizan APIs mayoristas existentes).
                         "mail_enqueue": reverse(
                             "ecom:mayoristapp_comprobantes_comprobante_a_mail_enqueue"
@@ -880,6 +891,88 @@ class PedidoMasivoDescuentoPieAPIView(APIView):
             {
                 "ok": True,
                 "message": msg,
+                "matriz": _serializar_matriz_ui(draft, base),
+            }
+        )
+
+
+def _draft_usuario(request, draft_id: Any) -> Any:
+    base = _session_base_empresa(request)
+    sess = _sess_user(request)
+    id_u = to_int_or_none(sess.get("id_usuario"))
+    did = to_int_or_none(draft_id)
+    if not base or did is None or id_u is None:
+        return None, base
+    draft = EcomPedidoMasivoDraft.objects.filter(
+        pk=did, base_empresa=base, id_usuario=id_u
+    ).first()
+    return draft, base
+
+
+class PedidoMasivoPlantillaExcelAPIView(APIView):
+    """GET descarga la plantilla matriz del borrador (sucursales VCM)."""
+
+    permission_classes = [EcomPedidoCapturaPermission]
+
+    def get(self, request: Request):
+        draft, _base = _draft_usuario(request, request.query_params.get("draft_id"))
+        if not draft:
+            return _err("Borrador no encontrado.", "no_encontrado", 404)
+        raw = generar_plantilla_excel(draft)
+        nombre = nombre_archivo_plantilla(draft)
+        resp = HttpResponse(
+            raw,
+            content_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+        resp["Content-Disposition"] = f'attachment; filename="{nombre}"'
+        return resp
+
+
+class PedidoMasivoImportarAPIView(APIView):
+    """POST multipart: reemplaza el borrador con la matriz Excel (validación VCM)."""
+
+    permission_classes = [EcomPedidoCapturaPermission]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request: Request) -> Response:
+        base = _session_base_empresa(request)
+        if not base:
+            return _err("Sin base_empresa.", "sin_base_empresa")
+        data = request.data if hasattr(request, "data") else {}
+        draft, _b = _draft_usuario(request, data.get("draft_id"))
+        if not draft:
+            return _err("Borrador no encontrado.", "no_encontrado", 404)
+        upload = request.FILES.get("archivo")
+        if not upload:
+            return _err("Falta el archivo Excel.", "sin_archivo")
+        nombre = str(getattr(upload, "name", "") or "").lower()
+        if not nombre.endswith((".xlsx", ".xlsm")):
+            return _err("El archivo debe ser .xlsx.", "archivo_invalido")
+        raw = upload.read()
+        result = importar_matriz_excel(draft, raw)
+        if not result.get("ok"):
+            status = 409 if result.get("code") == "validacion" else 400
+            return Response(
+                {
+                    "ok": False,
+                    "error": result.get("error") or "No se pudo importar.",
+                    "code": result.get("code") or "error",
+                    "errores": result.get("errores") or [],
+                    "errores_total": result.get("errores_total")
+                    or len(result.get("errores") or []),
+                },
+                status=status,
+            )
+        draft.refresh_from_db()
+        return Response(
+            {
+                "ok": True,
+                "message": result.get("message"),
+                "celdas": result.get("celdas"),
+                "articulos": result.get("articulos"),
+                "sucursales": result.get("sucursales"),
                 "matriz": _serializar_matriz_ui(draft, base),
             }
         )
