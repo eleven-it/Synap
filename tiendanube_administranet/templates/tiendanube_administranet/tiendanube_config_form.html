@@ -1,24 +1,22 @@
 {% extends "base_app.html" %}
 {% load i18n %}
-{% load crispy_forms_tags %}
 
-{% block title %}{% if object %}{% trans "Edit" %}{% else %}{% trans "Create" %}{% endif %} {% trans "Tiendanube Configuration" %}{% endblock %}
+{% block title %}{% if object %}{% trans "Editar" %}{% else %}{% trans "Crear" %}{% endif %} {% trans "configuración Tienda Nube" %}{% endblock %}
 
 {% block content %}
-<!-- Breadcrumb -->
 <nav class="flex mb-6" aria-label="Breadcrumb">
     <ol class="inline-flex items-center space-x-1 md:space-x-3">
         <li class="inline-flex items-center">
             <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
                 <span class="material-icons text-sm mr-2">dashboard</span>
-                {% trans "Dashboard" %}
+                {% trans "Panel" %}
             </a>
         </li>
         <li>
             <div class="flex items-center">
                 <span class="material-icons text-gray-400 mx-2">chevron_right</span>
                 <a href="{% url 'tiendanube_administranet:tiendanube_config' %}" class="text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
-                    {% trans "Tiendanube Configuration" %}
+                    {% trans "Tienda Nube" %}
                 </a>
             </div>
         </li>
@@ -26,231 +24,207 @@
             <div class="flex items-center">
                 <span class="material-icons text-gray-400 mx-2">chevron_right</span>
                 <span class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    {% if object %}{% trans "Edit" %}{% else %}{% trans "Create" %}{% endif %}
+                    {% if object %}{% trans "Editar" %}{% else %}{% trans "Crear" %}{% endif %}
                 </span>
             </div>
         </li>
     </ol>
 </nav>
 
-<div class="max-w-4xl mx-auto">
+<div class="max-w-4xl mx-auto mpr-contenedor-pagina">
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-800 dark:text-white">
-            {% if object %}{% trans "Edit" %}{% else %}{% trans "Create" %}{% endif %} {% trans "Tiendanube Configuration" %}
+            {% if object %}{% trans "Editar configuración Tienda Nube" %}{% else %}{% trans "Nueva configuración Tienda Nube" %}{% endif %}
         </h1>
         <p class="text-gray-600 dark:text-gray-400 mt-2">
-            {% if object %}
-                {% trans "Update your Tiendanube integration settings." %}
-            {% else %}
-                {% trans "Configure your Tiendanube integration to start syncing products and stock." %}
-            {% endif %}
+            {% trans "Credenciales OAuth, tienda activa, sincronización automática y secreto HMAC para webhooks." %}
         </p>
     </div>
 
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <form method="post" class="p-6">
+        <form method="post" class="p-6" id="tn-config-form">
             {% csrf_token %}
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Store Configuration -->
                 <div class="space-y-4">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center">
                         <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">store</span>
-                        {% trans "Store Configuration" %}
+                        {% trans "Tienda" %}
                     </h3>
-                    
+
                     <div>
-                        <label for="{{ form.store_id.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Store ID" %} *
+                        <label for="id_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Nombre" %} *
                         </label>
-                        <input type="text" name="store_id" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value="{{ form.store_id.value|default:'' }}" required>
-                        {% if form.store_id.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.store_id.errors|first }}</p>
-                        {% endif %}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Your Tiendanube store identifier" %}</p>
+                        <input type="text" name="name" id="id_name" required
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
+                               value="{{ form.name.value|default:'' }}">
+                        {% if form.name.errors %}<p class="text-red-500 text-sm mt-1">{{ form.name.errors|first }}</p>{% endif %}
+                    </div>
+
+                    <div>
+                        <label for="id_store_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "ID de tienda" %} *
+                        </label>
+                        <input type="text" name="store_id" id="id_store_id" required
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
+                               value="{{ form.store_id.value|default:'' }}">
+                        {% if form.store_id.errors %}<p class="text-red-500 text-sm mt-1">{{ form.store_id.errors|first }}</p>{% endif %}
                     </div>
 
                     <div>
                         <label for="access_token_field" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Access Token" %} *
+                            {% trans "Token de acceso" %}{% if not object %} *{% endif %}
                         </label>
                         <div class="flex gap-2 items-stretch">
-                            <input type="text" id="access_token_field" name="access_token" class="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" autocomplete="off" value="{{ form.access_token.value|default:'' }}" required>
+                            <input type="password" id="access_token_field" name="access_token" autocomplete="off"
+                                   {% if not object %}required{% endif %}
+                                   placeholder="{% if object %}{% trans 'Dejar vacío para no cambiar' %}{% else %}{% trans 'Token OAuth' %}{% endif %}"
+                                   class="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500">
                             {% if object and can_renew_access_token %}
-                            <button type="button" id="renewTokenBtn" class="inline-flex items-center shrink-0 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition whitespace-nowrap" title="{% trans 'Renovar access token vía OAuth' %}">
+                            <button type="button" id="renewTokenBtn" class="inline-flex items-center shrink-0 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700">
                                 <span class="material-icons text-sm mr-1">key</span>
                                 {% trans "Renovar" %}
                             </button>
                             {% endif %}
                         </div>
-                        {% if form.access_token.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.access_token.errors|first }}</p>
-                        {% endif %}
+                        {% if form.access_token.errors %}<p class="text-red-500 text-sm mt-1">{{ form.access_token.errors|first }}</p>{% endif %}
+                    </div>
+
+                    <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-600 dark:text-slate-300">
+                        <span class="font-medium">{% trans "API Tienda Nube:" %}</span>
+                        {{ form.instance.api_url|default:"https://api.tiendanube.com/2025-03" }}
+                        <span class="block mt-1 text-slate-500">{% trans "Versión fija 2025-03 (no editable)." %}</span>
+                    </div>
+
+                    <div>
+                        <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Tienda activa" %}</span>
+                        <input type="hidden" name="is_active" id="id_is_active" value="{% if form.is_active.value %}on{% endif %}">
+                        <button type="button" id="btn-toggle-tienda-activa"
+                                class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-orange-500">
+                            <span class="material-icons text-sm mr-1" id="btn-toggle-tienda-activa-icon">check_circle</span>
+                            <span id="btn-toggle-tienda-activa-text">{% trans "Activo" %}</span>
+                        </button>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Habilita la tienda en Synap (webhooks y sync)." %}</p>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center">
+                        <span class="material-icons text-green-600 dark:text-green-400 mr-2">sync</span>
+                        {% trans "Sincronización" %}
+                    </h3>
+
+                    <div>
+                        <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Sync automático" %}</span>
+                        <input type="hidden" name="auto_sync" id="id_auto_sync" value="{% if form.auto_sync.value %}on{% endif %}">
+                        <button type="button" id="btn-toggle-auto-sync"
+                                class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <span class="material-icons text-sm mr-1" id="btn-toggle-auto-sync-icon">sync</span>
+                            <span id="btn-toggle-auto-sync-text">{% trans "Inactivo" %}</span>
+                        </button>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {% trans "Token de acceso API de Tienda Nube. Use «Renovar» para obtener uno nuevo vía OAuth sin salir del formulario." %}
+                            {% trans "El drenaje periódico corre con el cron" %} <code class="text-xs">tiendanube_drain_inbox</code>
+                            {% trans "hasta que ops active Celery." %}
                         </p>
                     </div>
 
                     <div>
-                        <label for="{{ form.api_url.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "API URL" %}
+                        <label for="id_sync_interval" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Intervalo (minutos)" %}
                         </label>
-                        <input type="text" name="api_url" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value="{{ form.api_url.value|default:'' }}">
-                        {% if form.api_url.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.api_url.errors|first }}</p>
-                        {% endif %}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Leave empty to use default Tiendanube API" %}</p>
-                    </div>
-                </div>
-
-                <!-- Sync Configuration -->
-                <div class="space-y-4">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center">
-                        <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">sync</span>
-                        {% trans "Sync Configuration" %}
-                    </h3>
-                    
-                    <div>
-                        <label for="{{ form.is_active.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Auto Sync" %}
-                        </label>
-                        <div class="flex items-center space-x-3">
-                            <input type="checkbox" name="is_active" id="{{ form.is_active.id_for_label }}" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" {% if form.is_active.value %}checked{% endif %}>
-                            <label for="{{ form.is_active.id_for_label }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                                {% trans "Enable automatic synchronization" %}
-                            </label>
-                            <button type="button" id="playSyncBtn" class="ml-4 px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700 hover:bg-green-200 dark:hover:bg-green-800/50" title="{% trans 'Activate synchronization' %}">
-                                <span class="material-icons text-sm">play_arrow</span>
-                            </button>
-                            <button type="button" id="stopSyncBtn" class="ml-1 px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 hover:bg-red-200 dark:hover:bg-red-800/50" title="{% trans 'Deactivate synchronization' %}">
-                                <span class="material-icons text-sm">stop</span>
-                            </button>
-                        </div>
-                        {% if form.is_active.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.is_active.errors|first }}</p>
-                        {% endif %}
-                    </div>
-
-                    <div>
-                        <label for="{{ form.sync_interval.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Sync Interval (minutes)" %}
-                        </label>
-                        <select name="sync_interval" id="{{ form.sync_interval.id_for_label }}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="5" {% if form.sync_interval.value == 5 %}selected{% endif %}>5 {% trans "minutes" %}</option>
-                            <option value="15" {% if form.sync_interval.value == 15 %}selected{% endif %}>15 {% trans "minutes" %}</option>
-                            <option value="30" {% if form.sync_interval.value == 30 %}selected{% endif %}>30 {% trans "minutes" %}</option>
-                            <option value="60" {% if form.sync_interval.value == 60 %}selected{% endif %}>1 {% trans "hour" %}</option>
-                            <option value="120" {% if form.sync_interval.value == 120 %}selected{% endif %}>2 {% trans "hours" %}</option>
-                            <option value="240" {% if form.sync_interval.value == 240 %}selected{% endif %}>4 {% trans "hours" %}</option>
-                            <option value="480" {% if form.sync_interval.value == 480 %}selected{% endif %}>8 {% trans "hours" %}</option>
-                            <option value="1440" {% if form.sync_interval.value == 1440 %}selected{% endif %}>24 {% trans "hours" %}</option>
+                        <select name="sync_interval" id="id_sync_interval" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="5" {% if form.sync_interval.value == 5 %}selected{% endif %}>5 {% trans "min" %}</option>
+                            <option value="15" {% if form.sync_interval.value == 15 %}selected{% endif %}>15 {% trans "min" %}</option>
+                            <option value="30" {% if form.sync_interval.value == 30 %}selected{% endif %}>30 {% trans "min" %}</option>
+                            <option value="60" {% if form.sync_interval.value == 60 %}selected{% endif %}>1 {% trans "h" %}</option>
+                            <option value="120" {% if form.sync_interval.value == 120 %}selected{% endif %}>2 {% trans "h" %}</option>
+                            <option value="240" {% if form.sync_interval.value == 240 %}selected{% endif %}>4 {% trans "h" %}</option>
+                            <option value="480" {% if form.sync_interval.value == 480 %}selected{% endif %}>8 {% trans "h" %}</option>
+                            <option value="1440" {% if form.sync_interval.value == 1440 %}selected{% endif %}>24 {% trans "h" %}</option>
                         </select>
-                        {% if form.sync_interval.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.sync_interval.errors|first }}</p>
-                        {% endif %}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "How often to sync (5-1440 minutes)" %}</p>
                     </div>
 
                     <div>
-                        <label for="{{ form.webhook_secret.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Webhook Secret" %}
+                        <label for="id_webhook_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Secreto HMAC (webhooks)" %} *
                         </label>
-                        <input type="text" name="webhook_secret" id="{{ form.webhook_secret.id_for_label }}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value="{{ form.webhook_secret.value|default:'' }}">
-                        {% if form.webhook_secret.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.webhook_secret.errors|first }}</p>
-                        {% endif %}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Secret for webhook verification" %}</p>
+                        <input type="password" name="webhook_secret" id="id_webhook_secret" autocomplete="off"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
+                               value="{{ form.webhook_secret.value|default:'' }}"
+                               placeholder="{% if object %}{% trans 'Dejar vacío para no cambiar' %}{% endif %}">
+                        {% if form.webhook_secret.errors %}<p class="text-red-500 text-sm mt-1">{{ form.webhook_secret.errors|first }}</p>{% endif %}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Obligatorio en producción para validar firmas HMAC." %}</p>
                     </div>
                 </div>
             </div>
 
-
-            <!-- Sync Options -->
             <div class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
-                    <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">settings</span>
-                    {% trans "Sync Options" %}
-                </h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="flex items-center">
-                        <input type="checkbox" name="sync_products" id="{{ form.sync_products.id_for_label }}" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" {% if form.sync_products.value %}checked{% endif %}>
-                        <label for="{{ form.sync_products.id_for_label }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            {% trans "Sync Products" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        <input type="checkbox" name="sync_stock" id="{{ form.sync_stock.id_for_label }}" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" {% if form.sync_stock.value %}checked{% endif %}>
-                        <label for="{{ form.sync_stock.id_for_label }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            {% trans "Sync Stock" %}
-                        </label>
-                    </div>
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">{% trans "Qué sincronizar" %}</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="sync_products" class="rounded border-gray-300 text-orange-600" {% if form.sync_products.value %}checked{% endif %}>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{% trans "Productos" %}</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="sync_stock" class="rounded border-gray-300 text-orange-600" {% if form.sync_stock.value %}checked{% endif %}>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{% trans "Stock" %} ({% trans "requiere depósito AdministraNET" %})</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="sync_customers" class="rounded border-gray-300 text-orange-600" {% if form.sync_customers.value %}checked{% endif %}>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{% trans "Clientes" %}</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="sync_orders" class="rounded border-gray-300 text-orange-600" {% if form.sync_orders.value %}checked{% endif %}>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{% trans "Pedidos" %}</span>
+                    </label>
                 </div>
+                {% if form.sync_stock.errors %}<p class="text-red-500 text-sm mt-2">{{ form.sync_stock.errors|first }}</p>{% endif %}
             </div>
 
-            <!-- Last Sync Info -->
-            <div class="mt-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Last Sync" %}</label>
-                <div class="mt-1 text-gray-900 dark:text-white">
-                    {% if form.instance.updated_at %}{{ form.instance.updated_at|date:"SHORT_DATETIME_FORMAT" }}{% else %}{% trans "Never" %}{% endif %}
-                </div>
+            <div class="mt-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-sm">
+                <span class="text-gray-600 dark:text-gray-400">{% trans "Última actualización:" %}</span>
+                {% if form.instance.updated_at %}{{ form.instance.updated_at|date:"d/m/Y H:i" }}{% else %}{% trans "Nunca" %}{% endif %}
             </div>
 
-            <!-- Form Actions -->
-            <div class="mt-8 flex justify-end space-x-3">
-                <a href="{% url 'tiendanube_administranet:tiendanube_config' %}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition">
-                    <span class="material-icons text-sm mr-2">close</span>
-                    {% trans "Cancel" %}
+            <div class="mt-8 flex justify-end gap-3">
+                <a href="{% url 'tiendanube_administranet:tiendanube_config' %}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600">
+                    {% trans "Cancelar" %}
                 </a>
-                <button type="submit" class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition">
+                <button type="submit" class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700">
                     <span class="material-icons text-sm mr-2">save</span>
-                    {% if object %}{% trans "Update" %}{% else %}{% trans "Create" %}{% endif %} {% trans "Configuration" %}
+                    {% trans "Guardar" %}
                 </button>
             </div>
         </form>
     </div>
 </div>
 
+{% include "tiendanube_administranet/includes/synap_confirm_modal.html" %}
+{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
+
 {% if object and can_renew_access_token %}
 <div id="renewTokenModal" class="fixed inset-0 z-50 hidden" aria-modal="true" role="dialog">
     <div class="absolute inset-0 bg-black/50" id="renewTokenModalBackdrop"></div>
     <div class="relative flex min-h-full items-center justify-center p-4">
         <div class="w-full max-w-lg bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                    <span class="material-icons text-orange-500 mr-2">key</span>
-                    {% trans "Renovar access token" %}
-                </h2>
-                <button type="button" id="renewTokenModalClose" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                    <span class="material-icons">close</span>
-                </button>
-            </div>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                {% trans "Ingrese las credenciales de su app en Partners Tienda Nube. Será redirigido a autorizar la tienda; al volver, el token se actualizará en esta configuración." %}
-            </p>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% trans "Renovar access token" %}</h2>
             <form method="post" action="{% url 'tiendanube_administranet:tiendanube_config_renew_token' object.pk %}">
                 {% csrf_token %}
                 <div class="space-y-4">
                     <div>
-                        <label for="renew_app_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">App ID *</label>
-                        <input type="text" id="renew_app_id" name="app_id" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500">
+                        <label for="renew_app_id" class="block text-sm font-medium mb-1">App ID *</label>
+                        <input type="text" id="renew_app_id" name="app_id" required class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
                     </div>
                     <div>
-                        <label for="renew_client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Client Secret *</label>
-                        <input type="password" id="renew_client_secret" name="client_secret" required autocomplete="off" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500">
+                        <label for="renew_client_secret" class="block text-sm font-medium mb-1">Client Secret *</label>
+                        <input type="password" id="renew_client_secret" name="client_secret" required autocomplete="off" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
                     </div>
-                    <div class="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 text-xs text-blue-800 dark:text-blue-200">
-                        <span class="font-semibold">Redirect URI:</span>
-                        <code class="block mt-1 break-all font-mono">{{ oauth_redirect_uri }}</code>
-                    </div>
+                    <code class="block text-xs break-all">{{ oauth_redirect_uri }}</code>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">
-                    <button type="button" id="renewTokenModalCancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600">
-                        {% trans "Cancelar" %}
-                    </button>
-                    <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700">
-                        <span class="material-icons text-sm mr-1">login</span>
-                        {% trans "Autorizar en Tienda Nube" %}
-                    </button>
+                    <button type="button" id="renewTokenModalCancel" class="px-4 py-2 text-sm border rounded-lg">{% trans "Cancelar" %}</button>
+                    <button type="submit" class="px-4 py-2 text-sm text-white bg-orange-600 rounded-lg">{% trans "Autorizar" %}</button>
                 </div>
             </form>
         </div>
@@ -259,34 +233,43 @@
 {% endif %}
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const autoSyncCheckbox = document.getElementById('{{ form.is_active.id_for_label }}');
-    const playBtn = document.getElementById('playSyncBtn');
-    const stopBtn = document.getElementById('stopSyncBtn');
-    
-    if (playBtn && autoSyncCheckbox) {
-        playBtn.addEventListener('click', function() {
-            autoSyncCheckbox.checked = true;
-        });
-    }
-    if (stopBtn && autoSyncCheckbox) {
-        stopBtn.addEventListener('click', function() {
-            autoSyncCheckbox.checked = false;
+document.addEventListener('DOMContentLoaded', function () {
+    function wireToggle(hiddenId, btnId, iconId, textId, activeLabel, inactiveLabel, activeClasses, inactiveClasses) {
+        var hidden = document.getElementById(hiddenId);
+        var btn = document.getElementById(btnId);
+        var icon = document.getElementById(iconId);
+        var text = document.getElementById(textId);
+        if (!hidden || !btn) return;
+
+        function render(active) {
+            hidden.value = active ? 'on' : '';
+            text.textContent = active ? activeLabel : inactiveLabel;
+            icon.textContent = active ? 'check_circle' : 'cancel';
+            btn.className = 'inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition focus:outline-none focus:ring-2 ' +
+                (active ? activeClasses : inactiveClasses);
+        }
+
+        render(hidden.value === 'on');
+        btn.addEventListener('click', function () {
+            render(hidden.value !== 'on');
         });
     }
 
-    const renewBtn = document.getElementById('renewTokenBtn');
-    const modal = document.getElementById('renewTokenModal');
+    wireToggle('id_is_active', 'btn-toggle-tienda-activa', 'btn-toggle-tienda-activa-icon', 'btn-toggle-tienda-activa-text',
+        '{% trans "Activo" %}', '{% trans "Inactivo" %}',
+        'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 focus:ring-emerald-500',
+        'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 focus:ring-slate-400');
+    wireToggle('id_auto_sync', 'btn-toggle-auto-sync', 'btn-toggle-auto-sync-icon', 'btn-toggle-auto-sync-text',
+        '{% trans "Activo" %}', '{% trans "Inactivo" %}',
+        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 focus:ring-green-500',
+        'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 focus:ring-slate-400');
+
+    var renewBtn = document.getElementById('renewTokenBtn');
+    var modal = document.getElementById('renewTokenModal');
     if (renewBtn && modal) {
-        const closeEls = [
-            document.getElementById('renewTokenModalClose'),
-            document.getElementById('renewTokenModalCancel'),
-            document.getElementById('renewTokenModalBackdrop'),
-        ];
-        const openModal = () => modal.classList.remove('hidden');
-        const closeModal = () => modal.classList.add('hidden');
-        renewBtn.addEventListener('click', openModal);
-        closeEls.forEach(el => { if (el) el.addEventListener('click', closeModal); });
+        var closeEls = [document.getElementById('renewTokenModalCancel'), document.getElementById('renewTokenModalBackdrop')];
+        renewBtn.addEventListener('click', function () { modal.classList.remove('hidden'); });
+        closeEls.forEach(function (el) { if (el) el.addEventListener('click', function () { modal.classList.add('hidden'); }); });
     }
 });
 </script>

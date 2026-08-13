@@ -106,9 +106,14 @@ Default `true`: no hace falta definirlos en `.env` en uso normal.
 4. Split views + urls → mismo PR  
 5. `administranet_types` en webhook_processor → Sí  
 
+## Reflote 2026 (change posterior)
+
+El change **`tiendanube-administranet-reflote`** añade inbox/outbox, handler único webhook y contratos API 2026. Deuda **post-reflote** (Celery, cron, ModuleConfig): ver **`docs/ecom/TIENDANUBE_REFLOTE_DEUDA_PENDIENTE.md`**. Diálogos nativos: cerrados en 7.3b.
+
 ## Referencias
 
 - Plan SDD: Engram `sdd/tiendanube-deuda-tecnica-p0-p2/*`
+- Reflote: Engram `sdd/tiendanube-administranet-reflote/*` y `docs/ecom/TIENDANUBE_REFLOTE_DEUDA_PENDIENTE.md`
 - Endurecimiento mapeo clientes: `openspec/changes/tiendanube-customer-mapping-hardening/` y `docs/ecom/TIENDANUBE_CUSTOMER_MAPPING_HARDENING.md`
 - API: `NUVEMSHOP_API_VERSION = "2025-03"` en servicios HTTP
 - Regla subagentes: `.cursor/rules/subagentes-y-modelos.mdc`

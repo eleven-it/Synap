@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from django.utils import timezone
 from django.conf import settings
 from ..models import AdministraNETConfig, WebhookConfig, WebhookDeliveryLog, WebhookEvent
+from .sync_errors import should_retry_webhook_failure
 from .tiendanube_service import NUVEMSHOP_API_VERSION
 from .rate_limit import wait_for_rate_limit
 
@@ -481,7 +482,16 @@ class WebhookService:
 
 class WebhookProcessor:
     """
-    Procesador de eventos de webhook recibidos.
+    Procesador canónico de eventos webhook TN → AdministraNET.
+
+    Auditoría vs ``webhook_processor.py`` (legacy, eliminado en fase 2):
+    - **order/***: el canónico ya tenía pipeline completo (enrich→REC→comp_ped→stock);
+      el legacy usaba ``sync_orders_from_tiendanube`` (incompleto).
+    - **product/***: portado de legacy — ``sync_products_from_tiendanube`` en
+      ``product/created`` y ``product/updated`` además del mapeo local.
+    - **customer/***: portado de legacy — ``LocationMapper``, payload Adminet
+      normalizado, ``create_customer``/``update_customer``, fallback API TN en
+      ``customer/updated`` con datos incompletos.
     """
     
     @staticmethod
@@ -552,7 +562,10 @@ class WebhookProcessor:
                 webhook_event.mark_completed(result)
                 logger.info(f"Webhook event {event_id} processed successfully")
             else:
-                webhook_event.mark_failed(result['error'])
+                retry = should_retry_webhook_failure(
+                    http_status=result.get('status_code'),
+                )
+                webhook_event.mark_failed(result['error'], retry=retry)
                 logger.error(f"Webhook event {event_id} failed: {result['error']}")
             
             # Actualizar último trigger del webhook
@@ -566,11 +579,65 @@ class WebhookProcessor:
             logger.error(error_msg)
             
             if 'webhook_event' in locals():
-                webhook_event.mark_failed(error_msg, retry=False)
+                webhook_event.mark_failed(
+                    error_msg,
+                    retry=should_retry_webhook_failure(exc=e),
+                )
             
             return {
                 'success': False,
                 'error': error_msg
+            }
+
+    @staticmethod
+    def process_stored_webhook_event(webhook_event: WebhookEvent) -> Dict[str, Any]:
+        """
+        Procesar un WebhookEvent ya persistido (inbox worker / drenaje retry).
+
+        No crea un registro nuevo; reutiliza payload y headers almacenados.
+        """
+        event_data = webhook_event.payload or {}
+        event_id = webhook_event.event_id
+        try:
+            webhook_event.mark_processing()
+            logger.info(
+                "Processing stored webhook event: %s - %s",
+                webhook_event.event_type,
+                event_id,
+            )
+
+            result = WebhookProcessor._handle_event_by_type(webhook_event, event_data)
+
+            if result['success']:
+                webhook_event.mark_completed(result)
+                logger.info("Stored webhook event %s processed successfully", event_id)
+            else:
+                retry = should_retry_webhook_failure(
+                    http_status=result.get('status_code'),
+                )
+                webhook_event.mark_failed(result['error'], retry=retry)
+                logger.error(
+                    "Stored webhook event %s failed: %s",
+                    event_id,
+                    result['error'],
+                )
+
+            webhook_config = webhook_event.webhook_config
+            webhook_config.last_triggered = timezone.now()
+            webhook_config.save(update_fields=['last_triggered'])
+
+            return result
+
+        except Exception as e:
+            error_msg = f"Error processing stored webhook event: {str(e)}"
+            logger.error(error_msg)
+            webhook_event.mark_failed(
+                error_msg,
+                retry=should_retry_webhook_failure(exc=e),
+            )
+            return {
+                'success': False,
+                'error': error_msg,
             }
     
     @staticmethod
@@ -614,6 +681,288 @@ class WebhookProcessor:
             }
     
     @staticmethod
+    def _map_location_data(adminet_config, address_data: Dict[str, Any]) -> Tuple[str, int, int]:
+        """Mapear dirección TN → calle, provincia y departamento AdministraNET."""
+        from .location_mapper import LocationMapper
+
+        street = address_data.get('address', '')
+        number = address_data.get('number', '')
+        floor = address_data.get('floor', '')
+        locality = address_data.get('locality', '')
+        city = address_data.get('city', '')
+        province = address_data.get('province', '')
+
+        location_mapper = LocationMapper(adminet_config)
+        cod_provincia, id_departamento, _location_info = location_mapper.map_location(
+            province, city,
+        )
+        calle_completa = location_mapper.build_complete_address(
+            street, number, floor, locality, city, province,
+        )
+
+        if cod_provincia is None:
+            cod_provincia = 1
+            logger.warning(
+                "Provincia '%s' no encontrada, usando Buenos Aires (1) como default",
+                province,
+            )
+        if id_departamento is None:
+            logger.warning("Ciudad '%s' no encontrada en provincia %s", city, cod_provincia)
+
+        return calle_completa, cod_provincia, id_departamento
+
+    @staticmethod
+    def _build_adminet_customer_payload(
+        customer_name: str,
+        customer_email: str,
+        customer_data: Dict[str, Any],
+        address_data: Dict[str, Any],
+        calle_completa: str,
+        cod_provincia,
+        id_departamento,
+        customer_id,
+    ) -> Dict[str, Any]:
+        from .customer_payload import normalize_adminet_customer_payload
+
+        return normalize_adminet_customer_payload({
+            'nombre_cliente': customer_name,
+            'Email': customer_email,
+            'telefono': customer_data.get('phone', ''),
+            'Calle': calle_completa,
+            'NroCalle': address_data.get('number', ''),
+            'Dpto': address_data.get('floor', ''),
+            'CodProvincia': cod_provincia,
+            'IDDepartamento': id_departamento,
+            'CUIT': customer_data.get('identification', ''),
+            'Estado': 'Activo',
+            'id_tiendanube': customer_id,
+        })
+
+    @staticmethod
+    def _process_customer_created(
+        sync_service,
+        adminet_config,
+        customer_id,
+        customer_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        from ..models import CustomerMapping
+
+        customer_name = customer_data.get('name', '')
+        customer_email = customer_data.get('email', '')
+        default_address = customer_data.get('default_address', {})
+        addresses = customer_data.get('addresses', [])
+        address_data = default_address if default_address else (addresses[0] if addresses else {})
+
+        unique_email = customer_email if customer_email else None
+        if not unique_email:
+            logger.warning(
+                "Cliente Tienda Nube %s sin email; no se creará email ficticio",
+                customer_id,
+            )
+            return {'success': False, 'error': 'Cliente sin email'}
+
+        mapping, created = CustomerMapping.objects.get_or_create(
+            tiendanube_id=customer_id,
+            defaults={
+                'tiendanube_email': unique_email,
+                'tiendanube_first_name': customer_name,
+                'sync_status': CustomerMapping.SyncStatus.PENDING,
+            },
+        )
+
+        if created:
+            calle_completa, cod_provincia, id_departamento = WebhookProcessor._map_location_data(
+                adminet_config, address_data,
+            )
+            adminet_data = WebhookProcessor._build_adminet_customer_payload(
+                customer_name, customer_email, customer_data, address_data,
+                calle_completa, cod_provincia, id_departamento, customer_id,
+            )
+            result = sync_service.adminet_service.create_customer(adminet_data)
+            if result['success']:
+                mapping.adminet_codigo = result.get('customer_id')
+                mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
+                mapping.last_synced = timezone.now()
+                mapping.save()
+            else:
+                mapping.sync_status = CustomerMapping.SyncStatus.ERROR
+                mapping.error_message = result['message']
+                mapping.save()
+                return {
+                    'success': False,
+                    'error': result['message'],
+                }
+
+        return {
+            'success': True,
+            'action': 'customer_created',
+            'customer_id': customer_id,
+            'message': f'Cliente {customer_name} procesado exitosamente',
+        }
+
+    @staticmethod
+    def _process_customer_updated(
+        sync_service,
+        adminet_config,
+        tiendanube_config,
+        customer_id,
+        customer_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        from ..models import CustomerMapping
+
+        customer_name = customer_data.get('name', '')
+        customer_email = customer_data.get('email', '')
+        default_address = customer_data.get('default_address', {})
+        addresses = customer_data.get('addresses', [])
+        address_data = default_address if default_address else (addresses[0] if addresses else {})
+
+        if not customer_name and not customer_email and customer_id:
+            logger.warning(
+                "Datos del cliente incompletos en webhook. Obteniendo desde API TN ID: %s",
+                customer_id,
+            )
+            try:
+                from .tiendanube_service import TiendanubeService
+
+                tn_service = TiendanubeService(tiendanube_config)
+                customer_result = tn_service.get_customer(customer_id)
+                if customer_result.get('success'):
+                    customer_data = customer_result.get('customer', {})
+                    customer_name = customer_data.get('name', '')
+                    customer_email = customer_data.get('email', '')
+                    default_address = customer_data.get('default_address', {})
+                    addresses = customer_data.get('addresses', [])
+                    address_data = default_address if default_address else (
+                        addresses[0] if addresses else {}
+                    )
+                else:
+                    logger.error(
+                        "Error obteniendo cliente desde API TN: %s",
+                        customer_result.get('error'),
+                    )
+            except Exception as exc:
+                logger.error("Error obteniendo cliente desde API TN: %s", exc)
+
+        mapping = CustomerMapping.objects.filter(tiendanube_id=customer_id).first()
+        unique_email = customer_email if customer_email else None
+        if not unique_email:
+            return {'success': False, 'error': 'Cliente sin email'}
+
+        if mapping and mapping.adminet_codigo:
+            calle_completa, cod_provincia, id_departamento = WebhookProcessor._map_location_data(
+                adminet_config, address_data,
+            )
+            adminet_data = WebhookProcessor._build_adminet_customer_payload(
+                customer_name, customer_email, customer_data, address_data,
+                calle_completa, cod_provincia, id_departamento, customer_id,
+            )
+            result = sync_service.adminet_service.update_customer(
+                mapping.adminet_codigo, adminet_data,
+            )
+            if result['success']:
+                mapping.tiendanube_email = customer_email
+                mapping.tiendanube_first_name = customer_name
+                mapping.tiendanube_name = customer_name
+                mapping.tiendanube_phone = customer_data.get('phone', '')
+                mapping.tiendanube_document = customer_data.get('identification', '')
+                mapping.tiendanube_city = address_data.get('city', '')
+                mapping.tiendanube_state = address_data.get('province', '')
+                country = address_data.get('country', '')
+                mapping.tiendanube_country = (
+                    country if country and country.lower() not in ('none', 'null', '') else 'Argentina'
+                )
+                mapping.tiendanube_postal_code = address_data.get('zipcode', '')
+                mapping.adminet_nombre = customer_name
+                mapping.adminet_email = customer_email
+                mapping.adminet_telefono = customer_data.get('phone', '')
+                mapping.adminet_documento = customer_data.get('identification', '')
+                mapping.adminet_calle = calle_completa
+                mapping.adminet_nro_calle = address_data.get('number', '')
+                mapping.adminet_dpto = address_data.get('floor', '')
+                mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
+                mapping.last_synced = timezone.now()
+                mapping.save()
+                return {
+                    'success': True,
+                    'action': 'updated',
+                    'customer_id': customer_id,
+                    'adminet_code': mapping.adminet_codigo,
+                }
+
+            mapping.sync_status = CustomerMapping.SyncStatus.ERROR
+            mapping.error_message = result['message']
+            mapping.save()
+            return {
+                'success': False,
+                'action': 'update_failed',
+                'customer_id': customer_id,
+                'error': f"Error actualizando cliente en AdministraNET: {result['message']}",
+            }
+
+        mapping, created = CustomerMapping.objects.get_or_create(
+            tiendanube_id=customer_id,
+            defaults={
+                'tiendanube_email': unique_email,
+                'tiendanube_first_name': customer_name,
+                'sync_status': CustomerMapping.SyncStatus.PENDING,
+            },
+        )
+        if not created:
+            return {
+                'success': True,
+                'action': 'skipped',
+                'customer_id': customer_id,
+                'message': 'Customer mapping already exists',
+            }
+
+        calle_completa, cod_provincia, id_departamento = WebhookProcessor._map_location_data(
+            adminet_config, address_data,
+        )
+        adminet_data = WebhookProcessor._build_adminet_customer_payload(
+            customer_name, customer_email, customer_data, address_data,
+            calle_completa, cod_provincia, id_departamento, customer_id,
+        )
+        result = sync_service.adminet_service.create_customer(adminet_data)
+        if result['success']:
+            mapping.adminet_codigo = result.get('customer_id')
+            mapping.tiendanube_name = customer_name
+            mapping.tiendanube_phone = customer_data.get('phone', '')
+            mapping.tiendanube_document = customer_data.get('identification', '')
+            mapping.tiendanube_city = address_data.get('city', '')
+            mapping.tiendanube_state = address_data.get('province', '')
+            country = address_data.get('country', '')
+            mapping.tiendanube_country = (
+                country if country and country.lower() not in ('none', 'null', '') else 'Argentina'
+            )
+            mapping.tiendanube_postal_code = address_data.get('zipcode', '')
+            mapping.adminet_nombre = customer_name
+            mapping.adminet_email = customer_email
+            mapping.adminet_telefono = customer_data.get('phone', '')
+            mapping.adminet_documento = customer_data.get('identification', '')
+            mapping.adminet_calle = calle_completa
+            mapping.adminet_nro_calle = address_data.get('number', '')
+            mapping.adminet_dpto = address_data.get('floor', '')
+            mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
+            mapping.last_synced = timezone.now()
+            mapping.save()
+            return {
+                'success': True,
+                'action': 'created_from_update',
+                'customer_id': customer_id,
+                'adminet_code': mapping.adminet_codigo,
+            }
+
+        mapping.sync_status = CustomerMapping.SyncStatus.FAILED
+        mapping.error_message = result.get('error', 'Error desconocido')
+        mapping.save()
+        return {
+            'success': False,
+            'action': 'create_failed',
+            'customer_id': customer_id,
+            'error': f"Error creando cliente en AdministraNET: {result.get('error')}",
+        }
+
+    @staticmethod
     def _handle_product_event(webhook_event: WebhookEvent, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Manejar eventos de productos."""
         from ..services.sync_service import TiendanubeAdministraNETSyncService
@@ -649,6 +998,13 @@ class WebhookProcessor:
                         'sync_status': ProductMapping.SyncStatus.PENDING
                     }
                 )
+
+                sync_result = sync_service.sync_products_from_tiendanube([product_id])
+                if not sync_result.get('success'):
+                    return {
+                        'success': False,
+                        'error': sync_result.get('message') or sync_result.get('error', 'Sync failed'),
+                    }
                 
                 return {
                     'success': True,
@@ -668,6 +1024,13 @@ class WebhookProcessor:
                     mapping.tiendanube_stock = product_data.get('stock', mapping.tiendanube_stock)
                     mapping.sync_status = ProductMapping.SyncStatus.PENDING
                     mapping.save()
+
+                    sync_result = sync_service.sync_products_from_tiendanube([product_id])
+                    if not sync_result.get('success'):
+                        return {
+                            'success': False,
+                            'error': sync_result.get('message') or sync_result.get('error', 'Sync failed'),
+                        }
                     
                     return {
                         'success': True,
@@ -675,9 +1038,17 @@ class WebhookProcessor:
                         'product_id': product_id
                     }
                 except ProductMapping.DoesNotExist:
+                    sync_result = sync_service.sync_products_from_tiendanube([product_id])
+                    if sync_result.get('success'):
+                        return {
+                            'success': True,
+                            'action': 'product_updated',
+                            'product_id': product_id,
+                            'mapping_created': True,
+                        }
                     return {
                         'success': False,
-                        'error': f'Product mapping not found for ID {product_id}'
+                        'error': f'Product mapping not found for ID {product_id}',
                     }
                     
             elif webhook_event.event_type == 'product/deleted':
@@ -1018,81 +1389,40 @@ class WebhookProcessor:
     
     @staticmethod
     def _handle_customer_event(webhook_event: WebhookEvent, event_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Manejar eventos de clientes."""
+        """Manejar eventos de clientes (mapeo + sync AdministraNET enriquecido)."""
         try:
             customer_data = event_data.get('data', {})
             customer_id = customer_data.get('id')
-            
-            # Obtener configuraciones activas
+
             tiendanube_config = webhook_event.webhook_config.tiendanube_config
             adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
-            
+
             if not adminet_config:
                 return {
                     'success': False,
                     'error': 'No active AdministraNET configuration found'
                 }
-            
-            # Crear servicio de sincronización
+
             from ..services.sync_service import TiendanubeAdministraNETSyncService
             sync_service = TiendanubeAdministraNETSyncService(tiendanube_config, adminet_config)
-            
-            # Procesar según el tipo de evento
+
             if webhook_event.event_type == 'customer/created':
-                # Crear mapeo de cliente
-                from ..models import CustomerMapping
-                mapping, created = CustomerMapping.objects.get_or_create(
-                    tiendanube_id=customer_id,
-                    defaults={
-                        'tiendanube_email': customer_data.get('email', ''),
-                        'tiendanube_name': customer_data.get('name', ''),
-                        'tiendanube_document': customer_data.get('document', ''),
-                        'tiendanube_phone': customer_data.get('phone', ''),
-                        'tiendanube_address': customer_data.get('address', ''),
-                        'sync_status': CustomerMapping.SyncStatus.PENDING
-                    }
+                return WebhookProcessor._process_customer_created(
+                    sync_service, adminet_config, customer_id, customer_data,
                 )
-                
-                return {
-                    'success': True,
-                    'action': 'customer_created',
-                    'mapping_created': created,
-                    'customer_id': customer_id
-                }
-                
-            elif webhook_event.event_type == 'customer/updated':
-                # Actualizar mapeo de cliente
-                from ..models import CustomerMapping
-                try:
-                    mapping = CustomerMapping.objects.get(tiendanube_id=customer_id)
-                    mapping.tiendanube_email = customer_data.get('email', mapping.tiendanube_email)
-                    mapping.tiendanube_name = customer_data.get('name', mapping.tiendanube_name)
-                    mapping.tiendanube_document = customer_data.get('document', mapping.tiendanube_document)
-                    mapping.tiendanube_phone = customer_data.get('phone', mapping.tiendanube_phone)
-                    mapping.tiendanube_address = customer_data.get('address', mapping.tiendanube_address)
-                    mapping.sync_status = CustomerMapping.SyncStatus.PENDING
-                    mapping.save()
-                    
-                    return {
-                        'success': True,
-                        'action': 'customer_updated',
-                        'customer_id': customer_id
-                    }
-                except CustomerMapping.DoesNotExist:
-                    return {
-                        'success': False,
-                        'error': f'Customer mapping not found for ID {customer_id}'
-                    }
-                    
-            elif webhook_event.event_type == 'customer/deleted':
-                # Marcar cliente como eliminado
+
+            if webhook_event.event_type == 'customer/updated':
+                return WebhookProcessor._process_customer_updated(
+                    sync_service, adminet_config, tiendanube_config, customer_id, customer_data,
+                )
+
+            if webhook_event.event_type == 'customer/deleted':
                 from ..models import CustomerMapping
                 try:
                     mapping = CustomerMapping.objects.get(tiendanube_id=customer_id)
                     mapping.sync_status = CustomerMapping.SyncStatus.ERROR
                     mapping.error_message = 'Customer deleted in Tiendanube'
                     mapping.save()
-                    
                     return {
                         'success': True,
                         'action': 'customer_deleted',
@@ -1104,13 +1434,13 @@ class WebhookProcessor:
                         'action': 'customer_deleted',
                         'message': f'Customer mapping not found for ID {customer_id}'
                     }
-            
+
             return {
                 'success': True,
                 'action': 'customer_event_processed',
                 'event_type': webhook_event.event_type
             }
-            
+
         except Exception as e:
             error_msg = f"Error handling customer event: {str(e)}"
             logger.error(error_msg)

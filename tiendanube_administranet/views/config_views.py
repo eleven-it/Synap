@@ -368,6 +368,7 @@ class TiendanubeConfigWizardView(TiendanubeAdministranetLoginMixin, PermissionRe
             context['sync_interval'] = self.request.session.get('wizard_sync_interval', 30)
             context['sync_products'] = self.request.session.get('wizard_sync_products', True)
             context['sync_stock'] = self.request.session.get('wizard_sync_stock', True)
+            context['webhook_secret'] = self.request.session.get('wizard_webhook_secret', '')
             
             # Verificar que tenemos los datos necesarios para continuar
             access_token = self.request.session.get('wizard_access_token')
@@ -397,6 +398,11 @@ class TiendanubeConfigWizardView(TiendanubeAdministranetLoginMixin, PermissionRe
                         'sync_interval': self.request.session.get('wizard_sync_interval', 30),
                         'sync_products': self.request.session.get('wizard_sync_products', True),
                         'sync_stock': self.request.session.get('wizard_sync_stock', True),
+                        'webhook_secret': (
+                            '••••••••'
+                            if self.request.session.get('wizard_webhook_secret')
+                            else '—'
+                        ),
                     }
                     # Obtener datos de la tienda si están disponibles
             context['tienda_data'] = self.request.session.get('wizard_tienda_data')
@@ -445,11 +451,20 @@ class TiendanubeConfigWizardView(TiendanubeAdministranetLoginMixin, PermissionRe
                 return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=5")
                 
         elif step == 5:
-            # Procesar preferencias
+            # Procesar preferencias y HMAC
+            webhook_secret = (request.POST.get('webhook_secret') or '').strip()
+            if not webhook_secret:
+                request.session['wizard_message'] = _(
+                    'El secreto HMAC es obligatorio para verificar webhooks.'
+                )
+                request.session['wizard_message_type'] = 'error'
+                return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=5")
+
             request.session['wizard_auto_sync'] = 'auto_sync' in request.POST
             request.session['wizard_sync_interval'] = int(request.POST.get('sync_interval', 30))
             request.session['wizard_sync_products'] = 'sync_products' in request.POST
             request.session['wizard_sync_stock'] = 'sync_stock' in request.POST
+            request.session['wizard_webhook_secret'] = webhook_secret
             return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=6")
             
         elif step == 6:
@@ -491,23 +506,38 @@ class TiendanubeConfigWizardView(TiendanubeAdministranetLoginMixin, PermissionRe
                     except Exception as e:
                         logger.warning(f"Could not retrieve store data from Tiendanube: {e}")
                     
+                    webhook_secret = request.session.get('wizard_webhook_secret', '')
+                    if not webhook_secret:
+                        request.session['wizard_message'] = _(
+                            'Falta el secreto HMAC. Vuelva al paso de preferencias.'
+                        )
+                        request.session['wizard_message_type'] = 'error'
+                        return redirect(
+                            f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=5"
+                        )
+
                     # Crear la configuración de Tiendanube
                     config = TiendanubeConfig.objects.create(
                         name=tienda_name,
                         store_id=store_id,
                         access_token=access_token,
                         api_url=DEFAULT_TIENDANUBE_API_URL,
-                        is_active=request.session.get('wizard_auto_sync', True),
+                        is_active=True,
+                        auto_sync=request.session.get('wizard_auto_sync', False),
+                        sync_interval=request.session.get('wizard_sync_interval', 30),
+                        sync_products=request.session.get('wizard_sync_products', True),
+                        sync_stock=request.session.get('wizard_sync_stock', True),
+                        webhook_secret=webhook_secret,
                     )
                     
                     logger.info(f"Tiendanube configuration created successfully: {config.name} (ID: {config.id})")
                     
                     # Limpiar datos de sesión
                     session_keys_to_clean = [
-                        'wizard_app_id', 'wizard_client_secret', 'wizard_state', 
+                        'wizard_app_id', 'wizard_client_secret', 'wizard_state',
                         'wizard_access_token', 'wizard_user_id', 'wizard_auto_sync',
                         'wizard_sync_interval', 'wizard_sync_products', 'wizard_sync_stock',
-                        'wizard_scopes', 'wizard_tienda_data',
+                        'wizard_webhook_secret', 'wizard_scopes', 'wizard_tienda_data',
                         'wizard_message', 'wizard_message_type'
                     ]
                     

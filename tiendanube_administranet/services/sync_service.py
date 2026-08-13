@@ -39,6 +39,29 @@ SYNC_SKIP_MINUTES = 5
 STOCK_PRICE_BATCH_MAX = 50
 
 
+def normalize_product_visibility_payload(product_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Contrato API 2026: enviar visibility XOR published (nunca ambos)."""
+    payload = dict(product_data)
+    if 'visibility' in payload:
+        payload.pop('published', None)
+        return payload
+    if 'published' in payload:
+        published = payload.pop('published')
+        payload['visibility'] = 'visible' if published else 'hidden'
+    return payload
+
+
+def build_inventory_level_entry(
+    stock: int,
+    location_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Entrada inventory_levels para PATCH stock-price."""
+    entry: Dict[str, Any] = {'stock': stock}
+    if location_id is not None:
+        entry['location_id'] = location_id
+    return entry
+
+
 class TiendanubeAdministraNETSyncService:
     """
     Servicio principal para sincronización bidireccional entre Tiendanube y AdministraNET.
@@ -1079,7 +1102,9 @@ class TiendanubeAdministraNETSyncService:
         }
 
     def _build_stock_price_patch_payload(
-        self, pending_items: List[dict]
+        self,
+        pending_items: List[dict],
+        location_id: Optional[int] = None,
     ) -> List[dict]:
         by_product: Dict[int, dict] = {}
         for item in pending_items:
@@ -1088,11 +1113,19 @@ class TiendanubeAdministraNETSyncService:
             if item.get('price') is not None:
                 variant_entry['price'] = item['price']
             if item.get('stock') is not None:
-                variant_entry['inventory_levels'] = [{'stock': item['stock']}]
+                variant_entry['inventory_levels'] = [
+                    build_inventory_level_entry(item['stock'], location_id)
+                ]
             if product_id not in by_product:
                 by_product[product_id] = {'id': product_id, 'variants': []}
             by_product[product_id]['variants'].append(variant_entry)
         return list(by_product.values())
+
+    def _resolve_tiendanube_location_id(self) -> Optional[int]:
+        config = getattr(self, 'tiendanube_config', None)
+        if config is None:
+            return None
+        return to_int_or_none(getattr(config, 'location_id', None))
 
     def _queue_stock_price_update(
         self,
@@ -1120,7 +1153,10 @@ class TiendanubeAdministraNETSyncService:
             return 0, 0
         batch = pending[:]
         pending.clear()
-        payload = self._build_stock_price_patch_payload(batch)
+        payload = self._build_stock_price_patch_payload(
+            batch,
+            location_id=self._resolve_tiendanube_location_id(),
+        )
         result = self.product_service.patch_products_stock_price(payload)
         ok_count = 0
         fail_count = 0
@@ -1143,7 +1179,9 @@ class TiendanubeAdministraNETSyncService:
         tiendanube_data: Dict[str, Any],
         adminet_product: dict,
     ) -> Dict[str, Any]:
-        create_payload = self._strip_images_from_product_payload(tiendanube_data)
+        create_payload = normalize_product_visibility_payload(
+            self._strip_images_from_product_payload(tiendanube_data)
+        )
         result = self.product_service.create_product(create_payload)
         if result.get('success'):
             tn_product = result.get('product', {})
@@ -1361,6 +1399,91 @@ class TiendanubeAdministraNETSyncService:
     # ============================================================================
     # ÓRDENES (mantener implementación existente)
     # ============================================================================
+
+    def catch_up_missing_orders(self, since=None) -> Dict[str, Any]:
+        """
+        GET orders TN e importar pedidos pagados ausentes en AdministraNET.
+
+        Usa handler canónico order/paid; no duplica OrderMapping existentes.
+        """
+        from .webhook_service import WebhookProcessor
+        from ..models import WebhookConfig, WebhookEvent
+
+        reference = since or self.tiendanube_config.last_sync
+        orders_result = self.tiendanube_service.get_orders(limit=50)
+        if not orders_result.get('success'):
+            return orders_result
+
+        orders = orders_result.get('orders') or []
+        imported = 0
+        skipped_existing = 0
+        failed = 0
+
+        webhook_config = WebhookConfig.objects.filter(
+            tiendanube_config=self.tiendanube_config,
+            is_active=True,
+        ).first()
+        if not webhook_config:
+            return {
+                'success': False,
+                'message': 'Sin WebhookConfig activo para catch-up.',
+            }
+
+        for order in orders:
+            tn_id = order.get('id')
+            if not tn_id:
+                continue
+
+            existing = OrderMapping.objects.filter(tiendanube_id=tn_id).first()
+            if existing and existing.adminet_codigo:
+                skipped_existing += 1
+                continue
+
+            if order.get('payment_status') != 'paid':
+                continue
+
+            if reference is not None:
+                updated_at_raw = order.get('updated_at') or order.get('created_at')
+                if updated_at_raw:
+                    try:
+                        updated_at = timezone.datetime.fromisoformat(
+                            str(updated_at_raw).replace('Z', '+00:00')
+                        )
+                        if timezone.is_naive(updated_at):
+                            updated_at = timezone.make_aware(updated_at)
+                        if updated_at < reference:
+                            continue
+                    except (TypeError, ValueError):
+                        pass
+
+            synthetic_event = WebhookEvent(
+                webhook_config=webhook_config,
+                event_type='order/paid',
+                event_id=f'catchup-{tn_id}',
+                resource_id=tn_id,
+                resource_type='order',
+                payload={'type': 'order/paid', 'id': tn_id, 'data': order},
+                headers={},
+            )
+            result = WebhookProcessor._handle_order_event(
+                synthetic_event,
+                synthetic_event.payload,
+            )
+            if result.get('success'):
+                imported += 1
+            else:
+                failed += 1
+
+        self.tiendanube_config.last_sync = timezone.now()
+        self.tiendanube_config.save(update_fields=['last_sync'])
+
+        return {
+            'success': failed == 0,
+            'imported': imported,
+            'skipped_existing': skipped_existing,
+            'failed': failed,
+            'total_fetched': len(orders),
+        }
     
     def sync_orders_from_tiendanube(
         self, sync_log: Optional[SyncLog] = None

@@ -17,8 +17,7 @@ import json
 import logging
 from ..models import TiendanubeConfig, AdministraNETConfig, WebhookEvent, WebhookDeliveryLog
 from ..services.webhook_service import WebhookService
-from ..services.webhook_processor import WebhookProcessor
-from ..services.sync_service import TiendanubeAdministraNETSyncService
+from ..views.webhook_config_views import webhook_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -175,31 +174,9 @@ def configure_webhooks(request):
 @require_http_methods(["POST"])
 def webhook_receiver(request):
     """
-    Endpoint para recibir webhooks de Tiendanube.
+    Endpoint legacy — delega al inbox ACK canónico (persistir + accepted).
     """
-    try:
-        # Obtener configuraciones
-        tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
-        adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
-        
-        if not tiendanube_config or not adminet_config:
-            logger.error("No hay configuración activa de Tiendanube o AdministraNET")
-            return HttpResponse("Configuration not found", status=500)
-        
-        # Procesar webhook
-        processor = WebhookProcessor(tiendanube_config, adminet_config)
-        result = processor.process_webhook(request)
-        
-        if result['success']:
-            logger.info(f"Webhook procesado exitosamente: {result.get('action', 'unknown')}")
-            return HttpResponse("OK", status=200)
-        else:
-            logger.error(f"Error procesando webhook: {result.get('error')}")
-            return HttpResponse("Error processing webhook", status=500)
-            
-    except Exception as e:
-        logger.error(f"Exception en webhook_receiver: {e}")
-        return HttpResponse("Internal server error", status=500)
+    return webhook_endpoint(request)
 
 
 @login_required
