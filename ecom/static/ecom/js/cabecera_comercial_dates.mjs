@@ -38,22 +38,31 @@ export function cabeceraConDisplay(raw) {
   };
 }
 
-export function payloadCabeceraApi(cabecera, puedeEditar) {
+export function payloadCabeceraApi(cabecera, puedeEditarOFlags) {
   if (!cabecera) return {};
+  const flags = (puedeEditarOFlags && typeof puedeEditarOFlags === 'object')
+    ? puedeEditarOFlags
+    : {
+        puedeEditar: !!puedeEditarOFlags,
+        puedeEditarLista: !!puedeEditarOFlags,
+        puedeEditarCondicion: !!puedeEditarOFlags,
+        puedeEditarVencimiento: !!puedeEditarOFlags,
+      };
   const fp = cabecera.fecha_pedido || displayToIso(cabecera.fecha_pedido_display);
   const fe = cabecera.fecha_entrega || displayToIso(cabecera.fecha_entrega_display);
   const ven = cabecera.vencimiento || displayToIso(cabecera.vencimiento_display);
-  if (puedeEditar) {
-    return {
-      fecha_pedido: fp,
-      fecha_entrega: fe || undefined,
-      vencimiento: ven,
-      id_condventa: cabecera.id_condventa,
-      lista_id: cabecera.lista_id,
-    };
-  }
-  return {
+  const out = {
     fecha_pedido: fp,
     fecha_entrega: fe || undefined,
   };
+  if (flags.puedeEditarVencimiento || flags.puedeEditar) {
+    out.vencimiento = ven;
+  }
+  if (flags.puedeEditarCondicion || flags.puedeEditar) {
+    out.id_condventa = cabecera.id_condventa;
+  }
+  if (flags.puedeEditarLista || flags.puedeEditar) {
+    out.lista_id = cabecera.lista_id;
+  }
+  return out;
 }

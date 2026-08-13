@@ -59,7 +59,7 @@ from ecom.checkout_relay_views import (
 )
 from ecom.services.pedido_cabecera_comercial import (
     cabecera_defaults_json,
-    es_supervisor_desde_ctx,
+    flags_edicion_desde_sesion,
     parsear_cabecera_desde_body,
     resolver_cabecera_comercial,
 )
@@ -73,6 +73,33 @@ def _sess_user(request) -> Dict[str, Any]:
 
 def _err(msg: str, code: str = "error", status: int = 400) -> Response:
     return Response({"ok": False, "error": msg, "code": code}, status=status)
+
+
+def _flags_cabecera_masivo(request) -> Dict[str, bool]:
+    ctx = ctx_desde_request(request)
+    sess = _sess_user(request)
+    base = _session_base_empresa(request) or ""
+    return flags_edicion_desde_sesion(
+        ctx,
+        base_empresa=base,
+        id_puesto=to_int_or_none(sess.get("id_puesto")),
+    )
+
+
+def _cabecera_json_masivo(request, id_cliente: int, fecha_entrega=None) -> Dict[str, Any]:
+    flags = _flags_cabecera_masivo(request)
+    bag = (getattr(request, "session", None) or {}).get("mayoristapp") or {}
+    dias_ent = to_int_or_none(bag.get("cant_dias_entrega")) or 0
+    return cabecera_defaults_json(
+        _session_base_empresa(request) or "",
+        id_cliente,
+        es_supervisor=flags["es_supervisor"],
+        dias_entrega=int(dias_ent),
+        dias_no_laborables=_session_dias_no_laborables(request),
+        fecha_entrega=fecha_entrega,
+        prellenar_entrega_desde_vencimiento=fecha_entrega is None,
+        flags=flags,
+    )
 
 
 class _NdjsonAcceptRenderer(BaseRenderer):
@@ -149,8 +176,7 @@ def _resolver_cabecera_masivo(
     data: Dict[str, Any],
 ) -> tuple:
     """Resuelve cabecera comercial del body para preview/confirmar masivo."""
-    ctx = ctx_desde_request(request)
-    es_sup = es_supervisor_desde_ctx(ctx)
+    flags = _flags_cabecera_masivo(request)
     bag = (getattr(request, "session", None) or {}).get("mayoristapp") or {}
     dias_ent = to_int_or_none(data.get("dias_entrega")) or to_int_or_none(
         bag.get("cant_dias_entrega")
@@ -159,7 +185,7 @@ def _resolver_cabecera_masivo(
     return resolver_cabecera_comercial(
         draft.base_empresa,
         draft.id_cliente,
-        es_supervisor=es_sup,
+        es_supervisor=flags["es_supervisor"],
         fecha_pedido=parsed.get("fecha_pedido"),
         fecha_entrega=parsed.get("fecha_entrega"),
         vencimiento=parsed.get("vencimiento"),
@@ -168,6 +194,8 @@ def _resolver_cabecera_masivo(
         dias_entrega=int(dias_ent),
         dias_no_laborables=_session_dias_no_laborables(request),
         tipo_comprobante="PED",
+        puede_editar_lista=flags["puede_editar_lista"],
+        puede_editar_condicion=flags["puede_editar_condicion"],
     )
 
 
@@ -311,16 +339,16 @@ class PedidoMasivoConfirmarAPIView(APIView):
         ) or 1
         cv = cod_viajante_sesion(sess)
 
+        flags = _flags_cabecera_masivo(request)
         desc_pie = data.get("desc_pie_pct")
-        if desc_pie is not None:
+        if desc_pie is not None and flags["puede_editar_descuento_pie"]:
             guardar_descuento_pie(draft, desc_pie_pct=desc_pie)
 
         cabecera, err_cab = _resolver_cabecera_masivo(request, draft, data)
         if not cabecera:
             return None, _err(err_cab or "Cabecera comercial inválida.")
 
-        ctx = ctx_desde_request(request)
-        es_sup = es_supervisor_desde_ctx(ctx)
+        es_sup = flags["es_supervisor"]
         bag = (getattr(request, "session", None) or {}).get("mayoristapp") or {}
         dias_ent = to_int_or_none(data.get("dias_entrega")) or to_int_or_none(
             bag.get("cant_dias_entrega")
@@ -550,16 +578,7 @@ class PedidoMasivoAbrirAPIView(APIView):
         if not draft:
             return _err(err or "No se pudo abrir el borrador.")
         matriz = _serializar_matriz_ui(draft, base)
-        ctx = ctx_desde_request(request)
-        bag = (getattr(request, "session", None) or {}).get("mayoristapp") or {}
-        dias_ent = to_int_or_none(bag.get("cant_dias_entrega")) or 0
-        matriz["cabecera"] = cabecera_defaults_json(
-            base,
-            draft.id_cliente,
-            es_supervisor=es_supervisor_desde_ctx(ctx),
-            dias_entrega=int(dias_ent),
-            dias_no_laborables=_session_dias_no_laborables(request),
-        )
+        matriz["cabecera"] = _cabecera_json_masivo(request, draft.id_cliente)
         return Response({"ok": True, "matriz": matriz})
 
 
@@ -615,15 +634,9 @@ class PedidoMasivoAbrirPedidoAPIView(APIView):
             puede_anular, _msg_anular = puede_anular_pedido_relay(base, cod_mov)
 
         matriz = _serializar_matriz_ui(draft, base)
-        ctx = ctx_desde_request(request)
-        bag = (getattr(request, "session", None) or {}).get("mayoristapp") or {}
-        dias_ent = to_int_or_none(bag.get("cant_dias_entrega")) or 0
-        matriz["cabecera"] = cabecera_defaults_json(
-            base,
-            draft.id_cliente,
-            es_supervisor=es_supervisor_desde_ctx(ctx),
-            dias_entrega=int(dias_ent),
-            dias_no_laborables=_session_dias_no_laborables(request),
+        fecha_ent_existente = None if repetir else cab.get("fecha_entrega_iso")
+        matriz["cabecera"] = _cabecera_json_masivo(
+            request, draft.id_cliente, fecha_entrega=fecha_ent_existente
         )
         pedido_info = {
             "cod_mov": None if repetir else cod_mov,
@@ -795,8 +808,9 @@ class PedidoMasivoPreviewAPIView(APIView):
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
 
+        flags = _flags_cabecera_masivo(request)
         desc_pie = data.get("desc_pie_pct")
-        if desc_pie is not None:
+        if desc_pie is not None and flags["puede_editar_descuento_pie"]:
             guardar_descuento_pie(draft, desc_pie_pct=desc_pie)
 
         cabecera, err_cab = _resolver_cabecera_masivo(request, draft, data)
@@ -845,6 +859,13 @@ class PedidoMasivoDescuentoFilaAPIView(APIView):
         ).first()
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
+        flags = _flags_cabecera_masivo(request)
+        if not flags["puede_editar_descuento_renglon"]:
+            return _err(
+                "No tiene permiso para modificar el descuento de renglón.",
+                "sin_permiso",
+                403,
+            )
         ok, msg = guardar_descuento_fila(
             draft,
             id_articulo=to_int_or_none(data.get("id_articulo")),
@@ -881,6 +902,13 @@ class PedidoMasivoDescuentoPieAPIView(APIView):
         ).first()
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
+        flags = _flags_cabecera_masivo(request)
+        if not flags["puede_editar_descuento_pie"]:
+            return _err(
+                "No tiene permiso para modificar el descuento de pie.",
+                "sin_permiso",
+                403,
+            )
         ok, msg = guardar_descuento_pie(
             draft,
             desc_pie_pct=data.get("desc_pie_pct"),

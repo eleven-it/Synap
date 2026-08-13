@@ -7,7 +7,9 @@ from django.test import TestCase
 
 from ecom.services.pedido_cabecera_comercial import (
     PedidoCabeceraComercial,
+    calcular_fecha_entrega_desde_vencimiento,
     calcular_vencimiento,
+    flags_edicion_comercial,
     puede_editar_cabecera_comercial,
     resolver_cabecera_comercial,
 )
@@ -149,3 +151,105 @@ class TestResolverCabeceraComercial(TestCase):
             fecha_pedido=date(2026, 8, 1),
         )
         self.assertEqual(cab.vencimiento, date(2026, 8, 8))
+
+    @patch("ecom.services.pedido_cabecera_comercial.cargar_defaults_cliente")
+    @patch("ecom.services.pedido_cabecera_comercial._fetch_condicion")
+    @patch("ecom.services.pedido_cabecera_comercial.dias_condicion")
+    def test_prellena_entrega_desde_vencimiento(self, mock_dias, mock_fetch, mock_defaults):
+        mock_defaults.return_value = self._defaults()
+        mock_dias.return_value = 30
+        mock_fetch.return_value = {"Descripcion": "Cta/Cte 30", "Dias": 30}
+        cab, err = resolver_cabecera_comercial(
+            "emp1",
+            10,
+            es_supervisor=False,
+            fecha_pedido=date(2026, 8, 13),
+            prellenar_entrega_desde_vencimiento=True,
+        )
+        self.assertIsNone(err)
+        # vencimiento 12/09/2026 (sábado) + 10 = 22/09/2026 martes
+        self.assertEqual(cab.vencimiento, date(2026, 9, 12))
+        self.assertEqual(cab.fecha_entrega, date(2026, 9, 22))
+
+    @patch("ecom.services.pedido_cabecera_comercial.cargar_defaults_cliente")
+    @patch("ecom.services.pedido_cabecera_comercial._fetch_condicion")
+    @patch("ecom.services.pedido_cabecera_comercial.dias_condicion")
+    def test_conserva_fecha_entrega_ya_establecida(self, mock_dias, mock_fetch, mock_defaults):
+        mock_defaults.return_value = self._defaults()
+        mock_dias.return_value = 30
+        mock_fetch.return_value = {"Descripcion": "Cta/Cte 30", "Dias": 30}
+        ya = date(2026, 9, 1)
+        cab, err = resolver_cabecera_comercial(
+            "emp1",
+            10,
+            es_supervisor=False,
+            fecha_pedido=date(2026, 8, 13),
+            fecha_entrega=ya,
+            prellenar_entrega_desde_vencimiento=True,
+        )
+        self.assertIsNone(err)
+        self.assertEqual(cab.fecha_entrega, ya)
+
+    @patch("ecom.services.pedido_cabecera_comercial.cargar_defaults_cliente")
+    @patch("ecom.services.pedido_cabecera_comercial._fetch_condicion")
+    @patch("ecom.services.pedido_cabecera_comercial.dias_condicion")
+    def test_vendedor_con_permiso_lista_puede_cambiar(self, mock_dias, mock_fetch, mock_defaults):
+        mock_defaults.return_value = self._defaults()
+        mock_dias.return_value = 20
+        mock_fetch.return_value = {"Descripcion": "Cuenta Corriente", "Dias": 20}
+        cab, err = resolver_cabecera_comercial(
+            "emp1",
+            10,
+            es_supervisor=False,
+            lista_id=5,
+            puede_editar_lista=True,
+        )
+        self.assertIsNone(err)
+        self.assertEqual(cab.lista_id, 5)
+
+
+class TestFechaEntregaDesdeVencimiento(TestCase):
+    def test_dia_habil_se_conserva(self):
+        # viernes + 10 = lunes
+        self.assertEqual(
+            calcular_fecha_entrega_desde_vencimiento(date(2026, 9, 11)),
+            date(2026, 9, 21),
+        )
+
+    def test_sabado_pasa_a_lunes(self):
+        # jueves + 10 = domingo → lunes
+        self.assertEqual(
+            calcular_fecha_entrega_desde_vencimiento(date(2026, 9, 10)),
+            date(2026, 9, 21),
+        )
+
+    def test_domingo_pasa_a_lunes(self):
+        # miércoles + 10 = sábado → lunes
+        self.assertEqual(
+            calcular_fecha_entrega_desde_vencimiento(date(2026, 9, 9)),
+            date(2026, 9, 21),
+        )
+
+
+class TestFlagsEdicionComercial(TestCase):
+    def test_vendedor_con_flags_de_puesto(self):
+        flags = flags_edicion_comercial(
+            {"supervisor_venta": "No"},
+            {
+                "mod_lista_de_precio": "Si",
+                "cambia_cv": "Si",
+                "mod_descuento_pie": "No",
+                "mod_descuento_renglon": "Si",
+            },
+        )
+        self.assertTrue(flags["puede_editar_lista"])
+        self.assertTrue(flags["puede_editar_condicion"])
+        self.assertFalse(flags["puede_editar_descuento_pie"])
+        self.assertTrue(flags["puede_editar_descuento_renglon"])
+        self.assertFalse(flags["puede_editar_vencimiento"])
+
+    def test_vendedor_sin_flags_no_edita(self):
+        flags = flags_edicion_comercial({"supervisor_venta": "No"}, {})
+        self.assertFalse(flags["puede_editar_lista"])
+        self.assertFalse(flags["puede_editar_condicion"])
+        self.assertFalse(flags["puede_editar_descuento_pie"])

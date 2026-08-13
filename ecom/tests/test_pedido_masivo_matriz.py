@@ -593,9 +593,21 @@ class TestApiPreviewMasivo(TestCase):
 
 
 class TestApiDescuentoFila(TestCase):
+    @patch(
+        "ecom.pedido_masivo_views._flags_cabecera_masivo",
+        return_value={
+            "es_supervisor": False,
+            "puede_editar": False,
+            "puede_editar_lista": False,
+            "puede_editar_condicion": False,
+            "puede_editar_vencimiento": False,
+            "puede_editar_descuento_pie": False,
+            "puede_editar_descuento_renglon": True,
+        },
+    )
     @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
     @patch("ecom.pedido_masivo_views.serializar_matriz", return_value={"draft_id": 1})
-    def test_post_descuento_fila(self, _m, _b):
+    def test_post_descuento_fila(self, _m, _b, _f):
         d = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_m",
             id_usuario=55,
