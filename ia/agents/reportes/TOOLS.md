@@ -638,6 +638,7 @@ Complemento operativo respecto del diseño ideal de tools: hoy parte de la lógi
 - **Desglose por tipo de comprobante** (`cuentacliente`): cantidad de `CodigoMovimiento` distintos y suma de `SubtotalDesc` por `TipoComprobante`, ordenado por cantidad descendente; admite filtro por sucursal si el nombre matchea en `sucursales`; período explícito `DD-MM-YYYY` / `DD/MM/YYYY` o ISO `YYYY-MM-DD` enlazado con `y`, `al`, `a`, `hasta` o `-`; si falta período se usa mes calendario en curso.
 - **Contexto de conversación**: el orquestador envía un snippet de los últimos mensajes para que aclaraciones en varios turnos («ventas» + fechas) sigan la misma intención sin depender solo del último mensaje.
 - **Pedidos / stock**: las palabras clave de estos dominios se evalúan solo sobre el **mensaje actual**, para no disparar falsos positivos cuando el asistente menciona «stock» u «pedidos» en el texto de aclaración.
+- **Kardex / trazabilidad MPR** (`execute_kardex_articulo`): consultas como «kardex», «trazabilidad del pack … en Semi» o «saldo semi» invocan `construir_kardex_articulo` (servicio MPR) **sin** `ReportDefinition` en catálogo `reports`. Requiere `mpr.ver` o `mpr.reportes`. Respuesta acotada: KPIs, resumen BOM y hasta 20 movimientos recientes; fechas en `dd/MM/yyyy`. El ledger completo queda en el hub `/mpr/reportes/?grupo=trazabilidad&reporte=kardex_articulo`.
 
 ## Política de fallback
 

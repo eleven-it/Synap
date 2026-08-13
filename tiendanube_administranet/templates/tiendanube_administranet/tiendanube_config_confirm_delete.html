@@ -64,12 +64,12 @@
                         <span class="font-medium text-gray-900 dark:text-white">{{ object.api_url|default:"Default" }}</span>
                     </div>
                     <div>
-                        <span class="text-gray-600 dark:text-gray-400">{% trans "Auto Sync:" %}</span>
-                        <span class="font-medium text-gray-900 dark:text-white">{{ object.is_active|yesno:"Enabled,Disabled" }}</span>
+                        <span class="text-gray-600 dark:text-gray-400">{% trans "Sync automático:" %}</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ object.auto_sync|yesno:"Sí,No" }}</span>
                     </div>
                     <div>
-                        <span class="text-gray-600 dark:text-gray-400">{% trans "Last Sync:" %}</span>
-                        <span class="font-medium text-gray-900 dark:text-white">{{ object.updated_at|default:"Never"|date:"M d, Y H:i" }}</span>
+                        <span class="text-gray-600 dark:text-gray-400">{% trans "Última sync:" %}</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{% if object.last_sync %}{{ object.last_sync|date:"d/m/Y H:i" }}{% else %}{% trans "Nunca" %}{% endif %}</span>
                     </div>
                 </div>
             </div>

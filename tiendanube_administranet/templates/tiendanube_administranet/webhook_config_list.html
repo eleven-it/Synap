@@ -288,12 +288,20 @@ function showToast(type, message) {
 }
 
 function testWebhook(webhookId) {
-    if (!confirm('{% trans "Are you sure you want to test this webhook?" %}')) {
-        return;
-    }
-    
+    if (!window.TnSynapConfirm) return;
+    TnSynapConfirm.show({
+        title: 'Probar webhook',
+        message: '¿Está seguro de que desea probar este webhook?',
+        confirmLabel: 'Probar',
+        onConfirm: function () {
+            _testWebhookFetch(webhookId);
+        }
+    });
+}
+
+function _testWebhookFetch(webhookId) {
     setLoading(true);
-    
+
     fetch(`/tiendanube_administranet/api/webhooks/${webhookId}/test/`, {
         method: 'POST',
         headers: {
@@ -318,12 +326,20 @@ function testWebhook(webhookId) {
 }
 
 function syncWebhooks() {
-    if (!confirm('{% trans "Are you sure you want to sync webhooks with Tiendanube?" %}')) {
-        return;
-    }
-    
+    if (!window.TnSynapConfirm) return;
+    TnSynapConfirm.show({
+        title: 'Sincronizar webhooks',
+        message: '¿Está seguro de que desea sincronizar los webhooks con Tiendanube?',
+        confirmLabel: 'Sincronizar',
+        onConfirm: function () {
+            _syncWebhooksFetch();
+        }
+    });
+}
+
+function _syncWebhooksFetch() {
     setLoading(true);
-    
+
     fetch('/tiendanube_administranet/api/webhooks/sync/', {
         method: 'POST',
         headers: {
@@ -473,4 +489,6 @@ function toggleWebhook(webhookId, currentStatus) {
     });
 }
 </script>
+{% include "tiendanube_administranet/includes/synap_confirm_modal.html" %}
+{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
 {% endblock %}

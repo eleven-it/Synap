@@ -1,6 +1,6 @@
 # Kardex artículo MPR
 
-**Estado SDD:** Fase 1 disponible (MVP archivado 12/08/2026); Fase 2 NL (tool IA) pendiente; stretch 1.15 (saldo anterior) diferido.
+**Estado SDD:** Fase 1 disponible (MVP archivado 12/08/2026); **Fase 2 NL (tool IA) disponible**; stretch 1.15 (saldo anterior) diferido.
 
 Reporte de trazabilidad por artículo y depósito basado en movimientos MSTOCK (OPP/OPA) de AdministraNET.
 
@@ -67,9 +67,30 @@ Tests automatizados: `mpr.tests.test_kardex_articulo.TestKardexPack90794402Semi`
 ## Servicio y tests
 
 ```bash
-docker exec Synap_app python manage.py test mpr.tests.test_kardex_articulo
+docker exec Synap_app python manage.py test mpr.tests.test_kardex_articulo --keepdb
 ```
 
-## Fase 2 (pendiente)
+Cobertura UI (empty states, KPI strip, markup modal + JS Node sin `alert`/`confirm`/`prompt`):
+`TestKardexArticuloUIRender` y `mpr/tests/js/test_modal_comprobante_movimiento.mjs`.
 
-Tool IA NL sobre el mismo servicio (`ia/services/mpr_kardex_tools.py`) — ver spec `ia-trazabilidad-articulo-tool`.
+## Fase 2 — Asistente IA (disponible)
+
+Tool NL en `ia/services/mpr_kardex_tools.py` (`execute_kardex_articulo`), cableada en `ReportToolsService.interpret_query` y rama temprana de `ReportAgentService.handle_query`.
+
+### Cómo invocar vía asistente
+
+Ejemplos de mensajes que enrutan al kardex (no a stock-existencias):
+
+- «trazabilidad del pack 907944-02 en Semi»
+- «kardex artículo 907944-02 este mes»
+- «saldo semi del pack 907944-02»
+
+**Permisos:** `mpr.ver` o `mpr.reportes` (mismos que el hub).
+
+**Respuesta del asistente:** saldo final, `max_packs` si es pack, resumen BOM y hasta 20 movimientos recientes (fecha `dd/MM/yyyy`). No se vuelca el ledger completo al LLM; para detalle usar el hub kardex.
+
+**Tests IA:**
+
+```bash
+docker exec Synap_app python manage.py test ia.tests.test_mpr_kardex_tools
+```

@@ -39,8 +39,8 @@
                 {% trans "Edit" %}
             </a>
             <a href="{% url 'tiendanube_administranet:order_mapping_delete' object.pk %}" 
-               class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
-               onclick="return confirm('{% trans 'Are you sure you want to delete this order mapping?' %}')">
+               class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200 tn-confirm-delete-link"
+               data-confirm-message="¿Está seguro de que desea eliminar este mapeo de pedido?">
                 <span class="material-icons text-sm mr-2">delete</span>
                 {% trans "Delete" %}
             </a>
@@ -309,4 +309,7 @@
         </div>
     </div>
 </div>
+{% include "tiendanube_administranet/includes/synap_confirm_modal.html" %}
+{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
+{% include "tiendanube_administranet/includes/tn_confirm_delete_links.html" %}
 {% endblock %} 
