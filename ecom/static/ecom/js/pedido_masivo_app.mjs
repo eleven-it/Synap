@@ -620,7 +620,7 @@ function pedidoMasivoCore() {
       this.importErroresTotal = 0;
       this.abrirDialogo('masivo_importar', {
         titulo: 'Importar pedido',
-        mensaje: 'Solo completá cantidades (packs) en la plantilla de este cliente. El archivo reemplaza el borrador. No uses una planilla de otro cliente.',
+        mensaje: 'Solo completá cantidades (packs) en la plantilla de este cliente. Hay una fila por color/SKU. El archivo reemplaza el borrador. No uses una planilla de otro cliente.',
         confirmarTexto: 'Importar y reemplazar',
         cancelarTexto: 'Cancelar',
       });

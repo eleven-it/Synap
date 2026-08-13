@@ -1,8 +1,9 @@
 """Importación Excel de pedido masivo (matriz artículo × sucursal).
 
-Formato plantilla v2: hoja ``Pedido`` con fila 1 oculta (A1 marker, B1 id_cliente,
-C+ = id_cliente_domicilio), fila 2 = rótulos y datos desde fila 3.
-Columna A = SuperArt (id_manual), B = nombre, C+ = packs. Sin precios.
+Formato plantilla v4: hoja ``Pedido`` con A=SuperArt, B=nombre, C oculta=IDArt,
+D+=packs. Una fila por SKU (el SuperArt/`id_manual` no es único).
+v3 (sin columna IDArt): se desambigua por nombre / CodArtProv y se prioriza
+``id_manual`` frente a colisión con ``IDArt``.
 Hoja oculta ``_Synap`` identifica cliente y vendedor.
 
 Modo: **reemplazo total** del borrador (se vacían celdas y queda solo el Excel).
@@ -48,7 +49,8 @@ HOJA_SUCURSALES = "Sucursales"
 HOJA_INSTRUCCIONES = "Instrucciones"
 HOJA_META = "_Synap"
 MARKER_CODIGO = "codigo_articulo"
-PLANTILLA_VERSION = 3
+PLANTILLA_VERSION = 4
+MARKER_IDART = "id_articulo"
 MAX_BYTES = 8 * 1024 * 1024
 MAX_ERRORES = 200
 MAX_ARTICULOS_PLANTILLA = 5000  # red de seguridad; administranet prod 13/08/2026: 310 ecommerce Terminado
@@ -142,7 +144,7 @@ def consultar_articulos_por_codigos(
            OR articulo.NroCodBarra = %s
            OR articulo.NroCodBarraF = %s
            OR articulo.CodArtProv = %s
-        LIMIT 8
+        LIMIT 40
     """
     try:
         pool = get_mysql_pool()
@@ -181,6 +183,73 @@ def consultar_articulos_por_codigos(
         logger.warning("consultar_articulos_por_codigos: %s", e)
         for codigo in unicos:
             out.setdefault(codigo, [])
+    return out
+
+
+def _art_desde_row(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    aid = to_int_or_none(row.get("IDArt") or row.get("id_articulo"))
+    if aid is None:
+        return None
+    return {
+        "id_articulo": aid,
+        "id_manual": str_or_default(row.get("id_manual"), ""),
+        "nombre": str_or_default(row.get("nombre"), ""),
+        "codigo_marca": to_int_or_none(row.get("CodigoMarca") or row.get("codigo_marca")),
+        "cod_art_prov": str_or_default(row.get("cod_art_prov"), ""),
+        "codigo_t": str_or_default(row.get("codigo_t"), ""),
+        "discontinuo": str_or_default(row.get("discontinuo"), "No"),
+        "ecommerce": str_or_default(row.get("ecommerce"), "No"),
+        "tipo_art_fab": str_or_default(row.get("tipo_art_fab"), ""),
+        "multiplo_cantidad_vta": row.get("multiplo_cantidad_vta"),
+    }
+
+
+def consultar_articulos_por_ids(
+    base_empresa: str, ids: Sequence[int]
+) -> Dict[int, Dict[str, Any]]:
+    """Resuelve IDArt de plantilla → artículo."""
+    out: Dict[int, Dict[str, Any]] = {}
+    ids_ok = []
+    seen: Set[int] = set()
+    for i in ids:
+        aid = to_int_or_none(i)
+        if aid is None or aid in seen:
+            continue
+        seen.add(aid)
+        ids_ok.append(aid)
+    if not ids_ok:
+        return out
+    ph = ",".join(["%s"] * len(ids_ok))
+    sql = f"""
+        SELECT
+            articulo.IDArt,
+            COALESCE(articulo.id_manual, '') AS id_manual,
+            COALESCE(articulo.NombreArticulo, '') AS nombre,
+            articulo.CodigoMarca,
+            COALESCE(articulo.CodArtProv, '') AS cod_art_prov,
+            COALESCE(articulo.CodigoArticuloT, '') AS codigo_t,
+            COALESCE(articulo.Discontinuo, 'No') AS discontinuo,
+            COALESCE(articulo.ecommerce, 'No') AS ecommerce,
+            COALESCE(TRIM(articulo.tipo_art_fab), '') AS tipo_art_fab,
+            articulo.multiplo_cantidad_vta
+        FROM articulo
+        WHERE articulo.IDArt IN ({ph})
+    """
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, ids_ok)
+                cols = [d[0] for d in cursor.description] if cursor.description else []
+                for r in cursor.fetchall():
+                    art = _art_desde_row(dict(zip(cols, r)))
+                    if art:
+                        out[int(art["id_articulo"])] = art
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("consultar_articulos_por_ids: %s", e)
     return out
 
 
@@ -249,7 +318,6 @@ def listar_articulos_plantilla_vcm(draft: EcomPedidoMasivoDraft) -> List[Dict[st
     """
     out: List[Dict[str, Any]] = []
     seen_id: Set[int] = set()
-    seen_code: Set[str] = set()
     try:
         pool = get_mysql_pool()
         with pool.get_connection(draft.base_empresa.strip()) as conn:
@@ -261,11 +329,7 @@ def listar_articulos_plantilla_vcm(draft: EcomPedidoMasivoDraft) -> List[Dict[st
                     if aid is None or aid in seen_id:
                         continue
                     codigo = str_or_default(row[1], "") or str(aid)
-                    key = codigo.strip().lower()
-                    if not key or key in seen_code:
-                        continue
                     seen_id.add(aid)
-                    seen_code.add(key)
                     out.append(
                         {
                             "id_articulo": aid,
@@ -332,6 +396,7 @@ def generar_plantilla_excel(
         f"Borrador: #{draft.pk}",
         "",
         "Al importar se reemplaza todo el borrador. Usá la plantilla de este mismo pedido.",
+        "Hay una fila por color/SKU. No borres la columna oculta (identifica el artículo).",
     ]
     for i, texto in enumerate(instrucciones, start=1):
         ws_i.cell(i, 1, texto)
@@ -369,19 +434,21 @@ def generar_plantilla_excel(
     ws_m.append(["draft_id", draft.pk or 0])
     ws_m.append(["plantilla_version", PLANTILLA_VERSION])
     ws_m.append(["sucursal_ids", *ids_suc])
+    ws_m.append(["col_primera_sucursal", 4])
     ws_m.sheet_state = "veryHidden"
 
     ws = wb.create_sheet(HOJA_PEDIDO, 0)
     n_suc = len(sucursales)
     ws.cell(1, 1, "Código")
     ws.cell(1, 2, "Artículo")
+    ws.cell(1, 3, MARKER_IDART)
     for idx, s in enumerate(sucursales):
-        col = 3 + idx
+        col = 4 + idx
         ws.cell(1, col, _rotulo_columna_suc(s))
-    for col in range(1, 3 + max(n_suc, 1)):
+    for col in range(1, 4 + max(n_suc, 1)):
         c1 = ws.cell(1, col)
         c1.fill = _FILL_HDR
-        c1.font = _FONT_HDR_SUC if col >= 3 else _FONT_HDR
+        c1.font = _FONT_HDR_SUC if col >= 4 else _FONT_HDR
         c1.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
 
     for ridx, art in enumerate(articulos):
@@ -396,9 +463,12 @@ def generar_plantilla_excel(
         cn.fill = _FILL_LOCK
         cn.font = _FONT_ART
         cn.alignment = Alignment(wrap_text=True, vertical="center")
+        cid = ws.cell(fila, 3, aid)
+        cid.fill = _FILL_LOCK
+        cid.number_format = "0"
         ws.row_dimensions[fila].height = 20
         for idx, s in enumerate(sucursales):
-            col = 3 + idx
+            col = 4 + idx
             idd = to_int_or_none(s.get("id_cliente_domicilio"))
             qty = qty_map.get((aid, idd)) if idd is not None else None
             cell = ws.cell(fila, col, qty if qty is not None else None)
@@ -408,21 +478,24 @@ def generar_plantilla_excel(
 
     n_arts = len(articulos)
     last_row = 1 + max(n_arts, 1)
+    last_col = 3 + max(n_suc, 1)
     if n_arts == 0:
         for idx in range(n_suc):
-            cell = ws.cell(2, 3 + idx)
+            cell = ws.cell(2, 4 + idx)
             cell.fill = _FILL_QTY
 
     ws.row_dimensions[1].height = 56
     ws.column_dimensions["A"].width = 14
     ws.column_dimensions["B"].width = 52
+    ws.column_dimensions["C"].hidden = True
+    ws.column_dimensions["C"].width = 10
     for idx in range(n_suc):
-        ws.column_dimensions[get_column_letter(3 + idx)].width = 16
-    ws.freeze_panes = "C2"
+        ws.column_dimensions[get_column_letter(4 + idx)].width = 16
+    ws.freeze_panes = "D2"
     ws.sheet_view.showGridLines = True
     ws.sheet_view.zoomScale = 100
     if n_suc:
-        ws.auto_filter.ref = f"A1:{get_column_letter(2 + n_suc)}{last_row}"
+        ws.auto_filter.ref = f"A1:{get_column_letter(last_col)}{last_row}"
         dv = DataValidation(
             type="decimal",
             operator="greaterThanOrEqual",
@@ -432,7 +505,7 @@ def generar_plantilla_excel(
             errorTitle="Cantidad",
             error="Solo números mayores o iguales a 0 (packs).",
         )
-        dv.add(f"C2:{get_column_letter(2 + n_suc)}{max(last_row, 2)}")
+        dv.add(f"D2:{get_column_letter(last_col)}{max(last_row, 2)}")
         ws.add_data_validation(dv)
 
     bio = io.BytesIO()
@@ -481,8 +554,10 @@ def _mapear_columnas_sucursal(
     headers_nom: Sequence[Any],
     sucursales: Sequence[Dict[str, Any]],
     errores: List[Dict[str, Any]],
+    *,
+    col_primera: int = 3,
 ) -> List[Tuple[int, Optional[int], str]]:
-    """Lista (col_1based, id_domicilio|None, etiqueta_header) para cols ≥ 3."""
+    """Lista (col_1based, id_domicilio|None, etiqueta_header) desde ``col_primera``."""
     by_id = {
         to_int_or_none(s.get("id_cliente_domicilio")): s
         for s in sucursales
@@ -504,8 +579,9 @@ def _mapear_columnas_sucursal(
                 by_etiq.setdefault(k, []).append(idd)
 
     n = max(len(headers_id), len(headers_nom))
+    inicio = max(2, int(col_primera) - 1)
     out: List[Tuple[int, Optional[int], str]] = []
-    for i in range(2, n):  # índice 0-based; col Excel = i+1; saltar A,B
+    for i in range(inicio, n):
         col = i + 1
         raw_id = headers_id[i] if i < len(headers_id) else None
         raw_nom = headers_nom[i] if i < len(headers_nom) else None
@@ -561,11 +637,49 @@ def _mapear_columnas_sucursal(
     return out
 
 
+def _norm_txt(val: Any) -> str:
+    return " ".join(str_or_default(val, "").strip().lower().split())
+
+
+def _articulo_vendible(art: Dict[str, Any]) -> bool:
+    disc = str_or_default(art.get("discontinuo"), "No").strip().lower()
+    ecom = str_or_default(art.get("ecommerce"), "No").strip().lower()
+    tipo = str_or_default(art.get("tipo_art_fab"), "").strip()
+    return disc in ("no", "") and ecom in ("si", "sí") and tipo == "Terminado"
+
+
+def _puntuar_candidato(codigo: str, art: Dict[str, Any], nombre_excel: str) -> int:
+    """Mayor puntaje gana. IDArt solo suma 1: un SuperArt numérico no debe perder contra otro SKU."""
+    codigo_n = (codigo or "").strip().lower()
+    nombre_n = _norm_txt(nombre_excel)
+    score = 0
+    idm = str_or_default(art.get("id_manual"), "").strip().lower()
+    cap = str_or_default(art.get("cod_art_prov"), "").strip().lower()
+    ct = str_or_default(art.get("codigo_t"), "").strip().lower()
+    aid = to_int_or_none(art.get("id_articulo"))
+    if idm and idm == codigo_n:
+        score += 8
+    if cap and cap == codigo_n:
+        score += 8
+    if ct and ct == codigo_n:
+        score += 8
+    if aid is not None and str(aid) == (codigo or "").strip():
+        score += 1
+    nom = _norm_txt(art.get("nombre"))
+    if nombre_n and nom and nombre_n == nom:
+        score += 16
+    if cap and nombre_n and (nombre_n == cap or nombre_n.startswith(cap + " ")):
+        score += 12
+    return score
+
+
 def _elegir_articulo(
     codigo: str,
     candidatos: Sequence[Dict[str, Any]],
     fila: int,
     errores: List[Dict[str, Any]],
+    *,
+    nombre_excel: str = "",
 ) -> Optional[Dict[str, Any]]:
     if not candidatos:
         errores.append(
@@ -578,22 +692,38 @@ def _elegir_articulo(
             )
         )
         return None
-    if len(candidatos) > 1:
-        errores.append(
-            _err(
-                "Código de artículo ambiguo: coincide con más de un artículo.",
-                code="articulo_ambiguo",
-                fila=fila,
-                columna="A",
-                codigo_articulo=codigo,
-            )
+    vendibles = [a for a in candidatos if _articulo_vendible(a)]
+    pool = vendibles or list(candidatos)
+    elegido: Optional[Dict[str, Any]] = None
+    if len(pool) == 1:
+        elegido = pool[0]
+    else:
+        ranked = sorted(
+            vendibles,
+            key=lambda a: _puntuar_candidato(codigo, a, nombre_excel),
+            reverse=True,
         )
-        return None
-    art = candidatos[0]
-    disc = str_or_default(art.get("discontinuo"), "No").strip().lower()
-    ecom = str_or_default(art.get("ecommerce"), "No").strip().lower()
-    tipo = str_or_default(art.get("tipo_art_fab"), "").strip()
-    if disc not in ("no", "") or ecom not in ("si", "sí") or tipo != "Terminado":
+        if ranked:
+            best = _puntuar_candidato(codigo, ranked[0], nombre_excel)
+            winners = [
+                a
+                for a in ranked
+                if _puntuar_candidato(codigo, a, nombre_excel) == best
+            ]
+            if len(winners) == 1 and best > 0:
+                elegido = winners[0]
+        if elegido is None:
+            errores.append(
+                _err(
+                    "Código de artículo ambiguo: coincide con más de un artículo.",
+                    code="articulo_ambiguo",
+                    fila=fila,
+                    columna="A",
+                    codigo_articulo=codigo,
+                )
+            )
+            return None
+    if not _articulo_vendible(elegido):
         errores.append(
             _err(
                 "El artículo no está activo para venta (Terminado / ecommerce).",
@@ -604,7 +734,7 @@ def _elegir_articulo(
             )
         )
         return None
-    return art
+    return elegido
 
 
 def importar_matriz_excel(
@@ -612,6 +742,7 @@ def importar_matriz_excel(
     archivo_bytes: bytes,
     *,
     consultar_arts=None,
+    consultar_ids=None,
 ) -> Dict[str, Any]:
     """Parsea, valida VCM y reemplaza celdas. All-or-nothing si hay errores."""
     if draft.estado not in (
@@ -652,15 +783,19 @@ def importar_matriz_excel(
 
     sucursales, marcas_map = _territorio(draft)
     a1 = _celda_str(rows[0][0] if rows[0] else "").lower()
+    c1 = _celda_str(rows[0][2] if rows[0] and len(rows[0]) > 2 else "").lower()
     es_plantilla_v2 = a1.replace(" ", "_") == MARKER_CODIGO
+    es_v4 = c1.replace(" ", "_") == MARKER_IDART
     ids_meta = meta.get("sucursal_ids") if isinstance(meta.get("sucursal_ids"), list) else []
+    col_suc = to_int_or_none(meta.get("col_primera_sucursal")) or (4 if es_v4 else 3)
     if es_plantilla_v2:
         headers_id = list(rows[0])
         headers_nom = list(rows[1]) if len(rows) > 1 else []
         data_rows = rows[2:]
         fila_base = 3
+        col_suc = 3
     elif ids_meta:
-        headers_id = ["", ""] + list(ids_meta)
+        headers_id = [""] * (col_suc - 1) + list(ids_meta)
         headers_nom = list(rows[0])
         data_rows = rows[1:]
         fila_base = 2
@@ -669,6 +804,7 @@ def importar_matriz_excel(
         headers_nom = list(rows[0])
         data_rows = rows[1:]
         fila_base = 2
+        col_suc = 4 if es_v4 else 3
 
     id_cli_excel = to_int_or_none(meta.get("id_cliente"))
     if id_cli_excel is None and es_plantilla_v2 and rows and len(rows[0]) > 1:
@@ -709,7 +845,9 @@ def importar_matriz_excel(
             )
         )
 
-    cols = _mapear_columnas_sucursal(headers_id, headers_nom, sucursales, errores)
+    cols = _mapear_columnas_sucursal(
+        headers_id, headers_nom, sucursales, errores, col_primera=col_suc
+    )
     if not cols:
         errores.append(
             _err(
@@ -748,13 +886,25 @@ def importar_matriz_excel(
 
     lookup_fn = consultar_arts or consultar_articulos_por_codigos
     catalogo = lookup_fn(draft.base_empresa, [c for _f, c, _r in codigos_filas])
+    ids_filas = []
+    if es_v4:
+        for _f, _c, row in codigos_filas:
+            if len(row) > 2:
+                ida = to_int_or_none(row[2])
+                if ida is not None:
+                    ids_filas.append(ida)
+    lookup_ids = consultar_ids or consultar_articulos_por_ids
+    arts_por_id = lookup_ids(draft.base_empresa, ids_filas) if es_v4 else {}
 
     vistos: Dict[str, int] = {}
+    vistos_id: Dict[int, int] = {}
     celdas_ok: List[Tuple[int, int, Decimal]] = []
     arts_ok: Dict[int, Dict[str, Any]] = {}
 
     for fila, codigo, row in codigos_filas:
-        prev = vistos.get(codigo.lower())
+        id_art_fila = to_int_or_none(row[2]) if es_v4 and len(row) > 2 else None
+        nombre_excel = _celda_str(row[1]) if len(row) > 1 else ""
+        prev = vistos_id.get(id_art_fila) if id_art_fila is not None else vistos.get(codigo.lower())
         if prev:
             hay_qty_dup = False
             for col, _idd, _et in cols:
@@ -775,10 +925,39 @@ def importar_matriz_excel(
                     )
                 )
             continue
-        vistos[codigo.lower()] = fila
-        art = _elegir_articulo(codigo, catalogo.get(codigo) or [], fila, errores)
-        if not art:
-            continue
+        if id_art_fila is not None:
+            vistos_id[id_art_fila] = fila
+        else:
+            vistos[codigo.lower()] = fila
+        if id_art_fila is not None:
+            art = arts_por_id.get(id_art_fila)
+            if not art:
+                errores.append(
+                    _err(
+                        "Artículo no encontrado.",
+                        code="articulo_no_encontrado",
+                        fila=fila,
+                        columna="A",
+                        codigo_articulo=codigo,
+                    )
+                )
+                continue
+            vendible = _elegir_articulo(
+                codigo, [art], fila, errores, nombre_excel=nombre_excel
+            )
+            if not vendible:
+                continue
+            art = vendible
+        else:
+            art = _elegir_articulo(
+                codigo,
+                catalogo.get(codigo) or [],
+                fila,
+                errores,
+                nombre_excel=nombre_excel,
+            )
+            if not art:
+                continue
         aid = int(art["id_articulo"])
         arts_ok[aid] = art
         marca = to_int_or_none(art.get("codigo_marca"))
