@@ -1,0 +1,17 @@
+{% load static %}
+{# Toast Synap global (base_app) + helper AJAX para pantallas TN #}
+<script>
+window.TnSynapMessages = window.TnSynapMessages || {
+    show: function (text, level) {
+        if (window.SynapMessages && typeof window.SynapMessages.show === 'function') {
+            window.SynapMessages.show(text, level || 'info');
+            return;
+        }
+        if (window.mprShowAviso) {
+            window.mprShowAviso(text, level || 'info');
+            return;
+        }
+        console.warn('[TN]', text);
+    }
+};
+</script>

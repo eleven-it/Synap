@@ -5,6 +5,7 @@ import requests
 from django.conf import settings
 
 from ..models import TiendanubeConfig
+from .sync_errors import classify_tiendanube_response, should_retry_webhook_failure
 from .rate_limit import (
     get_max_consecutive_429,
     get_max_retries,
@@ -20,6 +21,24 @@ logger = logging.getLogger(__name__)
 NUVEMSHOP_API_VERSION = "2025-03"
 
 
+def build_tiendanube_auth_headers(access_token: str) -> Dict[str, str]:
+    """Headers canónicos Nuvemshop 2025-03 (Authentication, no Authorization)."""
+    return {
+        'Authentication': f'bearer {access_token}',
+        'Content-Type': 'application/json',
+        'User-Agent': 'AdministraNET (soporte@administranet.com.ar)',
+    }
+
+
+def interpret_tiendanube_http_status(status: int) -> Dict[str, Any]:
+    """Clasifica respuesta HTTP TN (p. ej. 402 → NOT CONFIGURED, sin retry)."""
+    kind = classify_tiendanube_response(status)
+    return {
+        'kind': kind,
+        'should_retry': should_retry_webhook_failure(http_status=status),
+    }
+
+
 class TiendanubeService:
     """
     Servicio para interactuar con la API de Tiendanube.
@@ -30,11 +49,7 @@ class TiendanubeService:
         self.base_url = (
             f"https://api.tiendanube.com/{NUVEMSHOP_API_VERSION}/{config.store_id}"
         )
-        self.headers = {
-            'Authentication': f'bearer {config.access_token}',
-            'Content-Type': 'application/json',
-            'User-Agent': 'AdministraNET (soporte@administranet.com.ar)'
-        }
+        self.headers = build_tiendanube_auth_headers(config.access_token)
 
     _RETRIABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
 
@@ -938,6 +953,7 @@ class TiendanubeService:
                     f'Error actualizando stock/precio: {response.status_code}'
                 ),
                 'error': response.text,
+                'status_code': response.status_code,
             }
         except Exception as e:
             logger.error(f"Error en patch_products_stock_price: {e}")

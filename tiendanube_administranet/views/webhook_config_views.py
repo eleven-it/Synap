@@ -507,34 +507,31 @@ def webhook_endpoint(request):
         try:
             event_data = json.loads(payload)
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON payload: {str(e)}")
+            logger.error("Payload JSON inválido: %s", e)
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
-        
-        # Procesar evento
-        from ..services.webhook_processor import WebhookProcessor
-        from ..models import AdministraNETConfig
-        
-        # Obtener configuración de AdministraNET
-        adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
-        if not adminet_config:
-            return JsonResponse({'error': 'AdministraNET configuration not found'}, status=500)
-        
-        # Crear procesador de webhook
-        processor = WebhookProcessor(webhook_config.tiendanube_config, adminet_config)
-        
-        # Crear request mock para el procesador
-        from django.test import RequestFactory
-        factory = RequestFactory()
-        mock_request = factory.post('/webhook/', data=json.dumps(event_data), content_type='application/json')
-        mock_request.headers = headers
-        
-        result = processor.process_webhook(mock_request)
-        
-        if result['success']:
-            return JsonResponse({'status': 'success'}, status=200)
-        else:
-            logger.error(f"Webhook processing failed: {result.get('error')}")
-            return JsonResponse({'error': 'Processing failed'}, status=500)
+
+        # Inbox ACK: persistir pending y responder 2xx sin procesar negocio inline
+        event_type = event_data.get('type') or event_data.get('event') or ''
+        event_id = str(event_data.get('id', ''))
+        data_block = event_data.get('data') if isinstance(event_data.get('data'), dict) else {}
+        resource_id = data_block.get('id')
+        resource_type = event_type.split('/')[0] if event_type else ''
+
+        WebhookEvent.objects.create(
+            webhook_config=webhook_config,
+            event_type=event_type,
+            event_id=event_id,
+            resource_id=resource_id,
+            resource_type=resource_type,
+            payload=event_data,
+            headers=headers,
+            status=WebhookEvent.EventStatus.PENDING,
+        )
+
+        webhook_config.last_triggered = timezone.now()
+        webhook_config.save(update_fields=['last_triggered'])
+
+        return JsonResponse({'status': 'accepted'}, status=200)
             
     except Exception as e:
         logger.error(f"Error in webhook endpoint: {str(e)}")

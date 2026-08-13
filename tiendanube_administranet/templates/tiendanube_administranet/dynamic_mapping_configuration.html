@@ -393,12 +393,16 @@ function refreshMappings() {
             // Recargar la página para mostrar los datos actualizados
             window.location.reload();
         } else {
-            alert('Error refreshing mappings: ' + data.error);
+            if (window.TnSynapMessages) {
+                TnSynapMessages.show('Error al actualizar mapeos: ' + data.error, 'error');
+            }
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Error refreshing mappings');
+        if (window.TnSynapMessages) {
+            TnSynapMessages.show('Error al actualizar mapeos', 'error');
+        }
     })
     .finally(() => {
         // Restaurar el botón
@@ -407,4 +411,5 @@ function refreshMappings() {
     });
 }
 </script>
+{% include "tiendanube_administranet/includes/tn_ui_scripts.html" %}
 {% endblock %} 
