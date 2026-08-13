@@ -450,3 +450,235 @@ class TestReportesKardexArticuloView(SimpleTestCase):
         self.assertIn("Saldo corrido", body)
         self.assertIn("01/08/2026", body)
         self.assertIn("10", body)
+
+
+class TestKardexArticuloUIRender(SimpleTestCase):
+    """Cierra gaps verify: empty states, modal markup, KPI strip y canon UI."""
+
+    def _base_ctx(self, **overrides):
+        ctx = {
+            "meta": {
+                "id_articulo": None,
+                "id_deposito": None,
+                "articulo": None,
+                "deposito": None,
+                "bom": None,
+                "advertencias": [],
+            },
+            "filas": [],
+            "depositos": [
+                {"CodDeposito": 3, "NombreDeposito": "Semi", "tipo_mpr": "semi"},
+            ],
+            "fecha_desde_iso": "2026-08-01",
+            "fecha_hasta_iso": "2026-08-31",
+            "fecha_desde_display": "01/08/2026",
+            "fecha_hasta_display": "31/08/2026",
+            "modo_presentacion": "docenas",
+            "renglones_por_movimiento": {},
+            "grupo": "trazabilidad",
+            "reporte": "kardex_articulo",
+            "kpis": {},
+        }
+        ctx.update(overrides)
+        return ctx
+
+    def _render_partial(self, context):
+        from django.template.loader import render_to_string
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/mpr/reportes/")
+        return render_to_string(
+            "mpr/reportes/partials/kardex_articulo.html",
+            context,
+            request=request,
+        )
+
+    def test_empty_state_sin_articulo_render(self):
+        html = self._render_partial(self._base_ctx())
+        self.assertIn("Seleccioná un artículo para ver el kardex OPP/OPA del período", html)
+        self.assertNotIn("js-comprobante-modal-trigger", html)
+        self.assertNotIn("Saldo corrido", html)
+
+    def test_empty_state_sin_movimientos_render(self):
+        html = self._render_partial(
+            self._base_ctx(
+                meta={
+                    "id_articulo": 615,
+                    "id_deposito": 3,
+                    "articulo": {
+                        "id": 615,
+                        "codigo": "907944-02",
+                        "descripcion": "Pack test",
+                        "es_pack": True,
+                    },
+                    "deposito": {"id": 3, "nombre": "Semi"},
+                    "bom": None,
+                    "advertencias": [],
+                },
+                filas=[],
+            )
+        )
+        self.assertIn("Sin movimientos OPP/OPA en el período para este artículo", html)
+        self.assertIn("Ver tablero de producción", html)
+        self.assertNotIn("js-comprobante-modal-trigger", html)
+
+    def test_tabla_incluye_trigger_modal_y_partial(self):
+        html = self._render_partial(
+            self._base_ctx(
+                meta={
+                    "id_articulo": 615,
+                    "id_deposito": 3,
+                    "articulo": {
+                        "id": 615,
+                        "codigo": "907944-02",
+                        "descripcion": "Pack test",
+                        "es_pack": True,
+                    },
+                    "deposito": {"id": 3, "nombre": "Semi"},
+                    "bom": {
+                        "componentes": [
+                            {
+                                "id_articulo": 963,
+                                "codigo_articulo": "COMP-963",
+                                "descripcion_articulo": "Componente Semi",
+                                "cantidad_articulo": 2,
+                            }
+                        ]
+                    },
+                    "advertencias": [],
+                },
+                filas=[
+                    {
+                        "fecha_display": "01/08/2026",
+                        "tipo_mov": "OPP",
+                        "entrada": 10,
+                        "salida": 0,
+                        "saldo_corrido": 10,
+                        "codigo_movimiento": 100,
+                        "nro_comprobante": "0001-00000100",
+                        "detalle": "Entrada",
+                        "operario": "-",
+                    }
+                ],
+                renglones_por_movimiento={
+                    "100": {
+                        "articulos": [
+                            {
+                                "codigo_articulo": "907944-02",
+                                "descripcion": "Pack test",
+                                "filas": [
+                                    {
+                                        "nombre_deposito": "Semi",
+                                        "entrada": 10,
+                                        "salida": 0,
+                                        "saldo": 10,
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+            )
+        )
+        self.assertIn("js-comprobante-modal-trigger", html)
+        self.assertIn('data-codigo-movimiento="100"', html)
+        self.assertIn('id="renglones-por-movimiento-data"', html)
+        self.assertIn('id="modal-comprobante-movimiento"', html)
+        self.assertIn("modal_comprobante_movimiento.js", html)
+        self.assertIn("sticky top-0", html)
+        self.assertIn("Saldo corrido", html)
+        self.assertIn("Lista de materiales (BOM)", html)
+        self.assertIn("reporte=timeline", html)
+        self.assertIn("id_articulo=963", html)
+        self.assertNotIn("alert(", html)
+        self.assertNotIn("window.confirm", html)
+
+    def test_kpi_strip_kardex_saldo_y_max_packs(self):
+        from django.template.loader import render_to_string
+
+        html = render_to_string(
+            "mpr/reportes/_kpi_strip.html",
+            {
+                "grupo": "trazabilidad",
+                "reporte": "kardex_articulo",
+                "kpis": {"saldo_final": 90, "max_packs": 45},
+                "filas": [{"x": 1}, {"x": 2}],
+            },
+        )
+        self.assertIn("Saldo final", html)
+        self.assertIn("90", html)
+        self.assertIn("Max packs", html)
+        self.assertIn("45", html)
+        self.assertIn("Movimientos", html)
+
+    def test_contexto_vista_expone_renglones_modal_para_ui(self):
+        """La vista debe pasar renglones_por_movimiento cuando hay movimientos."""
+        from mpr.views import ReportesMPRView
+        from django.test import RequestFactory
+
+        view = ReportesMPRView()
+        request = RequestFactory().get(
+            "/mpr/reportes/",
+            {
+                "grupo": "trazabilidad",
+                "reporte": "kardex_articulo",
+                "id_articulo": "615",
+                "id_deposito": "3",
+                "desde": "2026-08-01",
+                "hasta": "2026-08-31",
+            },
+        )
+        request.session = {"user": {"base_empresa": "empresa92"}}
+        request.user = _mock_user_reportes("mpr.reportes")
+        view.request = request
+        kardex_payload = {
+            "articulo": {"id": 615, "codigo": "907944-02", "descripcion": "Pack", "es_pack": True},
+            "bom": None,
+            "deposito": {"id": 3, "nombre": "Semi"},
+            "movimientos": [
+                {
+                    "fecha_display": "01/08/2026",
+                    "tipo_mov": "OPP",
+                    "entrada": 10,
+                    "salida": 0,
+                    "saldo_corrido": 10,
+                    "codigo_movimiento": 100,
+                    "nro_comprobante": "0001-00000100",
+                    "detalle": "Entrada",
+                    "operario": "-",
+                },
+            ],
+            "kpis": {"saldo_final": 10, "total_entradas": 10, "total_salidas": 0, "max_packs": 5},
+            "advertencias": [],
+        }
+        with patch("mpr.views._get_base_empresa", return_value="empresa92"):
+            with patch("mpr.views.listar_depositos_config", return_value=[]):
+                with patch("mpr.services.construir_kardex_articulo", return_value=kardex_payload):
+                    with patch(
+                        "mpr.views._build_renglones_modal_map",
+                        return_value={"100": {"articulos": [{"codigo_articulo": "907944-02", "filas": []}]}},
+                    ):
+                        ctx = view.get_context_data()
+        self.assertIn("100", ctx["renglones_por_movimiento"])
+        self.assertEqual(ctx["kpis"]["saldo_final"], 10)
+        self.assertEqual(ctx["kpis"]["max_packs"], 5)
+
+    def test_modal_js_abre_pinta_renglones_y_cierra(self):
+        import subprocess
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        script = root / "mpr" / "tests" / "js" / "test_modal_comprobante_movimiento.mjs"
+        result = subprocess.run(
+            ["node", str(script)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            msg=f"stderr={result.stderr}\nstdout={result.stdout}",
+        )
+        self.assertIn("OK modal_comprobante_movimiento", result.stdout)

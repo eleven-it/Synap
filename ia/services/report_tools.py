@@ -33,6 +33,7 @@ _RE_SIN_CLIENTE = re.compile(
     r"sin\s+(?:el\s+|la\s+)?cliente\s+(?P<name>[^\.\n]+?)(?:\.|\s*$)",
     re.IGNORECASE,
 )
+_RE_PACK_CODE_KARDEX = re.compile(r"\b(\d{5,}-\d{2,})\b")
 
 
 def _extraer_fragmento_exclusion_cliente(normalized_text: str) -> str | None:
@@ -102,6 +103,9 @@ class ReportToolsService:
         ],
         "stock-existencias": [
             "stock-existencias",
+        ],
+        "mpr-kardex-articulo": [
+            "mpr-kardex-articulo",
         ],
     }
 
@@ -291,6 +295,16 @@ class ReportToolsService:
             report_slug = "mpr-pedidos-estado"
             intent = "status_query"
             metadata["mpr_pedidos_por_estado"] = True
+        elif cls._is_kardex_articulo_query(text_current):
+            report_slug = "mpr-kardex-articulo"
+            intent = "detail_lookup"
+            metadata["mpr_kardex_articulo"] = True
+            codigo_pack = cls._extract_codigo_articulo_kardex(text_current)
+            if codigo_pack:
+                filters["codigo_articulo"] = codigo_pack
+            if "semi" in text_current:
+                metadata["deposito_hint_semi"] = True
+                filters["deposito_hint_semi"] = True
         elif (
             "pedido" in text_current
             and any(term in text_current for term in ["pendiente", "preparado", "preparacion", "armado"])
@@ -454,6 +468,9 @@ class ReportToolsService:
         deposito_match = cls._match_deposito_from_text(text, policy_context)
         if deposito_match and report_slug == "stock-existencias":
             filters["depositos_incluidos"] = [deposito_match["id"]]
+            metadata["deposito_match"] = deposito_match["label"]
+        elif deposito_match and report_slug == "mpr-kardex-articulo":
+            filters["id_deposito"] = deposito_match["id"]
             metadata["deposito_match"] = deposito_match["label"]
 
         if report_slug in (
@@ -1003,6 +1020,42 @@ class ReportToolsService:
             label = str(nom or "").strip() or f"Cliente {cod}"
             out.append({"id": cod, "label": label})
         return out
+
+    @staticmethod
+    def _is_kardex_articulo_query(normalized_text: str) -> bool:
+        if not normalized_text:
+            return False
+        if "kardex" in normalized_text:
+            return True
+        if "saldo semi" in normalized_text or (
+            "saldo" in normalized_text and "semi" in normalized_text
+        ):
+            return True
+        if "trazabilidad" in normalized_text and any(
+            t in normalized_text for t in ("articulo", "artículo", "pack")
+        ):
+            return True
+        if any(
+            t in normalized_text
+            for t in (
+                "trazabilidad articulo",
+                "trazabilidad del articulo",
+                "trazabilidad del artículo",
+            )
+        ):
+            return True
+        if _RE_PACK_CODE_KARDEX.search(normalized_text) and any(
+            t in normalized_text for t in ("trazabilidad", "kardex", "semi", "saldo")
+        ):
+            return True
+        return False
+
+    @staticmethod
+    def _extract_codigo_articulo_kardex(normalized_text: str) -> str | None:
+        m = _RE_PACK_CODE_KARDEX.search(normalized_text or "")
+        if m:
+            return m.group(1)
+        return None
 
     @staticmethod
     def _match_sucursal_from_text(message_text: str, policy_context) -> dict | None:

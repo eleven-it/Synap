@@ -8,6 +8,7 @@ from datetime import date
 
 from ia.services.date_range_service import DateRangeService
 from ia.services.llm_gateway import LlmGatewayError, LlmGatewayService
+from ia.services.mpr_kardex_tools import execute_kardex_articulo
 from ia.services.report_intent_refinement_service import ReportIntentRefinementService
 from ia.services.report_tools import ReportToolsService
 
@@ -313,7 +314,7 @@ class ReportAgentService:
             elif interpreted.report_slug == "comprobantes-rutas" or (
                 interpreted.report_slug and interpreted.report_slug.startswith("mpr-")
             ):
-                # Listado logístico y reportes MPR: el período es opcional (filtro de fechas si el texto lo trae).
+                # Listado logístico y reportes MPR (incl. kardex artículo): período opcional.
                 pass
             else:
                 return ReportAgentResult(
@@ -331,6 +332,56 @@ class ReportAgentService:
                     execution_status="partial",
                     used_report_slug=interpreted.report_slug,
                 )
+
+        if interpreted.report_slug == "mpr-kardex-articulo" or interpreted.metadata.get(
+            "mpr_kardex_articulo"
+        ):
+            exec_filters = dict(interpreted.filters or {})
+            if interpreted.metadata.get("deposito_hint_semi"):
+                exec_filters.setdefault("deposito_hint_semi", True)
+            if date_range.start_date and date_range.end_date:
+                exec_filters["fecha_desde"] = date_range.start_date
+                exec_filters["fecha_hasta"] = date_range.end_date
+            kardex_result = execute_kardex_articulo(self.policy_context, exec_filters)
+            if kardex_result.get("requires_clarification"):
+                return ReportAgentResult(
+                    answer=kardex_result.get("clarification_question")
+                    or "Necesito una aclaración para consultar el kardex.",
+                    response_payload={
+                        "phase": "clarification",
+                        "query_spec": {
+                            "intent": interpreted.intent,
+                            "report_slug": interpreted.report_slug,
+                            "filters": interpreted.filters,
+                            "metadata": interpreted.metadata,
+                        },
+                    },
+                    token_usage=self._merge_report_token_usage(refinement_usage),
+                    execution_status="partial",
+                    used_report_slug="mpr-kardex-articulo",
+                )
+            return ReportAgentResult(
+                answer=kardex_result.get("answer") or "",
+                response_payload={
+                    "phase": "mpr_kardex_articulo",
+                    "report_slug": "mpr-kardex-articulo",
+                    "query_spec": {
+                        "intent": interpreted.intent,
+                        "report_slug": interpreted.report_slug,
+                        "filters": interpreted.filters,
+                        "metadata": interpreted.metadata,
+                        "date_range": {
+                            "type": date_range.range_type,
+                            "start_date": date_range.start_date,
+                            "end_date": date_range.end_date,
+                        },
+                        "kardex_payload": kardex_result.get("payload"),
+                    },
+                },
+                token_usage=self._merge_report_token_usage(refinement_usage),
+                execution_status=kardex_result.get("status") or "success",
+                used_report_slug="mpr-kardex-articulo",
+            )
 
         actual_report_slug = ReportToolsService.resolve_actual_report_slug(
             interpreted.report_slug,

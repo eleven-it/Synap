@@ -209,6 +209,13 @@
         });
     }
 
+    // Hook de prueba / re-init (p. ej. tests Node con DOM mínimo).
+    if (typeof window !== 'undefined') {
+        window.MprModalComprobanteMovimiento = {
+            init: initModalComprobanteMovimiento,
+        };
+    }
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initModalComprobanteMovimiento);
     } else {
