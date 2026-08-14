@@ -24,6 +24,7 @@ Hay informes hermanos que no se reemplazan:
 |---------|----------|---------------------------|
 | **Ventas marcas mensual** | Análisis interno (matriz vendedor → cliente × mes) | No: solo AdministraNET |
 | **Ventas por marca y SuperArt** | Jerarquía Marca → SuperArt → Artículo (packs, docenas, facturación) | No: solo AdministraNET |
+| **Ventas BOM en docenas** | Componentes BOM con salida por venta (packs explosionados) | No: solo AdministraNET |
 | **Ventas Mensuales Licenciatarios** | Armar el pack **Monthly Reporting** que se envía a marcas | Sí: seed + AdministraNET (híbrido) |
 
 ---
@@ -183,12 +184,32 @@ Ver ventas del período agrupadas por **Marca → SuperArt → Artículo**, con 
 
 ---
 
-## 6. Referencias técnicas
+## 6. Ventas BOM en docenas
+
+**Nombre en catálogo:** Ventas BOM en docenas.  
+**URL:** `/reports/dashboard/ventas-bom-docenas/`  
+**Atajo:** `/reports/ventas-bom-docenas/`
+
+### Para qué sirve
+
+Ver cuántos **artículos BOM (componentes)** salieron por venta facturada: cada pack vendido se explota según su lista de materiales. Unidades en **docenas** (pares ÷ 12) y **pares** de control. No muestra importe en pesos.
+
+### Cómo usarlo
+
+1. Defina el período de facturación.
+2. Opcional: sucursal, PV, clientes, rubro/subrubro/marca del pack.
+3. Pulse **Actualizar**.
+4. Exporte a Excel si lo necesita.
+
+---
+
+## 7. Referencias técnicas
 
 | Tema | Documento |
 |------|-----------|
 | Spec VMM | [SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md](SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md) |
 | Spec Ventas por marca y SuperArt | [SPEC_INFORME_VENTAS_MARCA_SUPERART.md](SPEC_INFORME_VENTAS_MARCA_SUPERART.md) |
+| Spec Ventas BOM en docenas | [SPEC_INFORME_VENTAS_BOM_DOCENAS.md](SPEC_INFORME_VENTAS_BOM_DOCENAS.md) |
 | Spec VML | [SPEC_INFORME_VENTAS_MENSUALES_LICENCIATARIOS.md](SPEC_INFORME_VENTAS_MENSUALES_LICENCIATARIOS.md) |
 | Análisis Monthly Reporting | [ANALISIS_MONTHLY_REPORTING_BEST_SOX_LICENCIATARIOS.md](ANALISIS_MONTHLY_REPORTING_BEST_SOX_LICENCIATARIOS.md) |
 | Mapeo PuW/PuM | [MAPEO_PUW_PUM_ADMINISTRANET.md](MAPEO_PUW_PUM_ADMINISTRANET.md) |
@@ -196,4 +217,4 @@ Ver ventas del período agrupadas por **Marca → SuperArt → Artículo**, con 
 
 ---
 
-*Manual de usuario – Informes (Reports). Synap. Actualizado 07/08/2026.*
+*Manual de usuario – Informes (Reports). Synap. Actualizado 14/08/2026.*

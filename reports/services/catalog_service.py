@@ -37,6 +37,7 @@ _LEGACY_LISTADOS_SLUGS = frozenset(
         "ventas-por-articulo",
         "ventas-marcas-mensual",
         "ventas-marca-superart",
+        "ventas-bom-docenas",
         "evolucion-precios",
         "stock-existencias",
         "resumen-ejecutivo-ventas",
