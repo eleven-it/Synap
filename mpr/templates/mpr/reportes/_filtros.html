@@ -44,4 +44,13 @@
         <span class="hidden 2xl:inline">Exportar CSV</span>
         {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Exportar CSV" only %}
     </a>
+    {% if soporta_export_xlsx and reporte != 'inventario_deposito' %}
+    <a href="?grupo={{ grupo }}&reporte={{ reporte }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}{% if meta.id_deposito %}&id_deposito={{ meta.id_deposito }}{% endif %}&format=xlsx"
+       aria-label="Exportar Excel"
+       class="group relative inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-700 px-2.5 text-xs font-medium text-white transition-colors hover:bg-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
+        <span class="material-icons text-base" aria-hidden="true">table_view</span>
+        <span class="hidden 2xl:inline">Exportar Excel</span>
+        {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Exportar Excel" only %}
+    </a>
+    {% endif %}
 </form>

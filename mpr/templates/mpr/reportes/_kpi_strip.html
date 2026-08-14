@@ -80,6 +80,19 @@
         <span class="text-[10px] font-semibold uppercase tracking-wide text-rose-300">Críticos</span>
         <span class="text-sm font-bold tabular-nums text-rose-100">{{ kpis.criticos|default:0 }}</span>
     </span>
+    {% elif grupo == "demanda" and reporte == "inventario_deposito" %}
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-purple-300">Total docenas</span>
+        <span class="text-sm font-bold tabular-nums text-purple-100">{{ kpis.total_docenas|floatformat:2|default:"0,00" }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Depósitos</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.depositos|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Filas</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.filas|default:0 }}</span>
+    </span>
     {% elif grupo == "demanda" and reporte == "brecha_pack" %}
     <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
         <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Packs brecha</span>

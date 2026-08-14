@@ -346,3 +346,44 @@ def preparar_stock_por_deposito(
         "filas": filas_out,
         "columnas_deposito": columnas_deposito,
     }
+
+
+def preparar_inventario_deposito_presentacion(
+    resultado: Dict[str, Any],
+    modo: str,
+) -> Dict[str, Any]:
+    """Contexto de plantilla inventario_deposito: jerarquía y totales SUM(docenas)."""
+    filas = resultado.get("filas") or []
+    depositos_jerarquia = resultado.get("depositos_jerarquia") or []
+    total_docenas = float(resultado.get("total_docenas") or 0)
+
+    filas_csv: List[Dict[str, Any]] = []
+    for dep in depositos_jerarquia:
+        for marca in dep.get("marcas") or []:
+            for fila in marca.get("filas") or []:
+                filas_csv.append({
+                    **fila,
+                    "nombre_deposito": dep.get("nombre_deposito"),
+                    "marca_nombre": marca.get("marca_nombre"),
+                })
+
+    return {
+        "filas": filas_csv,
+        "depositos_jerarquia": depositos_jerarquia,
+        "total_docenas": total_docenas,
+        "total_docenas_display": f"{total_docenas:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        "modo_presentacion": modo,
+        "fecha_corte_display": _fmt_fecha_inventario(resultado.get("fecha_corte")),
+        "usa_stock_deposito": resultado.get("usa_stock_deposito", True),
+        "advertencia_fecha": resultado.get("advertencia_fecha"),
+    }
+
+
+def _fmt_fecha_inventario(value: Any) -> str:
+    from datetime import date, datetime
+
+    if isinstance(value, datetime):
+        value = value.date()
+    if isinstance(value, date):
+        return value.strftime("%d/%m/%Y")
+    return str(value or "")

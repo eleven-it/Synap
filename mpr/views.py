@@ -4368,6 +4368,9 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         if (request.GET.get("format") or "").strip().lower() == "csv":
             ctx = self.get_context_data(**kwargs)
             return self._respuesta_csv(ctx)
+        if (request.GET.get("format") or "").strip().lower() == "xlsx":
+            ctx = self.get_context_data(**kwargs)
+            return self._respuesta_xlsx(ctx)
         return super().get(request, *args, **kwargs)
 
     def _respuesta_csv(self, context: Dict[str, Any]) -> HttpResponse:
@@ -4388,11 +4391,39 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         resp["Content-Disposition"] = f'attachment; filename="{nombre}"'
         return resp
 
+    def _respuesta_xlsx(self, context: Dict[str, Any]) -> HttpResponse:
+        from mpr.export import exportar_inventario_deposito_xlsx
+        from mpr.reportes_hub import reporte_soporta_export_xlsx
+
+        grupo = context.get("grupo") or "produccion"
+        reporte = context.get("reporte") or "resumen_diario"
+        if not reporte_soporta_export_xlsx(grupo, reporte):
+            return HttpResponse("Exportación Excel no disponible para este reporte.", status=400)
+
+        if grupo == "demanda" and reporte == "inventario_deposito":
+            fecha_corte = context.get("fecha_corte_iso")
+            fecha_obj = None
+            if fecha_corte:
+                try:
+                    from datetime import datetime
+
+                    fecha_obj = datetime.strptime(str(fecha_corte)[:10], "%Y-%m-%d").date()
+                except (ValueError, TypeError):
+                    fecha_obj = None
+            return exportar_inventario_deposito_xlsx(
+                context.get("filas") or [],
+                total_docenas=float(context.get("total_docenas") or 0),
+                fecha_corte=fecha_obj,
+                titulo=context.get("titulo_reporte") or "Inventario por depósito",
+            )
+        return HttpResponse("Exportación Excel no implementada para este reporte.", status=400)
+
     def get_context_data(self, **kwargs):
         from mpr.reportes_hub import (
             GRUPOS_REPORTES,
             PARTIALS,
             parse_periodo,
+            reporte_soporta_export_xlsx,
             resolver_grupo_reporte,
             titulo_reporte,
         )
@@ -4416,6 +4447,7 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
             "reportes_nav": GRUPOS_REPORTES.get(grupo, {}).get("reportes", {}),
             "titulo_reporte": titulo_reporte(grupo, reporte),
             "partial_template": PARTIALS.get((grupo, reporte), ""),
+            "soporta_export_xlsx": reporte_soporta_export_xlsx(grupo, reporte),
             **periodo,
         })
         context["tipo_reporte"] = f"{grupo}_{reporte}"
@@ -4484,6 +4516,60 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
             kpis = {"pedidos": len(filas)}
         elif grupo == "demanda" and reporte == "stock":
             filas_stock_raw = reporte_mpr_stock(base_empresa, limit=500)
+        elif grupo == "demanda" and reporte == "inventario_deposito":
+            from mpr.services_inventario_deposito import (
+                consultar_inventario_deposito,
+                parse_filtros_inventario_deposito,
+            )
+            from stock.services.inventario_tabla import listar_marcas_catalogo
+
+            try:
+                context["depositos"] = listar_depositos_config(base_empresa)
+            except MprSchemaError as e:
+                _log_mpr_schema_error(e)
+                context["depositos"] = []
+            context["marcas_catalogo"] = listar_marcas_catalogo(base_empresa)
+            get_marcas = (
+                self.request.GET.getlist("marcas_incluidos")
+                if hasattr(self.request.GET, "getlist")
+                else []
+            )
+            filtros_inv = parse_filtros_inventario_deposito(
+                self.request.GET,
+                marcas_getlist=get_marcas,
+            )
+            context["filtros_inventario_deposito"] = filtros_inv
+            context["fecha_corte_iso"] = filtros_inv.fecha_corte.isoformat()
+            context["fecha_corte_display"] = filtros_inv.fecha_corte.strftime("%d/%m/%Y")
+            from django.http import QueryDict
+
+            export_q = QueryDict(mutable=True)
+            if hasattr(self.request.GET, "lists"):
+                for key in self.request.GET:
+                    for val in self.request.GET.getlist(key):
+                        export_q.appendlist(key, val)
+            elif isinstance(self.request.GET, dict):
+                for key, val in self.request.GET.items():
+                    if isinstance(val, list):
+                        for item in val:
+                            export_q.appendlist(key, item)
+                    else:
+                        export_q[key] = val
+            export_q.pop("format", None)
+            context["inventario_export_query"] = export_q.urlencode()
+            inv_raw = consultar_inventario_deposito(base_empresa, filtros_inv)
+            meta = {
+                "fecha_corte": filtros_inv.fecha_corte,
+                "incluir_2da": filtros_inv.incluir_2da,
+                "advertencias": [],
+            }
+            if inv_raw.get("advertencia_fecha"):
+                meta["advertencias"].append(inv_raw["advertencia_fecha"])
+            kpis = inv_raw.get("kpis") or {}
+            filas = inv_raw.get("filas") or []
+            totales = {"total_docenas": inv_raw.get("total_docenas") or 0}
+            context["_inventario_deposito_raw"] = inv_raw
+            context["meta"] = meta
         elif grupo == "demanda" and reporte == "bajo_minimo":
             filas = reporte_mpr_bajo_minimo(base_empresa)
         elif grupo == "trazabilidad" and reporte == "timeline":
@@ -4585,6 +4671,30 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                 ),
                 "etiqueta_cantidad_corta": (
                     "doc. · u." if modo_presentacion == "docenas" else "u."
+                ),
+            }
+        elif grupo == "demanda" and reporte == "inventario_deposito":
+            from mpr.reportes_presentacion import preparar_inventario_deposito_presentacion
+
+            inv_raw = context.pop("_inventario_deposito_raw", {})
+            inv_ctx = preparar_inventario_deposito_presentacion(inv_raw, modo_presentacion)
+            reporte_ctx = {
+                "kpis": kpis,
+                "filas": inv_ctx["filas"],
+                "depositos_jerarquia": inv_ctx["depositos_jerarquia"],
+                "total_docenas": inv_ctx["total_docenas"],
+                "total_docenas_display": inv_ctx["total_docenas_display"],
+                "fecha_corte_display": inv_ctx["fecha_corte_display"],
+                "usa_stock_deposito": inv_ctx["usa_stock_deposito"],
+                "advertencia_fecha": inv_ctx.get("advertencia_fecha"),
+                "dias": dias,
+                "eventos": eventos,
+                "totales": totales,
+                "meta": meta,
+                "modo_presentacion": modo_presentacion,
+                "empty_titulo": (
+                    "No hay stock para los filtros seleccionados. "
+                    "Probá ampliar depósito, marca o activar «Incluir 2da selección»."
                 ),
             }
         else:
