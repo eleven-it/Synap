@@ -191,12 +191,13 @@ class ExportService:
             "ventas-por-articulo",
             "ventas-marca-superart",
             "ventas-marcas-mensual",
+            "ventas-bom-docenas",
         ):
             return f"{report_slug}_{timestamp}.xlsx"
 
         filters = payload.get("filters") or {}
-        fi = filters.get("fecha_inicio_facturacion")
-        ff = filters.get("fecha_fin_facturacion")
+        fi = filters.get("fecha_inicio_facturacion") or filters.get("fecha_inicio")
+        ff = filters.get("fecha_fin_facturacion") or filters.get("fecha_fin")
 
         def _segmento_fecha(v: Any) -> str:
             if v is None or v == "":
@@ -219,6 +220,14 @@ class ExportService:
             return f"Ventas_marca_superart_{a}_{b}.xlsx"
         if report_slug == "ventas-marcas-mensual":
             return f"Ventas_marcas_mensual_{a}_{b}.xlsx"
+        if report_slug == "ventas-bom-docenas":
+            def _ddmmyyyy(seg: str) -> str:
+                parts = seg.split("-")
+                if len(parts) == 3:
+                    return f"{parts[2]}{parts[1]}{parts[0]}"
+                return seg.replace("-", "")
+
+            return f"Ventas_BOM_docenas_{_ddmmyyyy(a)}_{_ddmmyyyy(b)}.xlsx"
         return f"Ventas_objetivo_vendedores_{a}_{b}.xlsx"
 
     def _declarative_export_headers(self, report: ReportDefinition, sample_row: Dict[str, Any]) -> Optional[List[str]]:
@@ -341,6 +350,16 @@ class ExportService:
                 "packs",
                 "docenas",
                 "facturacion",
+            ]
+            return [h for h in preferred if h in available]
+
+        if slug == "ventas-bom-docenas":
+            preferred = [
+                "codigo_articulo",
+                "nombre_articulo",
+                "nombre_marca",
+                "pares",
+                "docenas",
             ]
             return [h for h in preferred if h in available]
 
@@ -653,6 +672,8 @@ class ExportService:
                     "nombre_superart": "SuperArt",
                     "packs": "Packs",
                     "docenas": "Docenas",
+                    "pares": "Pares",
+                    "codigo_articulo": "Código BOM",
                     "anio_mes": "AñoMes",
                     "backorder_total": "BO total",
                     "bo_con_stock": "BO c/stock",
@@ -670,6 +691,7 @@ class ExportService:
                     "ventas-por-articulo",
                     "ventas-marca-superart",
                     "ventas-marcas-mensual",
+                    "ventas-bom-docenas",
                 ):
                     translated_headers = [str(s).upper() for s in translated_headers]
                 if report.slug == "ventas-marcas-mensual":
@@ -708,7 +730,7 @@ class ExportService:
                                     row_values.append(float(value))
                             except (ValueError, TypeError):
                                 row_values.append("")
-                        elif h in ("cantidades_vendidas", "packs", "docenas"):
+                        elif h in ("cantidades_vendidas", "packs", "docenas", "pares"):
                             try:
                                 if value == "" or value is None:
                                     row_values.append(0.0)
@@ -730,7 +752,7 @@ class ExportService:
                                 cell.alignment = Alignment(horizontal="right", vertical="center")
                             else:
                                 cell.alignment = Alignment(horizontal="left", vertical="center")
-                        elif h in ("cantidades_vendidas", "packs", "docenas") and isinstance(val, (int, float)):
+                        elif h in ("cantidades_vendidas", "packs", "docenas", "pares") and isinstance(val, (int, float)):
                             cell.number_format = "#,##0.00"
                             cell.alignment = Alignment(horizontal="right", vertical="center")
                         else:
