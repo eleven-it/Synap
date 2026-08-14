@@ -215,6 +215,7 @@ class QueryRunnerService:
             'ventas-por-articulo',
             'ventas-marcas-mensual',
             'ventas-marca-superart',
+            'ventas-bom-docenas',
             'ventas-mensuales-licenciatarios',
             'stock-existencias',
             'comprobantes-rutas',
@@ -289,6 +290,8 @@ class QueryRunnerService:
             if report.slug == "ventas-marcas-mensual"
             else f"{payload_hash}:vmsa_v1"
             if report.slug == "ventas-marca-superart"
+            else f"{payload_hash}:vbd_v1"
+            if report.slug == "ventas-bom-docenas"
             else payload_hash
         )
 
@@ -334,6 +337,15 @@ class QueryRunnerService:
             from .ventas_marca_superart_runner import run_ventas_marca_superart
 
             result = run_ventas_marca_superart(report, payload, self.user)
+        elif report.slug == "ventas-bom-docenas":
+            from .ventas_bom_docenas_runner import run_ventas_bom_docenas
+
+            result = run_ventas_bom_docenas(
+                report,
+                payload,
+                user=self.user,
+                resolve_period_dates=self._resolve_period_dates,
+            )
         elif report.slug == "ventas-mensuales-licenciatarios":
             from .ventas_mensuales_licenciatarios_runner import (
                 run_ventas_mensuales_licenciatarios,

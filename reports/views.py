@@ -28,6 +28,7 @@ BUILDER_HYBRID_SLUGS = frozenset(
         "ventas-por-articulo",
         "ventas-marcas-mensual",
         "ventas-marca-superart",
+        "ventas-bom-docenas",
         "bo-stock-facturacion",
         "stock-existencias",
     }
@@ -182,6 +183,11 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             from reports.services.ventas_marca_superart_seed import ensure_ventas_marca_superart_report
 
             ensure_ventas_marca_superart_report()
+            report = ReportDefinition.objects.filter(filters).first()
+        if not report and slug == "ventas-bom-docenas":
+            from reports.services.ventas_bom_docenas_seed import ensure_ventas_bom_docenas_report
+
+            ensure_ventas_bom_docenas_report()
             report = ReportDefinition.objects.filter(filters).first()
         if not report:
             raise Http404("Report not found")

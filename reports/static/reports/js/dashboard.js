@@ -43,6 +43,7 @@ function detectReportType() {
     "ventas-por-vendedor",
     "ventas-por-articulo",
     "ventas-marca-superart",
+    "ventas-bom-docenas",
     "ventas-marcas-mensual",
     "comprobantes-rutas",
   ];
@@ -80,6 +81,7 @@ function isInformeBoDualPeriodo(slug) {
     slug === "ventas-por-vendedor" ||
     slug === "ventas-por-articulo" ||
     slug === "ventas-marca-superart" ||
+    slug === "ventas-bom-docenas" ||
     slug === "ventas-marcas-mensual"
   );
 }
@@ -87,6 +89,11 @@ function isInformeBoDualPeriodo(slug) {
 /** Informe ventas por marca y SuperArt (jerarquía Marca → SuperArt → Artículo). */
 function isVentasMarcaSuperartSlug(slug) {
   return slug === "ventas-marca-superart";
+}
+
+/** Informe ventas BOM en docenas (tabla plana por componente). */
+function isVentasBomDocenasSlug(slug) {
+  return slug === "ventas-bom-docenas";
 }
 
 /** Jerarquía VO/VPA/VMSA: fetch y render vía handler dedicado. */
@@ -104,7 +111,8 @@ function isInformeVentasMarcasFamiliaSlug(slug) {
   return (
     isJerarquiaVentasBoFamiliaSlug(slug) ||
     isVentasMarcasMensualSlug(slug) ||
-    isVentasMarcaSuperartSlug(slug)
+    isVentasMarcaSuperartSlug(slug) ||
+    isVentasBomDocenasSlug(slug)
   );
 }
 
@@ -119,6 +127,7 @@ function isInformeQuerySoloManualORealtime(slug) {
     slug === "ventas-por-vendedor" ||
     slug === "ventas-por-articulo" ||
     slug === "ventas-marca-superart" ||
+    slug === "ventas-bom-docenas" ||
     slug === "ventas-marcas-mensual"
   );
 }
@@ -143,7 +152,8 @@ function isVentasCatalogoFiltersSlug(slug) {
   return (
     slug === "ventas-por-articulo" ||
     slug === "ventas-por-vendedor" ||
-    slug === "ventas-marca-superart"
+    slug === "ventas-marca-superart" ||
+    slug === "ventas-bom-docenas"
   );
 }
 
@@ -9866,6 +9876,7 @@ if (dashboardRoot) {
       slug === "ventas-por-vendedor" ||
       slug === "ventas-por-articulo" ||
       slug === "ventas-marca-superart" ||
+      slug === "ventas-bom-docenas" ||
       slug === "ventas-marcas-mensual"
     ) {
       return true;
@@ -9899,6 +9910,10 @@ if (dashboardRoot) {
     "ventas-marca-superart": {
       title: "Cargando ventas por marca y SuperArt",
       subtitle: "Consultando jerarquía Marca → SuperArt → Artículo…",
+    },
+    "ventas-bom-docenas": {
+      title: "Cargando ventas BOM en docenas",
+      subtitle: "Explosionando packs facturados por receta BOM…",
     },
     "ventas-marcas-mensual": {
       title: "Cargando ventas marcas mensual",

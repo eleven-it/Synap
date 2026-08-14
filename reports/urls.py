@@ -85,6 +85,14 @@ urlpatterns = [
         ),
         name="reports_ventas_marca_superart_short_redirect",
     ),
+    path(
+        "ventas-bom-docenas/",
+        RedirectView.as_view(
+            url=reverse_lazy("reports:dashboard_detail", kwargs={"slug": "ventas-bom-docenas"}),
+            permanent=False,
+        ),
+        name="reports_ventas_bom_docenas_short_redirect",
+    ),
     path("dashboard/<slug:slug>/", DashboardDetailView.as_view(), name="dashboard_detail"),
     path("builder/", ReportBuilderListView.as_view(), name="builder_list"),
     path("builder/data-map/", DataMapView.as_view(), name="data_map"),  # Ruta específica debe ir ANTES de la genérica
