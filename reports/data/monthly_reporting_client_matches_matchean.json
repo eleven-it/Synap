@@ -1,0 +1,1152 @@
+{
+  "fuente": "matching_clientes_unicos_administranet_181_174_198_194_20260808.xlsx#Matchean",
+  "fecha": "2026-08-17",
+  "base_empresa": "administranet",
+  "host": "181.174.198.194:30804",
+  "informe": "ventas-mensuales-licenciatarios",
+  "matches": [
+    {
+      "seed_name": "Adolfo Fernandez",
+      "cuit": "20-93155264-4",
+      "anet_cliente_id": 780,
+      "anet_nombre": "ADOLFO FERNANDEZ"
+    },
+    {
+      "seed_name": "ADOLFO ZAKIAN SA",
+      "cuit": "30-70755361-4",
+      "anet_cliente_id": 1010,
+      "anet_nombre": "ADOLFO ZAKIAN SA"
+    },
+    {
+      "seed_name": "Alpha srl.",
+      "cuit": "30-59120159-6",
+      "anet_cliente_id": 792,
+      "anet_nombre": "Alpha srl."
+    },
+    {
+      "seed_name": "ALTA MONTAÑA S.R.L.",
+      "cuit": "30-71827303-6",
+      "anet_cliente_id": 814,
+      "anet_nombre": "ALTA MONTAÑA S.R.L."
+    },
+    {
+      "seed_name": "ANNEX",
+      "cuit": "30-71019492-7",
+      "anet_cliente_id": 595,
+      "anet_nombre": "ANNEX S.A."
+    },
+    {
+      "seed_name": "ANTONIO LUQUIN S.A.C.I.F.I",
+      "cuit": "30-52555824-6",
+      "anet_cliente_id": 833,
+      "anet_nombre": "ANTONIO LUQUIN S.A.C.I.F.I"
+    },
+    {
+      "seed_name": "ARIMA SPORT",
+      "cuit": "30-71533084-5",
+      "anet_cliente_id": 611,
+      "anet_nombre": "ARIMA SPORT"
+    },
+    {
+      "seed_name": "ARMANDO SPORT S.A.S.",
+      "cuit": "30-71833949-5",
+      "anet_cliente_id": 865,
+      "anet_nombre": "ARMANDO SPORT S. A. S."
+    },
+    {
+      "seed_name": "BARRIO SPORT SRL",
+      "cuit": "30-51901932-5",
+      "anet_cliente_id": 832,
+      "anet_nombre": "BARRIO SPORT SRL"
+    },
+    {
+      "seed_name": "BAU FERNANDO DIEGO",
+      "cuit": "20-22790133-1",
+      "anet_cliente_id": 434,
+      "anet_nombre": "BAU FERNANDO DIEGO"
+    },
+    {
+      "seed_name": "BLOISE GENARO Y BLOISE ANGEL SOCIEDAD",
+      "cuit": "30-57489339-5",
+      "anet_cliente_id": 580,
+      "anet_nombre": "BLOISE GENARO Y BLOISE ANGEL SOCIEDAD"
+    },
+    {
+      "seed_name": "BONERRO RUFFENER CAROLINA",
+      "cuit": "27-38107528-7",
+      "anet_cliente_id": 1002,
+      "anet_nombre": "BONERRO RUFFENER CAROLINA"
+    },
+    {
+      "seed_name": "CAMARIÑAS",
+      "cuit": "30-71077606-3",
+      "anet_cliente_id": 601,
+      "anet_nombre": "CAMARIÑAS"
+    },
+    {
+      "seed_name": "CARLOS ROSSETTI S.A.",
+      "cuit": "30-71480143-7",
+      "anet_cliente_id": 413,
+      "anet_nombre": "CARLOS ROSSETTI S.A."
+    },
+    {
+      "seed_name": "CASA  DEL PUEBLO S.A",
+      "cuit": "30-70760024-8",
+      "anet_cliente_id": 541,
+      "anet_nombre": "CASA  DEL PUEBLO S.A"
+    },
+    {
+      "seed_name": "Casa Ferracioli S.A.",
+      "cuit": "30-56180035-5",
+      "anet_cliente_id": 789,
+      "anet_nombre": "CASA FERRACIOLI S.A."
+    },
+    {
+      "seed_name": "CENTRO DEPORTES S.R.L.",
+      "cuit": "30-63357415-0",
+      "anet_cliente_id": 530,
+      "anet_nombre": "CENTRO DEPORTES S.R.L."
+    },
+    {
+      "seed_name": "CHECA JOSEFINA DEL CARMEN",
+      "cuit": "27-12870065-5",
+      "anet_cliente_id": 829,
+      "anet_nombre": "CHECA JOSEFINA DEL CARMEN"
+    },
+    {
+      "seed_name": "CICCIOLI CARLOS",
+      "cuit": "20-17142157-9",
+      "anet_cliente_id": 669,
+      "anet_nombre": "CICCIOLI CARLOS"
+    },
+    {
+      "seed_name": "COPPEL S.A.",
+      "cuit": "30-71041150-2",
+      "anet_cliente_id": 942,
+      "anet_nombre": "COPPEL S.A."
+    },
+    {
+      "seed_name": "COREN S.A.",
+      "cuit": "30-59848192-6",
+      "anet_cliente_id": 793,
+      "anet_nombre": "Coren s.a."
+    },
+    {
+      "seed_name": "COSANELLI ANIBAL",
+      "cuit": "20-10052800-3",
+      "anet_cliente_id": 270,
+      "anet_nombre": "COSANELLI ANIBAL"
+    },
+    {
+      "seed_name": "CRAVERO ADIAN GUSTAVO",
+      "cuit": "20-11346162-5",
+      "anet_cliente_id": 556,
+      "anet_nombre": "CRAVERO ADIAN GUSTAVO"
+    },
+    {
+      "seed_name": "CUCCHIARELLI RICARDO",
+      "cuit": "20-14002541-1",
+      "anet_cliente_id": 867,
+      "anet_nombre": "Cucchiarelli Ricardo"
+    },
+    {
+      "seed_name": "DABRA S.A.",
+      "cuit": "30-63848573-3",
+      "anet_cliente_id": 368,
+      "anet_nombre": "DABRA S.A."
+    },
+    {
+      "seed_name": "DAVID COMIZZO DEPORTES S.C",
+      "cuit": "30-65467091-5",
+      "anet_cliente_id": 533,
+      "anet_nombre": "DAVID COMIZZO DEPORTES S.C"
+    },
+    {
+      "seed_name": "DE GRUTOLLA DOMINGO",
+      "cuit": "30-71654904-2",
+      "anet_cliente_id": 614,
+      "anet_nombre": "DE GRUTOLLA DOMINGO"
+    },
+    {
+      "seed_name": "DE LUCA HECTOR DAMIAN",
+      "cuit": "23-25435623-9",
+      "anet_cliente_id": 314,
+      "anet_nombre": "DE LUCA HECTOR DAMIAN"
+    },
+    {
+      "seed_name": "DEFAGOT CARINA MARIA",
+      "cuit": "27-25237645-9",
+      "anet_cliente_id": 576,
+      "anet_nombre": "DEFAGOT CARINA MARIA"
+    },
+    {
+      "seed_name": "DEPORTES ANTONIO BALNCO S.A.",
+      "cuit": "30-65183403-8",
+      "anet_cliente_id": 845,
+      "anet_nombre": "DEPORTES ANTONIO BLANCO S.A."
+    },
+    {
+      "seed_name": "DIAZ JOSE ALEJANDRO",
+      "cuit": "20-17252993-4",
+      "anet_cliente_id": 979,
+      "anet_nombre": "DIAZ JOSE ALEJANDRO"
+    },
+    {
+      "seed_name": "DINOSAURIO",
+      "cuit": "30-69847147-2",
+      "anet_cliente_id": 1009,
+      "anet_nombre": "DINOSAURIO"
+    },
+    {
+      "seed_name": "DRAPANTE DANIEL",
+      "cuit": "20-22074993-3",
+      "anet_cliente_id": 775,
+      "anet_nombre": "DRAPANTE DANIEL"
+    },
+    {
+      "seed_name": "DULIO DEL GRECCO E HIJOS S.R.L",
+      "cuit": "30-71626375-0",
+      "anet_cliente_id": 948,
+      "anet_nombre": "DULIO DEL GRECCO E HIJOS S.R.L"
+    },
+    {
+      "seed_name": "E. Fajardo s.a.",
+      "cuit": "30-53329774-5",
+      "anet_cliente_id": 788,
+      "anet_nombre": "E. Fajardo s.a."
+    },
+    {
+      "seed_name": "EL DANTE SAIC",
+      "cuit": "30-50568727-9",
+      "anet_cliente_id": 578,
+      "anet_nombre": "EL DANTE SAIC"
+    },
+    {
+      "seed_name": "ESTAFO JOSE OSVALDO",
+      "cuit": "20-28178092-2",
+      "anet_cliente_id": 568,
+      "anet_nombre": "ESTEFO JOSE OSVALDO"
+    },
+    {
+      "seed_name": "FACTORY SPORT S.A.",
+      "cuit": "33-71199188-9",
+      "anet_cliente_id": 619,
+      "anet_nombre": "FACTORY SPORT S.A."
+    },
+    {
+      "seed_name": "FERREIRA  SPORT S.A.",
+      "cuit": "30-71013267-0",
+      "anet_cliente_id": 806,
+      "anet_nombre": "FERREIRA  SPORT S.A."
+    },
+    {
+      "seed_name": "FIRST LABEL.SRL",
+      "cuit": "30-71662063-4",
+      "anet_cliente_id": 417,
+      "anet_nombre": "FIRST LABEL.SRL"
+    },
+    {
+      "seed_name": "FORTALEZA EXTREMA S.A.",
+      "cuit": "30-71416654-5",
+      "anet_cliente_id": 605,
+      "anet_nombre": "FORTALEZA EXTREMA S.A."
+    },
+    {
+      "seed_name": "FRANQUICIE BAHIA BLANCA",
+      "cuit": "27-23796795-5",
+      "anet_cliente_id": 339,
+      "anet_nombre": "FRANQUICIE BAHIA BLANCA"
+    },
+    {
+      "seed_name": "Freile Andres s.a.",
+      "cuit": "30-71599930-3",
+      "anet_cliente_id": 811,
+      "anet_nombre": "Freile Andres s.a."
+    },
+    {
+      "seed_name": "GASTALDI MARIA LAURA",
+      "cuit": "27-26162458-9",
+      "anet_cliente_id": 577,
+      "anet_nombre": "GASTALDI MARIA LAURA"
+    },
+    {
+      "seed_name": "GERONIMO Deportes",
+      "cuit": "33-66563323-9",
+      "anet_cliente_id": 949,
+      "anet_nombre": "GERONIMO Deportes"
+    },
+    {
+      "seed_name": "GEVIRTZMAN MARIO",
+      "cuit": "30-67374902-6",
+      "anet_cliente_id": 800,
+      "anet_nombre": "GEVIRTZMAN MARIO"
+    },
+    {
+      "seed_name": "GOMEZ MIGUEL ANGEL",
+      "cuit": "20-21898717-7",
+      "anet_cliente_id": 561,
+      "anet_nombre": "GOMEZ MIGUEL ANGEL"
+    },
+    {
+      "seed_name": "GONZALES MARIA  ESTER",
+      "cuit": "27-13389071-3",
+      "anet_cliente_id": 324,
+      "anet_nombre": "GONZALEZ MARIA  ESTER"
+    },
+    {
+      "seed_name": "GONZALEZ MARIA ESTER",
+      "cuit": "27-13389071-3",
+      "anet_cliente_id": 324,
+      "anet_nombre": "GONZALEZ MARIA  ESTER"
+    },
+    {
+      "seed_name": "GRAELLS NELSON ANTONIO",
+      "cuit": "20-05410060-5",
+      "anet_cliente_id": 267,
+      "anet_nombre": "GRAELLS NELSON ANTONIO"
+    },
+    {
+      "seed_name": "HANDICAP S.A.",
+      "cuit": "30-69301836-2",
+      "anet_cliente_id": 1008,
+      "anet_nombre": "HANDICAP S.A."
+    },
+    {
+      "seed_name": "IMPACTO DEPORTES S.R.L.",
+      "cuit": "30-70908243-0",
+      "anet_cliente_id": 547,
+      "anet_nombre": "IMPACTO DEPORTES S.R.L."
+    },
+    {
+      "seed_name": "IRDANA S.A.",
+      "cuit": "30-71452130-2",
+      "anet_cliente_id": 906,
+      "anet_nombre": "IRDANA S.A."
+    },
+    {
+      "seed_name": "ISRAEL FELER S.A.",
+      "cuit": "30-70809951-8",
+      "anet_cliente_id": 934,
+      "anet_nombre": "ISRAEL FELER S.A."
+    },
+    {
+      "seed_name": "JAF S R L",
+      "cuit": "30-71407840-9",
+      "anet_cliente_id": 409,
+      "anet_nombre": "JAF S R L"
+    },
+    {
+      "seed_name": "KADIMA S.A.",
+      "cuit": "30-70868039-3",
+      "anet_cliente_id": 544,
+      "anet_nombre": "KADIMA S.A."
+    },
+    {
+      "seed_name": "LA CELADA  S.A.",
+      "cuit": "30-71076844-3",
+      "anet_cliente_id": 600,
+      "anet_nombre": "LA CELADA  S.A."
+    },
+    {
+      "seed_name": "La Madrileña S.A.",
+      "cuit": "30-56226584-4",
+      "anet_cliente_id": 791,
+      "anet_nombre": "La Madrileña S.A."
+    },
+    {
+      "seed_name": "LAFALLA MARIO  OSCAR",
+      "cuit": "20-11967545-7",
+      "anet_cliente_id": 864,
+      "anet_nombre": "LAFALLA MARIO  OSCAR"
+    },
+    {
+      "seed_name": "LAGUARDIA FRANCO",
+      "cuit": "20-27329187-4",
+      "anet_cliente_id": 567,
+      "anet_nombre": "LAGUARDIA FRANCO"
+    },
+    {
+      "seed_name": "LEURU S.A",
+      "cuit": "30-68689724-5",
+      "anet_cliente_id": 379,
+      "anet_nombre": "LEURU S.A"
+    },
+    {
+      "seed_name": "LEVI NESTOR",
+      "cuit": "20-10129728-5",
+      "anet_cliente_id": 271,
+      "anet_nombre": "LEVI NESTOR"
+    },
+    {
+      "seed_name": "LEVIMAR SRL",
+      "cuit": "33-71016646-9",
+      "anet_cliente_id": 424,
+      "anet_nombre": "LEVIMAR SRL"
+    },
+    {
+      "seed_name": "Leyenda Adrian",
+      "cuit": "20-21936936-9",
+      "anet_cliente_id": 774,
+      "anet_nombre": "Leyenda Adrian"
+    },
+    {
+      "seed_name": "LIEBE S R L",
+      "cuit": "30-71888821-9",
+      "anet_cliente_id": 422,
+      "anet_nombre": "LIEBE S R L"
+    },
+    {
+      "seed_name": "LIMITE DEPORTES S.R.L.",
+      "cuit": "30-71605948-7",
+      "anet_cliente_id": 857,
+      "anet_nombre": "LIMITE DEPORTES S.R.L."
+    },
+    {
+      "seed_name": "LOMERIDES S.A.",
+      "cuit": "30-70771109-0",
+      "anet_cliente_id": 933,
+      "anet_nombre": "LOMERIDES S.A."
+    },
+    {
+      "seed_name": "LONGHI MARCELO",
+      "cuit": "20-14307611-4",
+      "anet_cliente_id": 492,
+      "anet_nombre": "LONGHI MARCELO"
+    },
+    {
+      "seed_name": "LYG IMPORT SRL",
+      "cuit": "30-71826938-1",
+      "anet_cliente_id": 912,
+      "anet_nombre": "LYG IMPORT SRL"
+    },
+    {
+      "seed_name": "MABEL SALINAS",
+      "cuit": "30-71091865-8",
+      "anet_cliente_id": 901,
+      "anet_nombre": "mabel salinas"
+    },
+    {
+      "seed_name": "MAGNO ALEJANDRO",
+      "cuit": "20-29799868-5",
+      "anet_cliente_id": 826,
+      "anet_nombre": "MAGNO ALEJANDRO"
+    },
+    {
+      "seed_name": "MALDJIAN  ALEJANDRO",
+      "cuit": "20-13860896-5",
+      "anet_cliente_id": 919,
+      "anet_nombre": "MALDJIAN  ALEJANDRO"
+    },
+    {
+      "seed_name": "MARATHON SRL",
+      "cuit": "30-67537666-9",
+      "anet_cliente_id": 847,
+      "anet_nombre": "MARATHON SRL"
+    },
+    {
+      "seed_name": "MARCOS LEANDRO LAROSE",
+      "cuit": "20-34666457-7",
+      "anet_cliente_id": 993,
+      "anet_nombre": "MARCOS LEANDRO LAROSE"
+    },
+    {
+      "seed_name": "MARJUSVALE S.A.",
+      "cuit": "30-71035025-2",
+      "anet_cliente_id": 597,
+      "anet_nombre": "MARJUSVALE S.A."
+    },
+    {
+      "seed_name": "MARTI JUAN MARTIN",
+      "cuit": "20-10908057-9",
+      "anet_cliente_id": 488,
+      "anet_nombre": "MARTI JUAN MARTIN"
+    },
+    {
+      "seed_name": "Maza Roberto",
+      "cuit": "20-12047655-7",
+      "anet_cliente_id": 770,
+      "anet_nombre": "Maza Roberto"
+    },
+    {
+      "seed_name": "MC. CENTER TUCUMAN SRL",
+      "cuit": "30-59920087-4",
+      "anet_cliente_id": 841,
+      "anet_nombre": "MC. CENTER TUCUMAN SRL"
+    },
+    {
+      "seed_name": "MDQ LE SPORT S.A.",
+      "cuit": "30-70815705-4",
+      "anet_cliente_id": 935,
+      "anet_nombre": "MDQ LE SPORT S.A."
+    },
+    {
+      "seed_name": "Meo Liliana",
+      "cuit": "27-27719822-9",
+      "anet_cliente_id": 787,
+      "anet_nombre": "Meo Liliana"
+    },
+    {
+      "seed_name": "MERSAN S.R.L.",
+      "cuit": "30-71038602-8",
+      "anet_cliente_id": 1018,
+      "anet_nombre": "MERSAN S.R.L."
+    },
+    {
+      "seed_name": "MONTEMURRO&HERNANDEZ S H",
+      "cuit": "33-71494680-9",
+      "anet_cliente_id": 425,
+      "anet_nombre": "MONTEMURRO&HERNANDEZ S H"
+    },
+    {
+      "seed_name": "MULTIBRAND JEANS SRL",
+      "cuit": "30-71932433-5",
+      "anet_cliente_id": 1090,
+      "anet_nombre": "MULTIBRAND JEANS S. R. L."
+    },
+    {
+      "seed_name": "NACE S.R.L",
+      "cuit": "30-71608322-1",
+      "anet_cliente_id": 812,
+      "anet_nombre": "NACE S.R.L"
+    },
+    {
+      "seed_name": "O.A.DEPORTES",
+      "cuit": "30-70762243-8",
+      "anet_cliente_id": 586,
+      "anet_nombre": "O.A.DEPORTES"
+    },
+    {
+      "seed_name": "O.A. DEPORTES S.R.L.",
+      "cuit": "30-70762243-8",
+      "anet_cliente_id": 585,
+      "anet_nombre": "O.A. DEPORTES S.R.L."
+    },
+    {
+      "seed_name": "OSOPPO S.A.",
+      "cuit": "30-71112764-6",
+      "anet_cliente_id": 549,
+      "anet_nombre": "OSOPPO S.A."
+    },
+    {
+      "seed_name": "OULET CENTER SRL",
+      "cuit": "30-70834320-6",
+      "anet_cliente_id": 895,
+      "anet_nombre": "OULET CENTER SRL"
+    },
+    {
+      "seed_name": "PACO GARCIA S.A.",
+      "cuit": "30-52718199-9",
+      "anet_cliente_id": 835,
+      "anet_nombre": "PACO GARCIA S.A."
+    },
+    {
+      "seed_name": "PALACIO LAURA  CECILIA",
+      "cuit": "27-20303080-6",
+      "anet_cliente_id": 884,
+      "anet_nombre": "PALACIO LAURA  CECILIA"
+    },
+    {
+      "seed_name": "Performance s.a.",
+      "cuit": "30-64661135-7",
+      "anet_cliente_id": 796,
+      "anet_nombre": "Performance s.a."
+    },
+    {
+      "seed_name": "Pueblo S.A.",
+      "cuit": "30-70733113-1",
+      "anet_cliente_id": 894,
+      "anet_nombre": "PUEBLO SA"
+    },
+    {
+      "seed_name": "PUMA SPORTS ARGENTINA S.A",
+      "cuit": "34-55761909-9",
+      "anet_cliente_id": 427,
+      "anet_nombre": "PUMA SPORTS ARGENTINA S.A"
+    },
+    {
+      "seed_name": "QUEVEDO TEODORO",
+      "cuit": "20-07933311-6",
+      "anet_cliente_id": 862,
+      "anet_nombre": "QUEVEDO TEODORO"
+    },
+    {
+      "seed_name": "RA OUTLET S H",
+      "cuit": "30-69107670-5",
+      "anet_cliente_id": 801,
+      "anet_nombre": "RA OUTLET S H"
+    },
+    {
+      "seed_name": "RICAGNO FABIAN",
+      "cuit": "20-16600772-1",
+      "anet_cliente_id": 921,
+      "anet_nombre": "RICAGNO FABIAN"
+    },
+    {
+      "seed_name": "ROMITELLI ROSANA",
+      "cuit": "27-23497255-9",
+      "anet_cliente_id": 998,
+      "anet_nombre": "ROMITELLI ROSANA"
+    },
+    {
+      "seed_name": "SALINAS MABEL S.A.",
+      "cuit": "30-71091865-8",
+      "anet_cliente_id": 902,
+      "anet_nombre": "SALINAS MABEL S.A."
+    },
+    {
+      "seed_name": "SANTIAGO CAMPIS",
+      "cuit": "20-22560522-0",
+      "anet_cliente_id": 296,
+      "anet_nombre": "SANTIAGO CAMPIS"
+    },
+    {
+      "seed_name": "SANTIAGO VON MUHLIENEN",
+      "cuit": "20-05882074-2",
+      "anet_cliente_id": 480,
+      "anet_nombre": "SANTIAGO VON MUHLIENEN"
+    },
+    {
+      "seed_name": "SCALZO OSVALDO NESTOR",
+      "cuit": "20-10707498-9",
+      "anet_cliente_id": 654,
+      "anet_nombre": "SCALZO OSVALDO NESTOR"
+    },
+    {
+      "seed_name": "SIAN S.A.",
+      "cuit": "30-69992106-4",
+      "anet_cliente_id": 538,
+      "anet_nombre": "SIAN S.A."
+    },
+    {
+      "seed_name": "SIMON Y  CIA S.R.L",
+      "cuit": "30-56587836-7",
+      "anet_cliente_id": 889,
+      "anet_nombre": "SIMON Y  CIA S.R.L"
+    },
+    {
+      "seed_name": "SOTO RAMIRO RODOLFO",
+      "cuit": "20-25118002-5",
+      "anet_cliente_id": 873,
+      "anet_nombre": "SOTO RAMIRO RODOLFO"
+    },
+    {
+      "seed_name": "Sportman SRL",
+      "cuit": "30-62113492-9",
+      "anet_cliente_id": 723,
+      "anet_nombre": "SPORTMAN SRL"
+    },
+    {
+      "seed_name": "STADIO UNO",
+      "cuit": "30-70768635-5",
+      "anet_cliente_id": 932,
+      "anet_nombre": "STADIO UNO"
+    },
+    {
+      "seed_name": "TEMOINKO ENRIQUE JESUS",
+      "cuit": "20-17799289-6",
+      "anet_cliente_id": 671,
+      "anet_nombre": "TEMOINKO ENRIQUE JESUS"
+    },
+    {
+      "seed_name": "TESI S.A.",
+      "cuit": "30-70733106-9",
+      "anet_cliente_id": 893,
+      "anet_nombre": "TESI S.A."
+    },
+    {
+      "seed_name": "TOTAL SPORT S. R. L",
+      "cuit": "30-70985312-7",
+      "anet_cliente_id": 804,
+      "anet_nombre": "TOTAL SPORT S. R. L"
+    },
+    {
+      "seed_name": "Total Sport srl",
+      "cuit": "30-70985312-7",
+      "anet_cliente_id": 805,
+      "anet_nombre": "Total Sport srl"
+    },
+    {
+      "seed_name": "TUTUCA S.A.",
+      "cuit": "30-71331650-0",
+      "anet_cliente_id": 904,
+      "anet_nombre": "TUTUCA S.A."
+    },
+    {
+      "seed_name": "UGARTE Y CIA. S.R.L.",
+      "cuit": "30-52778140-6",
+      "anet_cliente_id": 457,
+      "anet_nombre": "ugarte y cia s.r.l."
+    },
+    {
+      "seed_name": "VALERA SANDRA PATRICIA",
+      "cuit": "27-16798549-7",
+      "anet_cliente_id": 521,
+      "anet_nombre": "VALERA SANDRA PATRICIA"
+    },
+    {
+      "seed_name": "VARTAT S.A.",
+      "cuit": "30-71685109-1",
+      "anet_cliente_id": 472,
+      "anet_nombre": "vartat s.a"
+    },
+    {
+      "seed_name": "VIMIANZO",
+      "cuit": "30-71137776-6",
+      "anet_cliente_id": 602,
+      "anet_nombre": "VIMIANZO"
+    },
+    {
+      "seed_name": "Von Muhlinen Santiago",
+      "cuit": "20-05882074-2",
+      "anet_cliente_id": 481,
+      "anet_nombre": "Von Muhlinen Santiago"
+    },
+    {
+      "seed_name": "WAIMEA  PINAMAR",
+      "cuit": "30-71660293-8",
+      "anet_cliente_id": 416,
+      "anet_nombre": "WAIMEA  PINAMAR"
+    },
+    {
+      "seed_name": "ZANARKAND SRL",
+      "cuit": "30-71495166-8",
+      "anet_cliente_id": 609,
+      "anet_nombre": "ZANARKAND SRL"
+    },
+    {
+      "seed_name": "ZARCAL S.A.",
+      "cuit": "30-70843347-7",
+      "anet_cliente_id": 589,
+      "anet_nombre": "ZARCAL S.A."
+    }
+  ],
+  "missing_cuit": [],
+  "ambiguous": [
+    {
+      "seed_name": "Adolfo Fernandez",
+      "elegido": 780,
+      "candidatos": [
+        [
+          780,
+          "ADOLFO FERNANDEZ",
+          "Activo"
+        ],
+        [
+          781,
+          "Adolfo Fernandez",
+          "Activo"
+        ],
+        [
+          782,
+          "FERNANDEZ ADOLFO",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "Alpha srl.",
+      "elegido": 792,
+      "candidatos": [
+        [
+          717,
+          "ALPHA S.R.L.",
+          "Activo"
+        ],
+        [
+          792,
+          "Alpha srl.",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "BLOISE GENARO Y BLOISE ANGEL SOCIEDAD",
+      "elegido": 580,
+      "candidatos": [
+        [
+          142,
+          "BLOISE Genaro  y Angel SH",
+          "Activo"
+        ],
+        [
+          580,
+          "BLOISE GENARO Y BLOISE ANGEL SOCIEDAD",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "Casa Ferracioli S.A.",
+      "elegido": 789,
+      "candidatos": [
+        [
+          789,
+          "CASA FERRACIOLI S.A.",
+          "Activo"
+        ],
+        [
+          790,
+          "Casa Ferracioli S.A.",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "COREN S.A.",
+      "elegido": 793,
+      "candidatos": [
+        [
+          718,
+          "FILEPO Y CORNETO",
+          "Activo"
+        ],
+        [
+          793,
+          "Coren s.a.",
+          "Activo"
+        ],
+        [
+          794,
+          "COREN S.A.",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "CRAVERO ADIAN GUSTAVO",
+      "elegido": 556,
+      "candidatos": [
+        [
+          555,
+          "CLAVERO ADRIAN",
+          "Activo"
+        ],
+        [
+          556,
+          "CRAVERO ADIAN GUSTAVO",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "DE GRUTOLLA DOMINGO",
+      "elegido": 614,
+      "candidatos": [
+        [
+          614,
+          "DE GRUTOLLA DOMINGO",
+          "Activo"
+        ],
+        [
+          615,
+          "DE GRUTTOLA JAVIER E HIJAS",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "DE LUCA HECTOR DAMIAN",
+      "elegido": 314,
+      "candidatos": [
+        [
+          314,
+          "DE LUCA HECTOR DAMIAN",
+          "Activo"
+        ],
+        [
+          315,
+          "LUCA HECTOR",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "DINOSAURIO",
+      "elegido": 1009,
+      "candidatos": [
+        [
+          231,
+          "dinosaurio s.a.",
+          "Activo"
+        ],
+        [
+          1009,
+          "DINOSAURIO",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "FORTALEZA EXTREMA S.A.",
+      "elegido": 605,
+      "candidatos": [
+        [
+          605,
+          "FORTALEZA EXTREMA S.A.",
+          "Activo"
+        ],
+        [
+          1083,
+          "fortaleza extrema",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "FRANQUICIE BAHIA BLANCA",
+      "elegido": 339,
+      "candidatos": [
+        [
+          339,
+          "FRANQUICIE BAHIA BLANCA",
+          "Activo"
+        ],
+        [
+          340,
+          "FRENQUICIE BAHIA BLANCA",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "Freile Andres s.a.",
+      "elegido": 811,
+      "candidatos": [
+        [
+          811,
+          "Freile Andres s.a.",
+          "Activo"
+        ],
+        [
+          1057,
+          "FREILE  ANDRES",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "GEVIRTZMAN MARIO",
+      "elegido": 800,
+      "candidatos": [
+        [
+          799,
+          "GEVIRTZMAN I L MARIO",
+          "Activo"
+        ],
+        [
+          800,
+          "GEVIRTZMAN MARIO",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "GONZALES MARIA  ESTER",
+      "elegido": 324,
+      "candidatos": [
+        [
+          324,
+          "GONZALEZ MARIA  ESTER",
+          "Activo"
+        ],
+        [
+          325,
+          "GONZALEZ MARIA ESTER",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "GONZALEZ MARIA ESTER",
+      "elegido": 324,
+      "candidatos": [
+        [
+          324,
+          "GONZALEZ MARIA  ESTER",
+          "Activo"
+        ],
+        [
+          325,
+          "GONZALEZ MARIA ESTER",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "MABEL SALINAS",
+      "elegido": 901,
+      "candidatos": [
+        [
+          901,
+          "mabel salinas",
+          "Activo"
+        ],
+        [
+          902,
+          "SALINAS MABEL S.A.",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "O.A.DEPORTES",
+      "elegido": 586,
+      "candidatos": [
+        [
+          585,
+          "O.A. DEPORTES S.R.L.",
+          "Activo"
+        ],
+        [
+          586,
+          "O.A.DEPORTES",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "O.A. DEPORTES S.R.L.",
+      "elegido": 585,
+      "candidatos": [
+        [
+          585,
+          "O.A. DEPORTES S.R.L.",
+          "Activo"
+        ],
+        [
+          586,
+          "O.A.DEPORTES",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "SALINAS MABEL S.A.",
+      "elegido": 902,
+      "candidatos": [
+        [
+          901,
+          "mabel salinas",
+          "Activo"
+        ],
+        [
+          902,
+          "SALINAS MABEL S.A.",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "SANTIAGO VON MUHLIENEN",
+      "elegido": 480,
+      "candidatos": [
+        [
+          480,
+          "SANTIAGO VON MUHLIENEN",
+          "Activo"
+        ],
+        [
+          481,
+          "Von Muhlinen Santiago",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "Sportman SRL",
+      "elegido": 723,
+      "candidatos": [
+        [
+          723,
+          "SPORTMAN SRL",
+          "Activo"
+        ],
+        [
+          795,
+          "Sportman SRL",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "TOTAL SPORT S. R. L",
+      "elegido": 804,
+      "candidatos": [
+        [
+          804,
+          "TOTAL SPORT S. R. L",
+          "Activo"
+        ],
+        [
+          805,
+          "Total Sport srl",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "Total Sport srl",
+      "elegido": 805,
+      "candidatos": [
+        [
+          804,
+          "TOTAL SPORT S. R. L",
+          "Activo"
+        ],
+        [
+          805,
+          "Total Sport srl",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "UGARTE Y CIA. S.R.L.",
+      "elegido": 457,
+      "candidatos": [
+        [
+          457,
+          "ugarte y cia s.r.l.",
+          "Activo"
+        ],
+        [
+          1003,
+          "UGARTE Y CIA. S.R.L.",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "VARTAT S.A.",
+      "elegido": 472,
+      "candidatos": [
+        [
+          472,
+          "vartat s.a",
+          "Activo"
+        ],
+        [
+          1024,
+          "VARTAT S.A.",
+          "Activo"
+        ]
+      ]
+    },
+    {
+      "seed_name": "Von Muhlinen Santiago",
+      "elegido": 481,
+      "candidatos": [
+        [
+          480,
+          "SANTIAGO VON MUHLIENEN",
+          "Activo"
+        ],
+        [
+          481,
+          "Von Muhlinen Santiago",
+          "Activo"
+        ]
+      ]
+    }
+  ]
+}

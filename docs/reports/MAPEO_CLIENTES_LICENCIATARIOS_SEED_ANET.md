@@ -39,3 +39,17 @@ Catálogo máquina: [`reports/data/monthly_reporting_client_matches_libro1.json`
 
 1. Importar seed Monthly Reporting (crea filas `MonthlyReportingClientMatch` en `pending`).  
 2. Para cada fila de §1: API/modal de match del dashboard VML → vincular `anet_cliente_id` y `base_empresa=administranet`.
+
+---
+
+## 3. Matchean (matching_clientes_unicos … 08/08/2026)
+
+Fuente: `tmp_exports/matching_clientes_unicos_administranet_181_174_198_194_20260808.xlsx` hoja **Matchean** (119 filas: nombre planilla + nombre ANET + CUIT).
+
+Resolución: CUIT → `cliente.Codigo` en AdministraNET (`181.174.198.194:30804`). Catálogo:
+[`reports/data/monthly_reporting_client_matches_matchean.json`](../../reports/data/monthly_reporting_client_matches_matchean.json).
+
+Aplicación: `reports/data/monthly_reporting_seed_export/apply_matchean_matches.py` (idempotente).
+
+**Estado 17/08/2026 (Postgres local):** tras aplicar Matchean + Libro1 → **206 matched / 0 pending**.
+
