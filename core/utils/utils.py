@@ -79,6 +79,14 @@ APPS_MENU = [
                 "seccion": _("Consultas"),
                 "items": [
                     {"label": _("Inventario por etapa"), "url": "stock:inventario", "icon": "description", "permission": "stock.consultas", "menu_item_id": "stock_cons_ficha"},
+                    {
+                        "label": _("Inventario por depósito"),
+                        "url": "reports:dashboard_detail",
+                        "url_kwargs": {"slug": "inventario-deposito-articulo"},
+                        "icon": "warehouse",
+                        "permission": ["stock.consultas", "reports.view_operational", "mpr.reportes"],
+                        "menu_item_id": "stock_cons_inventario_deposito",
+                    },
                     {"label": _("Consultas y Anulaciones"), "url": "stock:visualiza_movimientos", "icon": "list_alt", "permission": "stock.consultas", "menu_item_id": "stock_cons_anulaciones"},
                     {"label": _("Informes"), "url": "stock:visualiza_movimientos", "icon": "assessment", "permission": "stock.informes", "menu_item_id": "stock_cons_informes"},
                 ]
@@ -270,14 +278,6 @@ APPS_MENU = [
                 "seccion": _("Reportes"),
                 "items": [
                     {"label": _("Reportes MPR"), "url": "mpr:reportes", "icon": "assessment", "permission": ["mpr.ver", "mpr.reportes"], "menu_item_id": "mpr_rep_reportes"},
-                    {
-                        "label": _("Inventario por depósito"),
-                        "url": "reports:dashboard_detail",
-                        "url_kwargs": {"slug": "inventario-deposito-articulo"},
-                        "icon": "warehouse",
-                        "permission": ["mpr.ver", "mpr.reportes", "reports.view_operational"],
-                        "menu_item_id": "mpr_rep_inventario_deposito",
-                    },
                 ]
             },
             {
@@ -587,19 +587,6 @@ APPS_MENU = [
                     }
                 ]
             },
-            {
-                "seccion": _("Producción / stock"),
-                "items": [
-                    {
-                        "label": _("Inventario por depósito"),
-                        "url": "reports:dashboard_detail",
-                        "url_kwargs": {"slug": "inventario-deposito-articulo"},
-                        "icon": "warehouse",
-                        "permission": ["reports.view_operational", "mpr.reportes", "mpr.ver"],
-                        "menu_item_id": "reports_mpr_inventario_deposito",
-                    }
-                ]
-            }
         ]
     },
     {

@@ -12,10 +12,11 @@ Motor de negocio: [`docs/mpr/INVENTARIO_DEPOSITO_ARTICULO.md`](../mpr/INVENTARIO
 
 | Canal | Destino |
 |-------|---------|
-| Menú **Reports → Producción / stock → Inventario por depósito** | Dashboard del slug |
-| Menú **MPR → Reportes → Inventario por depósito** | Mismo deep-link |
+| Menú **Stock → Consultas → Inventario por depósito** | Dashboard del slug |
 | Catálogo `/reports/` | Tarjeta del informe |
 | Hub legacy `/mpr/reportes/?grupo=demanda&reporte=inventario_deposito` | **302** al dashboard |
+
+No hay ítem en el menú MPR ni en Reports: el acceso de menú es solo Stock.
 
 **Permisos:** `reports.view_operational` **o** `mpr.reportes` **o** `mpr.ver`.
 
