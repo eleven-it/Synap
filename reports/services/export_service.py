@@ -201,12 +201,13 @@ class ExportService:
             "ventas-marca-superart",
             "ventas-marcas-mensual",
             "ventas-mensuales-licenciatarios",
+            "ventas-bom-docenas",
         ):
             return f"{report_slug}_{timestamp}.xlsx"
 
         filters = payload.get("filters") or {}
-        fi = filters.get("fecha_inicio_facturacion")
-        ff = filters.get("fecha_fin_facturacion")
+        fi = filters.get("fecha_inicio_facturacion") or filters.get("fecha_inicio")
+        ff = filters.get("fecha_fin_facturacion") or filters.get("fecha_fin")
 
         def _segmento_fecha(v: Any) -> str:
             if v is None or v == "":
@@ -232,6 +233,14 @@ class ExportService:
         if report_slug == "ventas-mensuales-licenciatarios":
             pack = str((filters.get("pack_id") or "pack")).strip()
             return f"Ventas_licenciatarios_{pack}_{a}_{b}.xlsx"
+        if report_slug == "ventas-bom-docenas":
+            def _ddmmyyyy(seg: str) -> str:
+                parts = seg.split("-")
+                if len(parts) == 3:
+                    return f"{parts[2]}{parts[1]}{parts[0]}"
+                return seg.replace("-", "")
+
+            return f"Ventas_BOM_docenas_{_ddmmyyyy(a)}_{_ddmmyyyy(b)}.xlsx"
         return f"Ventas_objetivo_vendedores_{a}_{b}.xlsx"
 
     def _declarative_export_headers(self, report: ReportDefinition, sample_row: Dict[str, Any]) -> Optional[List[str]]:
@@ -357,6 +366,16 @@ class ExportService:
             ]
             return [h for h in preferred if h in available]
 
+        if slug == "ventas-bom-docenas":
+            preferred = [
+                "codigo_articulo",
+                "nombre_articulo",
+                "nombre_marca",
+                "pares",
+                "docenas",
+            ]
+            return [h for h in preferred if h in available]
+
         if slug == "ventas-marcas-mensual":
             # Sin Cód. vendedor / Cód. cliente en Excel (siguen en data[] para orden interno).
             if "unidades_a" in available:
@@ -478,9 +497,6 @@ class ExportService:
         if report.slug == "documento-presupuesto-ventas":
             self._generate_excel_documento_presupuesto_ventas(file_path, report, query_result, payload)
             return
-        if report.slug == "inventario-deposito-articulo":
-            self._generate_excel_inventario_deposito(file_path, report, query_result, payload)
-            return
         if report.slug == "ventas-marcas-mensual":
             self._generate_excel_ventas_marcas_mensual(file_path, report, query_result, payload)
             return
@@ -488,6 +504,9 @@ class ExportService:
             self._generate_excel_ventas_mensuales_licenciatarios(
                 file_path, report, query_result, payload
             )
+            return
+        if report.slug == "inventario-deposito-articulo":
+            self._generate_excel_inventario_deposito(file_path, report, query_result, payload)
             return
         if report.slug == "bo-stock-facturacion":
             self._generate_excel_bo(file_path, report, query_result, payload)
@@ -674,6 +693,8 @@ class ExportService:
                     "nombre_superart": "SuperArt",
                     "packs": "Packs",
                     "docenas": "Docenas",
+                    "pares": "Pares",
+                    "codigo_articulo": "Código BOM",
                     "anio_mes": "AñoMes",
                     "backorder_total": "BO total",
                     "bo_con_stock": "BO c/stock",
@@ -691,6 +712,7 @@ class ExportService:
                     "ventas-por-articulo",
                     "ventas-marca-superart",
                     "ventas-marcas-mensual",
+                    "ventas-bom-docenas",
                 ):
                     translated_headers = [str(s).upper() for s in translated_headers]
                 if report.slug == "ventas-marcas-mensual":
@@ -729,7 +751,7 @@ class ExportService:
                                     row_values.append(float(value))
                             except (ValueError, TypeError):
                                 row_values.append("")
-                        elif h in ("cantidades_vendidas", "packs", "docenas"):
+                        elif h in ("cantidades_vendidas", "packs", "docenas", "pares"):
                             try:
                                 if value == "" or value is None:
                                     row_values.append(0.0)
@@ -751,7 +773,7 @@ class ExportService:
                                 cell.alignment = Alignment(horizontal="right", vertical="center")
                             else:
                                 cell.alignment = Alignment(horizontal="left", vertical="center")
-                        elif h in ("cantidades_vendidas", "packs", "docenas") and isinstance(val, (int, float)):
+                        elif h in ("cantidades_vendidas", "packs", "docenas", "pares") and isinstance(val, (int, float)):
                             cell.number_format = "#,##0.00"
                             cell.alignment = Alignment(horizontal="right", vertical="center")
                         else:
@@ -1068,6 +1090,7 @@ class ExportService:
         wb.save(file_path)
         logger.info(f"✅ Archivo Excel generado: {file_path}")
 
+
     def _generate_excel_inventario_deposito(
         self, file_path: Path, report: ReportDefinition, query_result, payload: Dict
     ):
@@ -1268,8 +1291,7 @@ class ExportService:
         )
 
         extra = (query_result.meta or {}).get("extra") or {}
-        merge_result = getattr(query_result, "artifacts", None) or {}
-        merge_result = merge_result.get("merge_result") or extra.get("merge_result")
+        merge_result = extra.get("merge_result")
         pack_id = str(extra.get("pack_id") or (payload.get("filters") or {}).get("pack_id") or "").strip()
         year = extra.get("year")
         month_from = extra.get("month_from")
@@ -1277,7 +1299,7 @@ class ExportService:
 
         if merge_result is None or not pack_id or year is None:
             raise ValueError(
-                "Export licenciatarios requiere merge_result (artifacts); ejecute el runner primero."
+                "Export licenciatarios requiere merge_result en meta.extra; ejecute el runner primero."
             )
 
         pack = MonthlyReportingPack.objects.get(pack_id=pack_id, active=True)
