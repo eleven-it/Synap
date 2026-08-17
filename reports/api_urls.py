@@ -36,6 +36,8 @@ from .ventas_mensuales_licenciatarios_api_views import (
     LicenciatariosAnetClientsAPIView,
     LicenciatariosClientMatchDetailAPIView,
     LicenciatariosClientMatchesListAPIView,
+    LicenciatariosSuperArtQABulkAPIView,
+    LicenciatariosSuperArtQAListAPIView,
 )
 from .executive_dashboard_api_views import (
     ExecutiveDashboardAPIView,
@@ -194,6 +196,16 @@ urlpatterns = [
         "licenciatarios/anet-clients/",
         LicenciatariosAnetClientsAPIView.as_view(),
         name="reports-licenciatarios-anet-clients",
+    ),
+    path(
+        "licenciatarios/superart-qa/",
+        LicenciatariosSuperArtQAListAPIView.as_view(),
+        name="reports-licenciatarios-superart-qa",
+    ),
+    path(
+        "licenciatarios/superart-qa/bulk/",
+        LicenciatariosSuperArtQABulkAPIView.as_view(),
+        name="reports-licenciatarios-superart-qa-bulk",
     ),
     path(
         "executive-dashboard/ventas/resumen/",
