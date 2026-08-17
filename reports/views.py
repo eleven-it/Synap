@@ -155,8 +155,6 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             return ["reports/dashboard_dabra_consolidado_remitos.html"]
         if slug == self.UTILIDAD_GERENCIAL_SLUG:
             return ["reports/dashboard_utilidad_gerencial.html"]
-        if slug == INVENTARIO_DEPOSITO_SLUG:
-            return ["reports/dashboard_inventario_deposito.html"]
         return [self.template_name]
 
     def get_report(self) -> ReportDefinition:
@@ -369,6 +367,14 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["licenciatarios_anet_clients_api_url"] = reverse(
                 "reports-api:reports-licenciatarios-anet-clients"
             )
+        if report.slug == INVENTARIO_DEPOSITO_SLUG:
+            from datetime import date
+
+            context["dashboard_api_url"] = reverse("reports-api:reports-query")
+            context["export_api_url"] = reverse("reports-api:reports-export")
+            context["filters_api_url"] = reverse("reports-api:reports-filters")
+            context["fecha_corte_iso"] = date.today().isoformat()
+            context["fecha_corte_display"] = date.today().strftime("%d/%m/%Y")
         return context
 
 
