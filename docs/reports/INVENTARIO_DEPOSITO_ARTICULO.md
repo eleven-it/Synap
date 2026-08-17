@@ -22,12 +22,13 @@ No hay ítem en el menú MPR ni en Reports: el acceso de menú es solo Stock.
 
 ## UI
 
-Pantalla dedicada (sin tabs del hub MPR ni Desde/Hasta compartidos):
+Usa el chrome estándar de Synap Reports en `reports/dashboard_detail.html` (sin tabs del hub MPR ni Desde/Hasta compartidos):
 
-- Hero + KPIs (total docenas, depósitos, filas)
-- Filtros: fecha de corte, depósitos, marcas, artículo, Incluir 2da (default No)
-- Tabla jerárquica Depósito → Marca → Artículo/Talle/Stock/UM/Docenas
-- Export **Excel** vía `POST /api/reports/export/?type=xlsx` (sin CSV)
+- Hero con **Actualizar**, **Exportar Excel**, **Mostrar/Ocultar filtros**, **Tiempo real** y **Pantalla completa**.
+- Panel de filtros colapsable: fecha de corte, depósitos y marcas con tags, artículo e Incluir 2da selección (default No).
+- Resumen `#report-summary` con total docenas, depósitos y filas.
+- Modal compartido durante la consulta y tabla jerárquica dedicada Depósito → Marca → Artículo/Talle/Stock/UM/Docenas.
+- Exportación **Excel** vía `POST /api/reports/export/?type=xlsx` con los filtros vigentes (sin CSV).
 
 ## Distinto de `stock-existencias`
 

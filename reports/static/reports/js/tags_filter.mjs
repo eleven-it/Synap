@@ -187,6 +187,7 @@ export function initializeTagsFilter(
       (slug === "uninvoiced_remitos" ||
         slug === "total-consolidado-operativo" ||
         slug === "stock-existencias" ||
+        slug === "inventario-deposito-articulo" ||
         (typeof window.isVentasNetasSlug === "function" &&
           window.isVentasNetasSlug(slug)))
     ) {

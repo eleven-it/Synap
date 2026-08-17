@@ -18,9 +18,15 @@ from reports.services.inventario_deposito_runner import (
     run_inventario_deposito,
 )
 from reports.services.inventario_deposito_seed import INVENTARIO_DEPOSITO_SLUG as SEED_SLUG
+from reports.views import DashboardDetailView
 
 
 class InventarioDepositoPermisosTest(SimpleTestCase):
+    def test_dashboard_usa_template_estandar(self):
+        view = DashboardDetailView()
+        view.kwargs = {"slug": INVENTARIO_DEPOSITO_SLUG}
+        self.assertEqual(view.get_template_names(), ["reports/dashboard_detail.html"])
+
     def test_slug_canonico(self):
         self.assertEqual(INVENTARIO_DEPOSITO_SLUG, "inventario-deposito-articulo")
         self.assertEqual(SEED_SLUG, INVENTARIO_DEPOSITO_SLUG)
