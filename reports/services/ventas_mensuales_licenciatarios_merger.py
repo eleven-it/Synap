@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 from django.db.models import QuerySet
 
-from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
+from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 from reports.models import (
     MonthlyReportingClientMatch,
     MonthlyReportingPack,
@@ -267,6 +267,77 @@ def compute_ytd(rows: Iterable[MergedClientMonth]) -> Dict[str, Dict[str, Decima
         bucket["amount_men"] += row.amount_men
         bucket["amount_women"] += row.amount_women
     return ytd
+
+
+def _parse_clientes_excluidos_ids(clientes_excluidos: Sequence) -> set[int]:
+    excluded: set[int] = set()
+    for raw in clientes_excluidos or []:
+        parsed = to_int_or_none(raw)
+        if parsed is not None:
+            excluded.add(parsed)
+    return excluded
+
+
+def filter_merge_result_by_clientes_excluidos(
+    merge_result: MergeResult,
+    clientes_excluidos: Sequence,
+    *,
+    base_empresa: str = "",
+) -> MergeResult:
+    """
+    Excluye clientes AdministraNET del merge (filas seed matcheadas, ANET-only e identidades).
+
+    Recalcula YTD y pending_clients solo con filas restantes.
+    """
+    excluded_ids = _parse_clientes_excluidos_ids(clientes_excluidos)
+    if not excluded_ids:
+        return merge_result
+
+    base = (base_empresa or "default").strip()
+    excluded_identities: set[str] = {f"anet:{base}:{anet_id}" for anet_id in excluded_ids}
+    excluded_seed_keys: set[str] = set()
+
+    for match in MonthlyReportingClientMatch.objects.filter(anet_cliente_id__in=excluded_ids):
+        excluded_seed_keys.add(match.seed_key)
+        excluded_identities.add(f"seed:{match.seed_key}")
+        excluded_identities.add(resolve_client_identity(match, base_empresa))
+
+    def _row_excluded(row: MergedClientMonth) -> bool:
+        anet_id = to_int_or_none(row.anet_cliente_id)
+        if anet_id is not None and anet_id in excluded_ids:
+            return True
+        if row.identity in excluded_identities:
+            return True
+        if row.identity.startswith("seed:"):
+            seed_key = row.identity[5:]
+            if seed_key in excluded_seed_keys:
+                return True
+        if row.identity.startswith("anet:"):
+            parts = row.identity.split(":")
+            if len(parts) >= 3 and to_int_or_none(parts[-1]) in excluded_ids:
+                return True
+        return False
+
+    def _pending_excluded(pending: dict) -> bool:
+        anet_id = to_int_or_none(pending.get("anet_cliente_id"))
+        if anet_id is not None and anet_id in excluded_ids:
+            return True
+        identity = str_or_default(pending.get("identity"), "")
+        if identity in excluded_identities:
+            return True
+        seed_key = str_or_default(pending.get("seed_key"), "")
+        return bool(seed_key and seed_key in excluded_seed_keys)
+
+    filtered_rows = [row for row in merge_result.rows if not _row_excluded(row)]
+    filtered_pending = [
+        pending for pending in merge_result.pending_clients if not _pending_excluded(pending)
+    ]
+    return MergeResult(
+        rows=filtered_rows,
+        ytd_by_identity=compute_ytd(filtered_rows),
+        pending_clients=filtered_pending,
+        qa_superarts=merge_result.qa_superarts,
+    )
 
 
 def merge_pack_year(

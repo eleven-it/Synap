@@ -81,6 +81,7 @@ from reports.services.ventas_mensuales_licenciatarios_merger import (
     anet_range_for_month,
     compare_dz_pk_parity,
     compute_ytd,
+    filter_merge_result_by_clientes_excluidos,
     merge_pack_year,
     seed_months_in_range,
 )
@@ -662,6 +663,124 @@ class VentasMensualesLicenciatariosMergerCutoverTests(SimpleTestCase):
         self.assertEqual(units_nc, Decimal("-1"))
         self.assertEqual(amt_fa, Decimal("120"))
         self.assertEqual(amt_nc, Decimal("-120"))
+
+    def test_filter_merge_excluye_anet_id_y_recalcula_ytd(self):
+        identity_anet = "anet:demo:500"
+        rows = [
+            MergedClientMonth(
+                identity=identity_anet,
+                display_name="Cliente ANET",
+                match_estado="anet_only",
+                month=date(2026, 8, 1),
+                units=Decimal("10"),
+                amount=Decimal("100"),
+                source="anet",
+                anet_cliente_id=500,
+            ),
+            MergedClientMonth(
+                identity="anet:demo:501",
+                display_name="Otro Cliente",
+                match_estado="anet_only",
+                month=date(2026, 8, 1),
+                units=Decimal("4"),
+                amount=Decimal("40"),
+                source="anet",
+                anet_cliente_id=501,
+            ),
+        ]
+        from reports.services.ventas_mensuales_licenciatarios_merger import MergeResult
+
+        merge = MergeResult(
+            rows=rows,
+            ytd_by_identity=compute_ytd(rows),
+            pending_clients=[],
+            qa_superarts=[],
+        )
+        filtered = filter_merge_result_by_clientes_excluidos(
+            merge,
+            [500],
+            base_empresa="demo",
+        )
+        self.assertEqual(len(filtered.rows), 1)
+        self.assertEqual(filtered.rows[0].anet_cliente_id, 501)
+        self.assertNotIn(identity_anet, filtered.ytd_by_identity)
+        self.assertEqual(filtered.ytd_by_identity["anet:demo:501"]["units"], Decimal("4"))
+
+
+class VentasMensualesLicenciatariosClientesExcluidosTests(TestCase):
+    """Exclusión de clientes en merge y runner."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.pack = MonthlyReportingPack.objects.get(pack_id="levis_bw")
+        self.match = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:excluir-seed",
+            seed_customer_name="Cliente Seed Matcheado",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=900,
+            base_empresa="demo",
+        )
+        self.batch = MonthlyReportingImportBatch.objects.create(
+            pack=self.pack,
+            file_name="excl.xlsx",
+            file_format="xlsx",
+            file_sha256="sha-excl-seed",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        MonthlyReportingSeedRow.objects.create(
+            pack=self.pack,
+            match=self.match,
+            month=date(2026, 3, 1),
+            units=Decimal("8"),
+            amount=Decimal("80"),
+            batch=self.batch,
+        )
+        self.report = ReportDefinition.objects.create(
+            slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG,
+            name="Ventas Mensuales Licenciatarios",
+            category="operational",
+            is_active=True,
+        )
+
+    def test_merge_excluye_seed_matcheado_por_anet_id(self):
+        result = merge_pack_year(
+            pack=self.pack,
+            year=2026,
+            month_from=1,
+            month_to=6,
+            base_empresa="demo",
+            fetch_anet_fn=lambda **kwargs: [],
+        )
+        self.assertEqual(len(result.rows), 1)
+        filtered = filter_merge_result_by_clientes_excluidos(
+            result,
+            [900],
+            base_empresa="demo",
+        )
+        self.assertEqual(filtered.rows, [])
+        self.assertEqual(filtered.ytd_by_identity, {})
+        self.assertEqual(filtered.pending_clients, [])
+
+    def test_runner_aplica_clientes_excluidos(self):
+        payload = {
+            "filters": {
+                "pack_id": "levis_bw",
+                "fecha_inicio_facturacion": "2026-01-01",
+                "fecha_fin_facturacion": "2026-03-31",
+                "clientes_excluidos": ["900"],
+            },
+            "base_empresa": "demo",
+        }
+        result = run_ventas_mensuales_licenciatarios(
+            self.report,
+            payload,
+            Mock(),
+            fetch_anet_fn=lambda **kwargs: [],
+        )
+        self.assertEqual(result.data, [])
+        self.assertEqual(result.totals.get("unidades"), 0)
+        self.assertEqual(result.meta["filters_applied"]["clientes_excluidos"], [900])
+        self.assertTrue(any("excluidos" in n.lower() for n in result.notes))
 
 
 class MonthlyReportingClientMatchServiceTests(TestCase):
@@ -1410,6 +1529,8 @@ class LicenciatariosUiContractTests(TestCase):
         self.assertIn('reportSlug === "ventas-mensuales-licenciatarios"', content)
         self.assertIn("Seleccioná un pack licenciatario antes de exportar.", content)
         self.assertIn("vml_pack_id", content)
+        self.assertIn("clientes_excluidos", content)
+        self.assertIn("isVentasMensualesLicenciatariosSlug(reportSlug)", content)
 
     def test_modal_template_sin_dialogos_nativos(self):
         tpl_path = (

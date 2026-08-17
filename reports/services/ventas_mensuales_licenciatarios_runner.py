@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from django.conf import settings
 
-from core.utils.administranet_types import str_or_default, to_date_or_none
+from core.utils.administranet_types import str_or_default, to_date_or_none, to_int_or_none
 from reports.models import MonthlyReportingPack
 from reports.services.monthly_reporting_superart_service import (
     make_classify_fn,
@@ -17,6 +17,7 @@ from reports.services.monthly_reporting_superart_service import (
 from reports.services.query_runner import QueryResult
 from reports.services.ventas_mensuales_licenciatarios_merger import (
     MergeResult,
+    filter_merge_result_by_clientes_excluidos,
     merge_pack_year,
 )
 from reports.services.ventas_mensuales_licenciatarios_query import (
@@ -58,6 +59,20 @@ def validate_calendar_year_range(fecha_inicio: Any, fecha_fin: Any) -> tuple[int
     if d_start > d_end:
         raise ValueError("La fecha inicio no puede ser posterior a la fecha fin.")
     return d_start.year, d_start.month, d_end.month
+
+
+def _parse_clientes_excluidos_filters(filters: Dict[str, Any]) -> List[int]:
+    raw = filters.get("clientes_excluidos", [])
+    if isinstance(raw, str):
+        raw = [raw] if raw.strip() else []
+    elif not isinstance(raw, list):
+        raw = []
+    ids: List[int] = []
+    for item in raw:
+        parsed = to_int_or_none(item)
+        if parsed is not None:
+            ids.append(parsed)
+    return ids
 
 
 def _resolve_base_empresa(payload: Dict[str, Any], user=None) -> str:
@@ -186,6 +201,13 @@ def run_ventas_mensuales_licenciatarios(
         classify_genero=classify_fn,
         register_unknown_superart=_register_unknown,
     )
+    clientes_excluidos = _parse_clientes_excluidos_filters(filters)
+    if clientes_excluidos:
+        merge_result = filter_merge_result_by_clientes_excluidos(
+            merge_result,
+            clientes_excluidos,
+            base_empresa=base_empresa,
+        )
     qa_all = sorted(set(merge_result.qa_superarts) | qa_collected)
 
     data = merged_to_dashboard_rows(
@@ -199,11 +221,16 @@ def run_ventas_mensuales_licenciatarios(
         "facturacion": sum(row["facturacion"] for row in data),
     }
 
+    notes: List[str] = []
+    if clientes_excluidos:
+        notes.append(f"Clientes excluidos: {len(clientes_excluidos)} cliente(s).")
+
     meta["filters_applied"] = {
         "pack_id": pack_id,
         "fecha_inicio_facturacion": str_or_default(fi, "")[:10],
         "fecha_fin_facturacion": str_or_default(ff, "")[:10],
         "base_empresa": base_empresa,
+        "clientes_excluidos": clientes_excluidos,
     }
     meta["extra"].update(
         {
@@ -226,6 +253,6 @@ def run_ventas_mensuales_licenciatarios(
         meta=meta,
         data=data,
         totals=totals,
-        notes=[],
+        notes=notes,
         artifacts={"merge_result": merge_result},
     )
