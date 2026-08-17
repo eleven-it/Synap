@@ -299,8 +299,9 @@ class QueryRunnerService:
             else payload_hash
         )
 
+        skip_cache = bool(payload.get("_skip_report_cache"))
         # Intentar obtener del caché con protección contra stampeding (solo si está habilitado)
-        if getattr(settings, 'REPORTS_CACHE_ENABLED', False):
+        if (not skip_cache) and getattr(settings, 'REPORTS_CACHE_ENABLED', False):
             cached_result = self._get_cached_with_lock(tenant_id, report.slug, cache_payload_hash)
             if cached_result:
                 logger.info(f"✅ Cache HIT para {report.slug} (payload_hash: {payload_hash[:8]}...)")
@@ -403,7 +404,11 @@ class QueryRunnerService:
             result = QueryResult(meta=meta, data=data, totals=totals, notes=notes)
         
         # Calcular TTL inteligente y guardar en caché (solo si está habilitado)
-        if result and getattr(settings, 'REPORTS_CACHE_ENABLED', False):
+        if (
+            result
+            and (not skip_cache)
+            and getattr(settings, 'REPORTS_CACHE_ENABLED', False)
+        ):
             ttl = self._get_cache_ttl(report.slug, filters)
             set_cached_report(tenant_id, report.slug, cache_payload_hash, result, ttl=ttl)
             logger.info(f"💾 Resultado cacheado para {report.slug} con TTL de {ttl}s")

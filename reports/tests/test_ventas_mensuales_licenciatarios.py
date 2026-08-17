@@ -192,6 +192,103 @@ class LicenciatariosExportLayoutSimpleTests(SimpleTestCase):
         self.assertTrue(str(ws.cell(row=5, column=29).value or "").startswith("=AA5+"))
 
 
+class LicenciatariosExportServiceArtifactsTests(SimpleTestCase):
+    """ExportService lee MergeResult desde QueryResult.artifacts (no meta.extra)."""
+
+    def test_export_pasa_skip_cache_y_lee_artifacts(self):
+        from reports.services.export_service import ExportService
+        from reports.services.query_runner import QueryResult
+        from reports.services.ventas_mensuales_licenciatarios_merger import MergeResult
+
+        merge = MergeResult(
+            rows=[],
+            ytd_by_identity={},
+            pending_clients=[],
+            qa_superarts=[],
+        )
+        qr = QueryResult(
+            meta={
+                "extra": {
+                    "pack_id": "levis_bw",
+                    "year": 2026,
+                    "month_from": 1,
+                    "month_to": 12,
+                }
+            },
+            data=[],
+            totals={},
+            notes=[],
+            artifacts={"merge_result": merge},
+        )
+        report = Mock()
+        report.slug = "ventas-mensuales-licenciatarios"
+        report.name = "VML"
+        report.is_active = True
+
+        svc = ExportService(Mock())
+        captured = {}
+
+        def _fake_export_wb(path, *, pack, merge_result, year, month_from, month_to):
+            captured["merge"] = merge_result
+            captured["year"] = year
+            Path(path).write_bytes(b"PK")
+
+        with patch.object(ReportDefinition.objects, "get", return_value=report), patch(
+            "reports.services.export_service.QueryRunnerService"
+        ) as mock_qrs, patch(
+            "reports.models.MonthlyReportingPack.objects.get", return_value=Mock(pack_id="levis_bw")
+        ), patch(
+            "reports.services.ventas_mensuales_licenciatarios_export.export_licenciatarios_workbook",
+            side_effect=_fake_export_wb,
+        ), patch(
+            "django.conf.settings.MEDIA_ROOT",
+            new=tempfile.mkdtemp(),
+        ):
+            mock_qrs.return_value.run.return_value = qr
+            result = svc.export(
+                "ventas-mensuales-licenciatarios",
+                {
+                    "filters": {
+                        "pack_id": "levis_bw",
+                        "fecha_inicio_facturacion": "2026-01-01",
+                        "fecha_fin_facturacion": "2026-12-31",
+                    }
+                },
+                "xlsx",
+            )
+            run_payload = mock_qrs.return_value.run.call_args[0][1]
+            self.assertTrue(run_payload.get("_skip_report_cache"))
+            self.assertIs(captured["merge"], merge)
+            self.assertEqual(captured["year"], 2026)
+            self.assertTrue(str(result.filename).endswith(".xlsx"))
+
+    def test_export_sin_artifacts_falla_claro(self):
+        from reports.services.export_service import ExportService
+        from reports.services.query_runner import QueryResult
+
+        qr = QueryResult(
+            meta={"extra": {"pack_id": "levis_bw", "year": 2026}},
+            data=[],
+            totals={},
+            notes=[],
+            artifacts={},
+        )
+        report = Mock()
+        report.slug = "ventas-mensuales-licenciatarios"
+        with patch.object(ReportDefinition.objects, "get", return_value=report), patch(
+            "reports.services.export_service.QueryRunnerService"
+        ) as mock_qrs:
+            mock_qrs.return_value.run.return_value = qr
+            with self.assertRaises(ValueError) as ctx:
+                ExportService(Mock())._generate_excel_ventas_mensuales_licenciatarios(
+                    Path(tempfile.mkdtemp()) / "out.xlsx",
+                    report,
+                    qr,
+                    {"filters": {"pack_id": "levis_bw"}},
+                )
+            self.assertIn("artifacts", str(ctx.exception).lower())
+
+
 class MonthlyReportingModelConstraintTests(TestCase):
     def setUp(self):
         seed_monthly_reporting_packs(MonthlyReportingPack)
