@@ -69,11 +69,14 @@ MUST NOT reutilizar el layout Matriz/Detalle de VMM como entregable a marcas.
 | Conciliación seed | `reports/management/commands/reconcile_monthly_reporting_seed.py` |
 | Merger / export | `ventas_mensuales_licenciatarios_{merger,export}.py` |
 | API match cliente | `reports/ventas_mensuales_licenciatarios_api_views.py` |
+| API SuperArt QA | `GET/POST /api/reports/licenciatarios/superart-qa/` (+ bulk opcional) |
 | Modelos seed | `reports/models.py` (`MonthlyReporting*`) |
 
 UI canónica: patrones reports/MPR ([FUENTE_VERDAD_UI](../general/FUENTE_VERDAD_UI_REPORTES_MPR.md)). Diálogos: modales Synap, sin `alert` nativo.
 
 Layout del dashboard: la barra de navegación y el banner del informe quedan fijos; **sin KPIs/resumen genérico** (`#report-summary` oculto). El único scroll vertical es la matriz cliente × mes (`#vml-matriz-container`). El thead, la columna Cliente y la fila **Totales** (suma por columna de unidades y monto, según filas visibles) permanecen sticky dentro de esa región.
+
+**Panel Preview QA:** además de clientes seed pendientes de match, muestra la lista de **SuperArt desconocidos** (`qa_superarts`) cuando el pack Puma encuentra códigos fuera del catálogo activo. Botón **Clasificar SuperArt** abre modal Synap (`modal_licenciatarios_superart_qa.html`): listado desde `MonthlyReportingSuperArtQAPending` + códigos del último preview; por ítem botones **Men** / **Women**; al guardar se agrega entrada al catálogo activo (crea versión 1 si no hay activa), elimina el pending y actualiza badge/lista. Toast con `mprShowAviso` / `SynapMessages`. Permisos: lectura `OperationalReportsPermission`; escritura solo `user_has_full_access` (igual que match cliente).
 
 Export Excel: el botón **Exportar Excel** del banner (junto a Actualizar) dispara `/api/reports/export/?type=xlsx` con `pack_id` y el rango calendario. Requiere pack seleccionado. El export vuelve a ejecutar el runner (sin caché) y toma `merge_result` desde `QueryResult.artifacts` (no desde `meta.extra`, que es solo JSON). Las plantillas anuales viven en `reports/templates/reports/excel/monthly_reporting/*_annual.xlsx` (versionadas); si faltan en disco, el export las regenera con `build_all_templates`. El **nombre de descarga** coincide con las planillas de envío hasta julio (`Monthly Reporting Best Sox_LEVIS BW 26.xlsx`, etc.; Puma con basename histórico y extensión `.xlsx`). La hoja `input Licensee sales` aplica estilo julio: cabecera azul `#4F81BD` / texto blanco Tahoma 10, meses combinados (`E4:F4`…), totales en fila 2 y anchos de columna autoampliados según datos.
 
@@ -105,6 +108,7 @@ Ver evidencia en [VERIFY_INFORME_VENTAS_MENSUALES_LICENCIATARIOS.md](VERIFY_INFO
 | Modelos seed + importer idempotente | Hecho |
 | Merger cutover 21/22 + export plantilla | Hecho |
 | UI canónica + API match + modal Synap | Hecho |
+| Modal clasificación SuperArt QA (Men/Women) | Hecho (17/08/2026) |
 | Matriz cliente × mes en dashboard | Hecho (17/08/2026) |
 | Sin KPIs + fila Totales por columna | Hecho (17/08/2026) |
 | Chrome fijo + scroll solo en matriz | Hecho (17/08/2026) |

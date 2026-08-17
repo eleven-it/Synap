@@ -117,7 +117,8 @@ Preparar el **Monthly Reporting** que Best Sox envía a licenciatarios (Levi’s
 2. Pulse **Mostrar filtros**, elija **pack** y rango (mismo año calendario).
 3. Opcional: en **Clientes a excluir**, busque y seleccione clientes AdministraNET; no aparecerán en la matriz, totales ni Excel exportado (tampoco filas seed vinculadas a esos códigos).
 4. Pulse **Actualizar**. Verá la **matriz cliente × mes** (sin KPIs de cabecera) y una fila **Totales** al pie que suma cada columna; si busca un cliente, los totales reflejan las filas visibles.
-5. En el banner, pulse **Exportar Excel** (icono de descarga, junto a Actualizar). El archivo usa la plantilla del pack (`input Licensee sales`, `monthly`, hoja QA).
+5. Si el pack es **Puma** y hay SuperArt sin género en catálogo, el panel **Preview QA** listará los códigos y podrá pulsar **Clasificar SuperArt** (filtros o panel QA). En el modal Synap elija **Men** o **Women** por código; al guardar el contador baja y el código entra al catálogo activo.
+6. En el banner, pulse **Exportar Excel** (icono de descarga, junto a Actualizar). El archivo usa la plantilla del pack (`input Licensee sales`, `monthly`, hoja QA).
 
 ### Packs previstos
 

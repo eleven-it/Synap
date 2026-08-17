@@ -95,8 +95,11 @@ from reports.services.monthly_reporting_client_match_service import (
 from reports.services.monthly_reporting_superart_service import (
     activate_catalog_version,
     classify_superart,
+    get_or_create_active_catalog,
+    list_qa_pending,
     make_classify_fn,
     register_qa_pending,
+    resolve_superart_genero,
     seed_catalog_entries,
 )
 from reports.services.ventas_mensuales_licenciatarios_importer import ParsedSeedCell
@@ -945,6 +948,36 @@ class MonthlyReportingSuperArtServiceTests(TestCase):
         self.assertEqual(fn("PU-1"), "men")
         self.assertIsNone(fn("NO-EXISTE"))
 
+    def test_resolve_superart_genero_crea_entry_y_elimina_pending(self):
+        register_qa_pending("PU-NEW", {"pack": "puma_bw"})
+        self.assertEqual(MonthlyReportingSuperArtQAPending.objects.filter(superart="PU-NEW").count(), 1)
+        result = resolve_superart_genero(
+            "PU-NEW",
+            "women",
+            actor_cod_usuario="supervisor",
+            actor_nombre="Supervisor",
+        )
+        self.assertEqual(result["superart"], "PU-NEW")
+        self.assertEqual(result["genero"], "women")
+        self.assertEqual(MonthlyReportingSuperArtQAPending.objects.filter(superart="PU-NEW").count(), 0)
+        active = get_or_create_active_catalog()
+        entry = MonthlyReportingSuperArtCatalogEntry.objects.get(
+            version=active,
+            superart="PU-NEW",
+        )
+        self.assertEqual(entry.genero, "women")
+
+    def test_resolve_superart_genero_rechaza_genero_invalido(self):
+        with self.assertRaises(ValueError):
+            resolve_superart_genero("X", "invalid")
+
+    def test_list_qa_pending_ordenado(self):
+        register_qa_pending("Z-ART")
+        register_qa_pending("A-ART")
+        codes = [p.superart for p in list_qa_pending()]
+        self.assertIn("A-ART", codes)
+        self.assertIn("Z-ART", codes)
+
 
 class DzPkParityTests(SimpleTestCase):
     """Phase 4.3 — paridad DZ/PK misma facturación, U.M. distinta."""
@@ -1438,6 +1471,102 @@ class LicenciatariosApiTests(TestCase):
         self.assertEqual(response_undo.data["estado"], "pending")
         self.assertIsNone(response_undo.data["anet_cliente_id"])
 
+
+class LicenciatariosSuperArtApiTests(TestCase):
+    """API clasificación SuperArt QA — permisos y resolución."""
+
+    def setUp(self):
+        register_qa_pending("API-SA-1", {"cliente": 1})
+        register_qa_pending("API-SA-2")
+
+    def _user(self, *, supervisor=False, operational=True):
+        user = Mock()
+        user.is_authenticated = True
+        user.is_superuser = False
+        user.is_admin = Mock(return_value=False)
+        user.cod_usuario = "supervisor" if supervisor else "vendedor"
+        user.tiene_permiso = lambda p: operational and p == "reports.view_operational"
+        return user
+
+    def _session(self):
+        return {"user": {"base_empresa": "emp_test", "id_usuario": 7, "nombre": "Tester"}}
+
+    @patch("reports.ventas_mensuales_licenciatarios_api_views.user_has_full_access", return_value=False)
+    def test_get_superart_qa_sin_edicion(self, _full):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_mensuales_licenciatarios_api_views import (
+            LicenciatariosSuperArtQAListAPIView,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.get("/api/reports/licenciatarios/superart-qa/")
+        force_authenticate(request, user=self._user())
+        request.session = self._session()
+        response = LicenciatariosSuperArtQAListAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["can_edit"])
+        self.assertGreaterEqual(response.data["pending_count"], 2)
+        self.assertIn("superart", response.data["pending"][0])
+
+    def test_get_superart_qa_sin_permiso_operational_403(self):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_mensuales_licenciatarios_api_views import (
+            LicenciatariosSuperArtQAListAPIView,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.get("/api/reports/licenciatarios/superart-qa/")
+        force_authenticate(request, user=self._user(operational=False))
+        request.session = self._session()
+        response = LicenciatariosSuperArtQAListAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 403)
+
+    @patch("reports.ventas_mensuales_licenciatarios_api_views.user_has_full_access", return_value=False)
+    def test_post_superart_qa_rechaza_sin_full_access(self, _full):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_mensuales_licenciatarios_api_views import (
+            LicenciatariosSuperArtQAListAPIView,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/reports/licenciatarios/superart-qa/",
+            {"superart": "API-SA-1", "genero": "men"},
+            format="json",
+        )
+        force_authenticate(request, user=self._user())
+        request.session = self._session()
+        response = LicenciatariosSuperArtQAListAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 403)
+
+    @patch("reports.ventas_mensuales_licenciatarios_api_views.user_has_full_access", return_value=True)
+    def test_post_superart_qa_clasifica_y_elimina_pending(self, _full):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_mensuales_licenciatarios_api_views import (
+            LicenciatariosSuperArtQAListAPIView,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/reports/licenciatarios/superart-qa/",
+            {"superart": "API-SA-1", "genero": "men"},
+            format="json",
+        )
+        force_authenticate(request, user=self._user(supervisor=True))
+        request.session = self._session()
+        response = LicenciatariosSuperArtQAListAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["genero"], "men")
+        self.assertFalse(
+            MonthlyReportingSuperArtQAPending.objects.filter(superart="API-SA-1").exists()
+        )
+        self.assertGreaterEqual(response.data["pending_count"], 1)
+
+
     def test_runner_rechaza_rango_cruza_anios(self):
         seed_monthly_reporting_packs(MonthlyReportingPack)
         report = ReportDefinition(slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG, name="Licenciatarios")
@@ -1543,6 +1672,46 @@ class LicenciatariosUiContractTests(TestCase):
         content = tpl_path.read_text(encoding="utf-8")
         self.assertIn('role="dialog"', content)
         self.assertNotIn("onclick=\"confirm", content.lower())
+
+    def test_superart_modal_template_y_botones(self):
+        modal_path = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "includes"
+            / "modal_licenciatarios_superart_qa.html"
+        )
+        filters_path = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "includes"
+            / "filters_ventas_mensuales_licenciatarios.html"
+        )
+        dashboard_path = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "dashboard_detail.html"
+        )
+        js_path = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "reports"
+            / "js"
+            / "ventas_mensuales_licenciatarios.js"
+        )
+        modal = modal_path.read_text(encoding="utf-8")
+        filters = filters_path.read_text(encoding="utf-8")
+        dashboard = dashboard_path.read_text(encoding="utf-8")
+        js = js_path.read_text(encoding="utf-8")
+        self.assertIn('id="vml-superart-modal"', modal)
+        self.assertIn('id="vml-superart-list"', modal)
+        self.assertIn('id="vml-superart-qa-btn"', filters)
+        self.assertIn('id="vml-superart-badge"', filters)
+        self.assertIn('id="vml-qa-superart-list"', dashboard)
+        self.assertIn("wireSuperartQaModal", js)
+        self.assertIn("vml-superart-men-btn", js)
 
     @patch("reports.ventas_mensuales_licenciatarios_api_views.user_has_full_access", return_value=True)
     def test_api_auditoria_fecha_dd_mm_yyyy(self, _full):

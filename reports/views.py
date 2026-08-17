@@ -361,11 +361,17 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["can_edit_licenciatarios_match"] = user_has_full_access(
                 self.request.user
             )
+            context["can_edit_licenciatarios_superart"] = context[
+                "can_edit_licenciatarios_match"
+            ]
             context["licenciatarios_matches_api_url"] = reverse(
                 "reports-api:reports-licenciatarios-client-matches"
             )
             context["licenciatarios_anet_clients_api_url"] = reverse(
                 "reports-api:reports-licenciatarios-anet-clients"
+            )
+            context["licenciatarios_superart_qa_api_url"] = reverse(
+                "reports-api:reports-licenciatarios-superart-qa"
             )
         if report.slug == INVENTARIO_DEPOSITO_SLUG:
             from datetime import date
