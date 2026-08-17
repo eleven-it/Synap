@@ -217,10 +217,15 @@ def run_ventas_mensuales_licenciatarios(
             },
             "pending_clients": merge_result.pending_clients,
             "qa_superarts": qa_all,
-            "merge_result": merge_result,
             "pack_codigo_salida": pack.codigo_salida,
             "unit_mode": pack.unit_mode,
         }
     )
 
-    return QueryResult(meta=meta, data=data, totals=totals, notes=[])
+    return QueryResult(
+        meta=meta,
+        data=data,
+        totals=totals,
+        notes=[],
+        artifacts={"merge_result": merge_result},
+    )
