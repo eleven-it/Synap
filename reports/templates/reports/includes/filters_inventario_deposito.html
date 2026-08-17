@@ -1,0 +1,54 @@
+{% comment %}
+Filtros Inventario por depósito (fecha_corte, depósitos, marcas, artículo, 2da).
+{% endcomment %}
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
+  <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
+    Fecha de corte
+    <input type="date"
+           x-model="fechaCorte"
+           class="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400">
+  </label>
+
+  <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
+    Depósitos
+    <select x-model="depositosSeleccionados"
+            multiple
+            class="w-full min-h-[2.5rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-xs">
+      <template x-for="dep in depositosOpciones" :key="dep.id">
+        <option :value="String(dep.id)" x-text="dep.label"></option>
+      </template>
+    </select>
+    <span class="text-[10px] font-normal text-slate-400 italic">Vacío = todos los depósitos con suma stock.</span>
+  </label>
+
+  <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
+    Marcas
+    <select x-model="marcasSeleccionadas"
+            multiple
+            class="w-full min-h-[2.5rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-xs">
+      <template x-for="m in marcasOpciones" :key="m.id">
+        <option :value="String(m.id)" x-text="m.label"></option>
+      </template>
+    </select>
+    <span class="text-[10px] font-normal text-slate-400 italic">Vacío = todas las marcas.</span>
+  </label>
+
+  <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0 md:col-span-2 xl:col-span-1">
+    Artículo
+    <input type="search"
+           x-model="q"
+           placeholder="Código o descripción…"
+           class="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400">
+  </label>
+
+  <div class="flex flex-col gap-2 min-w-0">
+    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">2da selección</span>
+    <button type="button"
+            @click="incluir2da = !incluir2da"
+            :class="incluir2da ? 'bg-sky-600 text-white border-sky-600' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-600'"
+            class="min-h-10 rounded-md border px-3 text-xs font-medium transition-colors"
+            :aria-pressed="incluir2da">
+      <span x-text="incluir2da ? 'Incluir 2da: Sí' : 'Incluir 2da: No'"></span>
+    </button>
+  </div>
+</div>

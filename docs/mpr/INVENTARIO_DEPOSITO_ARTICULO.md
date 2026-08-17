@@ -1,7 +1,9 @@
 # Inventario por depósito y artículo (MPR)
 
-**Change:** `mpr-inventario-deposito-articulo`  
-**Ruta hub:** `/mpr/reportes/?grupo=demanda&reporte=inventario_deposito`
+**Change motor:** `mpr-inventario-deposito-articulo`  
+**Change catálogo:** `reports-inventario-deposito-catalogo`  
+**Ruta canónica (UI):** `/reports/dashboard/inventario-deposito-articulo/` — ver [`docs/reports/INVENTARIO_DEPOSITO_ARTICULO.md`](../reports/INVENTARIO_DEPOSITO_ARTICULO.md)  
+**Hub legacy:** `/mpr/reportes/?grupo=demanda&reporte=inventario_deposito` → **302** al dashboard del catálogo.
 
 Reporte alineado a Excel `Inventarios.xlsx` / `REP_INVENTARIOS`: jerarquía Depósito→Marca→Artículo, medidas **Stock** (UM nativa) y **Docenas**, total cabecera = **SUM(docenas)**.
 

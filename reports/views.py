@@ -17,6 +17,8 @@ from .permissions import (
     ManagerialReportsPermission,
     BuilderReportsPermission,
     DabraConsolidadoRemitosPermission,
+    INVENTARIO_DEPOSITO_SLUG,
+    user_can_access_inventario_deposito,
 )
 
 # Reportes con UI/dashboard propio (runner legacy por slug) que deben listarse también bajo «Declarativos»
@@ -153,6 +155,8 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             return ["reports/dashboard_dabra_consolidado_remitos.html"]
         if slug == self.UTILIDAD_GERENCIAL_SLUG:
             return ["reports/dashboard_utilidad_gerencial.html"]
+        if slug == INVENTARIO_DEPOSITO_SLUG:
+            return ["reports/dashboard_inventario_deposito.html"]
         return [self.template_name]
 
     def get_report(self) -> ReportDefinition:
@@ -189,11 +193,21 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
 
             ensure_ventas_bom_docenas_report()
             report = ReportDefinition.objects.filter(filters).first()
+        if not report and slug == INVENTARIO_DEPOSITO_SLUG:
+            from reports.services.inventario_deposito_seed import (
+                ensure_inventario_deposito_report,
+            )
+
+            ensure_inventario_deposito_report()
+            report = ReportDefinition.objects.filter(filters).first()
         if not report:
             raise Http404("Report not found")
         if report.slug == self.DABRA_CONSOLIDADO_REMITOS_SLUG:
             if not DabraConsolidadoRemitosPermission().has_permission(self.request, self):
                 raise Http404("Not authorized for DABRA consolidated report")
+        elif report.slug == INVENTARIO_DEPOSITO_SLUG:
+            if not user_can_access_inventario_deposito(self.request.user):
+                raise Http404("Not authorized for inventario por depósito")
         elif report.is_operational() and not OperationalReportsPermission().has_permission(self.request, self):
             raise Http404("Not authorized for operational reports")
         elif report.is_managerial() and not ManagerialReportsPermission().has_permission(self.request, self):

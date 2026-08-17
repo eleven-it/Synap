@@ -4365,6 +4365,18 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
             return redirect("core:dashboard")
+        # Inventario por depósito vive en el catálogo Reportes (oleada 1).
+        grupo_q = (request.GET.get("grupo") or "").strip()
+        reporte_q = (request.GET.get("reporte") or "").strip()
+        if grupo_q == "demanda" and reporte_q == "inventario_deposito":
+            from django.urls import reverse
+
+            return redirect(
+                reverse(
+                    "reports:dashboard_detail",
+                    kwargs={"slug": "inventario-deposito-articulo"},
+                )
+            )
         if (request.GET.get("format") or "").strip().lower() == "csv":
             ctx = self.get_context_data(**kwargs)
             return self._respuesta_csv(ctx)

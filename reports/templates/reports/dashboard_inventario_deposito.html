@@ -1,0 +1,142 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% comment %}
+Inventario por depósito — pantalla dedicada del catálogo Reportes (sin chrome hub MPR).
+{% endcomment %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24"
+         id="inventario-deposito-root"
+         data-slug="inventario-deposito-articulo"
+         data-query-url="{{ dashboard_api_url }}"
+         data-export-url="{{ export_api_url }}"
+         data-filters-url="{{ filters_api_url }}"
+         data-fecha-corte="{{ fecha_corte_iso }}"
+         x-data="inventarioDepositoApp()"
+         x-init="init()">
+
+  <div class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-95"></div>
+    <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+      <nav class="text-xs text-slate-400 mb-2">
+        <a href="{% url 'reports:catalog' %}" class="hover:text-sky-300">Reportes</a>
+        <span class="mx-1">/</span>
+        <span class="text-slate-200">{{ report.name }}</span>
+      </nav>
+      <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div>
+          <p class="text-[11px] uppercase tracking-[0.25em] text-slate-400 font-semibold mb-2">Foco operativo · MPR</p>
+          <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">{{ report.name }}</h1>
+          {% if report.description %}
+          <p class="mt-2 max-w-3xl text-sm text-slate-300">{{ report.description }}</p>
+          {% endif %}
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="rounded-xl border border-slate-600/60 bg-slate-800/60 px-4 py-2 text-center">
+            <p class="text-[10px] uppercase tracking-wide text-slate-400">Total docenas</p>
+            <p class="text-lg font-semibold tabular-nums text-white" x-text="kpiDocenas"></p>
+          </div>
+          <div class="rounded-xl border border-slate-600/60 bg-slate-800/60 px-4 py-2 text-center">
+            <p class="text-[10px] uppercase tracking-wide text-slate-400">Depósitos</p>
+            <p class="text-lg font-semibold tabular-nums text-white" x-text="kpiDepositos"></p>
+          </div>
+          <div class="rounded-xl border border-slate-600/60 bg-slate-800/60 px-4 py-2 text-center">
+            <p class="text-[10px] uppercase tracking-wide text-slate-400">Filas</p>
+            <p class="text-lg font-semibold tabular-nums text-white" x-text="kpiFilas"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="w-full px-4 sm:px-6 lg:px-12 -mt-4">
+    <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg shadow-slate-900/5 p-4 sm:p-5 mb-6">
+      {% include "reports/includes/filters_inventario_deposito.html" %}
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button"
+                @click="consultar()"
+                :disabled="cargando"
+                class="inline-flex items-center gap-2 rounded-full bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50">
+          <span class="material-icons text-sm" aria-hidden="true">query_stats</span>
+          <span x-text="cargando ? 'Consultando…' : 'Consultar'"></span>
+        </button>
+        <button type="button"
+                @click="exportarExcel()"
+                :disabled="cargando || !tieneDatos"
+                class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed">
+          <span class="material-icons text-sm" aria-hidden="true">table_view</span>
+          Exportar Excel
+        </button>
+        <p class="text-xs text-slate-500 dark:text-slate-400" x-show="fechaCorteDisplay">
+          Corte: <span class="font-medium text-slate-700 dark:text-slate-200" x-text="fechaCorteDisplay"></span>
+          <span x-show="!usaStockDeposito" class="ml-2 text-amber-600 dark:text-amber-400">(histórico)</span>
+        </p>
+      </div>
+    </div>
+
+    <div x-show="errorMsg" x-cloak class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-100" x-text="errorMsg"></div>
+    <div x-show="avisoMsg" x-cloak class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100" x-text="avisoMsg"></div>
+
+    <div x-show="!tieneDatos && !cargando && consultado" x-cloak
+         class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-16 text-center">
+      <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Sin existencias para el alcance seleccionado</p>
+      <p class="mt-1 text-xs text-slate-500">Probá otra fecha de corte, depósitos o marcas.</p>
+    </div>
+
+    <template x-for="dep in jerarquia" :key="dep.id_deposito || dep.nombre_deposito">
+      <section class="mb-8 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+        <header class="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 px-4 sm:px-6 py-3">
+          <h2 class="text-base font-bold text-slate-900 dark:text-slate-100" x-text="dep.nombre_deposito"></h2>
+          <span class="text-sm tabular-nums text-slate-600 dark:text-slate-400">
+            Total depósito:
+            <strong class="text-slate-900 dark:text-slate-100" x-text="fmtNum(dep.total_docenas)"></strong> docenas
+          </span>
+        </header>
+        <template x-for="marca in (dep.marcas || [])" :key="(dep.id_deposito || '') + '-' + (marca.marca_nombre || '')">
+          <div class="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+            <div class="flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/30 px-4 sm:px-6 py-2">
+              <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" x-text="marca.marca_nombre || 'Sin marca'"></h3>
+              <span class="text-xs tabular-nums text-slate-500" x-text="'Subtotal: ' + fmtNum(marca.subtotal_docenas) + ' doc.'"></span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+                <thead class="bg-white dark:bg-slate-900">
+                  <tr>
+                    <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Artículo</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Talle</th>
+                    <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Stock</th>
+                    <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">UM</th>
+                    <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Docenas</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                  <template x-for="fila in (marca.filas || [])" :key="(fila.id_articulo || '') + '-' + (fila.talle || '')">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td class="px-4 py-2.5">
+                        <span class="block font-semibold tabular-nums text-slate-900 dark:text-slate-100" x-text="fila.codigo_manual || '-'"></span>
+                        <span class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400" x-text="fila.descripcion_articulo"></span>
+                      </td>
+                      <td class="px-3 py-2.5 text-slate-700 dark:text-slate-300" x-text="fila.talle || '-'"></td>
+                      <td class="px-3 py-2.5 text-right tabular-nums text-slate-900 dark:text-slate-100" x-text="fmtNum(fila.stock_um)"></td>
+                      <td class="px-3 py-2.5 text-center text-xs uppercase text-slate-500" x-text="fila.um_etiqueta || ''"></td>
+                      <td class="px-3 py-2.5 text-right font-medium tabular-nums text-slate-900 dark:text-slate-100" x-text="fmtNum(fila.docenas)"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+      </section>
+    </template>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script src="{% static 'reports/js/inventario_deposito.js' %}"></script>
+{% endblock %}

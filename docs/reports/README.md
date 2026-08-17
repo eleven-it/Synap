@@ -11,6 +11,7 @@
 
 | Documento | Descripción |
 |-----------|-------------|
+| [INVENTARIO_DEPOSITO_ARTICULO.md](INVENTARIO_DEPOSITO_ARTICULO.md) | Inventario por depósito (catálogo; motor MPR) |
 | [SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md](SPEC_INFORME_VENTAS_MARCAS_MENSUAL.md) | Spec VMM |
 | [SPEC_INFORME_VENTAS_MARCA_SUPERART.md](SPEC_INFORME_VENTAS_MARCA_SUPERART.md) | Spec Ventas por marca y SuperArt |
 | [DESIGN_INFORME_VENTAS_MARCA_SUPERART.md](DESIGN_INFORME_VENTAS_MARCA_SUPERART.md) | Diseño técnico VMSA |

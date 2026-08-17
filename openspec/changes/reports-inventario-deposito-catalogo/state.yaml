@@ -1,0 +1,6 @@
+change: reports-inventario-deposito-catalogo
+status: applying
+wave: 1
+slug: inventario-deposito-articulo
+created: 2026-08-17
+notes: Oleada 1 — solo Inventario por depósito. Motor MPR ya en Desarrollo.

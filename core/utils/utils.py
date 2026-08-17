@@ -270,6 +270,14 @@ APPS_MENU = [
                 "seccion": _("Reportes"),
                 "items": [
                     {"label": _("Reportes MPR"), "url": "mpr:reportes", "icon": "assessment", "permission": ["mpr.ver", "mpr.reportes"], "menu_item_id": "mpr_rep_reportes"},
+                    {
+                        "label": _("Inventario por depósito"),
+                        "url": "reports:dashboard_detail",
+                        "url_kwargs": {"slug": "inventario-deposito-articulo"},
+                        "icon": "warehouse",
+                        "permission": ["mpr.ver", "mpr.reportes", "reports.view_operational"],
+                        "menu_item_id": "mpr_rep_inventario_deposito",
+                    },
                 ]
             },
             {
@@ -283,6 +291,25 @@ APPS_MENU = [
                     {"label": _("Operarios y usuarios"), "url": "mpr:operario_usuario_map", "icon": "badge", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_operario_usuario"},
                     {"label": _("Línea habitual (operarios)"), "url": "mpr:operario_linea", "icon": "conveyor_belt", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_operario_linea"},
                     {"label": _("Migración BEST"), "url": "mpr:migracion_best_hub", "icon": "sync_alt", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_migracion_best"},
+                ]
+            },
+        ]
+    },
+    {
+        "id": "mtrix",
+        "nombre": _("Mtrix"),
+        "permiso": "mtrix.ver",
+        "url": "mtrix:hub",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10'/></svg>""",
+        "orden": 6,
+        "color": "sky",
+        "submenus": [
+            {
+                "seccion": _("Exportación"),
+                "items": [
+                    {"label": _("Panel Mtrix"), "url": "mtrix:hub", "icon": "dashboard", "permission": "mtrix.ver", "menu_item_id": "mtrix_hub"},
+                    {"label": _("Jobs"), "url": "mtrix:job_list", "icon": "history", "permission": "mtrix.ver", "menu_item_id": "mtrix_jobs"},
+                    {"label": _("Configuración"), "url": "mtrix:configuracion", "icon": "tune", "permission": "mtrix.configurar", "menu_item_id": "mtrix_config"},
                 ]
             },
         ]
@@ -557,6 +584,19 @@ APPS_MENU = [
                         "icon": "dashboard_customize",
                         "permission": "reports.ver",
                         "menu_item_id": "reports_cat_workspace",
+                    }
+                ]
+            },
+            {
+                "seccion": _("Producción / stock"),
+                "items": [
+                    {
+                        "label": _("Inventario por depósito"),
+                        "url": "reports:dashboard_detail",
+                        "url_kwargs": {"slug": "inventario-deposito-articulo"},
+                        "icon": "warehouse",
+                        "permission": ["reports.view_operational", "mpr.reportes", "mpr.ver"],
+                        "menu_item_id": "reports_mpr_inventario_deposito",
                     }
                 ]
             }
@@ -1412,7 +1452,7 @@ def apps_visibles_sin_filtro_pwa(
     # Siempre visibles en menú: cadena base y apps sin registro en ModuleConfig.
     # Los demás módulos de MODULE_CONFIGS (reports, ia, mpr, logistica, fe_afip, …)
     # dependen solo de ModuleConfig.is_active.
-    core_modules = {'core', 'login', 'dashboard', 'stock', 'ventas', 'compras', 'self_checkout', 'contabilidad'}
+    core_modules = {'core', 'login', 'dashboard', 'stock', 'ventas', 'compras', 'self_checkout', 'contabilidad', 'mtrix'}
     active_modules.update(core_modules)
 
     from core.services.navbar_visibilidad import (
