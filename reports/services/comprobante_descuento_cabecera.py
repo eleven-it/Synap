@@ -2,7 +2,8 @@
 """
 Factor de descuento al pie de factura (cabecera cuentacliente).
 
-Compartido entre Ventas marcas mensual (VMM) e informe DABRA consolidado remitos.
+Compartido entre Ventas marcas mensual (VMM), Ventas Mensuales Licenciatarios
+(query ANET) e informe DABRA consolidado remitos.
 Las líneas de ``stock`` guardan precios pre-pie; el descuento vive en cabecera
 (``SubTotal1``, ``SubtotalDesc`` derivado de ``PorDesc1``/``ImpDesc1``).
 """

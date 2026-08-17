@@ -359,6 +359,16 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["vmm_preset_hombre_api_url"] = reverse(
                 "reports-api:reports-vmm-preset-hombre"
             )
+        if report.slug == "ventas-mensuales-licenciatarios":
+            context["can_edit_licenciatarios_match"] = user_has_full_access(
+                self.request.user
+            )
+            context["licenciatarios_matches_api_url"] = reverse(
+                "reports-api:reports-licenciatarios-client-matches"
+            )
+            context["licenciatarios_anet_clients_api_url"] = reverse(
+                "reports-api:reports-licenciatarios-anet-clients"
+            )
         return context
 
 

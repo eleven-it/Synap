@@ -1,0 +1,25 @@
+{
+  "fuente": "Libro1.xlsx",
+  "fecha": "2026-08-17",
+  "base_empresa": "administranet",
+  "host": "181.174.198.194:30804",
+  "informe": "ventas-mensuales-licenciatarios",
+  "matches": [
+    {"seed_name": "AGALMA", "cuit": "30-71175431-4", "anet_cliente_id": 1091, "anet_nombre": "AGALMA"},
+    {"seed_name": "MC PIE SRL", "cuit": "30-71000570-9", "anet_cliente_id": 1092, "anet_nombre": "MC PIE S.R.L."},
+    {"seed_name": "ML FULL", "cuit": "27-34230002-8", "anet_cliente_id": 348, "anet_nombre": "TREACY JENNIFER"},
+    {"seed_name": "RADA TILLY", "cuit": "30-55822868-3", "anet_cliente_id": 1099, "anet_nombre": "LOMPAS SRL"},
+    {"seed_name": "ALONSO JUAN JOSE", "cuit": "20-16162791-8", "anet_cliente_id": 1093, "anet_nombre": "JUAN JOSE ALONSO"},
+    {"seed_name": "BELLETTINI JOSE", "cuit": "20-23637940-0", "anet_cliente_id": 1094, "anet_nombre": "JOSE GUSTAVO BELLETTINI", "alias_seed": ["BELLETTINI JOSE GUSTAVO"]},
+    {"seed_name": "BRAVA MARKET", "cuit": "30-71876976-7", "anet_cliente_id": 1095, "anet_nombre": "BRAVAMARKET ARGENTINA S.A.", "alias_seed": ["BRAVA MARKET ARGENTINA"]},
+    {"seed_name": "DE GRUTTOLA JAVIER E HIJAS", "cuit": "30-71654904-2", "anet_cliente_id": 615, "anet_nombre": "DE GRUTTOLA JAVIER E HIJAS", "alias_seed": ["DE GRUTTOLA JESUS  Y JAVIER S.H."], "nota": "No usar 614 DE GRUTOLLA DOMINGO"},
+    {"seed_name": "DELGADO JULIA MARCELA", "cuit": "27-27561823-9", "anet_cliente_id": 1096, "anet_nombre": "JULIA MARCELA DELGADO"},
+    {"seed_name": "FALCON ESTEBAN LECINA", "cuit": "20-27167406-7", "anet_cliente_id": 303, "anet_nombre": "FALCO ESTEBAN LECINA"},
+    {"seed_name": "FRALFE SPORT", "cuit": "30-71901315-1", "anet_cliente_id": 1097, "anet_nombre": "FRALFE SPORT S.A.S.", "alias_seed": ["FRALFE SPORT S.A.S"]},
+    {"seed_name": "JOSE MARIA BRUNO", "cuit": "20-35292124-7", "anet_cliente_id": 309, "anet_nombre": "MAURO BRUNO"},
+    {"seed_name": "PARENTI KARINA VERONICA", "cuit": "27-23628344-0", "anet_cliente_id": 1098, "anet_nombre": "KARINA VERONICA PARENTI"},
+    {"seed_name": "MARTIN GHIANO", "cuit": "20-41618536-1", "anet_cliente_id": 876, "anet_nombre": "SOTO GASTON NICOLAS", "nota": "Alias comercial confirmado negocio 17/08/2026"},
+    {"seed_name": "NOLASCO ARIEL", "cuit": "30-71740107-3", "anet_cliente_id": 1026, "anet_nombre": "ANORAK S.A.", "nota": "Alias comercial confirmado negocio 17/08/2026"}
+  ],
+  "pendientes": []
+}

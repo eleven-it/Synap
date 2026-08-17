@@ -21,6 +21,7 @@ webauthn>=2.0,<3
 six==1.16.0
 django-widget-tweaks==1.5.0
 openpyxl  # Para exportación de reportes a Excel
+pyxlsb  # Lectura de planillas Monthly Reporting .xlsb (seed licenciatarios)
 reportlab  # Para exportación de reportes a PDF
 django-filter
 PyYAML

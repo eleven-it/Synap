@@ -106,6 +106,11 @@ function isVentasMarcasMensualSlug(slug) {
   return slug === "ventas-marcas-mensual";
 }
 
+/** Informe Monthly Reporting licenciatarios (pack + rango calendario). */
+function isVentasMensualesLicenciatariosSlug(slug) {
+  return slug === "ventas-mensuales-licenciatarios";
+}
+
 /** Familia filtros período facturación + sucursal/clientes (sin backorder obligatorio). */
 function isInformeVentasMarcasFamiliaSlug(slug) {
   return (
@@ -9825,6 +9830,18 @@ if (dashboardRoot) {
         const selectedCajas = Array.from(idCajaSelect.selectedOptions).map(opt => opt.value).filter(v => v);
         if (selectedCajas.length > 0) filters.id_caja = selectedCajas;
       }
+    } else if (currentReportSlug === "ventas-mensuales-licenciatarios") {
+      const packEl = document.getElementById("vml_pack_id");
+      if (packEl && packEl.value) {
+        filters.pack_id = packEl.value;
+      }
+      const periodoTipoFac =
+        document.getElementById("vml_periodo_tipo_facturacion")?.value || "año_actual";
+      const fechaInicioFac = document.getElementById("fecha_inicio_facturacion")?.value;
+      const fechaFinFac = document.getElementById("fecha_fin_facturacion")?.value;
+      filters.periodo_tipo_facturacion = periodoTipoFac;
+      filters.fecha_inicio_facturacion = fechaInicioFac;
+      filters.fecha_fin_facturacion = fechaFinFac;
     } else {
       // Filtros genéricos para otros reportes
       const dateFrom = document.querySelector('[name="date_from"]')?.value;
@@ -9877,7 +9894,8 @@ if (dashboardRoot) {
       slug === "ventas-por-articulo" ||
       slug === "ventas-marca-superart" ||
       slug === "ventas-bom-docenas" ||
-      slug === "ventas-marcas-mensual"
+      slug === "ventas-marcas-mensual" ||
+      slug === "ventas-mensuales-licenciatarios"
     ) {
       return true;
     }
@@ -9918,6 +9936,10 @@ if (dashboardRoot) {
     "ventas-marcas-mensual": {
       title: "Cargando ventas marcas mensual",
       subtitle: "Consultando matriz vendedor × cliente por mes…",
+    },
+    "ventas-mensuales-licenciatarios": {
+      title: "Cargando ventas mensuales licenciatarios",
+      subtitle: "Fusionando seed histórico y AdministraNET read-only…",
     },
     ventas_netas: {
       title: "Cargando ventas netas",
@@ -10039,6 +10061,17 @@ if (dashboardRoot) {
         }
       }
 
+      if (isVentasMensualesLicenciatariosSlug(reportSlug)) {
+        const vmlErr =
+          typeof window.vmlValidateBeforeQuery === "function" && !window.vmlValidateBeforeQuery();
+        if (vmlErr) {
+          hideReportsQueryLoadingModal();
+          if (!isAutoRefresh) hideLoadingAnimation();
+          fetchDashboardDataInFlight = false;
+          return;
+        }
+      }
+
       const queryLimit =
         reportSlug === "stock-existencias"
           ? stockExistenciasNeedsFullFetch()
@@ -10134,6 +10167,26 @@ if (dashboardRoot) {
             if (errNote) {
               hasErrorNote = true;
               if (!isAutoRefresh) toast(errNote, "error");
+            }
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
+        } else if (isVentasMensualesLicenciatariosSlug(currentReportSlug)) {
+          try {
+            renderWidgets(payload);
+            if (typeof window.vmlOnDashboardResult === "function") {
+              window.vmlOnDashboardResult(payload);
+            }
+            const errNoteVml = (payload.notes || []).find((n) =>
+              /error|mismo año|pack|calendario/i.test(String(n))
+            );
+            if (errNoteVml) {
+              hasErrorNote = true;
+              if (!isAutoRefresh) toast(errNoteVml, "error");
             }
           } finally {
             requestAnimationFrame(() => {
@@ -10755,6 +10808,10 @@ if (dashboardRoot) {
         }
 
         if (reportSlug === "ventas-marcas-mensual" && typeof window.getFilters === "function") {
+          Object.assign(filters, window.getFilters());
+        }
+
+        if (reportSlug === "ventas-mensuales-licenciatarios" && typeof window.getFilters === "function") {
           Object.assign(filters, window.getFilters());
         }
 
