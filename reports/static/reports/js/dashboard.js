@@ -43,6 +43,7 @@ function detectReportType() {
     "ventas-por-vendedor",
     "ventas-por-articulo",
     "ventas-marca-superart",
+    "ventas-bom-docenas",
     "ventas-marcas-mensual",
     "comprobantes-rutas",
   ];
@@ -80,6 +81,7 @@ function isInformeBoDualPeriodo(slug) {
     slug === "ventas-por-vendedor" ||
     slug === "ventas-por-articulo" ||
     slug === "ventas-marca-superart" ||
+    slug === "ventas-bom-docenas" ||
     slug === "ventas-marcas-mensual"
   );
 }
@@ -87,6 +89,11 @@ function isInformeBoDualPeriodo(slug) {
 /** Informe ventas por marca y SuperArt (jerarquía Marca → SuperArt → Artículo). */
 function isVentasMarcaSuperartSlug(slug) {
   return slug === "ventas-marca-superart";
+}
+
+/** Informe ventas BOM en docenas (tabla plana por componente). */
+function isVentasBomDocenasSlug(slug) {
+  return slug === "ventas-bom-docenas";
 }
 
 /** Jerarquía VO/VPA/VMSA: fetch y render vía handler dedicado. */
@@ -109,7 +116,8 @@ function isInformeVentasMarcasFamiliaSlug(slug) {
   return (
     isJerarquiaVentasBoFamiliaSlug(slug) ||
     isVentasMarcasMensualSlug(slug) ||
-    isVentasMarcaSuperartSlug(slug)
+    isVentasMarcaSuperartSlug(slug) ||
+    isVentasBomDocenasSlug(slug)
   );
 }
 
@@ -124,6 +132,7 @@ function isInformeQuerySoloManualORealtime(slug) {
     slug === "ventas-por-vendedor" ||
     slug === "ventas-por-articulo" ||
     slug === "ventas-marca-superart" ||
+    slug === "ventas-bom-docenas" ||
     slug === "ventas-marcas-mensual"
   );
 }
@@ -148,7 +157,8 @@ function isVentasCatalogoFiltersSlug(slug) {
   return (
     slug === "ventas-por-articulo" ||
     slug === "ventas-por-vendedor" ||
-    slug === "ventas-marca-superart"
+    slug === "ventas-marca-superart" ||
+    slug === "ventas-bom-docenas"
   );
 }
 
@@ -9833,6 +9843,7 @@ if (dashboardRoot) {
       filters.fecha_inicio_facturacion = fechaInicioFac;
       filters.fecha_fin_facturacion = fechaFinFac;
     } else {
+      // Filtros genéricos para otros reportes
       const dateFrom = document.querySelector('[name="date_from"]')?.value;
       const dateTo = document.querySelector('[name="date_to"]')?.value;
       if (dateFrom) filters.date_from = dateFrom;
@@ -9882,6 +9893,7 @@ if (dashboardRoot) {
       slug === "ventas-por-vendedor" ||
       slug === "ventas-por-articulo" ||
       slug === "ventas-marca-superart" ||
+      slug === "ventas-bom-docenas" ||
       slug === "ventas-marcas-mensual" ||
       slug === "ventas-mensuales-licenciatarios"
     ) {
@@ -9916,6 +9928,10 @@ if (dashboardRoot) {
     "ventas-marca-superart": {
       title: "Cargando ventas por marca y SuperArt",
       subtitle: "Consultando jerarquía Marca → SuperArt → Artículo…",
+    },
+    "ventas-bom-docenas": {
+      title: "Cargando ventas BOM en docenas",
+      subtitle: "Explosionando packs facturados por receta BOM…",
     },
     "ventas-marcas-mensual": {
       title: "Cargando ventas marcas mensual",
@@ -10162,6 +10178,26 @@ if (dashboardRoot) {
               });
             });
           }
+        } else if (isVentasMensualesLicenciatariosSlug(currentReportSlug)) {
+          try {
+            renderWidgets(payload);
+            if (typeof window.vmlOnDashboardResult === "function") {
+              window.vmlOnDashboardResult(payload);
+            }
+            const errNoteVml = (payload.notes || []).find((n) =>
+              /error|mismo año|pack|calendario/i.test(String(n))
+            );
+            if (errNoteVml) {
+              hasErrorNote = true;
+              if (!isAutoRefresh) toast(errNoteVml, "error");
+            }
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
         } else if (isVentasMarcasMensualSlug(currentReportSlug)) {
           try {
             const vmmResponse = {
@@ -10260,26 +10296,6 @@ if (dashboardRoot) {
             if (errNoteVo) {
               hasErrorNote = true;
               if (!isAutoRefresh) toast(errNoteVo, "error");
-            }
-          } finally {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                hideReportsQueryLoadingModal();
-              });
-            });
-          }
-        } else if (isVentasMensualesLicenciatariosSlug(currentReportSlug)) {
-          try {
-            renderWidgets(payload);
-            if (typeof window.vmlOnDashboardResult === "function") {
-              window.vmlOnDashboardResult(payload);
-            }
-            const errNoteVml = (payload.notes || []).find((n) =>
-              /error|mismo año|pack|calendario/i.test(String(n))
-            );
-            if (errNoteVml) {
-              hasErrorNote = true;
-              if (!isAutoRefresh) toast(errNoteVml, "error");
             }
           } finally {
             requestAnimationFrame(() => {
@@ -10794,11 +10810,11 @@ if (dashboardRoot) {
           Object.assign(filters, window.getFilters());
         }
 
-        if (reportSlug === "ventas-mensuales-licenciatarios" && typeof window.getFilters === "function") {
+        if (reportSlug === "ventas-marcas-mensual" && typeof window.getFilters === "function") {
           Object.assign(filters, window.getFilters());
         }
 
-        if (reportSlug === "ventas-marcas-mensual" && typeof window.getFilters === "function") {
+        if (reportSlug === "ventas-mensuales-licenciatarios" && typeof window.getFilters === "function") {
           Object.assign(filters, window.getFilters());
         }
 
