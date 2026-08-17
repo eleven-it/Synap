@@ -367,7 +367,7 @@ Rutas sugeridas (prefijo bajo el mismo `include` de API de reportes o `ecom`, se
 
 ### C.2 — Alcance v1 (paridad parcial PHP)
 
-- **`listar_por`:** `mes` (default), `cliente` y `vendedor` sobre `cuentacliente` (`vendedor` con join `viajantes.Nombre`); `rubro`, `subrubro`, `articulo`, `marca`, `zona`, `tipocliente` y `proveedor` sobre `stock` inner join `cuentacliente`, `articulo`, `rubro` (más `subrubro`/`marca`/`cliente+erp_zona`/`tipo_cliente`/`proveedor` según dimensión), con suma por renglón `stock.PrecioNetoxR` y filtro `stock.TipoComp` (`Venta`, `Venta TPV`, `Devol - Cliente`, `ND Anul NC`), `stock.Anulado = 'No'`, y rubro no anulado (`ru.anulado = 'No'` o sin rubro).
+- **`listar_por`:** `mes` (default), `cliente` y `vendedor` sobre `cuentacliente` (`vendedor` con join `viajantes.Nombre`); `rubro`, `subrubro`, `articulo`, `marca`, `zona`, `tipocliente` y `proveedor` sobre `stock` inner join `cuentacliente`, `articulo`, `rubro` (más `subrubro`/`marca`/`cliente+erp_zona`/`tipo_cliente`/`proveedor` según dimensión), con suma por renglón `stock.PrecioNetoxR` y filtro `stock.TipoComp` (`Venta`, `Venta TPV`, `Devol - Cliente`, `ND Anul NC`), `stock.Anulado = 'No'`, rubro no anulado (`ru.anulado = 'No'` o sin rubro), y **exclusión `articulo.tipo_art = Gasto`**.
 - **`tipo`:**
   - `monto`: suma neta por comprobante (FA/FB/… − NC).
   - `unidades` y `peso`: habilitados para dimensiones basadas en `stock` (`rubro`, `subrubro`, `articulo`, `marca`, `zona`, `tipocliente`, `proveedor`), usando `stock.Cantidad` y `stock.Cantidad * articulo_val_ce.valor` (`id_articulo_ce=1`) respectivamente.

@@ -25,6 +25,8 @@ Migración parcial de `relay-ventas-netas.php` y `relay-ventas-netas-gerencia.ph
 
 `data`, `cabeceras`, `titulos`, `meta`. Sin filas: listas vacías y HTTP 200 ([DECISIÓN-VN-4]).
 
+Dimensiones sobre renglones `stock` excluyen `articulo.tipo_art = 'Gasto'` ([FILTRO_TIPO_ART_GASTO.md](FILTRO_TIPO_ART_GASTO.md)).
+
 ## Tests
 
 `python manage.py test reports.tests.test_ventas_netas_relay`

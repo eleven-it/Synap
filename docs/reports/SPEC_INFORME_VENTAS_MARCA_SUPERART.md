@@ -35,6 +35,7 @@ Informe histórico de **packs**, **docenas** y **facturación** del período, ag
 - **Sin KPIs** de cabecera; sin BO/objetivos/remitos/PEA.
 - **Filtros:** período facturación, PV/sucursal/depósito, clientes, vendedores, rubro/subrubro/marca (incluir/excluir) y **SuperArt** (`superarts_incluidos`).
 - **Ordenar por:** Facturación período, Packs, Docenas; forma asc/desc; reorden local si hay dataset.
+- **Exclusión fija:** `articulo.tipo_art <> 'Gasto'` ([FILTRO_TIPO_ART_GASTO.md](FILTRO_TIPO_ART_GASTO.md)).
 
 ---
 

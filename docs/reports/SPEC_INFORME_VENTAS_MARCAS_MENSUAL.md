@@ -42,7 +42,7 @@ Sección UI: **«Licencia y proyección»** en `filters_ventas_marcas_mensual.ht
 
 La carga de catálogos inicializa los cuatro tags de clientes y vendedores para esta familia de informe: `clientes_incluir` ↔ `clientes_excluidos` y `vendedores_incluir` ↔ `vendedores_excluidos`. Cada par aplica exclusión mutua en el desplegable para no ofrecer IDs seleccionados en el campo opuesto.
 
-**Fijos (sin UI):** `cc.Anulado='No'`, `cc.CodigoMovimiento<>0`, tipos FA/FB/FC/FE/FM + NC*, `st.Anulado='No'`, `st.TipoComp` ∈ Venta / Venta TPV / Devol - Cliente / ND Anul NC.
+**Fijos (sin UI):** `cc.Anulado='No'`, `cc.CodigoMovimiento<>0`, tipos FA/FB/FC/FE/FM + NC*, `st.Anulado='No'`, `st.TipoComp` ∈ Venta / Venta TPV / Devol - Cliente / ND Anul NC, **`articulo.tipo_art <> 'Gasto'`** (renglones sin artículo se conservan). Ver [FILTRO_TIPO_ART_GASTO.md](FILTRO_TIPO_ART_GASTO.md).
 
 **Omitidos:** módulo/comprobante, tabla `mpr_costo_parametro` (fase posterior), depósitos.
 

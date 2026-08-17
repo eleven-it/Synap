@@ -43,6 +43,7 @@ Generar y (más adelante) previsualizar el **pack Monthly Reporting** que Best S
 5. Royalty = Sales × tasa del pack (Levi’s 20 %, LW/Puma 13 % salvo config).  
 6. **Amounts ANET (22/07+):** mismo motor que VMM — `signo × PrecioNetoxR × (SubtotalDesc/SubTotal1)` (descuento al pie de factura). El seed ene–jun / jul 1–21 **no** se recalcula (congelado tal como se envió).
 7. **Match cliente seed→ANET:** el vínculo auditable (`MonthlyReportingClientMatch`) es propio de este informe (híbrido). Los mapeos confirmados de negocio (Libro1, 17/08/2026) aplican aquí — ver [MAPEO_CLIENTES_LICENCIATARIOS_SEED_ANET.md](MAPEO_CLIENTES_LICENCIATARIOS_SEED_ANET.md). Pendientes visibles en el panel hasta vincular.
+8. **Artículos de venta (tramo ANET):** se excluye `articulo.tipo_art = 'Gasto'` (misma cláusula que VMM). Ver [FILTRO_TIPO_ART_GASTO.md](FILTRO_TIPO_ART_GASTO.md).
 
 ---
 

@@ -27,6 +27,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence
 
 from core.utils.administranet_types import to_date_or_none, to_decimal_or_none, to_int_or_none
+from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.connection_pool import get_mysql_pool
 
 logger = logging.getLogger(__name__)
@@ -266,7 +267,11 @@ def get_utilidad_gerencial(
         select_sql += f", {expr} AS {name}"
 
     # ---- WHERE ----
-    where: List[str] = ["st.Anulado = 'No'", "st.visualiza_ensamble = 'No'"]
+    where: List[str] = [
+        "st.Anulado = 'No'",
+        "st.visualiza_ensamble = 'No'",
+        sql_excluir_tipo_art_gasto("arti"),
+    ]
     params: List[Any] = list(select_params)
     tc_ph = ", ".join(["%s"] * len(_STOCK_TIPOCOMP))
     where.append(f"st.TipoComp IN ({tc_ph})")
@@ -439,7 +444,11 @@ def _consultar_indice(
     )
     params: List[Any] = [desde, hasta, desde_dos, hasta_dos]
 
-    where: List[str] = ["st.Anulado = 'No'", "st.visualiza_ensamble = 'No'"]
+    where: List[str] = [
+        "st.Anulado = 'No'",
+        "st.visualiza_ensamble = 'No'",
+        sql_excluir_tipo_art_gasto("arti"),
+    ]
     tc_ph = ", ".join(["%s"] * len(_STOCK_TIPOCOMP))
     where.append(f"st.TipoComp IN ({tc_ph})")
     params.extend(_STOCK_TIPOCOMP)

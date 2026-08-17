@@ -33,6 +33,8 @@ El toggle **Tipo de artículo** separa dos universos según `articulo.tipo_art_f
 
 Solo se suman depósitos con `suma_stock = 'Si'` y no anulados.
 
+**Exclusión fija:** no se listan artículos con `articulo.tipo_art = 'Gasto'` (misma regla que los informes de venta). Helper: `core.utils.articulo_tipo_sql.sql_excluir_tipo_art_gasto`. Ver [../reports/FILTRO_TIPO_ART_GASTO.md](../reports/FILTRO_TIPO_ART_GASTO.md).
+
 Detalle de modelo CE: [../mpr/ARTICULO_CE_TALLES_COLOR.md](../mpr/ARTICULO_CE_TALLES_COLOR.md).
 
 ## Filtros

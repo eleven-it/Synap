@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 
+from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.connection_pool import get_mysql_pool
 
 
@@ -105,7 +106,7 @@ class Command(BaseCommand):
             {sp_join_rem}
             LEFT JOIN articulo a ON a.IDArt = sp.IDArt
             WHERE {' AND '.join(where_rem)}
-              AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+              AND {sql_excluir_tipo_art_gasto("a")}
             GROUP BY cp.Codigo
         """
 
@@ -129,7 +130,7 @@ class Command(BaseCommand):
             {sp_join_ped}
             LEFT JOIN articulo a ON a.IDArt = sp.IDArt
             WHERE {' AND '.join(where_ped)}
-              AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+              AND {sql_excluir_tipo_art_gasto("a")}
             GROUP BY cp.Codigo
         """
 

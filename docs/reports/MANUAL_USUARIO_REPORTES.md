@@ -16,6 +16,8 @@ Guía práctica de los informes del módulo **Reports** orientados a marcas y li
 2. Busque el informe por nombre o ábralo desde el **Command Center** (área Ventas), si tiene el atajo.
 3. También puede pegar la URL directa del dashboard (ver cada informe más abajo).
 
+Los informes de **artículos de venta** no incluyen ítems tipo **Gasto** (`articulo.tipo_art`). Eso aplica a marcas mensual, licenciatarios (tramo AdministraNET), SuperArt, ventas netas por artículo/rubro, utilidad gerencial y backorder.
+
 ### Idea clave
 
 Hay informes hermanos que no se reemplazan:

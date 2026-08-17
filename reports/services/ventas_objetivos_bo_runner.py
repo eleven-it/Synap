@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from core.models import UsuarioExtendido
 from reports.models import ReportDefinition, ReportExecutionLog
+from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.connection_pool import get_mysql_pool
 from reports.services.objetivos_ventas_contract import (
     calcular_falta,
@@ -1291,10 +1292,11 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             ped_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
             if not solo_ventas_periodo:
                 filt_art_rp = (
-                    " AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')"
+                    f" AND {sql_excluir_tipo_art_gasto('a')}"
                     if not vo_filtra_rubro
                     else (
-                        " AND a.IDArt IS NOT NULL AND (a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')"
+                        " AND a.IDArt IS NOT NULL AND "
+                        + sql_excluir_tipo_art_gasto("a")
                         + rub_sub_sql_a
                     )
                 )
@@ -1465,6 +1467,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 f"cc.TipoComprobante IN ({ph_tc})",
                 "st.Anulado = %s",
                 f"st.TipoComp IN ({ph_st})",
+                sql_excluir_tipo_art_gasto("art"),
             ]
             params_uni: List[Any] = [fi_fac_sql, ff_fac_sql] + list(_TIPOS_FAC_NC) + ["No"] + list(_STOCK_TIPO_COMP_VENTAS)
             if sucursales_ints:
@@ -1493,6 +1496,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 FROM stock st
                 INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
                 INNER JOIN cliente cl_uni ON cl_uni.Codigo = cc.Codigo
+                LEFT JOIN articulo art ON art.IDArt = st.IDArt
                 WHERE {" AND ".join(where_uni)}{alcance_sql_cl_uni}
                 GROUP BY cc.Codigo
             """

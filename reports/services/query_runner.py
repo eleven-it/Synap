@@ -17,6 +17,7 @@ from ..models import ReportDefinition, ReportExecutionLog
 from ..tasks import enqueue_report_refresh
 from ..cache import get_cached_report, set_cached_report, build_cache_key
 from .sample_data import get_sample_data
+from .articulo_venta_sql import sql_excluir_tipo_art_gasto
 from .connection_pool import get_mysql_pool
 from .execution_engine import ReportExecutionEngine
 
@@ -3345,7 +3346,7 @@ class QueryRunnerService:
                     AND sp.CodigoMovimiento IS NOT NULL
                     {suc_bo_ph}
                     AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
-                    AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+                    AND {sql_excluir_tipo_art_gasto("a")}
                 GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, r.NombreRubro, sd.stock_total, oc_pendiente_sub.oc_pendiente, reservado_sub.reservado
                 HAVING bo_qty > 0
                 ORDER BY bo_importe DESC
@@ -3699,7 +3700,7 @@ class QueryRunnerService:
                 f"cp.Estado IN {bo_estados}",
                 "spr.CodigoMovimiento IS NOT NULL",
                 "spr.Fecha >= %s AND spr.Fecha <= %s",
-                "(a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')",
+                sql_excluir_tipo_art_gasto("a"),
             ]
             params_bo_rows = [fecha_inicio_bo, fecha_fin_bo]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta

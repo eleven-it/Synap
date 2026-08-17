@@ -183,7 +183,7 @@ La definición exacta de “precio según lista” en VB6: parámetro **lista_pr
 
 **Origen:** `reports/services/query_runner.py`, método `_run_backorder_vs_stock_vs_facturacion`.  
 **Filtros desde payload:** fecha_inicio, fecha_fin, base_empresa, sucursales, punto_venta, **depositos_incluidos** (opcional: solo se suman al stock estos depósitos; si vacío, todos), clientes_excluidos, **lista_precio** (0–6: Costo, Lista Oficial, Lista 1–5; mismo mapeo que VB6 Info_Stock; por defecto 2 = Lista 1).  
-**Filtro fijo (alineado con VB6):** artículos con `articulo.tipo_art = 'Gasto'` se excluyen del detalle BO y del detalle por renglón.  
+**Filtro fijo (alineado con VB6 y con el resto de informes de venta):** artículos con `articulo.tipo_art = 'Gasto'` se excluyen del detalle BO y del detalle por renglón. Helper: `sql_excluir_tipo_art_gasto`. Política: [FILTRO_TIPO_ART_GASTO.md](FILTRO_TIPO_ART_GASTO.md).  
 **Reservado:** solo estados **En preparación** y **Preparado** (sin Parcial), alineado con Excel Hoja1.  
 **Valorización:** costo = articulo.PrecioCosto; saldo_valorizado = stock_actual × precio según lista_precio (CASE 0→PrecioCosto, 1→PNOficial, 2→Precio1V, …, 6→Precio5V).  
 **Filtro por fecha en backorder:** las consultas que filtran por `stockp.Fecha` (sp.Fecha, spr.Fecha) reciben fechas en formato **YYYYMMDD** (ej. `'20260101'`, `'20260302'`). En bases AdministraNET donde `stockp.Fecha` es INT (YYYYMMDD), enviar `'YYYY-MM-DD'` hace que MySQL convierta a 2026 y el rango incluya todo el año; usar YYYYMMDD alinea el bo_importe con VB6.

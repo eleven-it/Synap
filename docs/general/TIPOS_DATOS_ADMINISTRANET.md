@@ -37,6 +37,10 @@ Las funciones de normalización están en **`core.utils.administranet_types`**:
 - Tablas y columnas: `reports/docs/tablas/*.md`, `docs/general/tablas/*.md`.
 - Comportamiento de formularios VB6: `docs/general/MIGRACION_ADMINISTRANET_VB6_ANALISIS.md`.
 
+## `articulo.tipo_art` (artículos de venta)
+
+Columna VARCHAR en AdministraNET (valores típicos: `Articulo`, `Gasto`, `Servicio`). En reportes de **artículos de venta** y en **inventario por etapa** se excluye siempre `tipo_art = 'Gasto'` (`core.utils.articulo_tipo_sql`). No confundir con `tipo_art_fab`. Ver [FILTRO_TIPO_ART_GASTO.md](../reports/FILTRO_TIPO_ART_GASTO.md).
+
 ## Compatibilidad Empresa.frm (DatosEmpresa)
 
 - **Tablas:** Empresa.frm puede usar `DatosEmpresa` o `datosempresa2` (según flujo, ver MIGRACION_ADMINISTRANET_VB6_ANALISIS.md § 3.1). Synap al guardar actualiza **ambas** tablas si existen, para que AdministraNET muestre los mismos datos con independencia de a cuál esté enlazado el formulario.

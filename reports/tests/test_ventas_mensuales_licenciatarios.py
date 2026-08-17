@@ -430,6 +430,7 @@ class VentasMarcasMensualRulesExtractedTests(SimpleTestCase):
         self.assertIn("'FA'", joined)
         self.assertIn("'NCA'", joined)
         self.assertIn("'Venta TPV'", joined)
+        self.assertIn("art.tipo_art <> 'Gasto'", joined)
 
     def test_signo_sql_contiene_fac_y_nc(self):
         qty_sql = sql_signo_qty_expr()
@@ -461,6 +462,7 @@ class VentasMensualesLicenciatariosQueryTests(SimpleTestCase):
         self.assertIn("st.Anulado = 'No'", sql)
         self.assertIn("art.CodigoMarca = (", sql)
         self.assertIn("m.NombreMarca = %s", sql)
+        self.assertIn("art.tipo_art <> 'Gasto'", sql)
 
     def test_build_anet_sales_sql_importe_post_pie(self):
         """ANET amounts MUST usar el mismo factor cabecera que VMM (SubtotalDesc/SubTotal1)."""

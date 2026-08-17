@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from core.mysql_pool import mysql_cursor
 from core.utils.administranet_types import str_codigo_manual_articulo, str_or_default, to_int_or_none
+from core.utils.articulo_tipo_sql import sql_excluir_tipo_art_gasto
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +316,7 @@ def _build_articulo_where(
     *,
     alias_ce: Optional[str] = None,
 ) -> Tuple[str, List[Any]]:
-    parts: List[str] = []
+    parts: List[str] = [sql_excluir_tipo_art_gasto(alias)]
     params: List[Any] = []
 
     tipos_fab = TIPOS_ART_FAB_POR_AMBITO.get(parse_ambito(f.ambito), TIPOS_ART_FAB_POR_AMBITO[AMBITO_TERMINADOS])

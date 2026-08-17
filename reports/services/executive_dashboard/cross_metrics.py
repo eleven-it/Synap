@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
+from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.query_runner import parse_fecha_bo_yyyymmdd
 
 from .base import DashboardFilters, build_meta, build_paginated_response, round_money
@@ -37,7 +38,7 @@ def fetch_cruzados_resumen(cursor, filters: DashboardFilters) -> dict[str, Any]:
             AND sp.CodigoMovimiento IS NOT NULL
             AND sp.Fecha >= %s AND sp.Fecha <= %s
             {suc_bo}
-            AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+            AND {sql_excluir_tipo_art_gasto("a")}
     """
     params_bo = [fecha_inicio_bo, fecha_fin_bo] + params_suc
     cursor.execute(sql_bo, params_bo)
@@ -190,7 +191,7 @@ def list_backorder_detalle(cursor, filters: DashboardFilters) -> dict[str, Any]:
             AND sp.CodigoMovimiento IS NOT NULL
             {suc_bo}
             AND sp.Fecha >= %s AND sp.Fecha <= %s
-            AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+            AND {sql_excluir_tipo_art_gasto("a")}
     """
     params_base = params_suc + [fecha_inicio_bo, fecha_fin_bo]
 

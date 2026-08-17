@@ -13,6 +13,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.connection_pool import get_mysql_pool
 from ecom.services.filtros_estadisticas_relay import listado_filtros_estadisticas
 
@@ -330,6 +331,7 @@ def get_ventas_netas(
         where.append(f"st.TipoComp IN ({ph_tc})")
         params.extend(_STOCK_TIPO_COMP_VENTAS)
         where.append("(ru.CodigoRubro IS NULL OR ru.anulado = 'No')")
+        where.append(sql_excluir_tipo_art_gasto("art"))
         meta["nota"] = (
             "listar_por rubro/subrubro/articulo/marca/zona/tipocliente/proveedor: "
             "importe por renglones stock.PrecioNetoxR "

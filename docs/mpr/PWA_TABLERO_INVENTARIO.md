@@ -35,7 +35,7 @@ Ofrecer dos pantallas MPR optimizadas para dispositivos móviles (PWA), siguiend
 
 ## Inventario MPR
 
-- **Fuente de datos:** `stock.services.inventario_tabla` (`parse_inventario_filtros`, `consultar_inventario_tabla`, `preparar_filas_inventario_presentacion`).
+- **Fuente de datos:** `stock.services.inventario_tabla` (`parse_inventario_filtros`, `consultar_inventario_tabla`, `preparar_filas_inventario_presentacion`). Excluye `tipo_art = Gasto`.
 - **Presentación:** alineada con `resolver_modo_presentacion_operativa` (misma sesión que tablero MPR).
 - **Filtros móvil (GET):** Fabricados | Terminados, Docenas | Pares, Con stock | Todos.
 - **Búsqueda:** Alpine client-side sobre filas SSR (sin filtro SQL por tecla).
