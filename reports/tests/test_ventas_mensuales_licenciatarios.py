@@ -190,6 +190,13 @@ class LicenciatariosExportLayoutSimpleTests(SimpleTestCase):
         self.assertEqual(ws.cell(row=4, column=29).value, "YTD_Units")
         self.assertEqual(ws.cell(row=4, column=30).value, "YTD_Sales")
         self.assertTrue(str(ws.cell(row=5, column=29).value or "").startswith("=AA5+"))
+        self.assertIn("E4:F4", {str(m) for m in ws.merged_cells.ranges})
+        self.assertEqual(ws.cell(row=3, column=5).value, "units")
+        self.assertEqual(ws.cell(row=3, column=6).value, "amounts")
+        self.assertEqual(ws.cell(row=4, column=1).fill.fgColor.rgb, "004F81BD")
+        self.assertEqual(ws.cell(row=4, column=1).font.color.rgb, "00FFFFFF")
+        self.assertGreaterEqual(ws.column_dimensions["A"].width or 0, 31.0)
+        self.assertGreaterEqual(ws.column_dimensions["F"].width or 0, 14.0)
 
 
 class LicenciatariosExportServiceArtifactsTests(SimpleTestCase):
