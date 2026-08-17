@@ -260,7 +260,10 @@ class LicenciatariosExportServiceArtifactsTests(SimpleTestCase):
             self.assertTrue(run_payload.get("_skip_report_cache"))
             self.assertIs(captured["merge"], merge)
             self.assertEqual(captured["year"], 2026)
-            self.assertTrue(str(result.filename).endswith(".xlsx"))
+            self.assertEqual(
+                result.filename,
+                "Monthly Reporting Best Sox_LEVIS BW 26.xlsx",
+            )
 
     def test_export_sin_artifacts_falla_claro(self):
         from reports.services.export_service import ExportService

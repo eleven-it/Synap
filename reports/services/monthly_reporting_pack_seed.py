@@ -71,6 +71,34 @@ MONTHLY_REPORTING_TEMPLATE_FILES: dict[str, str] = {
     "puma_sw": "puma_sw_annual.xlsx",
 }
 
+# Nombres de descarga = plantillas de envío usadas hasta julio (fwdreportesjun).
+# Puma original era .xlsb; el export Synap entrega .xlsx con el mismo basename.
+MONTHLY_REPORTING_EXPORT_FILENAMES: dict[str, str] = {
+    "levis_bw": "Monthly Reporting Best Sox_LEVIS BW 26.xlsx",
+    "levis_lw_dz": "Monthly Reporting Best Sox_LEVIS LW 26 DZ.xlsx",
+    "levis_lw_pk": "Monthly Reporting Best Sox_LEVIS LW 26 PK.xlsx",
+    "lw_propia": "Monthly Reporting Best Sox_LW 26.xlsx",
+    "puma_bw": "Monthly_Reporting _Best Sox_2026_BW_PUMA.xlsx",
+    "puma_sw": "Monthly_Reporting _Best Sox_2026_SW_PUMA.xlsx",
+}
+
+# Archivos fuente seed / conciliación (Puma sigue .xlsb en disco de origen).
+MONTHLY_REPORTING_SOURCE_FILENAMES: dict[str, str] = {
+    **{
+        pack_id: name
+        for pack_id, name in MONTHLY_REPORTING_EXPORT_FILENAMES.items()
+        if not pack_id.startswith("puma_")
+    },
+    "puma_bw": "Monthly_Reporting _Best Sox_2026_BW_PUMA.xlsb",
+    "puma_sw": "Monthly_Reporting _Best Sox_2026_SW_PUMA.xlsb",
+}
+
+
+def resolve_monthly_reporting_export_filename(pack_id: str) -> str:
+    """Nombre Content-Disposition / disco al exportar el pack (paridad plantillas julio)."""
+    key = str(pack_id or "").strip()
+    return MONTHLY_REPORTING_EXPORT_FILENAMES.get(key) or f"Monthly Reporting Best Sox_{key or 'pack'}.xlsx"
+
 
 def seed_monthly_reporting_packs(MonthlyReportingPack: Type) -> list[object]:
     """Crea o actualiza los 6 packs canónicos."""

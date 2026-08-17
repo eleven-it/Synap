@@ -74,7 +74,7 @@ UI canónica: patrones reports/MPR ([FUENTE_VERDAD_UI](../general/FUENTE_VERDAD_
 
 Layout del dashboard: la barra de navegación y el banner del informe quedan fijos; **sin KPIs/resumen genérico** (`#report-summary` oculto). El único scroll vertical es la matriz cliente × mes (`#vml-matriz-container`). El thead, la columna Cliente y la fila **Totales** (suma por columna de unidades y monto, según filas visibles) permanecen sticky dentro de esa región.
 
-Export Excel: el botón **Exportar Excel** del banner (junto a Actualizar) dispara `/api/reports/export/?type=xlsx` con `pack_id` y el rango calendario. Requiere pack seleccionado. El export vuelve a ejecutar el runner (sin caché) y toma `merge_result` desde `QueryResult.artifacts` (no desde `meta.extra`, que es solo JSON). Las plantillas anuales viven en `reports/templates/reports/excel/monthly_reporting/*_annual.xlsx` (versionadas); si faltan en disco, el export las regenera con `build_all_templates`.
+Export Excel: el botón **Exportar Excel** del banner (junto a Actualizar) dispara `/api/reports/export/?type=xlsx` con `pack_id` y el rango calendario. Requiere pack seleccionado. El export vuelve a ejecutar el runner (sin caché) y toma `merge_result` desde `QueryResult.artifacts` (no desde `meta.extra`, que es solo JSON). Las plantillas anuales viven en `reports/templates/reports/excel/monthly_reporting/*_annual.xlsx` (versionadas); si faltan en disco, el export las regenera con `build_all_templates`. El **nombre de descarga** coincide con las planillas de envío hasta julio (`Monthly Reporting Best Sox_LEVIS BW 26.xlsx`, etc.; Puma con basename histórico y extensión `.xlsx`).
 
 ---
 

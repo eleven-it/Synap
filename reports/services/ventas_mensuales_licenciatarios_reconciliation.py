@@ -9,7 +9,10 @@ from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
 from reports.models import MonthlyReportingPack, MonthlyReportingSeedRow
-from reports.services.monthly_reporting_pack_seed import iter_monthly_reporting_pack_ids
+from reports.services.monthly_reporting_pack_seed import (
+    MONTHLY_REPORTING_SOURCE_FILENAMES as PACK_SOURCE_FILES,
+    iter_monthly_reporting_pack_ids,
+)
 from reports.services.ventas_mensuales_licenciatarios_importer import (
     ParsedSeedCell,
     parse_monthly_reporting_workbook,
@@ -18,15 +21,6 @@ from reports.services.ventas_mensuales_licenciatarios_merger import CUTOVER_DATE
 from reports.services.ventas_marcas_mensual_rules import TIPOS_FAC, TIPOS_NC
 
 DEFAULT_SOURCE_DIR = Path("/Users/sebastian/Documents/Best Sox/fwdreportesjun")
-
-PACK_SOURCE_FILES: dict[str, str] = {
-    "levis_bw": "Monthly Reporting Best Sox_LEVIS BW 26.xlsx",
-    "levis_lw_dz": "Monthly Reporting Best Sox_LEVIS LW 26 DZ.xlsx",
-    "levis_lw_pk": "Monthly Reporting Best Sox_LEVIS LW 26 PK.xlsx",
-    "lw_propia": "Monthly Reporting Best Sox_LW 26.xlsx",
-    "puma_bw": "Monthly_Reporting _Best Sox_2026_BW_PUMA.xlsb",
-    "puma_sw": "Monthly_Reporting _Best Sox_2026_SW_PUMA.xlsb",
-}
 
 FA_NC_REFERENCE_NOTE = (
     "La porción AdministraNET (≥22/07/2026) usa las reglas compartidas VMM "
