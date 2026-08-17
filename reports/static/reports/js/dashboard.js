@@ -10008,6 +10008,7 @@ if (dashboardRoot) {
     slug === "ventas-por-articulo" ||
     slug === "ventas-marca-superart" ||
     slug === "ventas-marcas-mensual" ||
+    slug === "ventas-mensuales-licenciatarios" ||
     isLogisticaListaComprobantesRutasSlug(slug);
 
   const fetchDashboardData = async (isAutoRefresh = false) => {
@@ -10079,7 +10080,9 @@ if (dashboardRoot) {
             : STOCK_EXISTENCIAS_PAGE_SIZE
           : reportSlug === "cash_flow_detailed_movements"
             ? CASH_FLOW_DETAILED_MOVEMENTS_API_LIMIT
-            : 200;
+            : reportSlug === "ventas-mensuales-licenciatarios"
+              ? 20000
+              : 200;
 
       const response = await fetch(apiUrl, {
         method: "POST",

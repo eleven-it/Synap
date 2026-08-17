@@ -95,7 +95,7 @@
                         </svg>
                         <span class="hidden sm:inline">Actualizar</span>
                     </button>
-                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-bom-docenas' or report.slug == 'ventas-marcas-mensual' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
+                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-marcas-mensual' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
                     <button type="button"
                             data-export-excel
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
@@ -343,7 +343,7 @@
                         <!-- Reportes Legacy: Usar templates unificados -->
                         {% if report.slug == 'stock-existencias' %}
                         {% include "reports/includes/filters_stock_existencias.html" %}
-                        {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-bom-docenas' or report.slug == 'ventas-marcas-mensual' %}
+                        {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-marcas-mensual' %}
                         {% include "reports/includes/filters_period_bo_dual.html" %}
                         {% elif report.slug == 'ventas-mensuales-licenciatarios' %}
                         {% include "reports/includes/filters_ventas_mensuales_licenciatarios.html" %}
@@ -351,7 +351,7 @@
                         {% else %}
                         {% include "reports/includes/filters_period.html" %}
                         {% endif %}
-                        {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-bom-docenas' or report.slug == 'ventas-marcas-mensual' %}
+                        {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-marcas-mensual' %}
                         {% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
                         {% endif %}
                         {% if report.slug == 'ventas-marcas-mensual' %}
@@ -381,10 +381,6 @@
                  data-is-declarative="{{ is_declarative|yesno:"true,false" }}">
                 {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
                 <p id="ventas-netas-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-4"></p>
-                {% endif %}
-                {% if report.slug == 'ventas-bom-docenas' %}
-                <p id="ventas-bom-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-2"></p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Packs facturados explosionados por BOM · cantidades en docenas (pares ÷ 12)</p>
                 {% endif %}
                 {% if report.slug != 'bo-stock-facturacion' and report.slug != 'ventas-objetivos-vs-bo' and report.slug != 'ventas-por-vendedor' and report.slug != 'ventas-por-articulo' and report.slug != 'ventas-marca-superart' and report.slug != 'ventas-marcas-mensual' and report.slug != 'ventas-mensuales-licenciatarios' and report.slug != 'stock-existencias' and report.slug != 'cash_flow_detailed_movements' %}
                 {% with widget=widgets|first %}
@@ -902,6 +898,21 @@
                         </section>
                     </div>
                 </div>
+                <section class="mt-1 flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/40">
+                        <label for="vml-matriz-search" class="text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Buscar cliente</label>
+                        <input type="search" id="vml-matriz-search" autocomplete="off"
+                               class="min-h-[44px] min-w-[12rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                               placeholder="Nombre o código…"
+                               aria-label="Filtrar clientes de la matriz">
+                    </div>
+                    <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 lg:hidden">Deslizá horizontalmente para ver todos los meses.</p>
+                    <div class="relative h-[min(75vh,56rem)] min-h-[14rem]">
+                        <div class="h-full overflow-auto overscroll-contain" id="vml-matriz-container" role="region" aria-label="Matriz cliente por mes">
+                            <p class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">Cargando matriz…</p>
+                        </div>
+                    </div>
+                </section>
                 {% endif %}
 
                 {% if report.slug == 'ventas-marcas-mensual' %}
@@ -1002,7 +1013,7 @@
         </div>
     </div>
     {% if not is_declarative %}
-        {% if report.slug == 'stock-existencias' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-bom-docenas' or report.slug == 'ventas-marcas-mensual' or report.slug == 'ventas-mensuales-licenciatarios' or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
+        {% if report.slug == 'stock-existencias' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-marcas-mensual' or report.slug == 'ventas-mensuales-licenciatarios' or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
         {# Modal de carga compartido (petición API + render): stock, BO, ventas netas, comprobantes en ruta. fixed + z alto; flex desde JS. #}
         <div id="reports-legacy-query-loading-modal"
              class="hidden fixed inset-0 z-[9999] p-4 sm:p-8 bg-slate-950/60 backdrop-blur-sm pointer-events-auto transition-opacity duration-200"
@@ -5228,7 +5239,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 {% else %}
 <script src="{% static 'reports/js/reports_responsive.js' %}?v=20260602b" defer></script>
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260806a"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260817a"></script>
 {% if report.slug == 'comprobantes-rutas' %}
 <script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260430b" defer></script>
 {% endif %}
@@ -5244,11 +5255,8 @@ document.addEventListener('DOMContentLoaded', function() {
 {% if report.slug == 'ventas-marca-superart' %}
 <script src="{% static 'reports/js/ventas_marca_superart.js' %}?v=20260807a"></script>
 {% endif %}
-{% if report.slug == 'ventas-bom-docenas' %}
-<script src="{% static 'reports/js/ventas_bom_docenas.js' %}?v=20260814a"></script>
-{% endif %}
 {% if report.slug == 'ventas-mensuales-licenciatarios' %}
-<script src="{% static 'reports/js/ventas_mensuales_licenciatarios.js' %}?v=20260808a"></script>
+<script src="{% static 'reports/js/ventas_mensuales_licenciatarios.js' %}?v=20260817a"></script>
 {% endif %}
 {% if report.slug == 'ventas-marcas-mensual' %}
 <script src="{% static 'reports/js/reports_filters_sheet.js' %}?v=20260802c" defer></script>

@@ -83,11 +83,143 @@
     panel.classList.toggle("hidden", !pending.length && !qaArts.length);
   }
 
+  function unidadLabel(unitMode) {
+    return String(unitMode || "").toLowerCase() === "dozens" ? "Docenas" : "Packs";
+  }
+
+  function escHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function fmtMesYm(ym) {
+    const s = String(ym || "");
+    if (s.length !== 6) return s;
+    const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const mi = Number(s.slice(4, 6)) - 1;
+    return `${meses[mi] || s.slice(4)} ${s.slice(0, 4)}`;
+  }
+
+  function pivotClientMonths(data, extra) {
+    const year = Number(extra?.year) || new Date().getFullYear();
+    const monthFrom = Number(extra?.month_from) || 1;
+    const monthTo = Number(extra?.month_to) || 12;
+    const meses = [];
+    for (let m = monthFrom; m <= monthTo; m += 1) {
+      meses.push(`${year}${String(m).padStart(2, "0")}`);
+    }
+    const byId = new Map();
+    (Array.isArray(data) ? data : []).forEach((row) => {
+      const id = String(row.identity || row.cliente || "");
+      if (!id) return;
+      let rec = byId.get(id);
+      if (!rec) {
+        rec = {
+          identity: id,
+          cliente: row.cliente || "—",
+          pendiente: Boolean(row.pendiente),
+          months: {},
+          totU: 0,
+          totF: 0,
+        };
+        byId.set(id, rec);
+      }
+      rec.months[String(row.anio_mes || "")] = {
+        u: Number(row.unidades) || 0,
+        f: Number(row.facturacion) || 0,
+      };
+      rec.totU += Number(row.unidades) || 0;
+      rec.totF += Number(row.facturacion) || 0;
+    });
+    const filas = Array.from(byId.values()).sort((a, b) => b.totF - a.totF || a.cliente.localeCompare(b.cliente, "es"));
+    return { meses, filas };
+  }
+
+  function renderMatriz(data, extra) {
+    const container = document.getElementById("vml-matriz-container");
+    if (!container) return;
+    const { meses, filas } = pivotClientMonths(data, extra);
+    const q = String(document.getElementById("vml-matriz-search")?.value || "")
+      .trim()
+      .toLowerCase();
+    const visible = q
+      ? filas.filter((f) => String(f.cliente).toLowerCase().includes(q) || String(f.identity).toLowerCase().includes(q))
+      : filas;
+    if (!filas.length) {
+      container.innerHTML =
+        '<p class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">Sin datos para el pack y período seleccionados.</p>';
+      return;
+    }
+    if (!visible.length) {
+      container.innerHTML =
+        '<p class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">Ningún cliente coincide con la búsqueda.</p>';
+      return;
+    }
+    const unidadHdr = unidadLabel(extra?.unit_mode);
+    const sticky =
+      "sticky left-0 z-[5] bg-slate-50 dark:bg-slate-800/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
+    const stickyCli =
+      "sticky left-0 z-[5] bg-white dark:bg-slate-900 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]";
+    let html = '<table class="min-w-full border-collapse text-xs">';
+    html += '<thead class="sticky top-0 z-10 bg-slate-100/95 shadow-sm backdrop-blur-sm dark:bg-slate-900/95"><tr>';
+    html += `<th scope="col" class="px-2 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 min-w-[14rem] ${sticky}">Cliente</th>`;
+    meses.forEach((ym) => {
+      html += `<th scope="colgroup" colspan="2" class="px-1 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200 border-l border-sky-200/70 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/20">${escHtml(fmtMesYm(ym))}</th>`;
+    });
+    html += '<th scope="colgroup" colspan="2" class="px-1 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-100 border-l border-emerald-300/80 dark:border-emerald-800 bg-emerald-100/70 dark:bg-emerald-950/40">Total</th>';
+    html += "</tr><tr>";
+    html += `<th class="px-2 py-1 ${sticky}"></th>`;
+    const sub = (isTotal) => {
+      const uCls = isTotal
+        ? "px-1.5 py-1.5 text-right text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 bg-emerald-50/80 dark:bg-emerald-950/30"
+        : "px-1.5 py-1.5 text-right text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
+      const fCls = isTotal
+        ? "px-1.5 py-1.5 text-right text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 bg-emerald-50/80 dark:bg-emerald-950/30"
+        : "px-1.5 py-1.5 text-right text-[9px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80";
+      return `<th scope="col" class="${uCls}">${escHtml(unidadHdr)}</th><th scope="col" class="${fCls}">Monto</th>`;
+    };
+    meses.forEach(() => {
+      html += sub(false);
+    });
+    html += sub(true);
+    html += "</tr></thead><tbody>";
+    visible.forEach((fila, idx) => {
+      const zebra = idx % 2 === 1 ? "bg-slate-50/80 dark:bg-slate-900/40" : "bg-white dark:bg-slate-950";
+      const nameCls = fila.pendiente
+        ? "text-amber-800 dark:text-amber-200"
+        : "text-slate-800 dark:text-slate-100";
+      html += `<tr class="${zebra}">`;
+      html += `<th scope="row" class="px-2 py-1.5 text-left font-medium ${nameCls} ${stickyCli}">${escHtml(fila.cliente)}</th>`;
+      meses.forEach((ym) => {
+        const cell = fila.months[ym] || { u: 0, f: 0 };
+        const empty = !cell.u && !cell.f;
+        html += `<td class="px-1.5 py-1.5 text-right tabular-nums border-l border-slate-100 dark:border-slate-800 ${empty ? "text-slate-300 dark:text-slate-600" : "text-slate-700 dark:text-slate-200"}">${empty ? "—" : NUM.format(cell.u)}</td>`;
+        html += `<td class="px-1.5 py-1.5 text-right tabular-nums ${empty ? "text-slate-300 dark:text-slate-600" : "text-emerald-800 dark:text-emerald-200"}">${empty ? "—" : ARS.format(cell.f)}</td>`;
+      });
+      html += `<td class="px-1.5 py-1.5 text-right tabular-nums font-semibold border-l border-emerald-200/80 dark:border-emerald-800 text-slate-800 dark:text-slate-100">${NUM.format(fila.totU)}</td>`;
+      html += `<td class="px-1.5 py-1.5 text-right tabular-nums font-semibold text-emerald-900 dark:text-emerald-100">${ARS.format(fila.totF)}</td>`;
+      html += "</tr>";
+    });
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  }
+
+  let _lastMatriz = { data: [], extra: {} };
+
+  function renderMatrizAndStore(data, extra) {
+    _lastMatriz = { data: data || [], extra: extra || {} };
+    renderMatriz(_lastMatriz.data, _lastMatriz.extra);
+  }
+
   window.vmlOnDashboardResult = function vmlOnDashboardResult(result) {
     const meta = result?.meta || {};
     const extra = meta.extra || {};
     syncSummaryPeriod(meta);
     renderQaPanel(extra);
+    renderMatrizAndStore(result?.data || [], extra);
     refreshPendingBadge();
   };
 
@@ -364,5 +496,8 @@
   document.addEventListener("DOMContentLoaded", () => {
     wireModal();
     refreshPendingBadge();
+    document.getElementById("vml-matriz-search")?.addEventListener("input", () => {
+      renderMatriz(_lastMatriz.data, _lastMatriz.extra);
+    });
   });
 })();
