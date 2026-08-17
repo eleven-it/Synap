@@ -729,6 +729,63 @@ class MonthlyReportingClientMatchServiceTests(TestCase):
         self.assertEqual(len(result.pending_clients), 1)
         self.assertEqual(result.pending_clients[0]["seed_key"], "name:cliente-x")
 
+    def test_merge_anet_homonimo_une_identidad_con_seed_pendiente(self):
+        """Evita filas duplicadas tipo VARTAT: seed pendiente + ANET julio mismo nombre."""
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        pack = MonthlyReportingPack.objects.get(pack_id="lw_propia")
+        match = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:vartat-dup",
+            seed_customer_name="VARTAT S.A.",
+            seed_city="Córdoba",
+            seed_store_type="Multibrand",
+            seed_product_group="LW",
+            estado=MonthlyReportingClientMatch.Estado.PENDING,
+        )
+        batch = MonthlyReportingImportBatch.objects.create(
+            pack=pack,
+            file_name="vartat.xlsx",
+            file_format="xlsx",
+            file_sha256="sha-vartat",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        MonthlyReportingSeedRow.objects.create(
+            pack=pack,
+            match=match,
+            month=date(2026, 6, 1),
+            units=Decimal("28"),
+            amount=Decimal("100"),
+            city="Córdoba",
+            store_type="Multibrand",
+            batch=batch,
+        )
+
+        def _anet_julio(**kwargs):
+            return [
+                AnetSalesRow(
+                    codigo_cliente=472,
+                    nombre_cliente="vartat s.a",
+                    month=date(2026, 7, 1),
+                    units=Decimal("19"),
+                    amount=Decimal("524263.2"),
+                )
+            ]
+
+        result = merge_pack_year(
+            pack=pack,
+            year=2026,
+            month_from=1,
+            month_to=7,
+            base_empresa="administranet",
+            fetch_anet_fn=_anet_julio,
+        )
+        vartat = [r for r in result.rows if "VARTAT" in (r.display_name or "").upper()]
+        identities = {r.identity for r in vartat}
+        self.assertEqual(len(identities), 1, msg=identities)
+        self.assertTrue(next(iter(identities)).startswith("seed:"))
+        months = sorted(r.month.month for r in vartat)
+        self.assertEqual(months, [6, 7])
+        self.assertEqual(vartat[0].city, "Córdoba")
+
 
 class MonthlyReportingSuperArtServiceTests(TestCase):
     """Phase 4.2 — catálogo SuperArt Men/Women + QA."""
