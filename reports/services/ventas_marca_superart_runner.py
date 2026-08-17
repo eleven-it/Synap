@@ -15,6 +15,7 @@ from django.conf import settings
 from core.utils.administranet_types import str_or_default, to_date_or_none, to_decimal_or_none, to_int_or_none
 from reports.models import ReportDefinition
 from reports.services.connection_pool import get_mysql_pool
+from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.query_runner import QueryResult, QueryRunnerService
 from reports.services.ventas_marcas_mensual_runner import (
     _resolve_marcas_incluidos,
@@ -415,6 +416,7 @@ def run_ventas_marca_superart(report: ReportDefinition, payload: Dict, user) -> 
         "cc.TipoComprobante IN ('FA','FB','FC','FE','FM','NCA','NCB','NCC','NCE','NCM')",
         "st.Anulado = 'No'",
         "st.TipoComp IN ('Venta','Venta TPV','Devol - Cliente','ND Anul NC')",
+        sql_excluir_tipo_art_gasto("art"),
     ]
     params: List[Any] = [fi_sql, ff_sql]
 

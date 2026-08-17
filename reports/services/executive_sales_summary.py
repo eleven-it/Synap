@@ -9,6 +9,7 @@ import logging
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.margen_costo_linea import (
     margen_costo_criterio_meta,
     signed_costo_neto_linea_sql,
@@ -145,10 +146,12 @@ def _unidades_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> float:
         ) AS u
         FROM stock st
         INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+        LEFT JOIN articulo a ON a.IDArt = st.IDArt
         WHERE cc.Fecha = %s
           AND {base_w}{suc_sql}
           AND st.Anulado = 'No'
           AND st.TipoComp IN ({ph_tc})
+          AND {sql_excluir_tipo_art_gasto("a")}
     """
     params = [dia] + base_p + suc_p + list(_STOCK_TIPO_COMP)
     cursor.execute(sql, params)
@@ -249,6 +252,7 @@ def _top_productos_ventas_dia(
               AND {base_w}{suc_sql}
               AND st.Anulado = 'No'
               AND st.TipoComp IN ({ph_tc})
+              AND {sql_excluir_tipo_art_gasto("a")}
               AND st.IDArt IS NOT NULL AND st.IDArt <> 0
             GROUP BY st.IDArt
         ) z
@@ -306,10 +310,12 @@ def _margen_bruto_totales_dia(
             SUM({costo}) AS costo_neto_lineas
         FROM stock st
         INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+        LEFT JOIN articulo a ON a.IDArt = st.IDArt
         WHERE cc.Fecha = %s
           AND {base_w}{suc_sql}
           AND st.Anulado = 'No'
           AND st.TipoComp IN ({ph_tc})
+          AND {sql_excluir_tipo_art_gasto("a")}
     """
     params: List[Any] = [dia] + base_p + suc_p + list(_STOCK_TIPO_COMP)
     cursor.execute(sql, params)
@@ -363,6 +369,7 @@ def _margen_por_rubro_dia(
               AND {base_w}{suc_sql}
               AND st.Anulado = 'No'
               AND st.TipoComp IN ({ph_tc})
+              AND {sql_excluir_tipo_art_gasto("a")}
         ) z
         GROUP BY z.codigo_rubro
         HAVING ABS(SUM(z.venta_neta)) > 0.000001 OR ABS(SUM(z.costo_neto)) > 0.000001
@@ -441,6 +448,7 @@ def _margen_por_subrubro_dia(
               AND {base_w}{suc_sql}
               AND st.Anulado = 'No'
               AND st.TipoComp IN ({ph_tc})
+              AND {sql_excluir_tipo_art_gasto("a")}
         ) z
         GROUP BY z.id_subrubro
         HAVING ABS(SUM(z.venta_neta)) > 0.000001 OR ABS(SUM(z.costo_neto)) > 0.000001

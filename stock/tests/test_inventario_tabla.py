@@ -170,6 +170,7 @@ class ArticuloWhereAmbitoTest(SimpleTestCase):
         )
         self.assertIn("tipo_art_fab", where)
         self.assertIn("IN", where)
+        self.assertIn("a.tipo_art <> 'Gasto'", where)
         self.assertEqual(params, ["Fabricado", "Fabricado 2da"])
 
     def test_terminados_incluye_terminado_y_tercero(self):
@@ -178,6 +179,7 @@ class ArticuloWhereAmbitoTest(SimpleTestCase):
         )
         self.assertIn("tipo_art_fab", where)
         self.assertIn("IN", where)
+        self.assertIn("a.tipo_art <> 'Gasto'", where)
         self.assertEqual(params, ["Terminado", "Tercero"])
 
     def test_busqueda_incluye_talle_y_color_ce(self):
@@ -268,7 +270,10 @@ class FiltroStockPositivoSqlTest(SimpleTestCase):
         sql_count = next(sql for sql in sqls if "FROM (SELECT a.IDArt" in sql)
         sql_filas = next(sql for sql in sqls if "SELECT a.IDArt AS id_articulo" in sql)
         condicion = "COALESCE(agg.`Terminado`, 0) > 0"
-        prefijo = "WHERE COALESCE(TRIM(a.tipo_art_fab), '') IN (%s,%s) AND ({condicion})"
+        prefijo = (
+            "WHERE (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto') "
+            "AND COALESCE(TRIM(a.tipo_art_fab), '') IN (%s,%s) AND ({condicion})"
+        )
         self.assertIn(prefijo.format(condicion=condicion), sql_count)
         self.assertIn(prefijo.format(condicion=condicion), sql_filas)
         self.assertNotIn("HAVING", sql_count)

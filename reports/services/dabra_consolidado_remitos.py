@@ -20,6 +20,7 @@ from core.utils.administranet_types import (
     to_decimal_or_none,
     to_int_or_none,
 )
+from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.comprobante_descuento_cabecera import (
     factor_descuento_cabecera,
     porcentaje_descuento_cabecera,
@@ -266,6 +267,7 @@ def _sql_lineas_fa() -> str:
           AND cc.TipoComprobante = 'FA'
           AND cc.Anulado = 'No'
           AND cc.Fecha BETWEEN %s AND %s
+          AND {sql_excluir_tipo_art_gasto("a")}
           AND NOT EXISTS (
               SELECT 1
               FROM cuentacliente nc

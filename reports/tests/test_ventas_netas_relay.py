@@ -333,6 +333,7 @@ class TestGetVentasNetasMocked(unittest.TestCase):
         sql = args[0]
         self.assertIn("LEFT JOIN proveedor prov", sql)
         self.assertIn("GROUP BY art.CodigoProveedor", sql)
+        self.assertIn("art.tipo_art <> 'Gasto'", sql)
 
     @patch("reports.services.ventas_netas.get_mysql_pool")
     def test_tipo_unidades_en_rubro_usa_cantidad(self, mock_pool):

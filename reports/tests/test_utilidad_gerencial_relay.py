@@ -94,6 +94,7 @@ class TestGetUtilidadGerencialMocked(unittest.TestCase):
         self.assertIn("st.TipoComp IN (%s, %s, %s, %s)", sql)
         self.assertIn("st.visualiza_ensamble = 'No'", sql)
         self.assertIn("st.Anulado = 'No'", sql)
+        self.assertIn("arti.tipo_art <> 'Gasto'", sql)
         self.assertIn("PrecioCostoxR", sql)
         self.assertIn("st.PrecioVentaxR", sql)
         self.assertIn("Venta", params)
