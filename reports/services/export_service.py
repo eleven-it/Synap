@@ -234,8 +234,12 @@ class ExportService:
         if report_slug == "ventas-marcas-mensual":
             return f"Ventas_marcas_mensual_{a}_{b}.xlsx"
         if report_slug == "ventas-mensuales-licenciatarios":
+            from reports.services.monthly_reporting_pack_seed import (
+                resolve_monthly_reporting_export_filename,
+            )
+
             pack = str((filters.get("pack_id") or "pack")).strip()
-            return f"Ventas_licenciatarios_{pack}_{a}_{b}.xlsx"
+            return resolve_monthly_reporting_export_filename(pack)
         if report_slug == "ventas-bom-docenas":
             def _ddmmyyyy(seg: str) -> str:
                 parts = seg.split("-")
