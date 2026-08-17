@@ -70,7 +70,7 @@
         overflow-x: clip;
     }
 
-    /* VML: navbar + título + resumen fijos; solo scrollea la matriz. */
+    /* VML: navbar + título fijos; sin KPIs de resumen; solo scrollea la matriz. */
     body:has(#vml-page) {
         overflow: hidden;
     }
@@ -98,9 +98,7 @@
         padding-bottom: 0.25rem;
     }
     #vml-page #report-summary {
-        flex-shrink: 0;
-        padding-top: 0.75rem;
-        padding-bottom: 0.75rem;
+        display: none !important;
     }
     #vml-page [data-filters-wrapper] {
         flex-shrink: 0;
@@ -191,7 +189,7 @@
 
     <div class="relative w-full px-4 sm:px-6 lg:px-12 {% if report.slug == 'ventas-mensuales-licenciatarios' %}flex min-h-0 flex-1 flex-col overflow-hidden pt-2{% else %}-mt-10{% endif %}">
         <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow{% if report.slug == 'ventas-mensuales-licenciatarios' %} flex min-h-0 flex-1 flex-col{% endif %}">
-            <div id="report-summary" data-summary-container class="px-6 sm:px-10 py-6 border-b border-slate-100 dark:border-slate-800 {% if is_declarative %}{% else %}hidden{% endif %}">
+            <div id="report-summary" data-summary-container class="px-6 sm:px-10 py-6 border-b border-slate-100 dark:border-slate-800 {% if report.slug == 'ventas-mensuales-licenciatarios' %}hidden{% elif is_declarative %}{% else %}hidden{% endif %}">
                 <div class="flex flex-row flex-wrap justify-between items-center gap-2 mb-4">
                     <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-100 uppercase tracking-wide">
                         <span>Resumen</span>
@@ -5307,7 +5305,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/ventas_bom_docenas.js' %}?v=20260814a"></script>
 {% endif %}
 {% if report.slug == 'ventas-mensuales-licenciatarios' %}
-<script src="{% static 'reports/js/ventas_mensuales_licenciatarios.js' %}?v=20260817a"></script>
+<script src="{% static 'reports/js/ventas_mensuales_licenciatarios.js' %}?v=20260817b"></script>
 {% endif %}
 {% if report.slug == 'ventas-marcas-mensual' %}
 <script src="{% static 'reports/js/reports_filters_sheet.js' %}?v=20260802c" defer></script>

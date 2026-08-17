@@ -115,7 +115,7 @@ Preparar el **Monthly Reporting** que Best Sox envía a licenciatarios (Levi’s
 
 1. Abra el informe desde Reports.
 2. Pulse **Mostrar filtros**, elija **pack** y rango (mismo año calendario).
-3. Pulse **Actualizar**.
+3. Pulse **Actualizar**. Verá la **matriz cliente × mes** (sin KPIs de cabecera) y una fila **Totales** al pie que suma cada columna; si busca un cliente, los totales reflejan las filas visibles.
 4. En el banner, pulse **Exportar Excel** (icono de descarga, junto a Actualizar). El archivo usa la plantilla del pack (`input Licensee sales`, `monthly`, hoja QA).
 
 ### Packs previstos

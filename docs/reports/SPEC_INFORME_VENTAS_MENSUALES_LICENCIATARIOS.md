@@ -72,7 +72,7 @@ MUST NOT reutilizar el layout Matriz/Detalle de VMM como entregable a marcas.
 
 UI canónica: patrones reports/MPR ([FUENTE_VERDAD_UI](../general/FUENTE_VERDAD_UI_REPORTES_MPR.md)). Diálogos: modales Synap, sin `alert` nativo.
 
-Layout del dashboard: la barra de navegación, el banner del informe y el resumen quedan fijos; el único scroll vertical es la matriz cliente × mes (`#vml-matriz-container`). El thead y la columna Cliente permanecen sticky dentro de esa región.
+Layout del dashboard: la barra de navegación y el banner del informe quedan fijos; **sin KPIs/resumen genérico** (`#report-summary` oculto). El único scroll vertical es la matriz cliente × mes (`#vml-matriz-container`). El thead, la columna Cliente y la fila **Totales** (suma por columna de unidades y monto, según filas visibles) permanecen sticky dentro de esa región.
 
 Export Excel: el botón **Exportar Excel** del banner (junto a Actualizar) dispara `/api/reports/export/?type=xlsx` con `pack_id` y el rango calendario. Requiere pack seleccionado. El export vuelve a ejecutar el runner (sin caché) y toma `merge_result` desde `QueryResult.artifacts` (no desde `meta.extra`, que es solo JSON).
 
@@ -104,6 +104,7 @@ Ver evidencia en [VERIFY_INFORME_VENTAS_MENSUALES_LICENCIATARIOS.md](VERIFY_INFO
 | Merger cutover 21/22 + export plantilla | Hecho |
 | UI canónica + API match + modal Synap | Hecho |
 | Matriz cliente × mes en dashboard | Hecho (17/08/2026) |
+| Sin KPIs + fila Totales por columna | Hecho (17/08/2026) |
 | Chrome fijo + scroll solo en matriz | Hecho (17/08/2026) |
 | Botón Exportar Excel en banner | Hecho (17/08/2026) |
 | Conciliación 6 planillas (dry-run) | Hecho |
