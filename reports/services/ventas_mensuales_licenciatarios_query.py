@@ -42,7 +42,16 @@ def build_anet_sales_sql(*, include_superart: bool = False) -> str:
     where_parts = sql_base_where_clauses()
     superart_select = ", COALESCE(art.id_manual, '') AS superart" if include_superart else ""
     superart_group = ", art.id_manual" if include_superart else ""
-    where_s = " AND ".join(where_parts) + " AND art.CodMarca = %s"
+    # articulo usa CodigoMarca (FK a marca.CodMarca). pack.marca_anet es NombreMarca
+    # (LB/LEV/PUM/PUW/PUS) según Monthly Reporting / VMM Best Sox.
+    where_s = (
+        " AND ".join(where_parts)
+        + " AND art.CodigoMarca = ("
+        + "SELECT m.CodMarca FROM marca m "
+        + "WHERE m.NombreMarca = %s "
+        + "AND (m.anulado IS NULL OR m.anulado = 'No') "
+        + "LIMIT 1)"
+    )
     return f"""
         SELECT
             cc.Codigo AS codigo_cliente,

@@ -416,7 +416,8 @@ class VentasMensualesLicenciatariosQueryTests(SimpleTestCase):
         sql = build_anet_sales_sql()
         self.assertIn("cc.Anulado = 'No'", sql)
         self.assertIn("st.Anulado = 'No'", sql)
-        self.assertIn("art.CodMarca = %s", sql)
+        self.assertIn("art.CodigoMarca = (", sql)
+        self.assertIn("m.NombreMarca = %s", sql)
 
     def test_build_anet_sales_sql_importe_post_pie(self):
         """ANET amounts MUST usar el mismo factor cabecera que VMM (SubtotalDesc/SubTotal1)."""
