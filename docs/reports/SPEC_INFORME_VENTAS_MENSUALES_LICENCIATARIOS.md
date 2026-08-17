@@ -23,6 +23,7 @@ Generar y (más adelante) previsualizar el **pack Monthly Reporting** que Best S
 |---------|------|--------|
 | `pack_id` | select | Ver plan §4 |
 | Período facturación | fechas | Año calendario del pack (ej. 2026) |
+| `clientes_excluidos` | multi-select tags | Opcional. Códigos AdministraNET a excluir de seed, matriz, totales y export |
 | Seed | import Excel | Solo staff/ops; versionado |
 | Filtros ANET | según pack | Marca / SuperArt / U.M. |
 
