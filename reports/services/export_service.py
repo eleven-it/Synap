@@ -200,6 +200,7 @@ class ExportService:
             "ventas-por-articulo",
             "ventas-marca-superart",
             "ventas-marcas-mensual",
+            "ventas-mensuales-licenciatarios",
             "ventas-bom-docenas",
         ):
             return f"{report_slug}_{timestamp}.xlsx"
@@ -229,6 +230,9 @@ class ExportService:
             return f"Ventas_marca_superart_{a}_{b}.xlsx"
         if report_slug == "ventas-marcas-mensual":
             return f"Ventas_marcas_mensual_{a}_{b}.xlsx"
+        if report_slug == "ventas-mensuales-licenciatarios":
+            pack = str((filters.get("pack_id") or "pack")).strip()
+            return f"Ventas_licenciatarios_{pack}_{a}_{b}.xlsx"
         if report_slug == "ventas-bom-docenas":
             def _ddmmyyyy(seg: str) -> str:
                 parts = seg.split("-")
@@ -495,6 +499,11 @@ class ExportService:
             return
         if report.slug == "ventas-marcas-mensual":
             self._generate_excel_ventas_marcas_mensual(file_path, report, query_result, payload)
+            return
+        if report.slug == "ventas-mensuales-licenciatarios":
+            self._generate_excel_ventas_mensuales_licenciatarios(
+                file_path, report, query_result, payload
+            )
             return
         if report.slug == "inventario-deposito-articulo":
             self._generate_excel_inventario_deposito(file_path, report, query_result, payload)
@@ -1271,6 +1280,38 @@ class ExportService:
 
         wb.save(file_path)
         logger.info("Excel ventas-marcas-mensual (Matriz + Detalle): %s", file_path)
+
+    def _generate_excel_ventas_mensuales_licenciatarios(
+        self, file_path: Path, report: ReportDefinition, query_result, payload: Dict
+    ):
+        """Export anual openpyxl desde plantilla Monthly Reporting + hoja QA."""
+        from reports.models import MonthlyReportingPack
+        from reports.services.ventas_mensuales_licenciatarios_export import (
+            export_licenciatarios_workbook,
+        )
+
+        extra = (query_result.meta or {}).get("extra") or {}
+        merge_result = extra.get("merge_result")
+        pack_id = str(extra.get("pack_id") or (payload.get("filters") or {}).get("pack_id") or "").strip()
+        year = extra.get("year")
+        month_from = extra.get("month_from")
+        month_to = extra.get("month_to")
+
+        if merge_result is None or not pack_id or year is None:
+            raise ValueError(
+                "Export licenciatarios requiere merge_result en meta.extra; ejecute el runner primero."
+            )
+
+        pack = MonthlyReportingPack.objects.get(pack_id=pack_id, active=True)
+        export_licenciatarios_workbook(
+            file_path,
+            pack=pack,
+            merge_result=merge_result,
+            year=int(year),
+            month_from=int(month_from or 1),
+            month_to=int(month_to or 12),
+        )
+        logger.info("Excel ventas-mensuales-licenciatarios (plantilla + QA): %s", file_path)
 
     def _generate_excel_bo(
         self, file_path: Path, report: ReportDefinition, query_result, payload: Optional[Dict] = None

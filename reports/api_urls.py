@@ -32,6 +32,11 @@ from .executive_summary_api_views import (
     SucursalCanalEjecutivoAPIView,
 )
 from .ventas_marcas_mensual_api_views import VentasMarcasMensualPresetAPIView
+from .ventas_mensuales_licenciatarios_api_views import (
+    LicenciatariosAnetClientsAPIView,
+    LicenciatariosClientMatchDetailAPIView,
+    LicenciatariosClientMatchesListAPIView,
+)
 from .executive_dashboard_api_views import (
     ExecutiveDashboardAPIView,
     ExecutiveDashboardAreasAPIView,
@@ -174,6 +179,21 @@ urlpatterns = [
         "ventas-marcas-mensual/preset-hombre/",
         VentasMarcasMensualPresetAPIView.as_view(),
         name="reports-vmm-preset-hombre",
+    ),
+    path(
+        "licenciatarios/client-matches/",
+        LicenciatariosClientMatchesListAPIView.as_view(),
+        name="reports-licenciatarios-client-matches",
+    ),
+    path(
+        "licenciatarios/client-matches/<int:match_id>/",
+        LicenciatariosClientMatchDetailAPIView.as_view(),
+        name="reports-licenciatarios-client-match-detail",
+    ),
+    path(
+        "licenciatarios/anet-clients/",
+        LicenciatariosAnetClientsAPIView.as_view(),
+        name="reports-licenciatarios-anet-clients",
     ),
     path(
         "executive-dashboard/ventas/resumen/",

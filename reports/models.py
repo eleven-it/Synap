@@ -828,3 +828,381 @@ class SucursalCanalEjecutivo(models.Model):
         return f"{self.empresa_id} Suc {self.id_sucursal} → {self.canal}"
 
 
+class MonthlyReportingPack(models.Model):
+    """Definición de pack Monthly Reporting (6 licenciatarios)."""
+
+    class UnitMode(models.TextChoices):
+        DOZENS = "dozens", _("Docenas")
+        PACKS = "packs", _("Packs")
+
+    class TemplateFamily(models.TextChoices):
+        LEVIS = "levis", _("Levi's")
+        LW = "lw", _("LW propia")
+        PUMA = "puma", _("Puma")
+
+    pack_id = models.SlugField(max_length=32, unique=True, verbose_name=_("Pack ID"))
+    codigo_salida = models.CharField(max_length=8, verbose_name=_("Código salida"))
+    marca_anet = models.CharField(max_length=8, verbose_name=_("Marca AdministraNET"))
+    product_group = models.CharField(max_length=64, verbose_name=_("Product group"))
+    template_family = models.CharField(
+        max_length=16,
+        choices=TemplateFamily.choices,
+        verbose_name=_("Familia plantilla"),
+    )
+    unit_mode = models.CharField(
+        max_length=16,
+        choices=UnitMode.choices,
+        verbose_name=_("Modo unidad"),
+    )
+    royalty_rate = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        verbose_name=_("Tasa regalía"),
+    )
+    config_version = models.PositiveIntegerField(default=1, verbose_name=_("Versión config"))
+    active = models.BooleanField(default=True, verbose_name=_("Activo"))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Creado"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Actualizado"))
+
+    class Meta:
+        verbose_name = _("Pack Monthly Reporting")
+        verbose_name_plural = _("Packs Monthly Reporting")
+        ordering = ("pack_id",)
+
+    def __str__(self) -> str:
+        return self.pack_id
+
+
+class MonthlyReportingImportBatch(models.Model):
+    """Lote de importación idempotente de planilla seed."""
+
+    class Estado(models.TextChoices):
+        PENDING = "pending", _("Pendiente")
+        APPLIED = "applied", _("Aplicado")
+        FAILED = "failed", _("Fallido")
+        DUPLICATE = "duplicate", _("Duplicado")
+
+    pack = models.ForeignKey(
+        MonthlyReportingPack,
+        on_delete=models.CASCADE,
+        related_name="import_batches",
+        verbose_name=_("Pack"),
+    )
+    file_name = models.CharField(max_length=255, verbose_name=_("Nombre archivo"))
+    file_size = models.PositiveBigIntegerField(default=0, verbose_name=_("Tamaño bytes"))
+    file_format = models.CharField(max_length=8, verbose_name=_("Formato"))
+    file_sha256 = models.CharField(max_length=64, verbose_name=_("SHA-256"))
+    replace_mode = models.BooleanField(default=False, verbose_name=_("Modo reemplazo"))
+    estado = models.CharField(
+        max_length=16,
+        choices=Estado.choices,
+        default=Estado.PENDING,
+        verbose_name=_("Estado"),
+    )
+    rows_created = models.PositiveIntegerField(default=0, verbose_name=_("Filas creadas"))
+    rows_updated = models.PositiveIntegerField(default=0, verbose_name=_("Filas actualizadas"))
+    rows_skipped = models.PositiveIntegerField(default=0, verbose_name=_("Filas omitidas"))
+    error_message = models.TextField(blank=True, default="", verbose_name=_("Error"))
+    actor_id_usuario = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("ID usuario legacy"),
+    )
+    actor_cod_usuario = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("Código usuario"),
+    )
+    actor_nombre = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name=_("Nombre actor"),
+    )
+    audit_json = models.JSONField(default=dict, blank=True, verbose_name=_("Auditoría"))
+    duplicate_of = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="duplicates",
+        verbose_name=_("Duplicado de"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Creado"))
+    applied_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Aplicado"))
+
+    class Meta:
+        verbose_name = _("Lote importación Monthly Reporting")
+        verbose_name_plural = _("Lotes importación Monthly Reporting")
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("pack", "file_sha256"),
+                condition=models.Q(estado="applied", duplicate_of__isnull=True),
+                name="reports_mr_batch_pack_sha_applied_uq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["pack", "file_sha256"], name="reports_mr_batch_sha_idx"),
+            models.Index(fields=["estado"], name="reports_mr_batch_estado_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.pack_id} {self.file_name} ({self.estado})"
+
+
+class MonthlyReportingClientMatch(models.Model):
+    """Vínculo auditable cliente histórico seed → cliente AdministraNET."""
+
+    class Estado(models.TextChoices):
+        PENDING = "pending", _("Pendiente")
+        MATCHED = "matched", _("Matcheado")
+
+    seed_key = models.CharField(max_length=128, unique=True, verbose_name=_("Clave seed"))
+    seed_customer_code = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("Código cliente seed"),
+    )
+    seed_customer_name = models.CharField(max_length=255, verbose_name=_("Nombre cliente seed"))
+    seed_city = models.CharField(max_length=128, blank=True, default="", verbose_name=_("Ciudad"))
+    seed_store_type = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        verbose_name=_("Tipo tienda"),
+    )
+    seed_product_group = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        verbose_name=_("Product group seed"),
+    )
+    seed_uf = models.CharField(max_length=64, blank=True, default="", verbose_name=_("UF"))
+    base_empresa = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        verbose_name=_("Base empresa"),
+    )
+    anet_cliente_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("ID cliente AdministraNET"),
+    )
+    estado = models.CharField(
+        max_length=16,
+        choices=Estado.choices,
+        default=Estado.PENDING,
+        verbose_name=_("Estado"),
+    )
+    actor_id_usuario = models.PositiveIntegerField(null=True, blank=True)
+    actor_cod_usuario = models.CharField(max_length=64, blank=True, default="")
+    actor_nombre = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Match cliente Monthly Reporting")
+        verbose_name_plural = _("Matches clientes Monthly Reporting")
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(estado="matched", anet_cliente_id__isnull=False)
+                    | models.Q(estado="pending", anet_cliente_id__isnull=True)
+                ),
+                name="reports_mr_match_estado_anet_chk",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["estado"], name="reports_mr_match_estado_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.seed_key} ({self.estado})"
+
+
+class MonthlyReportingClientMatchAudit(models.Model):
+    """Auditoría de cambios en match cliente."""
+
+    match = models.ForeignKey(
+        MonthlyReportingClientMatch,
+        on_delete=models.CASCADE,
+        related_name="audits",
+        verbose_name=_("Match"),
+    )
+    before_json = models.JSONField(default=dict, blank=True, verbose_name=_("Antes"))
+    after_json = models.JSONField(default=dict, blank=True, verbose_name=_("Después"))
+    actor_id_usuario = models.PositiveIntegerField(null=True, blank=True)
+    actor_cod_usuario = models.CharField(max_length=64, blank=True, default="")
+    actor_nombre = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Fecha"))
+
+    class Meta:
+        verbose_name = _("Auditoría match Monthly Reporting")
+        verbose_name_plural = _("Auditorías match Monthly Reporting")
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"Audit {self.match_id} @ {self.created_at}"
+
+
+class MonthlyReportingSeedRow(models.Model):
+    """Fila seed agregada pack×cliente×mes."""
+
+    pack = models.ForeignKey(
+        MonthlyReportingPack,
+        on_delete=models.CASCADE,
+        related_name="seed_rows",
+        verbose_name=_("Pack"),
+    )
+    match = models.ForeignKey(
+        MonthlyReportingClientMatch,
+        on_delete=models.CASCADE,
+        related_name="seed_rows",
+        verbose_name=_("Match cliente"),
+    )
+    month = models.DateField(verbose_name=_("Mes (día 1)"))
+    units = models.DecimalField(max_digits=20, decimal_places=6, default=0)
+    amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    units_men = models.DecimalField(max_digits=20, decimal_places=6, default=0)
+    units_women = models.DecimalField(max_digits=20, decimal_places=6, default=0)
+    amount_men = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    amount_women = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    city = models.CharField(max_length=128, blank=True, default="")
+    store_type = models.CharField(max_length=128, blank=True, default="")
+    uf = models.CharField(max_length=64, blank=True, default="")
+    batch = models.ForeignKey(
+        MonthlyReportingImportBatch,
+        on_delete=models.CASCADE,
+        related_name="seed_rows",
+        verbose_name=_("Lote"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Fila seed Monthly Reporting")
+        verbose_name_plural = _("Filas seed Monthly Reporting")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("pack", "match", "month"),
+                name="reports_mr_seed_pack_match_month_uq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["pack", "month"], name="reports_mr_seed_pack_month_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.pack_id} {self.match_id} {self.month}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.month and self.month.day != 1:
+            raise ValidationError({"month": "El mes debe ser el primer día del mes."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class MonthlyReportingSuperArtCatalogVersion(models.Model):
+    """Versión congelada del catálogo SuperArt Puma."""
+
+    class Estado(models.TextChoices):
+        DRAFT = "draft", _("Borrador")
+        ACTIVE = "active", _("Activa")
+        ARCHIVED = "archived", _("Archivada")
+
+    version = models.PositiveIntegerField(verbose_name=_("Versión"))
+    source_hash = models.CharField(max_length=64, blank=True, default="")
+    source_label = models.CharField(max_length=255, blank=True, default="")
+    estado = models.CharField(
+        max_length=16,
+        choices=Estado.choices,
+        default=Estado.DRAFT,
+        verbose_name=_("Estado"),
+    )
+    actor_id_usuario = models.PositiveIntegerField(null=True, blank=True)
+    actor_cod_usuario = models.CharField(max_length=64, blank=True, default="")
+    actor_nombre = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Versión catálogo SuperArt")
+        verbose_name_plural = _("Versiones catálogo SuperArt")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("version",),
+                name="reports_mr_superart_version_uq",
+            ),
+            models.UniqueConstraint(
+                fields=("estado",),
+                condition=models.Q(estado="active"),
+                name="reports_mr_superart_active_uq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"SuperArt v{self.version} ({self.estado})"
+
+
+class MonthlyReportingSuperArtCatalogEntry(models.Model):
+    """Entrada SuperArt → género Men/Women."""
+
+    class Genero(models.TextChoices):
+        MEN = "men", _("Men")
+        WOMEN = "women", _("Women")
+
+    version = models.ForeignKey(
+        MonthlyReportingSuperArtCatalogVersion,
+        on_delete=models.CASCADE,
+        related_name="entries",
+        verbose_name=_("Versión"),
+    )
+    superart = models.CharField(max_length=64, verbose_name=_("SuperArt"))
+    genero = models.CharField(max_length=8, choices=Genero.choices, verbose_name=_("Género"))
+
+    class Meta:
+        verbose_name = _("Entrada catálogo SuperArt")
+        verbose_name_plural = _("Entradas catálogo SuperArt")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("version", "superart"),
+                name="reports_mr_superart_entry_uq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.superart} → {self.genero}"
+
+
+class MonthlyReportingSuperArtQAPending(models.Model):
+    """SuperArt desconocido pendiente de clasificación."""
+
+    superart = models.CharField(max_length=64, unique=True, verbose_name=_("SuperArt"))
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    occurrence_count = models.PositiveIntegerField(default=1)
+    sample_json = models.JSONField(default=dict, blank=True)
+    resolved_version = models.ForeignKey(
+        MonthlyReportingSuperArtCatalogVersion,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="resolved_qa",
+        verbose_name=_("Versión resolución"),
+    )
+
+    class Meta:
+        verbose_name = _("SuperArt QA pendiente")
+        verbose_name_plural = _("SuperArt QA pendientes")
+
+    def __str__(self) -> str:
+        return self.superart
+
+
