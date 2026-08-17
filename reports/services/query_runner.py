@@ -217,6 +217,7 @@ class QueryRunnerService:
             'ventas-marca-superart',
             'ventas-bom-docenas',
             'ventas-mensuales-licenciatarios',
+            'inventario-deposito-articulo',
             'stock-existencias',
             'comprobantes-rutas',
             'mayoristapp-lista-comprobantes-rutas',  # compat. clientes que aún envían slug antiguo
@@ -352,6 +353,10 @@ class QueryRunnerService:
             )
 
             result = run_ventas_mensuales_licenciatarios(report, payload, self.user)
+        elif report.slug == "inventario-deposito-articulo":
+            from .inventario_deposito_runner import run_inventario_deposito
+
+            result = run_inventario_deposito(report, payload, self.user)
         elif report.slug == "stock-existencias":
             result = self._run_stock_existencias(report, payload)
         elif report.slug == "mpr-opt-atrasadas":

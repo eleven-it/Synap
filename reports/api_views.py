@@ -10,7 +10,14 @@ from rest_framework.views import APIView
 
 from .domain import build_catalog_for_user
 from .models import ReportDefinition, ReportWorkspace, ReportWidget, ReportDefinitionVersion, ReportTemplate
-from .permissions import OperationalReportsPermission, ManagerialReportsPermission, BuilderReportsPermission
+from .permissions import (
+    OperationalReportsPermission,
+    ManagerialReportsPermission,
+    BuilderReportsPermission,
+    InventarioDepositoCatalogPermission,
+    INVENTARIO_DEPOSITO_SLUG,
+    user_can_access_inventario_deposito,
+)
 from .services.semantic_service import SemanticService
 
 
@@ -80,7 +87,7 @@ class ReportCatalogAPIView(APIView):
 class ReportQueryAPIView(APIView):
     """API para ejecutar consultas de reportes."""
 
-    permission_classes = [OperationalReportsPermission | ManagerialReportsPermission]
+    permission_classes = [InventarioDepositoCatalogPermission]
 
     def post(self, request, *args, **kwargs):
         serializer = ReportQueryRequestSerializer(data=request.data)
@@ -88,9 +95,15 @@ class ReportQueryAPIView(APIView):
         payload = serializer.validated_data
 
         report = get_object_or_404(ReportDefinition, slug=payload["slug"], is_active=True)
-        if report.is_operational() and not OperationalReportsPermission().has_permission(request, self):
+        if report.slug == INVENTARIO_DEPOSITO_SLUG:
+            if not user_can_access_inventario_deposito(request.user):
+                return Response(
+                    {"detail": "Inventario por depósito no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.is_operational() and not OperationalReportsPermission().has_permission(request, self):
             return Response({"detail": "Operational reports not allowed."}, status=status.HTTP_403_FORBIDDEN)
-        if report.is_managerial() and not ManagerialReportsPermission().has_permission(request, self):
+        elif report.is_managerial() and not ManagerialReportsPermission().has_permission(request, self):
             return Response({"detail": "Managerial reports not allowed."}, status=status.HTTP_403_FORBIDDEN)
 
         # Agregar base_empresa al payload si está disponible en la sesión
@@ -398,7 +411,7 @@ class KPIAPIView(APIView):
 class ReportExportAPIView(APIView):
     """API para exportaciones PDF/XLSX."""
 
-    permission_classes = [OperationalReportsPermission | ManagerialReportsPermission]
+    permission_classes = [InventarioDepositoCatalogPermission]
 
     def post(self, request, *args, **kwargs):
         serializer = ReportQueryRequestSerializer(data=request.data)
@@ -407,9 +420,15 @@ class ReportExportAPIView(APIView):
         export_type = request.query_params.get("type", "xlsx")
 
         report = get_object_or_404(ReportDefinition, slug=payload["slug"], is_active=True)
-        if report.is_operational() and not OperationalReportsPermission().has_permission(request, self):
+        if report.slug == INVENTARIO_DEPOSITO_SLUG:
+            if not user_can_access_inventario_deposito(request.user):
+                return Response(
+                    {"detail": "Inventario por depósito no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.is_operational() and not OperationalReportsPermission().has_permission(request, self):
             return Response({"detail": "Operational reports not allowed."}, status=status.HTTP_403_FORBIDDEN)
-        if report.is_managerial() and not ManagerialReportsPermission().has_permission(request, self):
+        elif report.is_managerial() and not ManagerialReportsPermission().has_permission(request, self):
             return Response({"detail": "Managerial reports not allowed."}, status=status.HTTP_403_FORBIDDEN)
 
         try:

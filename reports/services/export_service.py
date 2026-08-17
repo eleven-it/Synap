@@ -185,6 +185,15 @@ class ExportService:
             nro = (filters.get("nro_comprobante_archivo") or "PRE").strip() or "PRE"
             return f"Presupuesto_{nro}_{timestamp}.xlsx"
 
+        if report_slug == "inventario-deposito-articulo":
+            filters = payload.get("filters") or {}
+            corte = filters.get("fecha_corte") or "hoy"
+            if hasattr(corte, "isoformat"):
+                corte = corte.isoformat()[:10]
+            else:
+                corte = str(corte).strip().replace("/", "")[:10] or "hoy"
+            return f"inventario_deposito_{corte}_{timestamp}.xlsx"
+
         if report_slug not in (
             "ventas-objetivos-vs-bo",
             "ventas-por-vendedor",
@@ -486,6 +495,9 @@ class ExportService:
             return
         if report.slug == "ventas-marcas-mensual":
             self._generate_excel_ventas_marcas_mensual(file_path, report, query_result, payload)
+            return
+        if report.slug == "inventario-deposito-articulo":
+            self._generate_excel_inventario_deposito(file_path, report, query_result, payload)
             return
         if report.slug == "bo-stock-facturacion":
             self._generate_excel_bo(file_path, report, query_result, payload)
@@ -1068,6 +1080,40 @@ class ExportService:
         # 5. Guardar archivo
         wb.save(file_path)
         logger.info(f"✅ Archivo Excel generado: {file_path}")
+
+
+    def _generate_excel_inventario_deposito(
+        self, file_path: Path, report: ReportDefinition, query_result, payload: Dict
+    ):
+        """Excel inventario por depósito (reutiliza export MPR)."""
+        from datetime import date, datetime
+
+        from reports.services.inventario_deposito_runner import (
+            generar_inventario_deposito_xlsx_archivo,
+        )
+
+        meta = query_result.meta or {}
+        totals = query_result.totals or {}
+        filas = query_result.data or []
+        total_docenas = float(totals.get("total_docenas") or 0)
+
+        fecha_corte = None
+        raw_fc = meta.get("fecha_corte")
+        if raw_fc:
+            try:
+                fecha_corte = datetime.strptime(str(raw_fc)[:10], "%Y-%m-%d").date()
+            except (TypeError, ValueError):
+                if isinstance(raw_fc, date):
+                    fecha_corte = raw_fc
+
+        generar_inventario_deposito_xlsx_archivo(
+            file_path,
+            filas,
+            total_docenas=total_docenas,
+            fecha_corte=fecha_corte,
+            titulo=report.name,
+        )
+        logger.info("Excel inventario-deposito-articulo: %s", file_path)
 
     def _generate_excel_ventas_marcas_mensual(
         self, file_path: Path, report: ReportDefinition, query_result, payload: Dict

@@ -40,6 +40,7 @@ _LEGACY_LISTADOS_SLUGS = frozenset(
         "ventas-bom-docenas",
         "evolucion-precios",
         "stock-existencias",
+        "inventario-deposito-articulo",
         "resumen-ejecutivo-ventas",
         "command-center-gerencial",
     }
