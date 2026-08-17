@@ -96,6 +96,7 @@ Ver evidencia en [VERIFY_INFORME_VENTAS_MENSUALES_LICENCIATARIOS.md](VERIFY_INFO
 | Modelos seed + importer idempotente | Hecho |
 | Merger cutover 21/22 + export plantilla | Hecho |
 | UI canónica + API match + modal Synap | Hecho |
+| Matriz cliente × mes en dashboard | Hecho (17/08/2026) |
 | Conciliación 6 planillas (dry-run) | Hecho |
 | Mapeo clientes Libro1 → ANET (15/15) | Cerrado 17/08/2026; aplicados en Postgres (`matched`) |
 | Planillas actualizadas (seed jul 1–21) | Importadas 17/08/2026 desde `Best Sox/Julio/reportesjul` (ene–jul en seed) |

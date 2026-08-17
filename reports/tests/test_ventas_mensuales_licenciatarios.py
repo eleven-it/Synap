@@ -1133,6 +1133,29 @@ class LicenciatariosUiContractTests(TestCase):
         self.assertNotIn("alert(", content)
         self.assertNotIn("confirm(", content)
 
+    def test_dashboard_incluye_contenedor_matriz(self):
+        tpl_path = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "dashboard_detail.html"
+        )
+        content = tpl_path.read_text(encoding="utf-8")
+        self.assertIn('id="vml-matriz-container"', content)
+
+    def test_js_pinta_matriz_cliente_mes(self):
+        js_path = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "reports"
+            / "js"
+            / "ventas_mensuales_licenciatarios.js"
+        )
+        content = js_path.read_text(encoding="utf-8")
+        self.assertIn("function renderMatriz", content)
+        self.assertIn("vml-matriz-container", content)
+        self.assertIn("pivotClientMonths", content)
+
     def test_modal_template_sin_dialogos_nativos(self):
         tpl_path = (
             Path(__file__).resolve().parents[1]
