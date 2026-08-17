@@ -74,7 +74,7 @@ UI canónica: patrones reports/MPR ([FUENTE_VERDAD_UI](../general/FUENTE_VERDAD_
 
 Layout del dashboard: la barra de navegación, el banner del informe y el resumen quedan fijos; el único scroll vertical es la matriz cliente × mes (`#vml-matriz-container`). El thead y la columna Cliente permanecen sticky dentro de esa región.
 
-Export Excel: el botón **Exportar Excel** del banner (junto a Actualizar) dispara `/api/reports/export/?type=xlsx` con `pack_id` y el rango calendario. Requiere pack seleccionado.
+Export Excel: el botón **Exportar Excel** del banner (junto a Actualizar) dispara `/api/reports/export/?type=xlsx` con `pack_id` y el rango calendario. Requiere pack seleccionado. El export vuelve a ejecutar el runner (sin caché) y toma `merge_result` desde `QueryResult.artifacts` (no desde `meta.extra`, que es solo JSON).
 
 ---
 

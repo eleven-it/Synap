@@ -120,6 +120,9 @@ class ExportService:
         run_payload = dict(payload)
         if report_slug == "ventas-marcas-mensual":
             run_payload["_export_detalle"] = True
+        if report_slug == "ventas-mensuales-licenciatarios":
+            # MergeResult vive en artifacts (no JSON); no usar caché que los descarta.
+            run_payload["_skip_report_cache"] = True
         query_result = query_service.run(report, run_payload)
         
         # Generar el archivo Excel
@@ -1291,7 +1294,9 @@ class ExportService:
         )
 
         extra = (query_result.meta or {}).get("extra") or {}
-        merge_result = extra.get("merge_result")
+        artifacts = getattr(query_result, "artifacts", None) or {}
+        # El runner guarda MergeResult en artifacts (no serializable en meta.extra).
+        merge_result = artifacts.get("merge_result") or extra.get("merge_result")
         pack_id = str(extra.get("pack_id") or (payload.get("filters") or {}).get("pack_id") or "").strip()
         year = extra.get("year")
         month_from = extra.get("month_from")
@@ -1299,7 +1304,8 @@ class ExportService:
 
         if merge_result is None or not pack_id or year is None:
             raise ValueError(
-                "Export licenciatarios requiere merge_result en meta.extra; ejecute el runner primero."
+                "Export licenciatarios requiere merge_result en artifacts; "
+                "verifique pack_id y rango de fechas del runner."
             )
 
         pack = MonthlyReportingPack.objects.get(pack_id=pack_id, active=True)
