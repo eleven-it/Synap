@@ -1,0 +1,7 @@
+# Mapeo pack → archivo seed (Julio / reportesjul) para import_monthly_reporting_seed.
+levis_bw=Monthly Reporting Best Sox_LEVIS BW 26.xlsx
+levis_lw_dz=Monthly Reporting Best Sox_LEVIS LW 26 DZ.xlsx
+levis_lw_pk=Monthly Reporting Best Sox_LEVIS LW 26 PK.xlsx
+lw_propia=Monthly Reporting Best Sox_LW 26.xlsx
+puma_bw=Monthly_Reporting _Best Sox_2026_BW_PUMA.xlsb
+puma_sw=Monthly_Reporting _Best Sox_2026_SW_PUMA.xlsb
