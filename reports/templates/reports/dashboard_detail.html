@@ -69,14 +69,56 @@
         min-width: 0;
         overflow-x: clip;
     }
+
+    /* VML: navbar + título + resumen fijos; solo scrollea la matriz. */
+    body:has(#vml-page) {
+        overflow: hidden;
+    }
+    body:has(#vml-page) > div.pt-14 {
+        height: 100dvh;
+        max-height: 100dvh;
+        min-height: 0;
+        padding-bottom: 2.25rem;
+        overflow: hidden;
+        display: flex;
+    }
+    body:has(#vml-page) .app-content {
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    body:has(#vml-page) .app-content > div {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        padding-top: 0.5rem;
+        padding-bottom: 0.25rem;
+    }
+    #vml-page #report-summary {
+        flex-shrink: 0;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+    }
+    #vml-page [data-filters-wrapper] {
+        flex-shrink: 0;
+        overflow-y: auto;
+        max-height: 40vh;
+    }
+    #vml-page #dashboard-root {
+        overflow: hidden;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
-    <div class="relative overflow-hidden">
+<section {% if report.slug == 'ventas-mensuales-licenciatarios' %}id="vml-page"{% endif %}
+         class="{% if report.slug == 'ventas-mensuales-licenciatarios' %}flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950{% else %}min-h-screen bg-slate-50 dark:bg-slate-950 pb-24{% endif %}">
+    <div class="relative overflow-hidden{% if report.slug == 'ventas-mensuales-licenciatarios' %} shrink-0{% endif %}">
         <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-90 dark:opacity-95"></div>
-        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+        <div class="relative w-full px-4 sm:px-6 lg:px-12 {% if report.slug == 'ventas-mensuales-licenciatarios' %}py-3{% else %}py-8{% endif %}">
             <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div>
                     <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 dark:text-slate-400 font-semibold mb-2">
@@ -95,7 +137,7 @@
                         </svg>
                         <span class="hidden sm:inline">Actualizar</span>
                     </button>
-                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-bom-docenas' or report.slug == 'ventas-marcas-mensual' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
+                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-bom-docenas' or report.slug == 'ventas-marcas-mensual' or report.slug == 'ventas-mensuales-licenciatarios' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
                     <button type="button"
                             data-export-excel
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
@@ -143,10 +185,12 @@
         </div>
     </div>
 
+    {% if report.slug != 'ventas-mensuales-licenciatarios' %}
     <br><br><br>
+    {% endif %}
 
-    <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-10">
-        <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow">
+    <div class="relative w-full px-4 sm:px-6 lg:px-12 {% if report.slug == 'ventas-mensuales-licenciatarios' %}flex min-h-0 flex-1 flex-col overflow-hidden pt-2{% else %}-mt-10{% endif %}">
+        <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow{% if report.slug == 'ventas-mensuales-licenciatarios' %} flex min-h-0 flex-1 flex-col{% endif %}">
             <div id="report-summary" data-summary-container class="px-6 sm:px-10 py-6 border-b border-slate-100 dark:border-slate-800 {% if is_declarative %}{% else %}hidden{% endif %}">
                 <div class="flex flex-row flex-wrap justify-between items-center gap-2 mb-4">
                     <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-100 uppercase tracking-wide">
@@ -373,7 +417,7 @@
                 </form>
             </div>
 
-            <div class="p-6 sm:p-10" id="dashboard-root"
+            <div class="{% if report.slug == 'ventas-mensuales-licenciatarios' %}flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4{% else %}p-6 sm:p-10{% endif %}" id="dashboard-root"
                  data-dashboard-url="{{ dashboard_api_url }}"
                  data-report-slug="{{ report.slug }}"
                  data-report-refresh-interval="{{ report.refresh_interval }}"
@@ -889,7 +933,7 @@
                 {% endif %}
 
                 {% if report.slug == 'ventas-mensuales-licenciatarios' %}
-                <div class="mt-4 mb-2 flex flex-row flex-wrap justify-between items-start gap-2">
+                <div class="mb-1 flex shrink-0 flex-row flex-wrap items-start justify-between gap-2">
                     <div class="flex flex-col gap-0.5">
                         <p id="vml-summary-period" class="text-sm text-slate-600 dark:text-slate-400 m-0"></p>
                         <section id="vml-qa-panel" class="hidden mt-2 rounded-xl border border-amber-200/80 dark:border-amber-800/80 bg-amber-50/60 dark:bg-amber-950/30 p-3" aria-label="Estado QA match">
@@ -898,20 +942,20 @@
                                 Pendientes match: <span id="vml-qa-pending-count" class="font-bold tabular-nums">0</span>
                                 · SuperArt desconocidos: <span id="vml-qa-superart-count" class="font-bold tabular-nums">0</span>
                             </p>
-                            <ul id="vml-qa-pending-list" class="mt-2 pl-4 list-disc text-[11px] text-amber-900 dark:text-amber-100 space-y-0.5"></ul>
+                            <ul id="vml-qa-pending-list" class="mt-2 max-h-24 overflow-y-auto pl-4 list-disc text-[11px] text-amber-900 dark:text-amber-100 space-y-0.5"></ul>
                         </section>
                     </div>
                 </div>
-                <section class="mt-1 flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/40">
+                <section class="mt-1 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/40">
                         <label for="vml-matriz-search" class="text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Buscar cliente</label>
                         <input type="search" id="vml-matriz-search" autocomplete="off"
                                class="min-h-[44px] min-w-[12rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                                placeholder="Nombre o código…"
                                aria-label="Filtrar clientes de la matriz">
                     </div>
-                    <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 lg:hidden">Deslizá horizontalmente para ver todos los meses.</p>
-                    <div class="relative h-[min(75vh,56rem)] min-h-[14rem]">
+                    <p class="shrink-0 border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 lg:hidden">Deslizá horizontalmente para ver todos los meses.</p>
+                    <div class="relative min-h-0 flex-1">
                         <div class="h-full overflow-auto overscroll-contain" id="vml-matriz-container" role="region" aria-label="Matriz cliente por mes">
                             <p class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">Cargando matriz…</p>
                         </div>
@@ -5243,7 +5287,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 {% else %}
 <script src="{% static 'reports/js/reports_responsive.js' %}?v=20260602b" defer></script>
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260817a"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260817c"></script>
 {% if report.slug == 'comprobantes-rutas' %}
 <script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260430b" defer></script>
 {% endif %}

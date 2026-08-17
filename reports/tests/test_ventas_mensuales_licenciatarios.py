@@ -46,6 +46,7 @@ from reports.services.ventas_mensuales_licenciatarios_export import (
     SHEET_MONTHLY,
     SHEET_OOH,
     SHEET_SALES,
+    _write_levis_sales_sheet,
     export_licenciatarios_workbook,
     resolve_template_path,
 )
@@ -121,7 +122,7 @@ def _build_levis_seed_xlsx(
     ws = wb.active
     ws.title = "input Licensee sales"
     ws.cell(row=4, column=1, value="Customer")
-    ws.cell(row=4, column=2, value="City")
+    ws.cell(row=4, column=2, value="City / Province")
     ws.cell(row=4, column=3, value="Store Type")
     ws.cell(row=4, column=4, value="Product group")
     ws.cell(row=4, column=5, value=date(2026, 1, 1))
@@ -147,6 +148,48 @@ class VentasMensualesLicenciatariosStubTest(SimpleTestCase):
         with self.assertRaises(ValueError) as ctx:
             validate_calendar_year_range("2025-10-01", "2026-02-15")
         self.assertIn("mismo año calendario", str(ctx.exception).lower())
+
+
+class LicenciatariosExportLayoutSimpleTests(SimpleTestCase):
+    """Formato plantilla Levi’s: encabezados en inglés, city/store/group del seed, totales fila 2."""
+
+    def test_sales_headers_ingles_city_y_sum_fila_2(self):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = SHEET_SALES
+        rows = [
+            MergedClientMonth(
+                identity="seed:demo",
+                display_name="LEURU S.A",
+                match_estado="matched",
+                month=date(2026, 1, 1),
+                units=Decimal("12"),
+                amount=Decimal("1500.50"),
+                city="Cap Fed",
+                store_type="Multibrand",
+                product_group="Bodywear",
+            )
+        ]
+        _write_levis_sales_sheet(
+            ws,
+            rows=rows,
+            year=2026,
+            month_from=1,
+            month_to=12,
+            product_group="Bodywear",
+        )
+        self.assertEqual(ws.cell(row=4, column=1).value, "Customer")
+        self.assertEqual(ws.cell(row=4, column=2).value, "City / Province")
+        self.assertEqual(ws.cell(row=4, column=3).value, "Store Type")
+        self.assertEqual(ws.cell(row=4, column=4).value, "Product group")
+        self.assertEqual(ws.cell(row=5, column=2).value, "Cap Fed")
+        self.assertEqual(ws.cell(row=5, column=3).value, "Multibrand")
+        self.assertEqual(ws.cell(row=5, column=4).value, "Bodywear")
+        self.assertEqual(ws.cell(row=2, column=5).value, "=SUM(E5:E4931)")
+        self.assertEqual(ws.cell(row=2, column=6).value, "=SUM(F5:F4931)")
+        self.assertEqual(ws.cell(row=4, column=29).value, "YTD_Units")
+        self.assertEqual(ws.cell(row=4, column=30).value, "YTD_Sales")
+        self.assertTrue(str(ws.cell(row=5, column=29).value or "").startswith("=AA5+"))
 
 
 class MonthlyReportingModelConstraintTests(TestCase):
@@ -903,6 +946,9 @@ class VentasMensualesLicenciatariosExportTests(TestCase):
                     amount=Decimal("100"),
                     source="seed",
                     pending=True,
+                    city="Rosario",
+                    store_type="Store",
+                    product_group="Bodywear",
                 )
             ]
             self.merge_result.ytd_by_identity = compute_ytd(self.merge_result.rows)
@@ -968,10 +1014,21 @@ class VentasMensualesLicenciatariosExportTests(TestCase):
                 month_from=1,
                 month_to=3,
             )
-            wb = openpyxl.load_workbook(out, data_only=True)
+            wb = openpyxl.load_workbook(out)
             sales = wb[SHEET_SALES]
             self.assertEqual(sales.cell(row=5, column=1).value, "Export Cliente")
+            self.assertEqual(sales.cell(row=4, column=2).value, "City / Province")
+            self.assertEqual(sales.cell(row=4, column=3).value, "Store Type")
+            self.assertEqual(sales.cell(row=4, column=4).value, "Product group")
+            self.assertEqual(sales.cell(row=5, column=2).value, "Rosario")
+            self.assertEqual(sales.cell(row=5, column=3).value, "Store")
+            self.assertEqual(sales.cell(row=5, column=4).value, "Bodywear")
             self.assertEqual(float(sales.cell(row=5, column=5).value or 0), 10.0)
+            self.assertTrue(str(sales.cell(row=2, column=5).value or "").startswith("=SUM(E5:"))
+            self.assertTrue(str(sales.cell(row=2, column=6).value or "").startswith("=SUM(F5:"))
+            monthly = wb[SHEET_MONTHLY]
+            self.assertNotIn("Unidades YTD", str(monthly["C20"].value or ""))
+            self.assertIn("input Licensee sales", str(monthly["D4"].value or ""))
             qa = wb[QA_SHEET]
             self.assertEqual(qa.cell(row=2, column=1).value, "ART-X")
             self.assertIn("pending", str(qa.cell(row=3, column=4).value).lower())
@@ -1142,6 +1199,25 @@ class LicenciatariosUiContractTests(TestCase):
         )
         content = tpl_path.read_text(encoding="utf-8")
         self.assertIn('id="vml-matriz-container"', content)
+        self.assertIn('id="vml-page"', content)
+        self.assertIn("body:has(#vml-page)", content)
+        vml_idx = content.find('id="vml-matriz-container"')
+        window = content[max(0, vml_idx - 500) : vml_idx]
+        self.assertIn("min-h-0 flex-1", window)
+        self.assertNotIn("h-[min(75vh,56rem)]", window)
+
+    def test_dashboard_incluye_boton_exportar_excel(self):
+        tpl_path = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "dashboard_detail.html"
+        )
+        content = tpl_path.read_text(encoding="utf-8")
+        export_idx = content.find("data-export-excel")
+        self.assertGreater(export_idx, 0)
+        pre = content[max(0, export_idx - 900) : export_idx]
+        self.assertIn("ventas-mensuales-licenciatarios", pre)
 
     def test_js_pinta_matriz_cliente_mes(self):
         js_path = (
@@ -1155,6 +1231,19 @@ class LicenciatariosUiContractTests(TestCase):
         self.assertIn("function renderMatriz", content)
         self.assertIn("vml-matriz-container", content)
         self.assertIn("pivotClientMonths", content)
+
+    def test_dashboard_js_exporta_vml_con_pack_obligatorio(self):
+        js_path = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "reports"
+            / "js"
+            / "dashboard.js"
+        )
+        content = js_path.read_text(encoding="utf-8")
+        self.assertIn('reportSlug === "ventas-mensuales-licenciatarios"', content)
+        self.assertIn("Seleccioná un pack licenciatario antes de exportar.", content)
+        self.assertIn("vml_pack_id", content)
 
     def test_modal_template_sin_dialogos_nativos(self):
         tpl_path = (

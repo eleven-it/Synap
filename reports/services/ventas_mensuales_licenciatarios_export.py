@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List
 
 import openpyxl
+from openpyxl.utils import get_column_letter
 
 from core.utils.administranet_types import str_or_default
 from reports.models import MonthlyReportingPack
@@ -27,7 +27,13 @@ SHEET_MINIMUM = "minimum agreed"
 QA_SHEET = "QA"
 
 QA_HEADERS = ("SuperArt / tipo", "Detalle", "Cliente", "Estado match")
-SALES_HEADERS_LEVIS = ("Customer", "City", "Store Type", "Product group")
+SALES_HEADERS_LEVIS = ("Customer", "City / Province", "Store Type", "Product group")
+YTD_UNITS_HEADER = "YTD_Units"
+YTD_SALES_HEADER = "YTD_Sales"
+SUM_LAST_ROW = 4931
+UNITS_FORMAT = "#,##0"
+AMOUNTS_FORMAT = '"$"#,##0.00'
+MONTH_DATE_FORMAT = "mmm-yy"
 
 
 def resolve_template_path(pack_id: str) -> Path:
@@ -35,13 +41,21 @@ def resolve_template_path(pack_id: str) -> Path:
     return TEMPLATE_DIR / filename
 
 
-def _month_columns(month_from: int, month_to: int, year: int) -> List[tuple[int, date]]:
+def _month_columns(year: int) -> List[tuple[int, date]]:
+    """Enero siempre en columna E (5), 12 pares units|amounts — mismo eje que la plantilla Levi’s."""
     cols: List[tuple[int, date]] = []
     col = 5
-    for month in range(month_from, month_to + 1):
+    for month in range(1, 13):
         cols.append((col, date(year, month, 1)))
         col += 2
     return cols
+
+
+def _write_row2_sums(ws, columns: Iterable[int]) -> None:
+    for col_idx in columns:
+        letter = get_column_letter(col_idx)
+        cell = ws.cell(row=2, column=col_idx)
+        cell.value = f"=SUM({letter}5:{letter}{SUM_LAST_ROW})"
 
 
 def _client_meta_from_rows(rows: Iterable[MergedClientMonth]) -> Dict[str, dict]:
@@ -61,6 +75,12 @@ def _client_meta_from_rows(rows: Iterable[MergedClientMonth]) -> Dict[str, dict]
         bucket["display_name"] = row.display_name
         bucket["match_estado"] = row.match_estado
         bucket["pending"] = row.pending
+        if row.city:
+            bucket["city"] = row.city
+        if row.store_type:
+            bucket["store_type"] = row.store_type
+        if row.product_group:
+            bucket["product_group"] = row.product_group
     return meta
 
 
@@ -73,13 +93,18 @@ def _write_levis_sales_sheet(
     month_to: int,
     product_group: str,
 ) -> None:
-    month_cols = _month_columns(month_from, month_to, year)
+    month_cols = _month_columns(year)
     for idx, label in enumerate(SALES_HEADERS_LEVIS, start=1):
         ws.cell(row=4, column=idx, value=label)
+    ytd_units_col = 29
+    ytd_sales_col = 30
+    ws.cell(row=4, column=ytd_units_col, value=YTD_UNITS_HEADER)
+    ws.cell(row=4, column=ytd_sales_col, value=YTD_SALES_HEADER)
     for col_idx, month_date in month_cols:
-        ws.cell(row=4, column=col_idx, value=month_date)
-    ws.cell(row=3, column=5, value="units")
-    ws.cell(row=3, column=6, value="amounts")
+        month_cell = ws.cell(row=4, column=col_idx, value=month_date)
+        month_cell.number_format = MONTH_DATE_FORMAT
+        ws.cell(row=3, column=col_idx, value="units")
+        ws.cell(row=3, column=col_idx + 1, value="amounts")
 
     by_client: dict[str, dict[date, MergedClientMonth]] = defaultdict(dict)
     client_meta = _client_meta_from_rows(rows)
@@ -87,6 +112,11 @@ def _write_levis_sales_sheet(
         by_client[row.identity][row.month] = row
 
     excel_row = 5
+    unit_letters = [get_column_letter(col_idx) for col_idx, _ in month_cols]
+    amount_letters = [get_column_letter(col_idx + 1) for col_idx, _ in month_cols]
+    ytd_units_formula_tpl = "=" + "+".join(f"{letter}{{row}}" for letter in reversed(unit_letters))
+    ytd_sales_formula_tpl = "=" + "+".join(f"{letter}{{row}}" for letter in reversed(amount_letters))
+
     for identity, months_map in sorted(
         by_client.items(),
         key=lambda item: client_meta[item[0]]["display_name"].upper(),
@@ -95,40 +125,47 @@ def _write_levis_sales_sheet(
         ws.cell(row=excel_row, column=1, value=meta["display_name"])
         ws.cell(row=excel_row, column=2, value=meta.get("city") or "")
         ws.cell(row=excel_row, column=3, value=meta.get("store_type") or "")
-        ws.cell(row=excel_row, column=4, value=meta.get("product_group") or product_group)
+        ws.cell(
+            row=excel_row,
+            column=4,
+            value=meta.get("product_group") or product_group,
+        )
         for col_idx, month_date in month_cols:
+            if month_date.month < month_from or month_date.month > month_to:
+                continue
             cell = months_map.get(month_date)
             if cell is None:
                 continue
-            ws.cell(row=excel_row, column=col_idx, value=float(cell.units))
-            ws.cell(row=excel_row, column=col_idx + 1, value=float(cell.amount))
-        excel_row += 1
-
-
-def _write_monthly_ytd(
-    ws,
-    *,
-    merge_result: MergeResult,
-    year: int,
-    month_to: int,
-) -> None:
-    """Recalcula YTD acumulado en hoja monthly (columna auxiliar)."""
-    ws["B2"] = "Best Sox"
-    ws["A20"] = "YTD recalculado Synap"
-    ws["B20"] = "Cliente"
-    ws["C20"] = "Unidades YTD"
-    ws["D20"] = "Facturación YTD"
-    excel_row = 21
-    for identity, bucket in sorted(merge_result.ytd_by_identity.items()):
-        display = next(
-            (r.display_name for r in merge_result.rows if r.identity == identity),
-            identity,
+            units_cell = ws.cell(row=excel_row, column=col_idx, value=float(cell.units))
+            units_cell.number_format = UNITS_FORMAT
+            amount_cell = ws.cell(row=excel_row, column=col_idx + 1, value=float(cell.amount))
+            amount_cell.number_format = AMOUNTS_FORMAT
+        ws.cell(
+            row=excel_row,
+            column=ytd_units_col,
+            value=ytd_units_formula_tpl.format(row=excel_row),
         )
-        ws.cell(row=excel_row, column=2, value=display)
-        ws.cell(row=excel_row, column=3, value=float(bucket.get("units", 0)))
-        ws.cell(row=excel_row, column=4, value=float(bucket.get("amount", 0)))
+        ws.cell(
+            row=excel_row,
+            column=ytd_sales_col,
+            value=ytd_sales_formula_tpl.format(row=excel_row),
+        )
         excel_row += 1
-    ws["A19"] = f"FY {year} hasta mes {month_to:02d}"
+
+    if ws.max_row >= excel_row:
+        ws.delete_rows(excel_row, ws.max_row - excel_row + 1)
+
+    sum_cols = [col for col_idx, _ in month_cols for col in (col_idx, col_idx + 1)]
+    sum_cols.extend([ytd_units_col, ytd_sales_col])
+    _write_row2_sums(ws, sum_cols)
+
+
+def _ensure_monthly_links_row2(ws) -> None:
+    """La hoja monthly lee totales de la fila 2 de input Licensee sales. No volcar YTD en español."""
+    if not ws["B2"].value:
+        ws["B2"] = "Best Sox"
+    if not ws["D4"].value:
+        ws["D4"] = "='input Licensee sales'!E2"
 
 
 def _write_qa_sheet(
@@ -189,12 +226,7 @@ def export_licenciatarios_workbook(
     )
 
     if SHEET_MONTHLY in wb.sheetnames:
-        _write_monthly_ytd(
-            wb[SHEET_MONTHLY],
-            merge_result=merge_result,
-            year=year,
-            month_to=month_to,
-        )
+        _ensure_monthly_links_row2(wb[SHEET_MONTHLY])
 
     _write_qa_sheet(wb, merge_result=merge_result)
 
