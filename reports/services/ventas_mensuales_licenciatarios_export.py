@@ -41,6 +41,19 @@ def resolve_template_path(pack_id: str) -> Path:
     return TEMPLATE_DIR / filename
 
 
+def ensure_template_path(pack_id: str) -> Path:
+    """Devuelve la plantilla del pack; si falta en disco, regenera las 6 plantillas mínimas."""
+    path = resolve_template_path(pack_id)
+    if path.exists():
+        return path
+    from reports.services.monthly_reporting_template_builder import build_all_templates
+
+    build_all_templates(TEMPLATE_DIR)
+    if not path.exists():
+        raise FileNotFoundError(f"Plantilla no encontrada tras regenerar: {path}")
+    return path
+
+
 def _month_columns(year: int) -> List[tuple[int, date]]:
     """Enero siempre en columna E (5), 12 pares units|amounts — mismo eje que la plantilla Levi’s."""
     cols: List[tuple[int, date]] = []
@@ -206,9 +219,7 @@ def export_licenciatarios_workbook(
     """
     Clona plantilla anual, reescribe ventas/mensual, conserva hojas auxiliares y agrega QA.
     """
-    template_path = resolve_template_path(pack.pack_id)
-    if not template_path.exists():
-        raise FileNotFoundError(f"Plantilla no encontrada: {template_path}")
+    template_path = ensure_template_path(pack.pack_id)
 
     wb = openpyxl.load_workbook(template_path)
     preserved = {SHEET_OOH, SHEET_MINIMUM} & set(wb.sheetnames)
