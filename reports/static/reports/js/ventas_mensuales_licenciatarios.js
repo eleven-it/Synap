@@ -203,7 +203,33 @@
       html += `<td class="px-1.5 py-1.5 text-right tabular-nums font-semibold text-emerald-900 dark:text-emerald-100">${ARS.format(fila.totF)}</td>`;
       html += "</tr>";
     });
-    html += "</tbody></table>";
+    html += "</tbody>";
+    const colTot = { totU: 0, totF: 0, months: {} };
+    meses.forEach((ym) => {
+      colTot.months[ym] = { u: 0, f: 0 };
+    });
+    visible.forEach((fila) => {
+      colTot.totU += fila.totU;
+      colTot.totF += fila.totF;
+      meses.forEach((ym) => {
+        const cell = fila.months[ym] || { u: 0, f: 0 };
+        colTot.months[ym].u += cell.u;
+        colTot.months[ym].f += cell.f;
+      });
+    });
+    const stickyTot =
+      "sticky left-0 z-[5] bg-slate-200/95 dark:bg-slate-700/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
+    html += '<tfoot class="sticky bottom-0 z-[6]"><tr class="bg-slate-200/95 dark:bg-slate-700/95 font-bold border-t-2 border-slate-300 dark:border-slate-600">';
+    html += `<th scope="row" class="px-2 py-2 text-left text-[10px] uppercase tracking-wide text-slate-800 dark:text-slate-100 ${stickyTot}">Totales</th>`;
+    meses.forEach((ym) => {
+      const cell = colTot.months[ym];
+      const empty = !cell.u && !cell.f;
+      html += `<td class="px-1.5 py-2 text-right tabular-nums border-l border-slate-300/60 dark:border-slate-600 text-slate-800 dark:text-slate-100">${empty ? "—" : NUM.format(cell.u)}</td>`;
+      html += `<td class="px-1.5 py-2 text-right tabular-nums text-emerald-900 dark:text-emerald-100">${empty ? "—" : ARS.format(cell.f)}</td>`;
+    });
+    html += `<td class="px-1.5 py-2 text-right tabular-nums border-l border-emerald-400/80 dark:border-emerald-700 text-slate-900 dark:text-slate-50">${NUM.format(colTot.totU)}</td>`;
+    html += `<td class="px-1.5 py-2 text-right tabular-nums text-emerald-950 dark:text-emerald-50">${ARS.format(colTot.totF)}</td>`;
+    html += "</tr></tfoot></table>";
     container.innerHTML = html;
   }
 

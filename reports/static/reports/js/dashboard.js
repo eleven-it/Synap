@@ -4200,6 +4200,15 @@ const renderSummary = (meta, totals) => {
     return;
   }
 
+
+  // ventas-mensuales-licenciatarios: sin KPIs; totales en fila pie de matriz
+  if (isVentasMensualesLicenciatariosSlug(reportSlug)) {
+    summaryGrid.innerHTML = "";
+    if (summaryContainer) summaryContainer.classList.add("hidden");
+    updateLastUpdateTime();
+    return;
+  }
+
   // cash_flow_detailed_movements: totales en tabla; resumen solo período en el panel
   if (reportSlug === "cash_flow_detailed_movements") {
     summaryGrid.innerHTML = "";
@@ -10128,11 +10137,15 @@ if (dashboardRoot) {
       // Pequeño delay para suavizar la transición
       setTimeout(() => {
         const currentReportSlug = dashboardRoot?.dataset?.reportSlug;
-        // La matriz VMM tiene sus propios KPIs. Evitar que el resumen genérico
-        // pueda fallar antes de que su handler procese la respuesta y cierre
-        // el modal de carga.
-        if (!isVentasMarcasMensualSlug(currentReportSlug)) {
+        // VMM/VML: sin resumen genérico (VMM tiene KPIs propios; VML usa fila Totales en matriz).
+        if (
+          !isVentasMarcasMensualSlug(currentReportSlug) &&
+          !isVentasMensualesLicenciatariosSlug(currentReportSlug)
+        ) {
           renderSummary(payload.meta || {}, payload.totals || {});
+        } else if (isVentasMensualesLicenciatariosSlug(currentReportSlug)) {
+          const summaryContainer = document.querySelector("[data-summary-container]");
+          if (summaryContainer) summaryContainer.classList.add("hidden");
         }
         let hasErrorNote = false;
         
