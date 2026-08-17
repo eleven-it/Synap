@@ -131,8 +131,15 @@ class ReportQueryAPIView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             
-            # Para reportes declarativos, incluir schema y query_result en la respuesta
-            response_data = ReportQueryResponseSerializer(result.__dict__).data
+            # Solo campos serializables (artifacts puede contener objetos no-JSON).
+            response_data = ReportQueryResponseSerializer(
+                {
+                    "meta": result.meta,
+                    "data": result.data,
+                    "totals": result.totals,
+                    "notes": result.notes,
+                }
+            ).data
             
             # Verificar si es un reporte declarativo
             config = report.config or {}
