@@ -76,7 +76,7 @@ Colores theme 3 + tint ≈ gris-azul claro Office; el amarillo del título es RG
 
 | Zona | Formato |
 |------|--------|
-| Headers A4:D4 + meses | **Tahoma 10** bold; fill theme 3 |
+| Headers A4:D4 + meses | **Tahoma 10** bold; fill theme 3. Textos: `Customer`, **`City / Province`**, `Store Type`, `Product group` |
 | Meses E4, G4, … | Date serial; format **`mmm-yy`**; merge con columna amounts (`E4:F4`, …) |
 | Subfila R3 | `units` / `amounts` alternados |
 | Unidades | `#,##0` (a veces `0.0` / decimales en DZ) |

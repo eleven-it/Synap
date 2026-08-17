@@ -7,6 +7,7 @@ from pathlib import Path
 
 import openpyxl
 from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 
 from reports.services.monthly_reporting_pack_seed import (
     MONTHLY_REPORTING_PACK_DEFINITIONS,
@@ -26,12 +27,22 @@ def _build_template(pack_id: str, product_group: str, unit_mode: str, royalty_ra
     wb = openpyxl.Workbook()
     sales = wb.active
     sales.title = "input Licensee sales"
-    headers = ["Customer", "City", "Store Type", "Product group"]
+    headers = ["Customer", "City / Province", "Store Type", "Product group"]
     for idx, label in enumerate(headers, start=1):
         sales.cell(row=4, column=idx, value=label).font = Font(bold=True)
-    sales.cell(row=4, column=5, value=datetime(2026, 1, 1))
-    sales.cell(row=3, column=5, value="units")
-    sales.cell(row=3, column=6, value="amounts")
+    for month in range(1, 13):
+        col = 3 + (month * 2)
+        month_cell = sales.cell(row=4, column=col, value=datetime(2026, month, 1))
+        month_cell.number_format = "mmm-yy"
+        sales.cell(row=3, column=col, value="units")
+        sales.cell(row=3, column=col + 1, value="amounts")
+        for offset in (0, 1):
+            letter = get_column_letter(col + offset)
+            sales.cell(row=2, column=col + offset, value=f"=SUM({letter}5:{letter}4931)")
+    sales.cell(row=4, column=29, value="YTD_Units")
+    sales.cell(row=4, column=30, value="YTD_Sales")
+    sales["AC2"] = "=SUM(AC5:AC4931)"
+    sales["AD2"] = "=SUM(AD5:AD4931)"
 
     monthly = wb.create_sheet("monthly")
     monthly["B2"] = "Best Sox"

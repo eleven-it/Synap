@@ -109,14 +109,12 @@ Puede comparar dos marcas (A y B) en el mismo período: KPIs y matriz con valore
 
 Preparar el **Monthly Reporting** que Best Sox envía a licenciatarios (Levi’s Bodywear/Legwear, LW propia, Puma, etc.): mismas hojas de negocio (`input Licensee sales`, `monthly`, regalía), no la matriz interna de §2.
 
-### Estado actual (fase 0)
+### Cómo usarlo
 
-El informe **ya figura en el catálogo** y abre el dashboard, pero la consulta aún responde **«en construcción»** (sin grilla ni export de plantilla). Las próximas fases cargarán:
-
-1. **Seed** desde los Excel ya enviados (ene–jun congelados; julio 01–21 cuando lleguen las planillas actualizadas).
-2. **AdministraNET** solo desde el **22/07/2026** en adelante.
-3. **Julio total** = seed (01–21) + AdministraNET (22–31).
-4. Export Excel con el formato de plantilla de cada pack.
+1. Abra el informe desde Reports.
+2. Pulse **Mostrar filtros**, elija **pack** y rango (mismo año calendario).
+3. Pulse **Actualizar**.
+4. En el banner, pulse **Exportar Excel** (icono de descarga, junto a Actualizar). El archivo usa la plantilla del pack (`input Licensee sales`, `monthly`, hoja QA).
 
 ### Packs previstos
 
@@ -132,7 +130,9 @@ El informe **ya figura en el catálogo** y abre el dashboard, pero la consulta a
 ### Qué no confundir
 
 - Use **Ventas marcas mensual** para análisis diario/mensual interno y regalías estimadas en Synap.
-- Use **este informe** (cuando esté operativo) para regenerar el archivo que se envía a la marca, con continuidad YTD tras el corte a AdministraNET.
+- Use **este informe** para regenerar el archivo que se envía a la marca, con continuidad YTD tras el corte a AdministraNET.
+
+Los **importes AdministraNET** (desde el 22/07/2026) incluyen el **descuento al pie de factura**, igual que Ventas marcas mensual. El histórico importado del Excel enviado no se recalcula.
 
 ---
 
@@ -169,12 +169,12 @@ Ver ventas del período agrupadas por **Marca → SuperArt → Artículo**, con 
 1. Abra **Ventas marcas mensual**, filtre marca/período y revise la matriz.
 2. Ajuste tasa de regalía y TC si el escenario lo pide.
 3. Exporte Matriz/Detalle para compartir internamente.
-4. No use aún Licenciatarios para envíos reales (fase 0).
+4. Use **Ventas Mensuales Licenciatarios** para el archivo que se envía a la marca.
 
 ### Gerencia / licencias
 
 1. KPIs de regalías y regalías/TC en VMM para seguimiento interno.
-2. Cuando VML esté listo: elegir pack, período y exportar plantilla Monthly Reporting.
+2. En **Ventas Mensuales Licenciatarios**: elegir pack, período y **Exportar Excel** (plantilla Monthly Reporting).
 
 ### Administrador / operaciones
 

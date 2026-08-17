@@ -79,10 +79,11 @@ docker exec Synap_app python manage.py reconcile_monthly_reporting_seed \
 1. Abrir `/reports/dashboard/ventas-mensuales-licenciatarios/`
 2. Elegir pack + rango 01/01/2026–31/12/2026 (mismo año) → Actualizar
 3. Verificar **matriz cliente × mes** (unidades + monto) debajo del resumen; no solo KPIs
-4. Verificar panel QA / clientes pendientes de match
-5. Exportar Excel → hojas `input Licensee sales`, `monthly`, `QA`; conservar `ooh`/`minimum agreed` en LW/Puma
-6. Supervisor: vincular cliente pendiente vía modal Synap (sin `alert`/`confirm`)
-7. Tras import seed: ejecutar conciliación dry-run → 0 discrepancias ene–jun
+4. Verificar que al recorrer clientes **no se mueve** el menú, el título ni el resumen: solo scrollea la tabla (cabeceras de mes y columna Cliente quedan visibles)
+5. Verificar panel QA / clientes pendientes de match
+6. En el banner, **Exportar Excel** → `input Licensee sales` con encabezados en inglés (`Customer`, `City / Province`, `Store Type`, `Product group`), valores de city/store/group del seed, **totales en fila 2** (`=SUM(...)`); `monthly` sigue enlazando a esa fila 2. Conservar `ooh`/`minimum agreed` en LW/Puma. Sin pack seleccionado debe avisar, no descargar.
+7. Supervisor: vincular cliente pendiente vía modal Synap (sin `alert`/`confirm`)
+8. Tras import seed: ejecutar conciliación dry-run → 0 discrepancias ene–jun
 
 ---
 

@@ -10898,6 +10898,13 @@ if (dashboardRoot) {
 
     newExportButton.addEventListener("click", async () => {
       const reportSlug = dashboardRoot?.dataset.reportSlug || "";
+      if (reportSlug === "ventas-mensuales-licenciatarios") {
+        const pack = document.getElementById("vml_pack_id")?.value;
+        if (!pack) {
+          toast("Seleccioná un pack licenciatario antes de exportar.", "error");
+          return;
+        }
+      }
       if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
         createExportScopeDropdown((scope) => {
           performExcelExport(scope);

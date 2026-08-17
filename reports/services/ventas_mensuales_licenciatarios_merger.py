@@ -44,6 +44,9 @@ class MergedClientMonth:
     source: str = "seed"
     pending: bool = False
     anet_cliente_id: Optional[int] = None
+    city: str = ""
+    store_type: str = ""
+    product_group: str = ""
 
 
 @dataclass
@@ -118,6 +121,9 @@ def seed_row_to_merged(row: MonthlyReportingSeedRow, base_empresa: str) -> Merge
         source="seed",
         pending=meta["pending"],
         anet_cliente_id=match.anet_cliente_id,
+        city=(row.city or match.seed_city or "").strip(),
+        store_type=(row.store_type or match.seed_store_type or "").strip(),
+        product_group=(match.seed_product_group or "").strip(),
     )
 
 
@@ -151,6 +157,9 @@ def anet_row_to_merged(
         source="anet",
         pending=pending,
         anet_cliente_id=row.codigo_cliente,
+        city=(match.seed_city if match else "") or "",
+        store_type=(match.seed_store_type if match else "") or "",
+        product_group=(match.seed_product_group if match else "") or "",
     )
 
 
@@ -174,6 +183,9 @@ def _add_row(acc: dict[tuple[str, date], MergedClientMonth], row: MergedClientMo
         source="merged" if prev.source != row.source else prev.source,
         pending=prev.pending or row.pending,
         anet_cliente_id=prev.anet_cliente_id or row.anet_cliente_id,
+        city=prev.city or row.city,
+        store_type=prev.store_type or row.store_type,
+        product_group=prev.product_group or row.product_group,
     )
 
 
