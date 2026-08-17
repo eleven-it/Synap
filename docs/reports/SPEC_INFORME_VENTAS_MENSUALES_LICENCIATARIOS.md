@@ -89,6 +89,7 @@ Export Excel: el botón **Exportar Excel** del banner (junto a Actualizar) dispa
 - **L6:** Dado rango 01/10/2025–15/02/2026, cuando se ejecuta el informe, entonces se rechaza (mismo año calendario obligatorio).  
 - **L7:** Dado un renglón ANET de una FA con dto pie 15 %, cuando se agrega `amount`, entonces es `PrecioNetoxR × 0,85` (misma expr que VMM); el seed histórico no se multiplica.
 - **L8:** Dado seed con «ML FULL» (u otro de [MAPEO clientes](MAPEO_CLIENTES_LICENCIATARIOS_SEED_ANET.md) §1), cuando se aplica el match confirmado, entonces `anet_cliente_id` queda el código ANET documentado y el cliente sale del panel de pendientes.
+- **L9:** Dado seed pendiente «VARTAT S.A.» y ventas ANET julio con el mismo nombre (aunque el match aún no tenga `anet_cliente_id`), cuando se exporta, entonces hay **una sola fila** de cliente (identidad seed) con meses seed+ANET unidos.
 
 Ver evidencia en [VERIFY_INFORME_VENTAS_MENSUALES_LICENCIATARIOS.md](VERIFY_INFORME_VENTAS_MENSUALES_LICENCIATARIOS.md).
 

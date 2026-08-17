@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 from django.db.models import QuerySet
 
-from core.utils.administranet_types import to_decimal_or_none
+from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
 from reports.models import (
     MonthlyReportingClientMatch,
     MonthlyReportingPack,
@@ -27,6 +27,55 @@ from reports.services.ventas_mensuales_licenciatarios_query import (
 
 CUTOVER_DATE = date(2026, 7, 22)
 CUTOVER_YEAR = CUTOVER_DATE.year
+
+
+def _normalize_customer_name(value: str) -> str:
+    """Clave estable para vincular ANET ↔ seed cuando el match aún no tiene anet_id."""
+    return " ".join(str(value or "").upper().split())
+
+
+def _build_match_indexes() -> tuple[
+    dict[int, MonthlyReportingClientMatch],
+    dict[str, MonthlyReportingClientMatch],
+]:
+    """
+    Índices para resolver match de filas ANET.
+
+    1) por codigo AdministraNET (matcheados)
+    2) por nombre normalizado (pendientes o matcheados) — evita filas duplicadas
+       tipo VARTAT: seed pendiente + ANET julio con el mismo display_name.
+    """
+    by_anet: dict[int, MonthlyReportingClientMatch] = {}
+    by_name: dict[str, MonthlyReportingClientMatch] = {}
+    qs = MonthlyReportingClientMatch.objects.all().order_by("id")
+    for match in qs:
+        name_key = _normalize_customer_name(match.seed_customer_name)
+        if name_key and name_key not in by_name:
+            by_name[name_key] = match
+        if match.estado == MonthlyReportingClientMatch.Estado.MATCHED:
+            anet_id = to_int_or_none(match.anet_cliente_id)
+            if anet_id is not None:
+                by_anet[anet_id] = match
+            # Matcheado gana sobre pendiente homónimo.
+            if name_key:
+                by_name[name_key] = match
+    return by_anet, by_name
+
+
+def resolve_anet_match(
+    *,
+    codigo_cliente: int,
+    nombre_cliente: str,
+    matches_by_anet: dict[int, MonthlyReportingClientMatch],
+    matches_by_name: dict[str, MonthlyReportingClientMatch],
+) -> Optional[MonthlyReportingClientMatch]:
+    anet_id = to_int_or_none(codigo_cliente)
+    if anet_id is not None and anet_id in matches_by_anet:
+        return matches_by_anet[anet_id]
+    name_key = _normalize_customer_name(nombre_cliente)
+    if name_key:
+        return matches_by_name.get(name_key)
+    return None
 
 
 @dataclass
@@ -133,16 +182,24 @@ def anet_row_to_merged(
     base_empresa: str,
     match: Optional[MonthlyReportingClientMatch] = None,
 ) -> MergedClientMonth:
-    if match and match.estado == MonthlyReportingClientMatch.Estado.MATCHED:
+    if match is not None:
         identity = resolve_client_identity(match, base_empresa)
         display_name = match.seed_customer_name or row.nombre_cliente
         match_estado = match.estado
-        pending = False
+        pending = match.estado == MonthlyReportingClientMatch.Estado.PENDING
+        city = (match.seed_city or "").strip()
+        store_type = (match.seed_store_type or "").strip()
+        product_group = (match.seed_product_group or "").strip()
+        anet_cliente_id = match.anet_cliente_id or row.codigo_cliente
     else:
         identity = f"anet:{base_empresa}:{row.codigo_cliente}"
         display_name = row.nombre_cliente
         match_estado = "anet_only"
         pending = False
+        city = ""
+        store_type = ""
+        product_group = ""
+        anet_cliente_id = row.codigo_cliente
     return MergedClientMonth(
         identity=identity,
         display_name=display_name,
@@ -156,10 +213,10 @@ def anet_row_to_merged(
         amount_women=row.amount_women,
         source="anet",
         pending=pending,
-        anet_cliente_id=row.codigo_cliente,
-        city=(match.seed_city if match else "") or "",
-        store_type=(match.seed_store_type if match else "") or "",
-        product_group=(match.seed_product_group if match else "") or "",
+        anet_cliente_id=anet_cliente_id,
+        city=city,
+        store_type=store_type,
+        product_group=product_group,
     )
 
 
@@ -239,13 +296,7 @@ def merge_pack_year(
         if merged.pending:
             pending_clients[merged.identity] = match_to_aggregate_row(seed_row.match, base_empresa)
 
-    matches_by_anet = {
-        m.anet_cliente_id: m
-        for m in MonthlyReportingClientMatch.objects.filter(
-            estado=MonthlyReportingClientMatch.Estado.MATCHED,
-            anet_cliente_id__isnull=False,
-        )
-    }
+    matches_by_anet, matches_by_name = _build_match_indexes()
 
     def _qa_hook(superart: str, sample: Optional[dict] = None) -> None:
         key = (superart or "").strip()
@@ -268,7 +319,12 @@ def merge_pack_year(
             register_unknown_superart=_qa_hook if classify_genero else register_unknown_superart,
         )
         for _key, agg in aggregate_anet_rows(anet_rows).items():
-            match = matches_by_anet.get(agg.codigo_cliente)
+            match = resolve_anet_match(
+                codigo_cliente=agg.codigo_cliente,
+                nombre_cliente=agg.nombre_cliente,
+                matches_by_anet=matches_by_anet,
+                matches_by_name=matches_by_name,
+            )
             merged = anet_row_to_merged(agg, base_empresa=base_empresa, match=match)
             merged.month = date(year, month, 1)
             _add_row(acc, merged)
