@@ -392,6 +392,7 @@
                         {% elif report.slug == 'ventas-mensuales-licenciatarios' %}
                         {% include "reports/includes/filters_ventas_mensuales_licenciatarios.html" %}
                         {% include "reports/includes/modal_licenciatarios_match.html" %}
+                        {% include "reports/includes/modal_licenciatarios_superart_qa.html" %}
                         {% else %}
                         {% include "reports/includes/filters_period.html" %}
                         {% endif %}
@@ -955,6 +956,15 @@
                                 · SuperArt desconocidos: <span id="vml-qa-superart-count" class="font-bold tabular-nums">0</span>
                             </p>
                             <ul id="vml-qa-pending-list" class="mt-2 max-h-24 overflow-y-auto pl-4 list-disc text-[11px] text-amber-900 dark:text-amber-100 space-y-0.5"></ul>
+                            <div id="vml-qa-superart-block" class="hidden mt-2">
+                                <p class="text-[10px] font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-200 m-0">SuperArt sin clasificar</p>
+                                <ul id="vml-qa-superart-list" class="mt-1 max-h-24 overflow-y-auto pl-4 list-disc text-[11px] text-violet-900 dark:text-violet-100 space-y-0.5"></ul>
+                                <button type="button" id="vml-qa-superart-btn"
+                                        class="mt-2 inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg border border-violet-300 dark:border-violet-600 bg-violet-50 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100 hover:bg-violet-100 dark:hover:bg-violet-900/50">
+                                    <span class="material-icons text-sm" aria-hidden="true">category</span>
+                                    Clasificar SuperArt
+                                </button>
+                            </div>
                         </section>
                     </div>
                 </div>
@@ -5299,7 +5309,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 {% else %}
 <script src="{% static 'reports/js/reports_responsive.js' %}?v=20260602b" defer></script>
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260817c"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260817d"></script>
 {% if report.slug == 'comprobantes-rutas' %}
 <script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260430b" defer></script>
 {% endif %}
@@ -5319,7 +5329,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/ventas_bom_docenas.js' %}?v=20260814a"></script>
 {% endif %}
 {% if report.slug == 'ventas-mensuales-licenciatarios' %}
-<script src="{% static 'reports/js/ventas_mensuales_licenciatarios.js' %}?v=20260817b"></script>
+<script src="{% static 'reports/js/ventas_mensuales_licenciatarios.js' %}?v=20260817c"></script>
 {% endif %}
 {% if report.slug == 'ventas-marcas-mensual' %}
 <script src="{% static 'reports/js/reports_filters_sheet.js' %}?v=20260802c" defer></script>

@@ -182,6 +182,59 @@ class TestObtenerDraft(TestCase):
         self.assertEqual(opened.estado, EcomPedidoMasivoDraft.ESTADO_CONFIRMADO)
 
 
+class TestSincronizarViajanteBorrador(TestCase):
+    @patch(
+        "ecom.services.pedido_masivo_matriz.listar_sucursales_cliente",
+        return_value=[{"id_cliente_domicilio": 10}, {"id_cliente_domicilio": 20}],
+    )
+    def test_reabrir_actualiza_cod_viajante_y_recorta_celdas(self, _sucs):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=368,
+            cod_viajante=30,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=1, id_cliente_domicilio=10, cantidad_packs=Decimal("2")
+        )
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=1, id_cliente_domicilio=99, cantidad_packs=Decimal("5")
+        )
+        opened, err = obtener_o_crear_draft(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=368,
+            cod_viajante=6,
+            draft_id=d.pk,
+        )
+        self.assertIsNotNone(opened, err)
+        opened.refresh_from_db()
+        self.assertEqual(opened.cod_viajante, 6)
+        ids = set(opened.celdas.values_list("id_cliente_domicilio", flat=True))
+        self.assertEqual(ids, {10})
+
+    def test_confirmado_solo_lectura_no_cambia_viajante(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=20,
+            cod_viajante=30,
+            estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+        )
+        opened, err = obtener_o_crear_draft(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=20,
+            cod_viajante=6,
+            draft_id=d.pk,
+            solo_lectura=True,
+        )
+        self.assertIsNotNone(opened, err)
+        opened.refresh_from_db()
+        self.assertEqual(opened.cod_viajante, 30)
+
+
 class TestAnularBorradorMasivo(TestCase):
     def test_anular_solo_desde_borrador(self):
         d = EcomPedidoMasivoDraft.objects.create(

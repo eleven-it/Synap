@@ -6737,7 +6737,7 @@ if (dashboardRoot) {
       }
       
       // Cargar clientes para "Clientes a excluir" (Ventas Netas, Remitos, Total Consolidado, BO Stock Facturación)
-      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug);
+      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasMensualesLicenciatariosSlug(reportSlug);
       if (reportShowsClientesExcluir) {
         const clientesResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
           headers: {
@@ -9297,7 +9297,7 @@ if (dashboardRoot) {
       }
 
       // Clientes a excluir (NOT IN) - Ventas Netas, Total Consolidado, Remitos, BO Stock Facturación
-      if ((isVentasNetasSlug(reportSlug) || reportSlug === "total-consolidado-operativo" || reportSlug === "uninvoiced_remitos" || isInformeBoDualPeriodo(reportSlug)) && filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos)) {
+      if ((isVentasNetasSlug(reportSlug) || reportSlug === "total-consolidado-operativo" || reportSlug === "uninvoiced_remitos" || isInformeBoDualPeriodo(reportSlug) || isVentasMensualesLicenciatariosSlug(reportSlug)) && filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos)) {
         const clientesSelect = document.getElementById("clientes_excluidos");
         if (clientesSelect) {
           filters.clientes_excluidos.forEach((value) => {
@@ -10061,6 +10061,15 @@ if (dashboardRoot) {
       filters.periodo_tipo_facturacion = periodoTipoFac;
       filters.fecha_inicio_facturacion = fechaInicioFac;
       filters.fecha_fin_facturacion = fechaFinFac;
+      const clientesExcluidosSelect = document.getElementById("clientes_excluidos");
+      if (clientesExcluidosSelect) {
+        const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions)
+          .map((opt) => String(opt.value))
+          .filter((v) => v);
+        if (selectedClientes.length > 0) {
+          filters.clientes_excluidos = selectedClientes;
+        }
+      }
     } else {
       // Filtros genéricos para otros reportes
       const dateFrom = document.querySelector('[name="date_from"]')?.value;

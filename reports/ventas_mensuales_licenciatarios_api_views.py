@@ -22,6 +22,11 @@ from reports.services.monthly_reporting_client_match_service import (
     format_match_updated_at,
     undo_client_match,
 )
+from reports.services.monthly_reporting_superart_service import (
+    get_active_catalog_version,
+    list_qa_pending,
+    resolve_superart_genero,
+)
 from reports.services.ventas_mensuales_licenciatarios_query import search_anet_clients
 
 logger = logging.getLogger(__name__)
@@ -159,6 +164,144 @@ class LicenciatariosClientMatchDetailAPIView(APIView):
         payload = serialize_client_match(match)
         payload["message"] = "Cliente histórico vinculado a AdministraNET."
         return Response(payload)
+
+
+def _format_qa_datetime(dt) -> str:
+    if not dt:
+        return ""
+    return dt.strftime("%d/%m/%Y %H:%M")
+
+
+def serialize_qa_pending(pending) -> dict[str, Any]:
+    return {
+        "superart": pending.superart,
+        "occurrence_count": pending.occurrence_count,
+        "sample_json": pending.sample_json or {},
+        "first_seen_at": pending.first_seen_at.isoformat() if pending.first_seen_at else "",
+        "last_seen_at": pending.last_seen_at.isoformat() if pending.last_seen_at else "",
+        "first_seen_display": _format_qa_datetime(pending.first_seen_at),
+        "last_seen_display": _format_qa_datetime(pending.last_seen_at),
+    }
+
+
+class LicenciatariosSuperArtQAListAPIView(APIView):
+    """GET pendientes SuperArt · POST clasificar uno (men/women)."""
+
+    permission_classes = [OperationalReportsPermission]
+
+    def get(self, request, *args, **kwargs):
+        can_edit = user_has_full_access(request.user)
+        active = get_active_catalog_version()
+        pending = [serialize_qa_pending(p) for p in list_qa_pending()[:500]]
+        return Response(
+            {
+                "pending": pending,
+                "pending_count": len(pending),
+                "can_edit": can_edit,
+                "catalog_version": active.version if active else None,
+            }
+        )
+
+    def post(self, request, *args, **kwargs):
+        if not user_has_full_access(request.user):
+            return Response(
+                {
+                    "detail": (
+                        "Solo usuarios con alcance global autorizado pueden "
+                        "clasificar SuperArt desconocidos."
+                    ),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        superart = str_or_default(request.data.get("superart"), "").strip()
+        genero = str_or_default(request.data.get("genero"), "").strip().lower()
+        if not superart:
+            return Response(
+                {"detail": "Se requiere «superart»."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        actor = _match_actor(request)
+        try:
+            entry = resolve_superart_genero(
+                superart,
+                genero,
+                actor_id_usuario=actor.id_usuario,
+                actor_cod_usuario=actor.cod_usuario,
+                actor_nombre=actor.nombre,
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            logger.exception("resolve_superart_genero: %s", exc)
+            return Response(
+                {"detail": "No se pudo clasificar el SuperArt."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        pending_count = list_qa_pending().count()
+        payload = {
+            **entry,
+            "message": f"SuperArt «{entry['superart']}» clasificado como {entry['genero']}.",
+            "pending_count": pending_count,
+        }
+        return Response(payload)
+
+
+class LicenciatariosSuperArtQABulkAPIView(APIView):
+    """POST clasificación masiva [{superart, genero}, …]."""
+
+    permission_classes = [OperationalReportsPermission]
+
+    def post(self, request, *args, **kwargs):
+        if not user_has_full_access(request.user):
+            return Response(
+                {
+                    "detail": (
+                        "Solo usuarios con alcance global autorizado pueden "
+                        "clasificar SuperArt desconocidos."
+                    ),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        items = request.data.get("items")
+        if not isinstance(items, list) or not items:
+            return Response(
+                {"detail": "Se requiere «items» con al menos un SuperArt."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        actor = _match_actor(request)
+        resolved = []
+        errors = []
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                errors.append({"index": idx, "detail": "Ítem inválido."})
+                continue
+            superart = str_or_default(item.get("superart"), "").strip()
+            genero = str_or_default(item.get("genero"), "").strip().lower()
+            try:
+                entry = resolve_superart_genero(
+                    superart,
+                    genero,
+                    actor_id_usuario=actor.id_usuario,
+                    actor_cod_usuario=actor.cod_usuario,
+                    actor_nombre=actor.nombre,
+                )
+                resolved.append(entry)
+            except ValueError as exc:
+                errors.append({"index": idx, "superart": superart, "detail": str(exc)})
+            except Exception as exc:
+                logger.exception("resolve_superart_genero bulk idx=%s: %s", idx, exc)
+                errors.append(
+                    {"index": idx, "superart": superart, "detail": "Error al clasificar."}
+                )
+        pending_count = list_qa_pending().count()
+        return Response(
+            {
+                "resolved": resolved,
+                "errors": errors,
+                "pending_count": pending_count,
+                "message": f"{len(resolved)} SuperArt(s) clasificado(s).",
+            }
+        )
 
 
 class LicenciatariosAnetClientsAPIView(APIView):

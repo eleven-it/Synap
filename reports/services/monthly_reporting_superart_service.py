@@ -95,6 +95,96 @@ def register_qa_pending(superart: str, sample: Optional[Dict[str, Any]] = None) 
     return pending
 
 
+def list_qa_pending():
+    """SuperArts pendientes de clasificación, más recientes primero."""
+    return MonthlyReportingSuperArtQAPending.objects.all().order_by(
+        "-last_seen_at",
+        "superart",
+    )
+
+
+@transaction.atomic
+def get_or_create_active_catalog(
+    *,
+    actor_id_usuario: Optional[int] = None,
+    actor_cod_usuario: str = "",
+    actor_nombre: str = "",
+) -> MonthlyReportingSuperArtCatalogVersion:
+    """Devuelve el catálogo activo; si no hay, crea versión 1 (o siguiente) y la activa."""
+    active = get_active_catalog_version()
+    if active is not None:
+        return active
+    max_version = (
+        MonthlyReportingSuperArtCatalogVersion.objects.order_by("-version")
+        .values_list("version", flat=True)
+        .first()
+    )
+    next_version = (max_version or 0) + 1
+    version = MonthlyReportingSuperArtCatalogVersion.objects.create(
+        version=next_version,
+        source_label="Clasificación QA Synap",
+        estado=MonthlyReportingSuperArtCatalogVersion.Estado.DRAFT,
+        actor_id_usuario=actor_id_usuario,
+        actor_cod_usuario=actor_cod_usuario,
+        actor_nombre=actor_nombre,
+    )
+    return activate_catalog_version(
+        version,
+        actor_id_usuario=actor_id_usuario,
+        actor_cod_usuario=actor_cod_usuario,
+        actor_nombre=actor_nombre,
+    )
+
+
+_VALID_GENEROS = frozenset(
+    {
+        MonthlyReportingSuperArtCatalogEntry.Genero.MEN,
+        MonthlyReportingSuperArtCatalogEntry.Genero.WOMEN,
+    }
+)
+
+
+@transaction.atomic
+def resolve_superart_genero(
+    superart: str,
+    genero: str,
+    *,
+    actor_id_usuario: Optional[int] = None,
+    actor_cod_usuario: str = "",
+    actor_nombre: str = "",
+) -> Dict[str, Any]:
+    """Clasifica un SuperArt en el catálogo activo y elimina el pendiente QA."""
+    key = (superart or "").strip()
+    gen = (genero or "").strip().lower()
+    if not key:
+        raise ValueError("SuperArt vacío.")
+    if gen not in _VALID_GENEROS:
+        raise ValueError("Género inválido; use «men» o «women».")
+
+    version = get_or_create_active_catalog(
+        actor_id_usuario=actor_id_usuario,
+        actor_cod_usuario=actor_cod_usuario,
+        actor_nombre=actor_nombre,
+    )
+    entry, created = MonthlyReportingSuperArtCatalogEntry.objects.update_or_create(
+        version=version,
+        superart=key,
+        defaults={"genero": gen},
+    )
+    pending = MonthlyReportingSuperArtQAPending.objects.filter(superart=key).first()
+    if pending is not None:
+        pending.resolved_version = version
+        pending.save(update_fields=["resolved_version"])
+        pending.delete()
+
+    return {
+        "superart": entry.superart,
+        "genero": entry.genero,
+        "catalog_version": version.version,
+        "created": created,
+    }
+
+
 def make_classify_fn(version: Optional[MonthlyReportingSuperArtCatalogVersion] = None):
     """Factory: classify_superart bound al catálogo activo o versión dada."""
     ver = version or get_active_catalog_version()

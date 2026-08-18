@@ -119,16 +119,14 @@ def cartera_permitida(ctx: Dict[str, Any], base_empresa: str = "") -> List[int]:
     """
     Conjunto permitido de CodViajante.
 
-    Con workflow jerarquía ON delega a ``alcance_comercial``; si no, cartera legacy.
+    Con ``base_empresa`` delega a ``alcance_viajantes_comercial`` (ver todos,
+    organigrama o cartera legacy). Sin base, solo cartera JSON de sesión.
     """
     base = (base_empresa or ctx.get("base_empresa") or "").strip()
     if base:
-        from ecom.services.ecom_config_mysql import workflow_jerarquia_comercial_activo
+        from ecom.services.alcance_comercial import alcance_viajantes_comercial
 
-        if workflow_jerarquia_comercial_activo(base):
-            from ecom.services.alcance_comercial import alcance_viajantes_comercial
-
-            return alcance_viajantes_comercial(base, ctx)
+        return alcance_viajantes_comercial(base, ctx)
     return cartera_permitida_legacy(ctx)
 
 
@@ -142,7 +140,7 @@ def resolver_viajante_operativo(ctx: Dict[str, Any]) -> Optional[int]:
     operativo = _operativo_desde_ctx(ctx)
     if operativo is None:
         return cv
-    permitidos = set(cartera_permitida(ctx))
+    permitidos = set(cartera_permitida(ctx, ctx.get("base_empresa") or ""))
     if operativo in permitidos:
         return operativo
     return cv
@@ -218,19 +216,10 @@ def listar_cartera_operativa(
         ctx_eff["base_empresa"] = base_empresa
     cv = _id_vendedor_desde_ctx(ctx_eff)
     operativo = resolver_viajante_operativo(ctx_eff)
-    es_supervisor = _si_no_supervisor(
-        ctx_eff.get("supervisor_venta") or ctx_eff.get("permiso_supervisor_venta_web")
-    )
-    from ecom.services.ecom_config_mysql import workflow_jerarquia_comercial_activo
+    from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 
-    if workflow_jerarquia_comercial_activo(base_empresa):
-        cartera = cartera_permitida(ctx_eff, base_empresa)
-        mostrar = len(cartera) > 1
-    else:
-        cartera = cartera_permitida(ctx_eff, base_empresa) if es_supervisor else (
-            [cv] if cv is not None else []
-        )
-        mostrar = bool(es_supervisor and len(cartera) > 0)
+    cartera = cartera_permitida(ctx_eff, base_empresa)
+    mostrar = len(cartera) > 1 or puede_ver_todos_pedidos(ctx_eff)
     nombres = nombres_viajantes(base_empresa, cartera)
     vendedores = [
         {"cod_viajante": c, "nombre": nombres.get(c, f"Vendedor {c}")}
@@ -248,7 +237,8 @@ def listar_cartera_operativa(
 def guardar_cod_viajante_operativo(request: Any, cod_viajante: int) -> bool:
     """Persiste operativo en bolsa ``mayoristapp`` tras validar cartera."""
     ctx = ctx_desde_request(request)
-    permitidos = set(cartera_permitida(ctx))
+    base = (ctx.get("base_empresa") or "").strip()
+    permitidos = set(cartera_permitida(ctx, base))
     cv = to_int_or_none(cod_viajante)
     if cv is None or cv not in permitidos:
         return False

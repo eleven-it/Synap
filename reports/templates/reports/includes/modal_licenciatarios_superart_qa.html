@@ -1,0 +1,45 @@
+{% comment %}
+Modal Synap — clasificación SuperArt desconocidos (packs Puma / VML).
+{% endcomment %}
+<div id="vml-superart-modal"
+     class="fixed inset-0 z-[80] hidden items-center justify-center p-4"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="vml-superart-modal-title"
+     hidden>
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" data-vml-superart-overlay tabindex="-1"></div>
+    <div class="relative w-full max-w-2xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-5 sm:p-6 flex flex-col gap-4 max-h-[90vh] overflow-hidden">
+        <div class="flex items-start gap-3 shrink-0">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200">
+                <span class="material-icons text-xl" aria-hidden="true">category</span>
+            </div>
+            <div class="min-w-0 flex-1">
+                <h3 id="vml-superart-modal-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    Clasificar SuperArt desconocidos
+                </h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Asigne género Men o Women a SuperArt de packs Puma que aún no están en el catálogo activo.
+                </p>
+                <p id="vml-superart-catalog-info" class="mt-1 text-[10px] text-slate-400 dark:text-slate-500 m-0"></p>
+            </div>
+            <button type="button" id="vml-superart-modal-close"
+                    class="shrink-0 rounded-lg p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                    aria-label="Cerrar">
+                <span class="material-icons text-lg" aria-hidden="true">close</span>
+            </button>
+        </div>
+
+        <div id="vml-superart-list" class="flex-1 overflow-y-auto min-h-[8rem] border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-800">
+            <p class="p-4 text-xs text-slate-500 dark:text-slate-400 m-0">Cargando pendientes…</p>
+        </div>
+
+        <p id="vml-superart-modal-status" class="text-[11px] text-slate-500 dark:text-slate-400 min-h-[1rem] shrink-0" aria-live="polite"></p>
+
+        <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1 shrink-0">
+            <button type="button" id="vml-superart-modal-cancel"
+                    class="inline-flex items-center justify-center min-h-[44px] px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60">
+                Cerrar
+            </button>
+        </div>
+    </div>
+</div>

@@ -13,6 +13,7 @@ from ecom.services.vendedor_operativo import (
     cartera_permitida_legacy,
     guardar_cod_viajante_operativo,
     leer_vendedores_a_cargo_config,
+    listar_cartera_operativa,
     normalizar_lista_cod_viajantes,
     resolver_viajante_operativo,
     reset_cod_viajante_operativo,
@@ -56,6 +57,20 @@ class TestResolverViajanteOperativo(unittest.TestCase):
         ctx = {"id_vendedor_usr": 5, "vendedor_a_cargo": [7]}
         self.assertEqual(cartera_permitida_legacy(ctx), [5, 7])
         self.assertEqual(cartera_permitida(ctx), [5, 7])
+
+    @patch("ecom.services.alcance_comercial._listar_todos_viajantes", return_value=[2, 6, 8])
+    def test_cartera_ver_todos_incluye_todos_aunque_jerarquia_off(self, mock_todos):
+        ctx = {
+            "id_vendedor_usr": 2,
+            "nombre_puesto": "Administracion",
+            "base_empresa": "emp1",
+        }
+        with patch(
+            "ecom.services.alcance_comercial.workflow_jerarquia_comercial_activo",
+            return_value=False,
+        ):
+            self.assertEqual(cartera_permitida(ctx, "emp1"), [2, 6, 8])
+        mock_todos.assert_called_once_with("emp1")
 
 
 class TestLeerVendedoresACargoConfig(unittest.TestCase):
@@ -112,3 +127,27 @@ class TestCheckoutCodViajante(unittest.TestCase):
     def test_session_cod_viajante_id_vendedor_usr(self):
         req = _request_con_sesion({"id_vendedor_usr": 7}, {})
         self.assertEqual(_session_cod_viajante(req), 7)
+
+
+class TestListarCarteraOperativa(unittest.TestCase):
+    @patch("ecom.services.vendedor_operativo.nombres_viajantes", return_value={2: "Vendedor 1", 6: "Francisco"})
+    @patch("ecom.services.vendedor_operativo.cartera_permitida", return_value=[2, 6])
+    def test_administracion_muestra_selector(self, _cartera, _nombres):
+        ctx = {
+            "id_vendedor_usr": 2,
+            "nombre_puesto": "Administracion",
+            "cod_viajante_operativo": 6,
+        }
+        payload = listar_cartera_operativa("emp1", ctx)
+        self.assertTrue(payload["mostrar_selector"])
+        self.assertTrue(payload["operando_como_otro"])
+        self.assertEqual(payload["operativo"], 6)
+        self.assertEqual([v["cod_viajante"] for v in payload["vendedores"]], [2, 6])
+
+    @patch("ecom.services.vendedor_operativo.nombres_viajantes", return_value={9: "Ana"})
+    @patch("ecom.services.vendedor_operativo.cartera_permitida", return_value=[9])
+    def test_vendedor_sin_cartera_no_muestra_selector(self, _cartera, _nombres):
+        ctx = {"id_vendedor_usr": 9, "nombre_puesto": "Vendedor"}
+        payload = listar_cartera_operativa("emp1", ctx)
+        self.assertFalse(payload["mostrar_selector"])
+        self.assertEqual(payload["operativo"], 9)

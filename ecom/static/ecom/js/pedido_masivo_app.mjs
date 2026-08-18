@@ -2370,16 +2370,18 @@ function pedidoMasivoCore() {
       if (!Number.isFinite(cod) || cod === this.vendedorOperativo) return;
       const dest = (this.vendedorCartera || []).find(v => v.cod_viajante === cod);
       const nombre = dest ? dest.nombre : ('Vendedor ' + cod);
-      const hayContexto = Boolean(this.draftId || this.clienteSel);
-      if (!hayContexto) {
+      const hayBorrador = Boolean(this.draftId);
+      if (!hayBorrador && !this.clienteSel) {
         this._aplicarCambioVendedor(cod);
         return;
       }
       this._vendedorPendiente = cod;
       this.abrirDialogo('cambio_vendedor', {
         titulo: 'Cambiar vendedor operativo',
-        mensaje: 'Al operar como ' + nombre + ' se limpiará el borrador y el cliente. ¿Continuar?',
-        confirmarTexto: 'Cambiar y limpiar',
+        mensaje: hayBorrador
+          ? ('El borrador se cargará a nombre de ' + nombre + '. Se actualizarán las sucursales de su territorio.')
+          : ('Vas a operar como ' + nombre + '.'),
+        confirmarTexto: 'Cambiar vendedor',
         cancelarTexto: 'Cancelar',
         onConfirm: async () => { await this._aplicarCambioVendedor(this._vendedorPendiente); },
       });
@@ -2397,24 +2399,11 @@ function pedidoMasivoCore() {
       }
       this.vendedorOperativo = data.operativo;
       await this.cargarCarteraVendedor();
-      this.draftId = null;
-      this.draftEstado = '';
-      this.idCliente = null;
-      this.clienteNombre = '';
-      this.listaPrecio = '';
-      this.listaPrecioPdfUrl = '';
-      this.clienteSel = '';
-      this.qCliente = '';
-      this.sucursales = [];
-      this.articulos = [];
-      this.celdas = {};
-      this.catalogoDesplegado = false;
-      this._limpiarSeleccionArticulos();
-      this.descuentosFila = {};
-      this.descPiePct = 0;
-      this.preview = { sucursales: [], total_lote: { neto: 0, iva: 0, total: 0 }, warning: '' };
-      this.previewEstimado = { neto: 0, iva: 0, total: 0 };
-      this.previewFuente = 'estimado';
+      if (this.draftId) {
+        await this.abrirDraft(this.draftId);
+        this.mostrarAviso('Vendedor del borrador actualizado.', 'success');
+        return;
+      }
       this.buscarClientes();
     },
   };
