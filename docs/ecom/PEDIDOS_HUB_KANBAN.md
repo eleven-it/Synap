@@ -55,7 +55,7 @@ Fechas UI: **dd/MM/yyyy**.
 |----------------|-----|
 | `ecom.pedidos.ver` | Ver hub |
 | `ecom.pedidos.ver_todos` | Ver todos los vendedores (sin filtro `CodViajante`) |
-| Puesto **Supervisor**, **Supervisor venta** o **Administracion** | Mismo efecto que `ver_todos` / `todos_clientes=Si`: hub y listados sin filtro de cartera (comparación case-insensitive, sin acentos) |
+| Puesto **Supervisor**, **Supervisor venta** o **Administracion** | Mismo efecto que `ver_todos` / `todos_clientes=Si`: hub y listados sin filtro de cartera; selector de vendedor operativo para cargar pedidos a nombre de cualquier viajante (comparación case-insensitive, sin acentos) |
 | `todos_clientes=Si` (legacy) | Ver todos los vendedores |
 | `ecom.pedidos.aprobar` | Aprobar/rechazar cola comercial en hub |
 | `ecom.pedido_masivo.usar` | CTA / abrir masivo |

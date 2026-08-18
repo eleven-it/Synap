@@ -777,6 +777,49 @@ def _nombres_articulos(
     return out
 
 
+def sincronizar_cod_viajante_borrador(
+    draft: EcomPedidoMasivoDraft,
+    cod_viajante: Optional[int],
+    base_empresa: str,
+) -> bool:
+    """
+    Actualiza ``draft.cod_viajante`` al viajante operativo y recorta celdas
+    cuyo domicilio ya no está en el territorio VCM del nuevo vendedor.
+
+    No toca borradores en solo lectura / confirmados / archivados.
+    """
+    cv = to_int_or_none(cod_viajante)
+    if cv is None or not draft:
+        return False
+    estado = (draft.estado or "").strip().lower()
+    if estado not in (
+        EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+    ):
+        return False
+    actual = to_int_or_none(draft.cod_viajante)
+    if actual == cv:
+        return False
+    draft.cod_viajante = cv
+    draft.save(update_fields=["cod_viajante", "updated_at"])
+    if not draft.celdas.exists():
+        return True
+    sucursales = listar_sucursales_cliente(
+        base_empresa, draft.id_cliente, cod_viajante=cv
+    )
+    ids_ok = {
+        to_int_or_none(s.get("id_cliente_domicilio"))
+        for s in sucursales
+        if to_int_or_none(s.get("id_cliente_domicilio")) is not None
+    }
+    qs = EcomPedidoMasivoDraftCelda.objects.filter(draft=draft)
+    if not ids_ok:
+        qs.delete()
+    else:
+        qs.exclude(id_cliente_domicilio__in=list(ids_ok)).delete()
+    return True
+
+
 def obtener_o_crear_draft(
     *,
     base_empresa: str,
@@ -832,6 +875,8 @@ def obtener_o_crear_draft(
         elif d.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
             d.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
             d.save(update_fields=["estado", "updated_at"])
+        if not consulta and not solo_lectura:
+            sincronizar_cod_viajante_borrador(d, cod_viajante, base_empresa)
         return d, ""
 
     if cod_origen is not None:
@@ -863,6 +908,10 @@ def obtener_o_crear_draft(
             ):
                 existente_origen.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
                 existente_origen.save(update_fields=["estado", "updated_at"])
+            if not consulta and not solo_lectura:
+                sincronizar_cod_viajante_borrador(
+                    existente_origen, cod_viajante, base_empresa
+                )
             return existente_origen, ""
 
     existente = (
@@ -897,6 +946,8 @@ def obtener_o_crear_draft(
         if existente.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
             existente.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
             existente.save(update_fields=["estado", "updated_at"])
+        if not consulta and not solo_lectura:
+            sincronizar_cod_viajante_borrador(existente, cod_viajante, base_empresa)
         return existente, ""
 
     estado_inicial = (

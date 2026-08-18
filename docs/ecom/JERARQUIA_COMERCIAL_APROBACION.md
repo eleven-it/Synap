@@ -57,6 +57,8 @@ El alcance, la búsqueda y la aprobación solo consideran vendedores con
 
 Consumidores: hub pipeline, selector vendedor, objetivos ventas, informe `ventas-objetivos-vs-bo`.
 
+El selector de vendedor operativo (`GET …/vendedores-cartera/`) usa el mismo alcance: Administracion / Supervisor / `ecom.pedidos.ver_todos` ven todos los viajantes activos y pueden cargar pedidos a nombre de cualquiera. Al cambiar el vendedor en un **borrador de pedido masivo/simple**, `obtener_o_crear_draft` sincroniza `draft.cod_viajante` con el operativo de sesión y recorta celdas que ya no están en el VCM del nuevo vendedor.
+
 ## Hub de pedidos (móvil + kanban)
 
 Ruta: `/ecom/mayoristapp/pedidos/`. Documento base: [PEDIDOS_HUB_KANBAN.md](PEDIDOS_HUB_KANBAN.md).

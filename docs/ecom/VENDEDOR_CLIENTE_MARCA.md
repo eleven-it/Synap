@@ -109,3 +109,36 @@ Ver también `docs/ecom/PEDIDO_MASIVO_SUCURSALES.md`.
 - **Filtro Excel:** 195 confirmadas, 34 cliente faltante, 8 ambiguo, 2 marca.
 - **Francisco:** usuario `francisco` (id=7) ya existía; se creó viajante 30 y se vinculó (`CodViajante` pasó de 2 → 30). Se actualizaron 3 filas G→S. Tres ternas DABRA/PUM que estaban en viajante genérico 2 se reasignaron a 30.
 - **Resto de vendedores:** solo alta de viajante (sin usuario de login), igual que en pruebas.
+
+## Reasignación de nombres y VCM (18/08/2026)
+
+**Motivo:** tras el cutover coexistían placeholders `Vendedor X` (con clientes/ventas) y fichas con nombre real (nomenclatura del sistema anterior, con VCM). Se conservan los `CodViajante` de los placeholders; no se reescriben pedidos ni facturas.
+
+**Entorno:** Server2 `181.174.198.194:30804`, base `administranet`.
+
+**Criterio de mapeo:** por `viajantes.Nombre` (el nro del Excel no es `CodViajante`; `CodViajante=1` es `-Ninguno-`).
+
+| Nombre vigente | Destino (en uso) | Origen (`NO USAR`) | VCM movidas |
+|----------------|------------------|--------------------|-------------|
+| Diego Cannarella | 4 | 27 | 8 |
+| Francisco Balantzian | 6 (ya tenía el nombre) | 30 `Francisco Balantzian (NUEVO)` → `Francisco Balantzian NO USAR` | 677 |
+| Walter Esquivel | 8 | 36 | 23 |
+| Alejandro Bruschini | 9 | 26 | 26 |
+| Felipe Rosales | 11 | 29 | 4 |
+| Miguel Diez | 12 | 33 | 26 |
+| Esteban Carrizo | 14 | 28 | 170 |
+| Ricardo Lozada | 15 | 35 | 20 |
+| Guillermo Bruschini | 16 | 31 | 13 |
+| Raul Cabrera | 18 | 34 | 32 |
+| Guillermo Caraccioli | 24 | 32 (DB: `Carraccioli`) | 1 |
+| Gustavo Ursela | 25 (`Vendedor 28`) | no existía ficha origen | 0 |
+
+**Operación (transacción):**
+
+1. `UPDATE ecom_vendedor_cliente_marca.CodViajante` origen → destino (1000 activas; unique cliente+sucursal+marca intacto).
+2. Origen: `Nombre` → `{vigente} NO USAR`. Destino: `Vendedor X` → nombre vigente.
+3. Usuario `francisco` (`id_usuario=7`): `usuarios.CodViajante` 30 → 6, para que el login vea el territorio vigente.
+
+**No se tocó:** `cliente.CodViajante`, comprobantes, ni alta de los 11 usuarios de login que aún no existen.
+
+**Verificación post:** VCM activas=1000 en destinos; orígenes con VCM=0; `ecom_usuario_viajante` sigue vacía.
