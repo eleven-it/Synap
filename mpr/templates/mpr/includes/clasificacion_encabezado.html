@@ -93,28 +93,60 @@
                 </button>
             </form>
 
-            <label class="flex min-w-[10rem] flex-1 flex-col gap-0.5 sm:min-w-[12rem] sm:max-w-sm">
+            <div class="flex min-w-[10rem] flex-1 flex-col gap-0.5 sm:min-w-[12rem] sm:max-w-sm"
+                 @click.outside="$store.clasificacionCc.cerrarSugerencias()">
                 <span class="text-[10px] font-medium text-slate-400">Buscar artículo</span>
                 <div class="relative">
                     <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
                     <input type="search"
                            id="clasif-busqueda-articulo"
-                           x-model="busqueda"
-                           @keydown.enter.prevent
+                           x-model="$store.clasificacionCc.busqueda"
+                           @input="$store.clasificacionCc.onInput()"
+                           @focus="$store.clasificacionCc.onInput()"
+                           @keydown.arrow-down.prevent="$store.clasificacionCc.move(1)"
+                           @keydown.arrow-up.prevent="$store.clasificacionCc.move(-1)"
+                           @keydown.enter.prevent="$store.clasificacionCc.enter()"
+                           @keydown.escape="$store.clasificacionCc.cerrarSugerencias()"
                            autocomplete="off"
                            placeholder="Código o descripción…"
+                           role="combobox"
+                           aria-autocomplete="list"
+                           aria-controls="clasif-sugerencias-articulo"
+                           :aria-expanded="$store.clasificacionCc.open && $store.clasificacionCc.sugerenciasFiltradas.length ? 'true' : 'false'"
                            aria-label="Filtrar artículo por código o descripción en la grilla"
                            class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 py-0 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"/>
                     <button type="button"
-                            x-show="busqueda.trim() !== ''"
+                            x-show="$store.clasificacionCc.activa"
                             x-cloak
-                            @click="busqueda = ''"
+                            @click="$store.clasificacionCc.limpiar()"
                             class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
                             aria-label="Limpiar búsqueda">
                         <span class="material-icons text-base" aria-hidden="true">close</span>
                     </button>
+                    <ul id="clasif-sugerencias-articulo"
+                        x-show="$store.clasificacionCc.open && $store.clasificacionCc.activa"
+                        x-cloak
+                        x-transition.opacity.duration.150ms
+                        role="listbox"
+                        class="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                        <template x-for="(item, idx) in $store.clasificacionCc.sugerenciasFiltradas" :key="item.key">
+                            <li role="option"
+                                :aria-selected="idx === $store.clasificacionCc.highlight"
+                                @mousedown.prevent="$store.clasificacionCc.seleccionar(item)"
+                                @mouseenter="$store.clasificacionCc.highlight = idx"
+                                :class="idx === $store.clasificacionCc.highlight ? 'bg-teal-50 dark:bg-teal-900/30' : ''"
+                                class="flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 text-slate-700 transition-colors dark:text-slate-200">
+                                <span class="text-xs font-semibold tabular-nums" x-text="item.codigo || '—'"></span>
+                                <span class="line-clamp-1 text-[11px] text-slate-500 dark:text-slate-400" x-text="item.descripcion"></span>
+                            </li>
+                        </template>
+                        <li x-show="$store.clasificacionCc.sugerenciasFiltradas.length === 0"
+                            class="px-3 py-2 text-xs text-slate-400">
+                            Ningún artículo coincide
+                        </li>
+                    </ul>
                 </div>
-            </label>
+            </div>
 
             {% if puede_ver_roster_completo and not requiere_fecha %}
             <div class="flex items-center gap-2 self-end">

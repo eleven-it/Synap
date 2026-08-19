@@ -334,9 +334,10 @@ Distribuir lo del **Parte** (y eventual extra en Producción) entre **Semi elabo
 
 1. Elija **Fecha** (y **Turno** opcional) → **Cargar grilla**. En la barra oscura también puede **buscar** artículo y alternar **Solo pendiente** / **Ver roster**.
 2. La columna **Parte** muestra lo fabricado (referencial). Cargue **Semi elaborado**, **2da selección** y **Desperdicio** (docenas / pares).
-   - Al abrir la grilla, **Semi elaborado** se precarga con lo atribuible del parte (docenas / pares).
-   - Al cargar **2da selección** o **Desperdicio**, la pantalla **descuenta automáticamente** esa cantidad de Semi elaborado (en pares equivalentes). Ejemplo: semi precargado 5 docenas (60 pares) + 6 pares en 2da → semi queda en 4 docenas y 6 pares.
-   - **Semi elaborado sigue siendo editable** a mano si necesita ajustar. Si después modifica 2da o desperdicio, el descuento se calcula sobre el semi **actual** (no vuelve a calcular desde la precarga).
+   - Al abrir la grilla, **Semi / 2da / Desperdicio** arrancan en **0**. Completá celda por celda; el parte no se copia a Semi.
+   - Al cargar **2da selección** o **Desperdicio**, si Semi ya tiene cantidad, la pantalla **descuenta automáticamente** ese delta de Semi (en pares equivalentes). Ejemplo: semi 5 docenas (60 pares) + 6 pares en 2da → semi queda en 4 docenas y 6 pares.
+   - **Semi elaborado sigue siendo editable** a mano. Si después modifica 2da o desperdicio, el descuento se calcula sobre el semi **actual**.
+   - **Buscar artículo** es predictivo: al tipear aparecen coincidencias de código/descripción de la grilla cargada y la tabla se filtra en vivo.
    - Si 2da + desperdicio superan el tope clasificable de la fila, Semi baja a 0 y la fila se marca en rojo hasta corregir.
 3. Los botones quedan fijos al pie de la grilla (siempre visibles):
    - **Guardar borrador** — guarda semi/2da/scrap **sin mover stock**. Puede cerrar y volver otro día: la grilla **precarga** lo guardado y muestra el chip *Borrador* en la barra.

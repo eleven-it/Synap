@@ -153,29 +153,31 @@
                             {% for fila in filas %}
                             <tr class="group/row clasif-grilla-fila{% if fila.solo_lectura %} opacity-70{% endif %}{% if fila.show_maquina and not forloop.first %} clasif-inicio-maquina{% endif %}"
                                 data-descripcion="{{ fila.maquina_nombre|lower }} {{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }} {{ fila.turno_nombre|lower }} {{ fila.operario_nombre|lower }}"
-                                x-show="$root.busqueda === '' || $el.dataset.descripcion.includes(($root.busqueda || '').toLowerCase().trim())"
+                                data-codigo="{{ fila.codigo_manual|lower }}"
+                                data-articulo="{{ fila.descripcion|lower }}"
+                                x-show="$store.clasificacionCc.coincide($el.dataset.descripcion)"
                                 x-data="clasificacionFila({{ fila.id_articulo }}, {{ fila.base_clasificable|floatformat:0 }}, {{ unidades_por_docena_clasificacion|default:12 }}, {{ fila.ini_seg2da|default:0 }}, {{ fila.ini_scrap|default:0 }}, {{ fila.solo_lectura|yesno:'true,false' }}, {{ fila.ini_semi|default:0 }})"
                                 :class="excede ? 'bg-red-50/40 dark:bg-red-950/15' : ''">
-                                <td x-show="($root.busqueda || '').trim() !== ''"
+                                <td x-show="$store.clasificacionCc.activa"
                                     class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 px-2 py-2 text-center align-top dark:border-slate-700 clasif-maq-tint-{{ fila.maquina_tint|default:0 }}">
                                     <span class="inline-flex max-w-full items-center justify-center rounded-md px-2 py-1 text-sm font-semibold leading-tight clasif-maq-chip-{{ fila.maquina_tint|default:0 }}"
                                           title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
                                 </td>
                                 {% if fila.show_maquina %}
-                                <td x-show="($root.busqueda || '').trim() === ''"
+                                <td x-show="!$store.clasificacionCc.activa"
                                     rowspan="{{ fila.rowspan_maquina|default:1 }}"
                                     class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 px-2 py-2 text-center align-top dark:border-slate-700 clasif-maq-tint-{{ fila.maquina_tint|default:0 }}">
                                     <span class="inline-flex max-w-full items-center justify-center rounded-md px-2 py-1 text-sm font-semibold leading-tight clasif-maq-chip-{{ fila.maquina_tint|default:0 }}"
                                           title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
                                 </td>
                                 {% endif %}
-                                <td x-show="($root.busqueda || '').trim() !== ''"
+                                <td x-show="$store.clasificacionCc.activa"
                                     class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-2 align-top dark:border-slate-700 dark:bg-slate-800">
                                     <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
                                           title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
                                 </td>
                                 {% if fila.show_articulo %}
-                                <td x-show="($root.busqueda || '').trim() === ''"
+                                <td x-show="!$store.clasificacionCc.activa"
                                     rowspan="{{ fila.rowspan_articulo|default:1 }}"
                                     class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-2 align-top dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
                                     <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
@@ -237,7 +239,7 @@
 
                 {% if not requiere_fecha and not filas_vacio %}
                 <div class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
-                     x-show="busqueda.trim() !== '' && Array.from($root.querySelectorAll('tbody tr.clasif-grilla-fila')).every(function(el) { return !el.offsetParent; })"
+                     x-show="$store.clasificacionCc.activa && Array.from($root.querySelectorAll('tbody tr.clasif-grilla-fila')).every(function(el) { return !el.offsetParent; })"
                      x-cloak>
                     Ningún artículo coincide con la búsqueda.
                 </div>
@@ -358,6 +360,74 @@
     });
 })();
 document.addEventListener('alpine:init', function () {
+    Alpine.store('clasificacionCc', {
+        busqueda: '',
+        open: false,
+        highlight: -1,
+        catalogo: [],
+        norm: function (s) {
+            return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        },
+        get activa() {
+            return this.norm(this.busqueda) !== '';
+        },
+        coincide: function (haystack) {
+            var q = this.norm(this.busqueda);
+            if (!q) { return true; }
+            return this.norm(haystack).indexOf(q) > -1;
+        },
+        get sugerenciasFiltradas() {
+            var q = this.norm(this.busqueda);
+            if (!q) { return []; }
+            var seen = {};
+            var out = [];
+            var cat = this.catalogo || [];
+            for (var i = 0; i < cat.length; i++) {
+                var it = cat[i];
+                if (seen[it.key]) { continue; }
+                if (this.norm(it.haystack).indexOf(q) === -1) { continue; }
+                seen[it.key] = true;
+                out.push(it);
+                if (out.length >= 12) { break; }
+            }
+            return out;
+        },
+        onInput: function () {
+            this.open = this.activa;
+            this.highlight = -1;
+        },
+        seleccionar: function (item) {
+            this.busqueda = (item && (item.codigo || item.descripcion)) || '';
+            this.open = false;
+            this.highlight = -1;
+        },
+        limpiar: function () {
+            this.busqueda = '';
+            this.open = false;
+            this.highlight = -1;
+        },
+        cerrarSugerencias: function () {
+            this.open = false;
+            this.highlight = -1;
+        },
+        move: function (dir) {
+            var n = this.sugerenciasFiltradas.length;
+            if (!n) {
+                this.open = this.activa;
+                return;
+            }
+            this.open = true;
+            this.highlight = (this.highlight + dir + n) % n;
+        },
+        enter: function () {
+            var items = this.sugerenciasFiltradas;
+            if (this.open && this.highlight >= 0 && items[this.highlight]) {
+                this.seleccionar(items[this.highlight]);
+            } else {
+                this.open = false;
+            }
+        }
+    });
     Alpine.data('clasificacionFiltros', function () {
         return {
             open: false,
@@ -492,7 +562,7 @@ document.addEventListener('alpine:init', function () {
             },
             init: function () {
                 var self = this;
-                // Precarga siempre (editable o solo lectura) para mostrar casilleros con el desglose.
+                // Solo lectura y borrador: mostrar desglose. Editable: ini_semi llega en 0.
                 var ism = this.iniSemi || 0;
                 this.semiDoc = Math.floor(ism / this.upd);
                 this.semiUni = ism % this.upd;
@@ -537,13 +607,27 @@ document.addEventListener('alpine:init', function () {
         return {
             excedidas: {},
             fechaIso: '',
-            busqueda: '',
             hayFilasEditables: {{ hay_filas_editables|yesno:"true,false" }},
             init: function () {
                 var raw = '{{ fecha_hoy|escapejs }}';
                 if (raw && raw.indexOf('/') > -1) {
                     var p = raw.split('/');
                     this.fechaIso = p[2] + '-' + p[1] + '-' + p[0];
+                }
+                var store = Alpine.store('clasificacionCc');
+                if (store) {
+                    var seen = {};
+                    var cat = [];
+                    this.$el.querySelectorAll('tr.clasif-grilla-fila').forEach(function (el) {
+                        var codigo = (el.getAttribute('data-codigo') || '').trim();
+                        var desc = (el.getAttribute('data-articulo') || '').trim();
+                        var hay = el.getAttribute('data-descripcion') || '';
+                        var key = codigo + '|' + desc;
+                        if (seen[key]) { return; }
+                        seen[key] = true;
+                        cat.push({ key: key, codigo: codigo, descripcion: desc, haystack: hay });
+                    });
+                    store.catalogo = cat;
                 }
                 var elFb = document.getElementById('clasificacion-feedback-modal');
                 if (!elFb || typeof window.mprShowAviso !== 'function') return;
