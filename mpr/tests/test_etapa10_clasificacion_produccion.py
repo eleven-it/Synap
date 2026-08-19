@@ -262,10 +262,27 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         fila = resultado["filas"][0]
         self.assertAlmostEqual(fila["parte"], 24.0)
         self.assertAlmostEqual(fila["base_clasificable"], 24.0)
-        self.assertEqual(fila["ini_semi"], 24)
+        self.assertEqual(fila["ini_semi"], 0)
         self.assertEqual(fila["ini_seg2da"], 0)
         self.assertEqual(fila["ini_scrap"], 0)
         self.assertFalse(fila["solo_lectura"])
+
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
+    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(saldo=24.0), {}))
+    def test_editable_no_precarga_semi_desde_parte(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
+        """Semi/2da/scrap editables arrancan en 0; el parte no se copia a Semi."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=24.0)
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
+        fila = resultado["filas"][0]
+        self.assertFalse(fila["solo_lectura"])
+        self.assertAlmostEqual(fila["parte"], 24.0)
+        self.assertAlmostEqual(fila["atribuible_parte"], 24.0)
+        self.assertEqual(fila["ini_semi"], 0)
+        self.assertEqual(fila["ini_seg2da"], 0)
+        self.assertEqual(fila["ini_scrap"], 0)
     @patch(
         "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
         return_value={(42, ID_OPERARIO): {"semi": Decimal("15"), "segunda": Decimal("0"), "scrap": Decimal("0")}},

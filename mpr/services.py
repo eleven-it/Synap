@@ -20355,6 +20355,8 @@ def construir_grilla_clasificacion_produccion(
     """Grilla clasificación por máquina × artículo × turno × operario fabricante.
 
     Fecha obligatoria para cargar filas; turno opcional (vacío = todos los turnos del día).
+    Filas editables: ``ini_semi``/2da/scrap = 0 (sin precarga del parte). Solo lectura y
+    borrador conservan el desglose guardado.
     """
     vacio: Dict[str, Any] = {
         "filas": [],
@@ -20464,7 +20466,8 @@ def construir_grilla_clasificacion_produccion(
             ini_scrap = int(round(float(asignado_scrap)))
         else:
             disp_texto = texto_docenas_unidades(base_int, unidades_por_docena_fijo=12)
-            ini_semi = int(round(float(atribuible)))
+            # Editable: celdas en 0 para completar celda por celda (sin precarga del parte).
+            ini_semi = 0
             ini_seg2da = 0
             ini_scrap = 0
 
