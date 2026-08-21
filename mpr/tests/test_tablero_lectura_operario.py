@@ -54,6 +54,7 @@ class TestHelpersTableroLectura(SimpleTestCase):
         user = _mock_user("mpr.parte_operario", "mpr.tablero_ver")
         flags = _context_flags_tablero(user)
         self.assertFalse(flags["puede_enviar"])
+        self.assertFalse(flags["puede_cambiar_vista_tablero"])
         self.assertTrue(flags["solo_lectura_tablero"])
         self.assertFalse(flags["puede_anular_envios"])
 
@@ -61,6 +62,7 @@ class TestHelpersTableroLectura(SimpleTestCase):
         user = _mock_user("mpr.ver")
         flags = _context_flags_tablero(user)
         self.assertTrue(flags["puede_enviar"])
+        self.assertTrue(flags["puede_cambiar_vista_tablero"])
         self.assertFalse(flags["solo_lectura_tablero"])
 
 
