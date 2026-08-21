@@ -1,4 +1,4 @@
-{# Encabezado denso Control de calidad (una fila, controles h-9). #}
+{# Encabezado denso Control de calidad — fecha del día (sin filtro Turno). #}
 <div class="mb-2 flex-shrink-0">
     <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
         <header class="flex flex-wrap items-end gap-x-3 gap-y-2">
@@ -19,67 +19,9 @@
                            aria-label="Fecha del control de calidad"
                            class="h-9 rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white [color-scheme:dark] focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"/>
                     <input type="hidden" name="fecha" :value="fechaDdmmyyyy">
+                    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
+                    <input type="hidden" name="ver_roster" value="{% if ver_roster %}1{% else %}0{% endif %}">
                 </label>
-
-                <div class="relative flex flex-col gap-0.5" @click.outside="open = false">
-                    <span class="text-[10px] font-medium text-slate-400">Turno <span class="sr-only">(opcional: vacío = todos)</span></span>
-                    <div class="relative">
-                        <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">schedule</span>
-                        <input type="text"
-                               x-model="query"
-                               @focus="open = true"
-                               @click="open = true"
-                               @input="onInput()"
-                               @keydown.arrow-down.prevent="move(1)"
-                               @keydown.arrow-up.prevent="move(-1)"
-                               @keydown.enter.prevent="enter()"
-                               @keydown.escape="open = false"
-                               role="combobox"
-                               aria-autocomplete="list"
-                               :aria-expanded="open"
-                               aria-label="Turno opcional"
-                               autocomplete="off"
-                               placeholder="Turno (opcional)…"
-                               title="Vacío = todos los turnos del día"
-                               class="h-9 w-40 rounded-lg border border-slate-600 bg-slate-900/80 pl-9 pr-8 text-sm text-white placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 sm:w-44"/>
-                        <button type="button"
-                                x-show="selectedId"
-                                x-cloak
-                                @click="clearSel()"
-                                aria-label="Limpiar turno"
-                                class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition-colors hover:text-white">
-                            <span class="material-icons text-sm" aria-hidden="true">close</span>
-                        </button>
-                        <input type="hidden" name="turno_id" :value="selectedId">
-                        <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
-                        <input type="hidden" name="ver_roster" value="{% if ver_roster %}1{% else %}0{% endif %}">
-
-                        <ul x-show="open"
-                            x-cloak
-                            x-transition.opacity.duration.150ms
-                            role="listbox"
-                            class="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
-                            <template x-for="(opt, idx) in filtered" :key="opt.id">
-                                <li role="option"
-                                    :aria-selected="String(opt.id) === String(selectedId)"
-                                    @click="select(opt)"
-                                    @mouseenter="highlight = idx"
-                                    :class="{
-                                        'bg-teal-50 dark:bg-teal-900/30': idx === highlight,
-                                        'font-semibold text-teal-700 dark:text-teal-300': String(opt.id) === String(selectedId)
-                                    }"
-                                    class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-slate-700 transition-colors dark:text-slate-200">
-                                    <span class="material-icons text-sm text-slate-400" aria-hidden="true">schedule</span>
-                                    <span x-text="opt.nombre"></span>
-                                </li>
-                            </template>
-                            <li x-show="filtered.length === 0"
-                                class="px-3 py-2 text-xs text-slate-400">
-                                Sin turnos que coincidan
-                            </li>
-                        </ul>
-                    </div>
-                </div>
 
                 {# Marcas ocultas: conservadas en DOM (altura del tags filter rompe alineación del chrome) #}
                 <div class="hidden" aria-hidden="true">
@@ -93,40 +35,72 @@
                 </button>
             </form>
 
-            <label class="flex min-w-[10rem] flex-1 flex-col gap-0.5 sm:min-w-[12rem] sm:max-w-sm">
+            <div class="flex min-w-[10rem] flex-1 flex-col gap-0.5 sm:min-w-[12rem] sm:max-w-sm"
+                 @click.outside="$store.clasificacionCc.cerrarSugerencias()">
                 <span class="text-[10px] font-medium text-slate-400">Buscar artículo</span>
                 <div class="relative">
                     <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
                     <input type="search"
                            id="clasif-busqueda-articulo"
-                           x-model="busqueda"
-                           @keydown.enter.prevent
+                           x-model="$store.clasificacionCc.busqueda"
+                           @input="$store.clasificacionCc.onInput()"
+                           @focus="$store.clasificacionCc.onInput()"
+                           @keydown.arrow-down.prevent="$store.clasificacionCc.move(1)"
+                           @keydown.arrow-up.prevent="$store.clasificacionCc.move(-1)"
+                           @keydown.enter.prevent="$store.clasificacionCc.enter()"
+                           @keydown.escape="$store.clasificacionCc.cerrarSugerencias()"
                            autocomplete="off"
                            placeholder="Código o descripción…"
+                           role="combobox"
+                           aria-autocomplete="list"
+                           aria-controls="clasif-sugerencias-articulo"
+                           :aria-expanded="$store.clasificacionCc.open && $store.clasificacionCc.sugerenciasFiltradas.length ? 'true' : 'false'"
                            aria-label="Filtrar artículo por código o descripción en la grilla"
                            class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 py-0 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"/>
                     <button type="button"
-                            x-show="busqueda.trim() !== ''"
+                            x-show="$store.clasificacionCc.activa"
                             x-cloak
-                            @click="busqueda = ''"
+                            @click="$store.clasificacionCc.limpiar()"
                             class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
                             aria-label="Limpiar búsqueda">
                         <span class="material-icons text-base" aria-hidden="true">close</span>
                     </button>
+                    <ul id="clasif-sugerencias-articulo"
+                        x-show="$store.clasificacionCc.open && $store.clasificacionCc.activa"
+                        x-cloak
+                        x-transition.opacity.duration.150ms
+                        role="listbox"
+                        class="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                        <template x-for="(item, idx) in $store.clasificacionCc.sugerenciasFiltradas" :key="item.key">
+                            <li role="option"
+                                :aria-selected="idx === $store.clasificacionCc.highlight"
+                                @mousedown.prevent="$store.clasificacionCc.seleccionar(item)"
+                                @mouseenter="$store.clasificacionCc.highlight = idx"
+                                :class="idx === $store.clasificacionCc.highlight ? 'bg-teal-50 dark:bg-teal-900/30' : ''"
+                                class="flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 text-slate-700 transition-colors dark:text-slate-200">
+                                <span class="text-xs font-semibold tabular-nums" x-text="item.codigo || '—'"></span>
+                                <span class="line-clamp-1 text-[11px] text-slate-500 dark:text-slate-400" x-text="item.descripcion"></span>
+                            </li>
+                        </template>
+                        <li x-show="$store.clasificacionCc.sugerenciasFiltradas.length === 0"
+                            class="px-3 py-2 text-xs text-slate-400">
+                            Ningún artículo coincide
+                        </li>
+                    </ul>
                 </div>
-            </label>
+            </div>
 
             {% if puede_ver_roster_completo and not requiere_fecha %}
             <div class="flex items-center gap-2 self-end">
                 {% if ver_roster %}
-                <a href="?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}&amp;ver_roster=0&amp;presentacion={{ modo_presentacion }}"
+                <a href="?fecha={{ fecha_str|urlencode }}&amp;ver_roster=0&amp;presentacion={{ modo_presentacion }}"
                    title="Vuelve a solo filas pendientes de clasificar"
                    class="group relative inline-flex h-9 items-center rounded-lg border border-slate-500 bg-slate-700 px-3 text-xs font-medium text-white hover:bg-slate-600">
                     Solo pendiente
                     {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Solo filas pendientes de clasificar" only %}
                 </a>
                 {% else %}
-                <a href="?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}&amp;ver_roster=1&amp;presentacion={{ modo_presentacion }}"
+                <a href="?fecha={{ fecha_str|urlencode }}&amp;ver_roster=1&amp;presentacion={{ modo_presentacion }}"
                    title="Incluye filas ya clasificadas (solo lectura)"
                    class="group relative inline-flex h-9 items-center rounded-lg border border-teal-500 bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-500{% if confirmadas_ocultas %} ring-2 ring-teal-300/80{% endif %}">
                     Ver roster{% if confirmadas_ocultas %} ({{ confirmadas_ocultas }}){% endif %}
@@ -135,7 +109,7 @@
                 {% endif %}
                 {% if tiene_borrador %}
                 <span class="inline-flex h-9 items-center gap-1 rounded-lg border border-teal-600/60 bg-teal-950/40 px-2.5 text-[11px] font-semibold text-teal-200"
-                      title="Hay un borrador guardado para esta fecha/turno">
+                      title="Hay un borrador guardado para esta fecha">
                     <span class="material-icons text-sm" aria-hidden="true">draft</span>
                     Borrador
                 </span>
@@ -143,7 +117,7 @@
             </div>
             {% elif tiene_borrador and not requiere_fecha %}
             <span class="inline-flex h-9 items-center gap-1 self-end rounded-lg border border-teal-600/60 bg-teal-950/40 px-2.5 text-[11px] font-semibold text-teal-200"
-                  title="Hay un borrador guardado para esta fecha/turno">
+                  title="Hay un borrador guardado para esta fecha">
                 <span class="material-icons text-sm" aria-hidden="true">draft</span>
                 Borrador
             </span>
@@ -154,7 +128,7 @@
                 {% include "mpr/includes/toggle_presentacion_cantidad.html" with modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
                 {% endif %}
 
-                {% include "mpr/includes/chrome_nav_flujo.html" with current="cc" fecha_str=fecha_str turno_id=turno_id only %}
+                {% include "mpr/includes/chrome_nav_flujo.html" with current="cc" fecha_str=fecha_str turno_id="" only %}
 
                 <a href="{% url 'mpr:manual_usuario' %}#control-calidad"
                    target="_blank"

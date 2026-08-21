@@ -1,5 +1,8 @@
-# Git
+# Git (la raíz .git no alcanza: un clone anidado o una copia .git.corrupt-*
+# sí entra al contexto y Docker Desktop se queda minutos transfiriendo cientos de MB)
 .git
+**/.git
+.git.corrupt-*
 .gitignore
 .gitattributes
 
@@ -84,11 +87,31 @@ test_*
 .coverage
 htmlcov/
 
-# Node modules (se instalarán en runtime)
+# Node modules (se instalarán en runtime).
+# Sin ** el patrón solo cubre la raíz; theme/node_modules y support/frontend/node_modules sí se enviaban.
 node_modules/
+**/node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Árboles locales que no van en la imagen Synap_app.
+# .gitignore no se aplica al build: administraNET-ecom (~430 MB, casi todo .git interno),
+# Best Sox (Excel de fábrica) y VB6 inflaban el contexto a ~686 MB / 50+ min.
+administraNET-ecom/
+administranet_vb6/
+administraNET_Limpio/
+administraNET_Limpio.zip
+Best Sox/
+support/
+
+# Dumps y exportaciones locales
+*.dump
+tmp_exports/
+
+# Cursor / agentes (no runtime)
+.cursor/
+.agents/
 
 # Temporary files
 tmp/

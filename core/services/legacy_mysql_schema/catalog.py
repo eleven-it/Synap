@@ -866,6 +866,14 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
                 _append_migration(
                     applied, failed, True, f"idx_mpr_tl_fecha_turno_art_op en {tbl_tl}"
                 )
+            if not indice_existe(cursor, tbl_tl, "idx_mpr_tl_fecha_art_dest"):
+                cursor.execute(
+                    "CREATE INDEX `idx_mpr_tl_fecha_art_dest` ON `{}` "
+                    "(fecha_produccion, id_articulo, tipo_destino)".format(ttl)
+                )
+                _append_migration(
+                    applied, failed, True, f"idx_mpr_tl_fecha_art_dest en {tbl_tl}"
+                )
 
         tbl_cc_borr = nombre_tabla_real(cursor, "mpr_clasificacion_borrador")
         if not tbl_cc_borr:
@@ -880,6 +888,23 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
                     failed,
                     True,
                     "DDL MPR borrador CC (006_mpr_clasificacion_borrador.sql)",
+                )
+
+        tbl_cc_borr_cons = nombre_tabla_real(cursor, "mpr_cc_borrador")
+        if not tbl_cc_borr_cons:
+            sql_borrador_cons = app_path / "sql" / "007_mpr_cc_borrador_consolidado.sql"
+            if sql_borrador_cons.is_file():
+                for stmt in _split_sql_statements(
+                    sql_borrador_cons.read_text(encoding="utf-8")
+                ):
+                    stmt = _sc_sql_strip_leading_comments(stmt)
+                    if stmt:
+                        cursor.execute(stmt)
+                _append_migration(
+                    applied,
+                    failed,
+                    True,
+                    "DDL MPR borrador CC consolidado (007_mpr_cc_borrador_consolidado.sql)",
                 )
 
         # Armado: fecha_realizado / estado / ítems de borrador (007)

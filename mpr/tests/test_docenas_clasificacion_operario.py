@@ -224,37 +224,28 @@ class TransicionLoteOperarioTests(SimpleTestCase):
 
 
 class ClasificacionOperarioServicioTests(SimpleTestCase):
+    """Grilla consolidada: saldo Producción, colapso máquinas, roster/pendiente."""
+
     def setUp(self):
-        self._patch_borrador = patch(
-            "mpr.repositories.clasificacion_borrador.listar_lineas_borrador",
-            return_value={},
-        )
-        self._patch_tiene_borrador = patch(
-            "mpr.repositories.clasificacion_borrador.tiene_borrador",
-            return_value=False,
-        )
-        self._patch_borrador.start()
-        self._patch_tiene_borrador.start()
+        self._patches = [
+            patch("mpr.repositories.clasificacion_borrador.listar_lineas_borrador", return_value={}),
+            patch("mpr.repositories.clasificacion_borrador.tiene_borrador", return_value=False),
+            patch("mpr.repositories.clasificacion_borrador.tiene_borrador_cc_consolidado", return_value=False),
+            patch("mpr.repositories.clasificacion_borrador.listar_lineas_borrador_cc_consolidado", return_value=[]),
+            patch("mpr.repositories.transicion_lote.semi_agregado_por_articulo_fecha", return_value={}),
+            patch("mpr.repositories.transicion_lote.clasificado_segunda_scrap_por_celda_fecha", return_value={}),
+        ]
+        for p in self._patches:
+            p.start()
 
     def tearDown(self):
-        self._patch_borrador.stop()
-        self._patch_tiene_borrador.stop()
+        for p in self._patches:
+            p.stop()
 
     @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 100.0}}, {}))
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
-        return_value={(10, 5): {"semi": Decimal("12"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
-    )
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno")
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={10: {"Produccion": 100.0}})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    def test_grilla_filas_por_operario(
-        self,
-        mock_celdas,
-        mock_clasif,
-        _desglose,
-        *_rest,
-    ):
+    def test_grilla_filas_por_operario(self, mock_celdas, *_rest):
         from mpr.services import construir_grilla_clasificacion_produccion
 
         mock_celdas.return_value = {
@@ -271,28 +262,21 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
                 "turno_nombre": "Mañana",
             },
         }
-        mock_clasif.return_value = {(10, 5): Decimal("12")}
-        grilla = construir_grilla_clasificacion_produccion(
-            "empresa92", date(2026, 7, 8), 1,
-        )
-        self.assertEqual(len(grilla["filas"]), 2)
-        pendientes = {f["id_operario"]: f["max_clasificable"] for f in grilla["filas"]}
-        self.assertEqual(pendientes[5], 64.0)
-        self.assertEqual(pendientes[6], 64.0)
+        grilla = construir_grilla_clasificacion_produccion("empresa92", date(2026, 7, 8), 1)
+        self.assertEqual(len(grilla["bloques"]), 1)
+        self.assertEqual(len(grilla["bloques"][0]["filas"]), 2)
+        saldos = {f["id_operario"]: float(grilla["bloques"][0]["saldo_produccion"]) for f in grilla["bloques"][0]["filas"]}
+        self.assertEqual(saldos[5], 100.0)
+        self.assertEqual(saldos[6], 100.0)
+
+    @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={10: {"Produccion": 0.0}})
     @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
-        return_value={(10, 5): {"semi": Decimal("48"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
-    )
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
-        return_value={(10, 5): Decimal("48")},
+        "mpr.repositories.transicion_lote.clasificado_segunda_scrap_por_celda_fecha",
+        return_value={(10, 5, 1): Decimal("48")},
     )
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 0.0}}, {}))
-    def test_grilla_ver_roster_muestra_completadas(
-        self, _pivot, _fetch, mock_celdas, _cls, _desglose,
-    ):
+    def test_grilla_ver_roster_muestra_completadas(self, mock_celdas, *_rest):
         from mpr.services import construir_grilla_clasificacion_produccion
 
         mock_celdas.return_value = {
@@ -306,9 +290,8 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         grilla = construir_grilla_clasificacion_produccion(
             "empresa92", date(2026, 7, 8), 1, ver_roster_completo=True,
         )
-        self.assertEqual(len(grilla["filas"]), 1)
-        self.assertTrue(grilla["filas"][0]["solo_lectura"])
-        self.assertIn("Completo", grilla["filas"][0]["disponible_texto"])
+        self.assertEqual(len(grilla["bloques"]), 1)
+        self.assertTrue(grilla["bloques"][0]["solo_lectura"])
         self.assertFalse(grilla["hay_filas_editables"])
 
         solo_pendiente = construir_grilla_clasificacion_produccion(
@@ -316,21 +299,15 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         )
         self.assertTrue(solo_pendiente["filas_vacio"])
         self.assertFalse(solo_pendiente["hay_filas_editables"])
+
+    @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={10: {"Produccion": 100.0}})
     @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
-        return_value={(10, 5): {"semi": Decimal("48"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
-    )
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
-        return_value={(10, 5): Decimal("48")},
+        "mpr.repositories.transicion_lote.clasificado_segunda_scrap_por_celda_fecha",
+        return_value={(10, 5, 1): Decimal("48")},
     )
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 100.0}}, {}))
-    def test_grilla_sin_bloqueo_si_clasificacion_completa(
-        self, _pivot, _fetch, mock_celdas, _cls, _desglose,
-    ):
-        from decimal import Decimal
+    def test_grilla_sin_bloqueo_si_clasificacion_completa(self, mock_celdas, *_rest):
         from mpr.services import construir_grilla_clasificacion_produccion
 
         mock_celdas.return_value = {
@@ -341,41 +318,24 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
                 "turno_nombre": "Mañana",
             },
         }
-        # Solo pendiente: CC confirmado no se reabre por stock extra.
-        pendiente = construir_grilla_clasificacion_produccion(
-            "empresa92", date(2026, 7, 8), 1,
-        )
-        self.assertTrue(pendiente["filas_vacio"])
+        pendiente = construir_grilla_clasificacion_produccion("empresa92", date(2026, 7, 8), 1)
+        # Solo pendiente oculta operario ya clasificado en 2da/scrap; bloque puede quedar vacío de filas.
         self.assertEqual(pendiente["bloqueos"], [])
-        self.assertFalse(pendiente["hay_filas_editables"])
-
         roster = construir_grilla_clasificacion_produccion(
             "empresa92", date(2026, 7, 8), 1, ver_roster_completo=True,
         )
-        self.assertEqual(len(roster["filas"]), 1)
-        self.assertTrue(roster["filas"][0]["solo_lectura"])
+        self.assertEqual(len(roster["bloques"]), 1)
         self.assertEqual(roster["bloqueos"], [])
-        self.assertFalse(roster["hay_filas_editables"])
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value={99: ("X", "Sin operario")})
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({99: {"Produccion": 12.0}}, {}))
-    def test_grilla_bloqueo_cantidad_sin_operario(
-        self, _pivot, _fetch, mock_celdas, _cls, _desglose,
-    ):
+
+    @patch("mpr.services._fetch_descripciones_articulo", return_value={99: ("X", "Sin parte")})
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={99: {"Produccion": 12.0}})
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno", return_value={})
+    def test_grilla_huerfano_sin_operario(self, *_rest):
         from mpr.services import construir_grilla_clasificacion_produccion
 
-        mock_celdas.return_value = {
-            (0, 99, 0, 1): {
-                "cantidad": Decimal("12"),
-                "operario_nombre": "-",
-                "maquina_nombre": "—",
-                "turno_nombre": "Mañana",
-            },
-        }
-        grilla = construir_grilla_clasificacion_produccion(
-            "empresa92", date(2026, 7, 8), 1,
-        )
-        self.assertEqual(len(grilla["bloqueos"]), 1)
-        self.assertEqual(grilla["bloqueos"][0]["id_articulo"], 99)
+        grilla = construir_grilla_clasificacion_produccion("empresa92", date(2026, 7, 8), 1)
+        self.assertEqual(len(grilla["bloques"]), 1)
+        self.assertTrue(grilla["bloques"][0]["huerfano"])
+        self.assertEqual(grilla["bloqueos"], [])
+
+
