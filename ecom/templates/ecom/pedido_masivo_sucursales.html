@@ -434,7 +434,13 @@
                         <p class="pm-art-nombre text-xs font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
                       </div>
                     </td>
-                    <td class="pm-c-precio text-xs tabular-nums text-slate-700 dark:text-slate-200" x-text="fmtPrecio(art.precio_unitario_neto)"></td>
+                    <td class="pm-c-precio">
+                      <input type="number" min="0" step="0.01" inputmode="decimal"
+                             class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                             :value="art.precio_unitario_neto"
+                             :disabled="!matrizEditable || !puedeEditarPrecioLinea"
+                             @change="onPrecioFila(art.id_articulo, $event.target.value)"/>
+                    </td>
                     <td class="pm-c-desc">
                       <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
                              class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
@@ -766,8 +772,7 @@
                       <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
                         <p class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
-                          <span x-text="fmtPrecio(art.precio_unitario_neto)"></span>
-                          <span class="mx-1">·</span>
+                          <span x-show="!puedeEditarPrecioLinea || !matrizEditable" x-text="fmtPrecio(art.precio_unitario_neto)"></span>
                           <span x-text="stockPacksTexto(art)"></span>
                         </p>
                       </div>
@@ -780,7 +785,16 @@
                         <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
                       </button>
                     </div>
-                    <div class="grid grid-cols-[minmax(5rem,1fr)_minmax(0,2fr)] gap-2">
+                    <div class="grid grid-cols-[minmax(5rem,1fr)_minmax(5rem,1fr)_minmax(0,2fr)] gap-2">
+                      <div class="min-w-0" x-show="puedeEditarPrecioLinea">
+                        <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" :for="'pm-precio-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio">Precio</label>
+                        <input type="number" min="0" step="0.01" inputmode="decimal"
+                               :id="'pm-precio-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio"
+                               class="pm-input-dense w-full rounded-md border border-slate-300 bg-white px-2 text-right tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                               :value="art.precio_unitario_neto"
+                               :disabled="!matrizEditable || !puedeEditarPrecioLinea"
+                               @change="onPrecioFila(art.id_articulo, $event.target.value)"/>
+                      </div>
                       <div class="min-w-0">
                         <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" :for="'pm-desc-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio">% desc.</label>
                         <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
@@ -921,6 +935,40 @@
     </div>
   </div>
 
+  <div x-show="listaChangeOpen" x-cloak
+       class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+       @keydown.escape.window="listaChangeOpen && _cerrarCambioLista()">
+    <div class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-600 dark:bg-slate-800"
+         @click.stop>
+      <div class="mb-3 flex items-start gap-3">
+        <span class="material-icons text-sky-600 dark:text-sky-400" aria-hidden="true">price_change</span>
+        <div>
+          <h2 class="text-base font-semibold text-slate-900 dark:text-white">Cambiaste la lista</h2>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            ¿Recalcular los precios de las líneas con la lista nueva, o conservar los que ya están cargados?
+          </p>
+        </div>
+      </div>
+      <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button"
+                class="pedidos-btn pedidos-btn-secondary"
+                @click="_cerrarCambioLista()">
+          Cancelar
+        </button>
+        <button type="button"
+                class="pedidos-btn pedidos-btn-secondary"
+                @click="confirmarCambioLista(false)">
+          Conservar precios
+        </button>
+        <button type="button"
+                class="pedidos-btn pedidos-btn-primary"
+                @click="confirmarCambioLista(true)">
+          Recalcular precios
+        </button>
+      </div>
+    </div>
+  </div>
+
   {# Modal espera operaciones bulk (Mostrar/Ocultar todos, agregar seleccionados) #}
   <div x-show="esperaOperacion" x-cloak
        class="pm-espera-overlay"
@@ -943,5 +991,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo44"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo45"></script>
 {% endblock %}

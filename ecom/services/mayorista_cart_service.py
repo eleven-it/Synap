@@ -141,9 +141,11 @@ def agregar_item(
     validar_stock: bool = True,
     cod_viajante: Optional[int] = None,
     id_cliente_domicilio: Optional[int] = None,
+    precio_unitario_neto: Optional[Any] = None,
 ) -> Tuple[Optional[EcomCartItem], Optional[str]]:
     """
-    Agrega (o consolida) un artículo al carrito. Precio del renglón vía motor; valida stock
+    Agrega (o consolida) un artículo al carrito. Precio del renglón vía motor, o
+    ``precio_unitario_neto`` si viene override de pedido masivo. Valida stock
     disponible con la cantidad total del artículo (salvo ``validar_stock=False``).
     Devuelve (item, error).
     """
@@ -180,6 +182,13 @@ def agregar_item(
     if res is None:
         return None, "Artículo no encontrado o inactivo."
     precio_neto, row = res
+    if precio_unitario_neto is not None:
+        ov = to_decimal_or_none(precio_unitario_neto)
+        if ov is None:
+            return None, "El precio de la línea no es válido."
+        if ov < 0:
+            return None, "El precio de la línea no puede ser negativo."
+        precio_neto = ov
 
     from ecom.services.pedido_masivo_matriz import marcas_asignadas_viajante_cliente
     from ecom.services.vendedor_asignacion_sql import vcm_ternas_disponible

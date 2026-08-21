@@ -80,6 +80,12 @@ Los módulos **registran** sus necesidades de esquema; el núcleo **orquesta** p
 | **MPR — eliminar OPT legacy** | `mpr_drop_lista_produccion_legacy` | DROP `lista_produccion_*` (irreversible). CLI: `drop_mpr_lista_produccion_legacy <base> --confirm` |
 | *(retirados de la herramienta)* | `mpr_lista_produccion_*` | ~~Creación~~ de tablas OPT legacy. Solo funciones de emergencia en código; **no** recrear tras el DROP |
 
+### Ventas — permiso precio de línea (19/08/2026)
+
+| Proveedor (UI) | id | Notas |
+|----------------|-----|--------|
+| Ventas — permiso precio de línea en pedido | `permisos_sistema_mod_precio_pedido` | `ALTER` idempotente de `permisos_sistema.mod_precio_pedido` (VARCHAR Si/No, default No). Habilita por puesto la edición de precio en pedido masivo/simple. Archivo → Permiso en sistema. |
+
 ### Proveedor cotización (estado 02/08/2026)
 
 | Proveedor (UI) | id | Notas |

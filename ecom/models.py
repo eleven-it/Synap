@@ -291,6 +291,11 @@ class EcomPedidoMasivoDraft(models.Model):
         default=dict,
         blank=True,
     )
+    precios_fila = models.JSONField(
+        "precios unitarios netos por artículo (id_articulo → decimal)",
+        default=dict,
+        blank=True,
+    )
     cod_mov_origen = models.IntegerField(
         "CodigoMovimiento PED origen",
         null=True,

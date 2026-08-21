@@ -21,6 +21,8 @@ from ecom.services.pedido_cabecera_comercial import (
 from ecom.services.pedido_cabecera_relay import puede_anular_pedido_relay
 from ecom.services.pedido_masivo_matriz import (
     descuentos_fila_efectivos,
+    lineas_con_precio_cero,
+    precios_fila_efectivos,
     leer_contexto_cliente_masivo,
     listar_sucursales_cliente,
     validar_multiplos_draft,
@@ -98,11 +100,14 @@ def _cargar_lineas_sucursal(
     *,
     descuentos_por_articulo: Dict[int, Decimal],
     validar_stock: bool = True,
+    precios_por_articulo: Optional[Dict[int, Decimal]] = None,
 ) -> Optional[str]:
     agregados = 0
+    precios = precios_por_articulo or {}
     for id_art, packs in lineas:
         tipo, mult = _pack_tipo_y_mult(cart.base_empresa, id_art)
         pct = descuentos_por_articulo.get(id_art, Decimal("0"))
+        precio_ov = precios.get(id_art)
         _item, err = agregar_item(
             cart,
             id_art,
@@ -111,6 +116,7 @@ def _cargar_lineas_sucursal(
             tipo_unidad=tipo,
             multiplicador=mult,
             validar_stock=validar_stock,
+            precio_unitario_neto=precio_ov,
         )
         if err:
             return f"Artículo {id_art}: {err}"
@@ -238,7 +244,19 @@ def calcular_totales_lote_masivo(
     else:
         lista_ef = int(lista_id if lista_id is not None else ctx_cli.get("lista_id") or 1)
     desc_map = descuentos_fila_efectivos(draft, draft.base_empresa)
+    precio_map = precios_fila_efectivos(draft, draft.base_empresa, lista_id=lista_ef)
     pie = _pie_efectivo(draft, desc_pie_pct)
+    cero = _payload_precios_cero(draft, lista_id=lista_ef)
+    if cero:
+        return {
+            "ok": False,
+            "sucursales": [],
+            "total_lote": {"neto": 0.0, "iva": 0.0, "total": 0.0},
+            "warning": "",
+            "preview_incompleto": False,
+            "celdas_con_cantidad": n_celdas,
+            **cero,
+        }
 
     sucursales_out: List[Dict[str, Any]] = []
     carritos_tmp: List[EcomCart] = []
@@ -268,6 +286,7 @@ def calcular_totales_lote_masivo(
                 lineas,
                 descuentos_por_articulo=desc_map,
                 validar_stock=False,
+                precios_por_articulo=precio_map,
             )
             if err_load:
                 warnings.append(f"Sucursal {id_dom}: {err_load}")
@@ -336,6 +355,7 @@ def _evento_fin(
     codigos_anulados_intento: Optional[List[int]] = None,
     cod_mov_origen_anulado: Optional[int] = None,
     infracciones_multiplo: Optional[List[Dict[str, Any]]] = None,
+    lineas_precio_cero: Optional[List[Dict[str, Any]]] = None,
     code: Optional[str] = None,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
@@ -358,9 +378,31 @@ def _evento_fin(
         payload["cod_mov_origen_anulado"] = cod_mov_origen_anulado
     if infracciones_multiplo is not None:
         payload["infracciones_multiplo"] = infracciones_multiplo
+    if lineas_precio_cero is not None:
+        payload["lineas_precio_cero"] = lineas_precio_cero
     if code:
         payload["code"] = code
     return payload
+
+
+def _payload_precios_cero(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    lista_id: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    lineas = lineas_con_precio_cero(
+        draft, draft.base_empresa, lista_id=lista_id
+    )
+    if not lineas:
+        return None
+    n = len(lineas)
+    return {
+        "code": "precio_cero",
+        "message": (
+            f"Hay {n} artículo(s) con precio 0. Corregí el precio antes de continuar."
+        ),
+        "lineas_precio_cero": lineas,
+    }
 
 
 def _anular_pedido_origen_simple(
@@ -443,6 +485,17 @@ def confirmar_lote_masivo_stream(
         )
         return
 
+    lista_check = int(cabecera.lista_id) if cabecera is not None else int(lista_id or 1)
+    cero = _payload_precios_cero(draft, lista_id=lista_check)
+    if cero:
+        yield _evento_fin(
+            ok=False,
+            message=cero["message"],
+            lineas_precio_cero=cero["lineas_precio_cero"],
+            code="precio_cero",
+        )
+        return
+
     nombres = _mapa_nombres_sucursales(draft, nombres_sucursales=nombres_sucursales)
     doms_ordenados = sorted(por_dom.items())
     total = len(doms_ordenados)
@@ -454,6 +507,7 @@ def confirmar_lote_masivo_stream(
     else:
         lista_ef = int(lista_id or ctx_cli.get("lista_id") or 1)
     desc_map = descuentos_fila_efectivos(draft, draft.base_empresa)
+    precio_map = precios_fila_efectivos(draft, draft.base_empresa, lista_id=lista_ef)
     pie = _pie_efectivo(draft, desc_pie_pct)
 
     cod_origen_anulado, err_origen = _anular_pedido_origen_simple(draft)
@@ -493,7 +547,10 @@ def confirmar_lote_masivo_stream(
             )
             carritos_tmp.append(cart)
             err_load = _cargar_lineas_sucursal(
-                cart, lineas, descuentos_por_articulo=desc_map
+                cart,
+                lineas,
+                descuentos_por_articulo=desc_map,
+                precios_por_articulo=precio_map,
             )
             if err_load:
                 errores[str(id_dom)] = err_load

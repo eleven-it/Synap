@@ -3,8 +3,9 @@ Cabecera comercial de pedidos e-commerce (fechas, condición, lista).
 
 Resolver único consumido por checkout simple y pedido masivo. Paridad AdministraNET:
 vencimiento = fecha_pedido + cond_venta.Dias.
-Lista/condición/descuentos: supervisor **o** flags de ``permisos_sistema`` del puesto
-(``mod_lista_de_precio``, ``cambia_cv``, ``mod_descuento_pie`` / ``mod_descuento_renglon``).
+Lista/condición/descuentos/precio de línea: supervisor **o** flags de
+``permisos_sistema`` del puesto (``mod_lista_de_precio``, ``cambia_cv``,
+``mod_descuento_pie`` / ``mod_descuento_renglon``, ``mod_precio_pedido``).
 Fecha entrega PED (alta): vencimiento + 10 días, lunes si cae sábado o domingo.
 """
 
@@ -70,6 +71,8 @@ def flags_edicion_comercial(
         or _es_si_permiso(p.get("mod_descuento_pie")),
         "puede_editar_descuento_renglon": es_sup
         or _es_si_permiso(p.get("mod_descuento_renglon")),
+        "puede_editar_precio_linea": es_sup
+        or _es_si_permiso(p.get("mod_precio_pedido")),
     }
 
 
@@ -363,6 +366,9 @@ def cabecera_defaults_json(
         ),
         "puede_editar_descuento_renglon": bool(
             fl.get("puede_editar_descuento_renglon", es_supervisor)
+        ),
+        "puede_editar_precio_linea": bool(
+            fl.get("puede_editar_precio_linea", es_supervisor)
         ),
     }
     return out

@@ -1402,6 +1402,51 @@ def run_synap_permisos_tables_mysql(conn) -> Dict[str, Any]:
     }
 
 
+def run_permisos_sistema_mod_precio_pedido_mysql(conn) -> Dict[str, Any]:
+    """Añade ``permisos_sistema.mod_precio_pedido`` (Si/No) por puesto."""
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    try:
+        tbl = nombre_tabla_real(cursor, "permisos_sistema")
+        if not tbl:
+            cursor.close()
+            return {
+                "success": True,
+                "message": "Tabla permisos_sistema no existe; omitido.",
+                "migrations_applied": [],
+                "migrations_failed": [],
+            }
+        if not columna_existe(cursor, tbl, "mod_precio_pedido"):
+            cursor.execute(
+                "ALTER TABLE `{}` ADD COLUMN mod_precio_pedido VARCHAR(2) NOT NULL "
+                "DEFAULT 'No' COMMENT 'Modificar precio de línea en pedido Synap'".format(
+                    tbl.replace("`", "``")
+                )
+            )
+            _append_migration(applied, failed, True, "permisos_sistema.mod_precio_pedido")
+        else:
+            _append_migration(
+                applied, failed, True, "permisos_sistema.mod_precio_pedido (ya existía)"
+            )
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_permisos_sistema_mod_precio_pedido_mysql: %s", e)
+        failed.append(str(e))
+        try:
+            cursor.close()
+        except Exception:
+            pass
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 def run_mpr_lista_produccion_detalle_corregir_pk_nombre_mysql(conn) -> Dict[str, Any]:
     """
     Renombra la PK de ``lista_produccion_detalle`` a ``id_lista_detalle`` cuando el nombre
@@ -2965,6 +3010,17 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_synap_permisos_tables_mysql,
+    },
+    {
+        "id": "permisos_sistema_mod_precio_pedido",
+        "title": "Ventas — permiso precio de línea en pedido",
+        "description": (
+            "Añade permisos_sistema.mod_precio_pedido (Si/No, default No) para habilitar "
+            "por puesto la edición de precio de línea en pedido masivo/simple. "
+            "Se gestiona en Archivo → Permiso en sistema."
+        ),
+        "risk": "bajo",
+        "run": run_permisos_sistema_mod_precio_pedido_mysql,
     },
     {
         "id": "cont_asiento_recalc_corrido_index",

@@ -22,6 +22,7 @@ Base: **administranet**
 | cambia_talonario | VARCHAR | Sí |  |  |  |
 | mod_descuento_pie | VARCHAR | Sí |  |  |  |
 | mod_descuento_renglon | VARCHAR | Sí |  |  |  |
+| mod_precio_pedido | VARCHAR | Sí |  |  | Synap: editar precio de línea en pedido (default No) |
 | visualizar_comprobantes | VARCHAR | Sí |  |  |  |
 | anular_comprobantes | VARCHAR | Sí |  |  |  |
 | reimprimir_comprobantes | VARCHAR | Sí |  |  |  |

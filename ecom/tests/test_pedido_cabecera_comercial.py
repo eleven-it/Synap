@@ -246,10 +246,21 @@ class TestFlagsEdicionComercial(TestCase):
         self.assertTrue(flags["puede_editar_condicion"])
         self.assertFalse(flags["puede_editar_descuento_pie"])
         self.assertTrue(flags["puede_editar_descuento_renglon"])
+        self.assertFalse(flags["puede_editar_precio_linea"])
         self.assertFalse(flags["puede_editar_vencimiento"])
+
+    def test_vendedor_con_mod_precio_pedido(self):
+        flags = flags_edicion_comercial(
+            {"supervisor_venta": "No"},
+            {"mod_precio_pedido": "Si"},
+        )
+        self.assertTrue(flags["puede_editar_precio_linea"])
+        self.assertFalse(flags["puede_editar_lista"])
 
     def test_vendedor_sin_flags_no_edita(self):
         flags = flags_edicion_comercial({"supervisor_venta": "No"}, {})
         self.assertFalse(flags["puede_editar_lista"])
         self.assertFalse(flags["puede_editar_condicion"])
         self.assertFalse(flags["puede_editar_descuento_pie"])
+        self.assertFalse(flags["puede_editar_descuento_renglon"])
+        self.assertFalse(flags["puede_editar_precio_linea"])

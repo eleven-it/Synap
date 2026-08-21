@@ -90,6 +90,40 @@ def _xlsx_plantilla(
     return bio.getvalue()
 
 
+def _xlsx_v5(ids_suc, filas, id_cliente=368, cod_viajante=30):
+    """filas: {codigo: {"id_articulo": int, "nombre": str, "precio": n|None, "qtys": [...]}}."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Pedido"
+    ws.cell(1, 1, "Código")
+    ws.cell(1, 2, "Artículo")
+    ws.cell(1, 3, MARKER_IDART)
+    ws.cell(1, 4, "Precio")
+    for i, idd in enumerate(ids_suc):
+        ws.cell(1, 5 + i, f"Suc {idd}")
+    fila = 2
+    for codigo, data in filas.items():
+        ws.cell(fila, 1, codigo)
+        ws.cell(fila, 2, data.get("nombre") or "x")
+        ws.cell(fila, 3, data["id_articulo"])
+        if data.get("precio") is not None:
+            ws.cell(fila, 4, data["precio"])
+        for i, q in enumerate(data.get("qtys") or []):
+            if q is not None:
+                ws.cell(fila, 5 + i, q)
+        fila += 1
+    ws_m = wb.create_sheet(HOJA_META)
+    ws_m.append(["id_cliente", id_cliente])
+    ws_m.append(["cod_viajante", cod_viajante])
+    ws_m.append(["draft_id", 1])
+    ws_m.append(["plantilla_version", 5])
+    ws_m.append(["sucursal_ids", *ids_suc])
+    ws_m.append(["col_primera_sucursal", 5])
+    bio = BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
+
 def _draft(**kwargs):
     defaults = dict(
         base_empresa="emp_m",
@@ -118,6 +152,9 @@ class TestImportarMatrizExcel(TestCase):
         self.p_desc = patch(
             "ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo"
         )
+        self.p_precio = patch(
+            "ecom.services.pedido_masivo_import.asegurar_precio_fila_articulo"
+        )
         self.p_pie = patch(
             "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
             return_value={
@@ -133,6 +170,7 @@ class TestImportarMatrizExcel(TestCase):
         self.p_suc.start()
         self.p_marcas.start()
         self.p_desc.start()
+        self.p_precio.start()
         self.p_pie.start()
         self.p_nom.start()
 
@@ -140,6 +178,7 @@ class TestImportarMatrizExcel(TestCase):
         self.p_suc.stop()
         self.p_marcas.stop()
         self.p_desc.stop()
+        self.p_precio.stop()
         self.p_pie.stop()
         self.p_nom.stop()
 
@@ -172,6 +211,57 @@ class TestImportarMatrizExcel(TestCase):
         )
         d.refresh_from_db()
         self.assertEqual(d.descuento_pie_pct, Decimal("5"))
+
+    def _lookup_ids(self, _base, ids):
+        out = {}
+        for i in ids:
+            if int(i) == 101:
+                out[int(i)] = dict(ART_OK)
+        return out
+
+    def test_importa_v5_cantidad_y_precio(self):
+        d = _draft()
+        raw = _xlsx_v5(
+            [10, 20],
+            {
+                "2401": {
+                    "id_articulo": 101,
+                    "nombre": "Media pack",
+                    "precio": 125.5,
+                    "qtys": [12, 6],
+                }
+            },
+        )
+        res = importar_matriz_excel(
+            d, raw, consultar_arts=self._lookup, consultar_ids=self._lookup_ids
+        )
+        self.assertTrue(res["ok"], res)
+        d.refresh_from_db()
+        self.assertEqual(d.precios_fila.get("101"), 125.5)
+        self.assertEqual(
+            d.celdas.get(id_articulo=101, id_cliente_domicilio=10).cantidad_packs,
+            Decimal("12"),
+        )
+
+    def test_rechaza_v5_precio_cero(self):
+        d = _draft()
+        raw = _xlsx_v5(
+            [10],
+            {
+                "2401": {
+                    "id_articulo": 101,
+                    "nombre": "Media pack",
+                    "precio": 0,
+                    "qtys": [6],
+                }
+            },
+        )
+        res = importar_matriz_excel(
+            d, raw, consultar_arts=self._lookup, consultar_ids=self._lookup_ids
+        )
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["errores"][0]["code"], "precio_cero")
+        self.assertEqual(d.celdas.count(), 0)
 
     def test_rechaza_sucursal_fuera_territorio(self):
         d = _draft()
@@ -444,7 +534,19 @@ class TestPlantillaExcel(TestCase):
         "ecom.services.pedido_masivo_import._nombre_cliente",
         return_value="Dabra S.A.",
     )
-    def test_plantilla_incluye_marker_e_ids(self, _n, _m, _s):
+    @patch(
+        "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
+        return_value={
+            "descRenglon": Decimal("0"),
+            "descPie": Decimal("0"),
+            "lista_id": 1,
+        },
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import._precio_real_articulo",
+        return_value=Decimal("80"),
+    )
+    def test_plantilla_incluye_marker_e_ids(self, _p, _ctx, _n, _m, _s):
         d = _draft()
         raw = generar_plantilla_excel(
             d,
@@ -461,14 +563,15 @@ class TestPlantillaExcel(TestCase):
         self.assertEqual(ws.cell(1, 1).value, "Código")
         self.assertEqual(ws.cell(1, 2).value, "Artículo")
         self.assertEqual(ws.cell(1, 3).value, MARKER_IDART)
+        self.assertEqual(ws.cell(1, 4).value, "Precio")
         self.assertTrue(bool(ws.column_dimensions["C"].hidden))
         self.assertFalse(bool(ws.row_dimensions[1].hidden))
         self.assertGreaterEqual(ws.row_dimensions[1].height or 0, 45)
         self.assertFalse(bool(ws.protection.sheet))
-        self.assertEqual(ws.freeze_panes, "D2")
-        self.assertIn("127", str(ws.cell(1, 4).value or ""))
-        self.assertIn("MORÓN", str(ws.cell(1, 4).value or "").replace("\n", " "))
-        self.assertNotIn(
+        self.assertEqual(ws.freeze_panes, "E2")
+        self.assertIn("127", str(ws.cell(1, 5).value or ""))
+        self.assertIn("MORÓN", str(ws.cell(1, 5).value or "").replace("\n", " "))
+        self.assertIn(
             "precio",
             " ".join(str(ws.cell(1, c).value or "").lower() for c in range(1, 7)),
         )
@@ -479,8 +582,8 @@ class TestPlantillaExcel(TestCase):
         claves = {ws_m.cell(i, 1).value: ws_m.cell(i, 2).value for i in range(1, 8)}
         self.assertEqual(claves.get("id_cliente"), 368)
         self.assertEqual(claves.get("cod_viajante"), 30)
-        self.assertEqual(claves.get("plantilla_version"), 4)
-        self.assertEqual(claves.get("col_primera_sucursal"), 4)
+        self.assertEqual(claves.get("plantilla_version"), 5)
+        self.assertEqual(claves.get("col_primera_sucursal"), 5)
         self.assertEqual(ws_m.cell(6, 1).value, "sucursal_ids")
         self.assertEqual(ws_m.cell(6, 2).value, 10)
         self.assertEqual(ws_m.cell(6, 3).value, 20)
@@ -505,8 +608,10 @@ class TestPlantillaExcel(TestCase):
             "lista_id": 1,
         },
     )
+    @patch("ecom.services.pedido_masivo_import._precio_real_articulo", return_value=Decimal("80"))
+    @patch("ecom.services.pedido_masivo_import.asegurar_precio_fila_articulo")
     @patch("ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo")
-    def test_importa_plantilla_v4_generada(self, _d, _pie, _n, _m, _s):
+    def test_importa_plantilla_v4_generada(self, _d, _pr, _px, _pie, _n, _m, _s):
         d = _draft()
         raw = generar_plantilla_excel(
             d,
@@ -517,7 +622,7 @@ class TestPlantillaExcel(TestCase):
         from openpyxl import load_workbook
 
         wb = load_workbook(BytesIO(raw))
-        wb["Pedido"]["D2"] = 6
+        wb["Pedido"]["E2"] = 6
         bio = BytesIO()
         wb.save(bio)
 
@@ -552,8 +657,10 @@ class TestPlantillaExcel(TestCase):
             "lista_id": 1,
         },
     )
+    @patch("ecom.services.pedido_masivo_import._precio_real_articulo", return_value=Decimal("80"))
+    @patch("ecom.services.pedido_masivo_import.asegurar_precio_fila_articulo")
     @patch("ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo")
-    def test_plantilla_v4_dos_sku_mismo_superart(self, _d, _pie, _n, _m, _s):
+    def test_plantilla_v4_dos_sku_mismo_superart(self, _d, _pr, _px, _pie, _n, _m, _s):
         d = _draft()
         art_a = dict(ART_OK, id_articulo=203, id_manual="3766", nombre="Blanco")
         art_b = dict(ART_OK, id_articulo=204, id_manual="3766", nombre="Negro")
@@ -572,8 +679,8 @@ class TestPlantillaExcel(TestCase):
         self.assertEqual(ws.cell(3, 1).value, "3766")
         self.assertEqual(ws.cell(2, 3).value, 203)
         self.assertEqual(ws.cell(3, 3).value, 204)
-        ws["D2"] = 6
-        ws["D3"] = 12
+        ws["E2"] = 6
+        ws["E3"] = 12
         bio = BytesIO()
         wb.save(bio)
 
@@ -607,6 +714,7 @@ class TestApiImportExcel(TestCase):
         "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
         return_value=[5],
     )
+    @patch("ecom.services.pedido_masivo_import.asegurar_precio_fila_articulo")
     @patch("ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo")
     @patch(
         "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
@@ -616,7 +724,11 @@ class TestApiImportExcel(TestCase):
             "lista_id": 1,
         },
     )
-    def test_post_importar_ok(self, _pie, _d, _m, _s, _b):
+    @patch(
+        "ecom.pedido_masivo_views._flags_cabecera_masivo",
+        return_value={"puede_editar_precio_linea": True, "es_supervisor": False},
+    )
+    def test_post_importar_ok(self, _f, _pie, _d, _pr, _m, _s, _b):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         d = _draft(id_usuario=55)

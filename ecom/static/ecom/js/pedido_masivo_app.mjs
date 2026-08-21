@@ -138,6 +138,9 @@ function pedidoMasivoCore() {
     puedeEditarVencimiento: false,
     puedeEditarDescPie: false,
     puedeEditarDescRenglon: false,
+    puedeEditarPrecioLinea: false,
+    listaChangeOpen: false,
+    listaIdPendiente: null,
     condicionesVenta: [],
     listasPrecio: [],
     tipo: 'PED',
@@ -761,6 +764,9 @@ function pedidoMasivoCore() {
         this.puedeEditarDescRenglon = m.cabecera.puede_editar_descuento_renglon != null
           ? !!m.cabecera.puede_editar_descuento_renglon
           : this.puedeEditarCabecera;
+        this.puedeEditarPrecioLinea = m.cabecera.puede_editar_precio_linea != null
+          ? !!m.cabecera.puede_editar_precio_linea
+          : this.puedeEditarCabecera;
         this.cabecera = cabeceraConDisplay(m.cabecera);
         this.listaId = Number(this.cabecera?.lista_id || m.lista_id || 1);
         this._cargarCatalogosCabecera();
@@ -930,9 +936,43 @@ function pedidoMasivoCore() {
     },
     async onCabeceraListaChange() {
       if (!this.cabecera || !this.puedeEditarLista) return;
-      this.listaId = Number(this.cabecera.lista_id || 1);
-      // Totales: el estimado FE usa precios ya en memoria; revalidar con el botón
-      // «Validar totales» o al confirmar (lista nueva implica reabrir/reprecio al refrescar).
+      const nueva = Number(this.cabecera.lista_id || 1);
+      const actual = Number(this.listaId || 1);
+      if (nueva === actual) return;
+      if (!this.articulos.length || !this.draftId) {
+        this.listaId = nueva;
+        return;
+      }
+      this.cabecera.lista_id = actual;
+      this.listaIdPendiente = nueva;
+      this.listaChangeOpen = true;
+    },
+    _cerrarCambioLista() {
+      this.listaChangeOpen = false;
+      this.listaIdPendiente = null;
+    },
+    async confirmarCambioLista(recalcular) {
+      const nueva = Number(this.listaIdPendiente || 0);
+      if (!nueva) {
+        this._cerrarCambioLista();
+        return;
+      }
+      if (this.cabecera) this.cabecera.lista_id = nueva;
+      this.listaId = nueva;
+      this._cerrarCambioLista();
+      if (recalcular && this.urls.recalcular_precios && this.draftId) {
+        const { data } = await this.postJson(this.urls.recalcular_precios, {
+          draft_id: this.draftId,
+          lista_id: nueva,
+        });
+        if (!data.ok) {
+          this.mostrarAviso(data.error || 'No se pudieron recalcular los precios.', 'error');
+          return;
+        }
+        if (data.matriz) this.aplicarMatriz(data.matriz);
+        this.flashGuardado();
+      }
+      this.marcarTotalesEstimados();
     },
     /** Expande/compacta la sección «Contexto comercial» (persistido por sesión). */
     toggleContexto() {
@@ -1479,6 +1519,51 @@ function pedidoMasivoCore() {
       this.flashGuardado();
       this.marcarTotalesEstimados();
     },
+    async onPrecioFila(idArt, raw) {
+      if (this.readonly || !this.matrizEditable || !this.puedeEditarPrecioLinea) return;
+      if (!this.draftId || !this.urls.precio_fila) return;
+      const val = String(raw || '').trim();
+      const precio = val === '' ? 0 : Number(val);
+      const art = this.articulos.find((a) => Number(a.id_articulo) === Number(idArt));
+      if (art) art.precio_unitario_neto = precio;
+      this.marcarTotalesEstimados();
+      const { data } = await this.postJson(this.urls.precio_fila, {
+        draft_id: this.draftId,
+        id_articulo: idArt,
+        precio_unitario_neto: val === '' ? 0 : val,
+      });
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo guardar el precio.', 'error'); return; }
+      if (data.matriz) this.aplicarMatriz(data.matriz);
+      this.flashGuardado();
+    },
+    _filaTieneCantidad(art) {
+      for (const s of this.sucursales || []) {
+        const qty = parseFloat(this.celda(art.id_articulo, s.id_cliente_domicilio));
+        if (!isNaN(qty) && qty > 0) return true;
+      }
+      return false;
+    },
+    _escanearPreciosCero() {
+      return (this.articulos || []).filter((art) => (
+        this._filaTieneCantidad(art) && Number(art.precio_unitario_neto || 0) <= 0
+      ));
+    },
+    _mostrarModalPreciosCero(arts) {
+      const lineas = arts.map((art) => {
+        const nom = art.nombre || art.descripcion || `Art. ${art.id_articulo}`;
+        return `• ${nom}: precio 0`;
+      });
+      this.abrirDialogo('aviso', {
+        titulo: 'Precios en 0',
+        mensaje: [
+          'Hay líneas con precio 0. Corregilas antes de continuar:',
+          '',
+          ...lineas,
+        ].join('\n'),
+        confirmarTexto: 'Entendido',
+        variante: 'warning',
+      });
+    },
     async onDescFila(idArt, raw) {
       if (this.readonly || !this.matrizEditable || !this.puedeEditarDescRenglon) return;
       if (!this.draftId || !this.urls.descuento_fila) return;
@@ -1584,6 +1669,11 @@ function pedidoMasivoCore() {
         this._mostrarModalListaInfracciones(infracciones);
         return;
       }
+      const preciosCero = this._escanearPreciosCero();
+      if (preciosCero.length) {
+        this._mostrarModalPreciosCero(preciosCero);
+        return;
+      }
       if (this._previewTimer) {
         clearTimeout(this._previewTimer);
         this._previewTimer = null;
@@ -1598,6 +1688,10 @@ function pedidoMasivoCore() {
         });
         if (seq !== this._previewSeq) return;
         if (!data || !data.ok) {
+          if (data && data.code === 'precio_cero') {
+            this._mostrarModalPreciosCero(data.lineas_precio_cero || this._escanearPreciosCero());
+            return;
+          }
           this.mostrarAviso((data && (data.error || data.message)) || 'No se pudo validar los totales.', 'error');
           return;
         }
@@ -2075,6 +2169,11 @@ function pedidoMasivoCore() {
         this._mostrarModalListaInfracciones(infracciones);
         return;
       }
+      const preciosCero = this._escanearPreciosCero();
+      if (preciosCero.length) {
+        this._mostrarModalPreciosCero(preciosCero);
+        return;
+      }
       this.recalcularPreviewEstimado();
       // Modo simple: mensaje según sea alta nueva o edición (anula+crea REQ-PSU-06).
       let titulo = 'Confirmar pedido masivo';
@@ -2295,6 +2394,12 @@ function pedidoMasivoCore() {
       }
 
       if (!data.ok || status === 409 || status >= 400) {
+        if (data.code === 'precio_cero') {
+          this.confirmProgreso = null;
+          this.dialogOpen = false;
+          this._mostrarModalPreciosCero(data.lineas_precio_cero || this._escanearPreciosCero());
+          return;
+        }
         this.mostrarAviso(this._formatoErrorConfirmacion(data, status), 'error', 'No se pudo confirmar');
         if (data.matriz?.ultimo_error) this.ultimoError = data.matriz.ultimo_error;
         else if (data.errores) this.ultimoError = data.errores;
