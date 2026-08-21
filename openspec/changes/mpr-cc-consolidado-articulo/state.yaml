@@ -1,0 +1,19 @@
+change: mpr-cc-consolidado-articulo
+status: apply-pending
+created: 2026-08-20
+phase: apply
+depends_on:
+  - mpr-docenas-clasificacion-operario
+artifacts:
+  exploration: skipped
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: pending
+delivery:
+  strategy: exception-ok
+  chain_strategy: stacked-to-main
+  size_exception: true
+  size_exception_reason: "Maintainer 20/08/2026: ampliar presupuesto para cerrar PR4 UI (1795 vs 800) y PR5 docs/verify"
+  max_changed_lines: 3500

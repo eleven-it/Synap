@@ -3,6 +3,7 @@ import json
 import logging
 import traceback
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -369,12 +370,53 @@ def _redirect_clasificacion_produccion(
     fecha_str: str = "",
     turno_id_raw: str = "",
 ):
+    """Redirige al GET de CC. ``turno_id_raw`` se ignora (día completo)."""
+    del turno_id_raw  # compat firma; el consolidado no filtra por turno
     url = reverse("mpr:clasificacion_produccion")
     qs = _urlencode_con_marcas(
-        {"fecha": fecha_str, "turno_id": turno_id_raw},
+        {"fecha": fecha_str},
         _parse_marcas_incluidos(request),
     )
     return redirect(f"{url}?{qs}" if qs else url)
+
+
+def _lineas_borrador_desde_payload_cc(
+    payload: Dict[int, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Convierte el payload del parser consolidado al shape de upsert 007."""
+    lineas: List[Dict[str, Any]] = []
+    for id_art, datos in (payload or {}).items():
+        aid = to_int_or_none(id_art)
+        if aid is None:
+            continue
+        semi = to_decimal_or_none((datos or {}).get("semi")) or Decimal("0")
+        if semi > 0:
+            lineas.append({
+                "id_articulo": aid,
+                "id_operario": None,
+                "id_mpr_turno": None,
+                "cant_semi": semi,
+                "cant_2da": Decimal("0"),
+                "cant_scrap": Decimal("0"),
+            })
+        for linea in (datos or {}).get("lineas") or []:
+            if len(linea) != 4:
+                continue
+            oid = to_int_or_none(linea[0])
+            tid = to_int_or_none(linea[1])
+            destino = str(linea[2])
+            cant = to_decimal_or_none(linea[3]) or Decimal("0")
+            if oid is None or tid is None or cant <= 0:
+                continue
+            lineas.append({
+                "id_articulo": aid,
+                "id_operario": oid,
+                "id_mpr_turno": tid,
+                "cant_semi": Decimal("0"),
+                "cant_2da": cant if destino == "2da" else Decimal("0"),
+                "cant_scrap": cant if destino == "scrap" else Decimal("0"),
+            })
+    return lineas
 
 
 # En formularios OPP (wizard y registrar), una docena son siempre 12 unidades (no cantidad_promedio_bulto).
@@ -7361,11 +7403,10 @@ class EnviarProduccionLoteView(MprLoginRequiredMixin, MprEscritorioVerMixin, Vie
 
 
 class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
-    """GET: pantalla de Clasificación de Producción en lote (E10).
+    """GET: pantalla de Control de calidad consolidado por artículo.
 
-    Muestra los componentes con saldo en Producción y permite distribuirlos a
-    Semi Elaborado, 2da Selección y Desperdicio (Scrap) en un solo formulario,
-    indicando la fecha de carga del parte.
+    Universo del día completo (sin filtro Turno). Semi único por artículo;
+    2da/scrap por operario+turno del parte.
     """
 
     template_name = "mpr/clasificacion_produccion.html"
@@ -7373,14 +7414,13 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from datetime import date as _date, datetime as _dt
-        from mpr.services import construir_grilla_clasificacion_produccion, listar_turnos, TIPO_MPR_PRODUCCION
+        from mpr.services import construir_grilla_clasificacion_produccion, TIPO_MPR_PRODUCCION
         from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
 
         base_empresa = _get_base_empresa(self.request)
         modo_presentacion = resolver_modo_presentacion_operativa(self.request)
         marcas_incluidos = _parse_marcas_incluidos(self.request)
         fecha_str = (self.request.GET.get("fecha") or "").strip()
-        turno_id_raw = (self.request.GET.get("turno_id") or "").strip()
         # Default: roster completo. «Solo pendiente» = ver_roster=0.
         _vr = (self.request.GET.get("ver_roster") or "").strip().lower()
         if _vr in ("0", "false", "no", "pendiente"):
@@ -7389,35 +7429,33 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
             ver_roster = True
 
         fecha_obj = None
-        turno_id = None
         if fecha_str:
             try:
                 fecha_obj = _dt.strptime(fecha_str, "%d/%m/%Y").date()
             except ValueError:
                 pass
-        if turno_id_raw:
-            try:
-                turno_id = int(turno_id_raw)
-            except (TypeError, ValueError):
-                turno_id = None
 
         grilla_vacia = {
+            "bloques": [],
             "filas": [],
             "filas_vacio": True,
             "hay_filas_editables": False,
             "confirmadas_ocultas": 0,
             "bloqueos": [],
             "requiere_fecha": fecha_obj is None,
-            "requiere_fecha_turno": fecha_obj is None,
+            "requiere_fecha_turno": False,
             "componentes": [],
             "componentes_vacio": True,
+            "tiene_borrador": False,
+            "borrador_incompatible": False,
+            "aviso_borrador": "",
         }
         try:
             grilla = (
                 construir_grilla_clasificacion_produccion(
                     base_empresa,
                     fecha_obj,
-                    turno_id,
+                    None,
                     ver_roster_completo=ver_roster,
                     marcas_incluidos=marcas_incluidos or None,
                 )
@@ -7425,24 +7463,15 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
                 else {
                     **grilla_vacia,
                     "requiere_fecha": True,
-                    "requiere_fecha_turno": True,
                 }
             )
         except Exception as e:
             _log_mpr_schema_error(e)
             context["mpr_schema_error_modal"] = (
-                f"{e}\n\nSi falta id_operario en mpr_transicion_lote, ejecutá:\n"
+                f"{e}\n\nSi falta esquema MPR, ejecutá:\n"
                 f"docker exec Synap_app python manage.py apply_mpr_core_tables {base_empresa or '<base_empresa>'}"
             )
             grilla = grilla_vacia
-
-        turno_nombre = ""
-        if base_empresa and turno_id is not None:
-            from mpr.services import obtener_turno
-
-            turno_rec = obtener_turno(base_empresa, turno_id)
-            if turno_rec is not None:
-                turno_nombre = str(getattr(turno_rec, "nombre", "") or "")
 
         context.update({
             "titulo_pantalla": "Control de calidad",
@@ -7450,30 +7479,30 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
             "url_registrar": reverse("mpr:clasificacion_produccion_registrar"),
             "fecha_hoy": _date.today().strftime("%d/%m/%Y"),
             "fecha_str": fecha_str,
-            "turno_id": turno_id_raw,
-            "turno_nombre": turno_nombre,
-            "turnos_activos": listar_turnos(base_empresa, solo_activos=True) if base_empresa else [],
+            "turno_id": "",
+            "turno_nombre": "",
+            "turnos_activos": [],
+            "bloques": grilla.get("bloques", []),
             "filas": grilla.get("filas", []),
             "filas_vacio": grilla.get("filas_vacio", True),
             "hay_filas_editables": grilla.get("hay_filas_editables", False),
             "confirmadas_ocultas": grilla.get("confirmadas_ocultas", 0),
             "bloqueos": grilla.get("bloqueos", []),
-            "requiere_fecha": grilla.get("requiere_fecha", grilla.get("requiere_fecha_turno", True)),
-            "requiere_fecha_turno": grilla.get("requiere_fecha_turno", grilla.get("requiere_fecha", True)),
+            "requiere_fecha": grilla.get("requiere_fecha", fecha_obj is None),
+            "requiere_fecha_turno": False,
             "ver_roster": ver_roster,
-            # Quien ya entró a CC (MprEscritorioVerMixin / mpr.ver) puede consultar
-            # el roster confirmado; no exige rol supervisor ni anular envíos.
             "puede_ver_roster_completo": True,
             "componentes": grilla.get("componentes", grilla.get("filas", [])),
             "componentes_vacio": grilla.get("componentes_vacio", grilla.get("filas_vacio", True)),
             "tiene_borrador": grilla.get("tiene_borrador", False),
+            "borrador_incompatible": grilla.get("borrador_incompatible", False),
+            "aviso_borrador": grilla.get("aviso_borrador", ""),
             "unidades_por_docena_clasificacion": UNIDADES_POR_DOCENA_OPP,
             "modo_presentacion": modo_presentacion,
             "presentacion_query_base": _urlencode_con_marcas(
                 {
                     k: v for k, v in (
                         ("fecha", fecha_str),
-                        ("turno_id", turno_id_raw),
                         ("ver_roster", "1" if ver_roster else "0"),
                     ) if v
                 },
@@ -7488,28 +7517,20 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
 
 
 class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
-    """POST: registra la clasificación Producción → {Semi | 2da | Scrap} en lote (E10).
+    """POST: confirma o guarda borrador del CC consolidado por artículo.
 
-    Parsea semi_{id}_docenas/unidades (o legacy semi_{id}), seg2da_* y scrap_*,
-    más ``fecha`` (dd/MM/yyyy) de carga. Una docena = 12 unidades (igual que OPP/parte).
-    Re-valida el saldo real de Producción desde BD (ignora hidden manipulable).
-    Pre-check por fila: (semi + 2da + scrap) ≤ producción disponible.
-    Best-effort: un ítem fallido no frena los demás. La fecha se propaga al asiento.
+    Usa ``parsear_post_cc_consolidado`` + ``confirmar_cc_consolidado``.
+    MUST NOT llamar ``transferir_stock_lote`` directamente.
     """
 
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
-        from decimal import Decimal
         from django.contrib import messages as dj_messages
-        from mpr.services import (
-            TIPO_MPR_PRODUCCION,
-            TIPO_MPR_2DA_SELECCION,
-            TIPO_MPR_SEMI_ELABORADO,
-            TIPO_MPR_SCRAP,
-            _pivot_stock_por_tipo_mpr,
-            _parse_fecha_ddmmaaaa,
-            transferir_stock_lote,
+        from mpr.services import _parse_fecha_ddmmaaaa
+        from mpr.services_cc_consolidado import (
+            confirmar_cc_consolidado,
+            parsear_post_cc_consolidado,
         )
 
         base_empresa = _get_base_empresa(request)
@@ -7523,304 +7544,80 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
         except (TypeError, ValueError):
             id_usuario = 0
 
-        # Fecha de carga del parte (dd/MM/yyyy). Obligatoria.
         fecha_str = (request.POST.get("fecha") or "").strip()
         fecha_obj, err_fecha = _parse_fecha_ddmmaaaa(fecha_str)
         if err_fecha or fecha_obj is None:
             dj_messages.error(request, err_fecha or "Fecha de carga inválida.")
             return _redirect_clasificacion_produccion(request, fecha_str=fecha_str)
 
-        turno_id_raw = (request.POST.get("turno_id") or "").strip()
-        turno_id_filtro: int | None = None
-        if turno_id_raw:
-            try:
-                turno_id_filtro = int(turno_id_raw)
-            except (TypeError, ValueError):
-                dj_messages.error(request, "Turno inválido.")
-                return _redirect_clasificacion_produccion(
-                    request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
-                )
-
         accion_raw = (request.POST.get("accion") or "confirmar").strip().lower()
         accion = "borrador" if accion_raw == "borrador" else "confirmar"
 
-        filas_post = _clasificacion_filas_desde_post(request.POST)
-
-        if not filas_post:
+        payload = parsear_post_cc_consolidado(
+            request.POST,
+            unidades_por_docena=UNIDADES_POR_DOCENA_OPP,
+        )
+        tiene_cantidad = any(
+            (to_decimal_or_none(datos.get("semi")) or Decimal("0")) > 0
+            or any(
+                (to_decimal_or_none(ln[3]) or Decimal("0")) > 0
+                for ln in (datos.get("lineas") or [])
+                if len(ln) == 4
+            )
+            for datos in payload.values()
+        )
+        if not payload or not tiene_cantidad:
             dj_messages.warning(request, "No se enviaron cantidades.")
-            return _redirect_clasificacion_produccion(
-                request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
-            )
-
-        tiene_cantidad = any(f[1] > 0 for f in filas_post)
-        if not tiene_cantidad:
-            dj_messages.warning(request, "No se enviaron cantidades.")
-            return _redirect_clasificacion_produccion(
-                request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
-            )
-
-        ids_post = {f[0] for f in filas_post if f[1] > 0}
-
-        from mpr.repositories.parte import acumular_celdas_clasificacion_maquina_turno
-        from mpr.repositories.transicion_lote import (
-            sumar_clasificado_desglose_por_operario_fecha_turno,
-        )
-        from mpr.services import (
-            _atribuible_clasificacion_por_celda,
-            _extra_pool_clasificacion_por_articulo,
-            _max_clasificable_celda,
-            _orden_celdas_clasificacion_grilla,
-            _repartir_cantidad_extra_por_destino,
-        )
-
-        celdas_parte = acumular_celdas_clasificacion_maquina_turno(
-            base_empresa, fecha_obj, turno_id_filtro
-        )
-        turnos_post = {
-            (f[2] if f[2] > 0 else turno_id_filtro)
-            for f in filas_post
-            if f[1] > 0
-        }
-        turnos_post.discard(None)
-        desglose_por_turno: Dict[int, Dict[Tuple[int, int], Dict[str, Decimal]]] = {}
-        meta_celda: Dict[Tuple[int, int, int, int], Dict[str, Any]] = {}
-
-        for (mid, aid, oid, tid), datos in celdas_parte.items():
-            meta_celda[(mid, aid, oid, tid)] = datos
-
-        for tid in turnos_post:
-            desglose_por_turno[int(tid)] = sumar_clasificado_desglose_por_operario_fecha_turno(
-                base_empresa, fecha_obj, int(tid)
-            )
-
-        atribuible_por_celda = _atribuible_clasificacion_por_celda(
-            celdas_parte, desglose_por_turno
-        )
-
-        stock_real, _ = _pivot_stock_por_tipo_mpr(base_empresa, list(ids_post))
-        extra_restante_por_art = _extra_pool_clasificacion_por_articulo(
-            stock_real, atribuible_por_celda
-        )
-
-        filas_con_cantidad: List[Dict[str, Any]] = []
-        celdas_en_post: set = set()
-        for id_art, id_operario, id_turno, id_maquina in filas_post:
-            tid = int(id_turno) if id_turno > 0 else int(turno_id_filtro or 0)
-            celdas_en_post.add((id_art, id_operario, tid, int(id_maquina)))
-
-        for clave_celda in _orden_celdas_clasificacion_grilla(celdas_parte):
-            id_maq_ef, id_art, id_operario, id_turno_ef = clave_celda
-            if id_operario <= 0:
-                continue
-            post_keys = (
-                (id_art, id_operario, id_turno_ef, id_maq_ef),
-                (id_art, id_operario, id_turno_ef, 0),
-                (id_art, id_operario, 0, 0),
-            )
-            if not any(k in celdas_en_post for k in post_keys):
-                continue
-
-            legacy_en_post = any(
-                request.POST.get(k)
-                for k in (
-                    f"seg2da_{id_art}_op_{id_operario}",
-                    f"scrap_{id_art}_op_{id_operario}",
-                    f"semi_{id_art}_op_{id_operario}",
-                    f"seg2da_{id_art}_op_{id_operario}_docenas",
-                    f"scrap_{id_art}_op_{id_operario}_docenas",
-                )
-            )
-            if legacy_en_post:
-                qty_kwargs = {}
-            elif (id_art, id_operario, id_turno_ef, id_maq_ef) in celdas_en_post:
-                qty_kwargs = {"id_turno": id_turno_ef, "id_maquina": id_maq_ef}
-            elif (id_art, id_operario, id_turno_ef, 0) in celdas_en_post:
-                qty_kwargs = {"id_turno": id_turno_ef, "id_maquina": 0}
-            else:
-                qty_kwargs = {}
-
-            cant_2da = Decimal(
-                _clasificacion_cantidad_unidades_desde_post(
-                    request.POST, id_art, "seg2da", id_operario, **qty_kwargs
-                )
-            )
-            cant_scrap = Decimal(
-                _clasificacion_cantidad_unidades_desde_post(
-                    request.POST, id_art, "scrap", id_operario, **qty_kwargs
-                )
-            )
-            atribuible = atribuible_por_celda.get(clave_celda, Decimal("0"))
-            extra_rest = extra_restante_por_art.get(id_art, Decimal("0"))
-            max_clasificable = _max_clasificable_celda(atribuible, extra_rest)
-            if _clasificacion_tiene_prefijo_en_post(
-                request.POST, id_art, "semi", id_operario, **qty_kwargs
-            ):
-                cant_semi = Decimal(
-                    _clasificacion_cantidad_unidades_desde_post(
-                        request.POST, id_art, "semi", id_operario, **qty_kwargs
-                    )
-                )
-            else:
-                cant_semi = max(Decimal("0"), atribuible - cant_2da - cant_scrap)
-            if cant_semi + cant_2da + cant_scrap > max_clasificable:
-                dj_messages.error(
-                    request,
-                    f"Exceso operario {id_operario} artículo {id_art} turno {id_turno_ef}: "
-                    f"semi+2da+desperdicio ({cant_semi + cant_2da + cant_scrap:g}) supera lo clasificable "
-                    f"({max_clasificable:g}, incluye extra producción). Fila ignorada.",
-                )
-                continue
-            if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
-                continue
-            total_celda = cant_semi + cant_2da + cant_scrap
-            extra_consumido = max(Decimal("0"), total_celda - atribuible)
-            extra_restante_por_art[id_art] = max(
-                Decimal("0"), extra_rest - extra_consumido
-            )
-            e_semi, e_2da, e_scrap = _repartir_cantidad_extra_por_destino(
-                atribuible, cant_semi, cant_2da, cant_scrap
-            )
-            filas_con_cantidad.append({
-                "id_art": id_art,
-                "id_operario": id_operario,
-                "id_turno_ef": id_turno_ef,
-                "id_maq_ef": id_maq_ef,
-                "cant_semi": cant_semi,
-                "cant_2da": cant_2da,
-                "cant_scrap": cant_scrap,
-                "extra_semi": e_semi,
-                "extra_2da": e_2da,
-                "extra_scrap": e_scrap,
-            })
+            return _redirect_clasificacion_produccion(request, fecha_str=fecha_str)
 
         if accion == "borrador":
-            from mpr.repositories.clasificacion_borrador import upsert_borrador
+            from mpr.repositories.clasificacion_borrador import upsert_borrador_cc_consolidado
 
-            por_turno: Dict[int, List[Dict[str, Any]]] = {}
-            for fila in filas_con_cantidad:
-                tid_b = int(fila["id_turno_ef"])
-                por_turno.setdefault(tid_b, []).append({
-                    "id_articulo": fila["id_art"],
-                    "id_operario": fila["id_operario"],
-                    "id_mpr_maquina": fila["id_maq_ef"],
-                    "cant_semi": fila["cant_semi"],
-                    "cant_2da": fila["cant_2da"],
-                    "cant_scrap": fila["cant_scrap"],
-                })
-            for tid_b, lineas_turno in por_turno.items():
-                upsert_borrador(
-                    base_empresa,
-                    fecha_obj,
-                    tid_b,
-                    id_usuario,
-                    lineas_turno,
-                )
-            dj_messages.success(request, "Borrador de control de calidad guardado.")
-            return _redirect_clasificacion_produccion(
-                request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+            upsert_borrador_cc_consolidado(
+                base_empresa,
+                fecha_obj,
+                id_usuario,
+                _lineas_borrador_desde_payload_cc(payload),
             )
+            request.session["clasificacion_feedback_modal"] = {
+                "tipo": "success",
+                "titulo": "Listo",
+                "mensaje": "Borrador de control de calidad guardado.",
+            }
+            return _redirect_clasificacion_produccion(request, fecha_str=fecha_str)
 
-        items = []
-        clasificado_turno_por_art: Dict[int, Decimal] = {}
-
-        for fila in filas_con_cantidad:
-            id_art = fila["id_art"]
-            id_operario = fila["id_operario"]
-            id_turno_ef = fila["id_turno_ef"]
-            id_maq_ef = fila["id_maq_ef"]
-
-            fabricado_celda = to_decimal_or_none(
-                (meta_celda.get((id_maq_ef, id_art, id_operario, id_turno_ef)) or {}).get("cantidad")
-            ) or Decimal("0")
-            if fabricado_celda <= 0:
-                dj_messages.error(
-                    request,
-                    f"Sin producción en parte para artículo {id_art}, operario {id_operario}, "
-                    f"turno {id_turno_ef}.",
-                )
-                continue
-
-            operario_nombre = str_or_default(
-                (meta_celda.get((id_maq_ef, id_art, id_operario, id_turno_ef)) or {}).get(
-                    "operario_nombre"
-                ),
-                "-",
-            )
-
-            for cant, extra, destino in (
-                (fila["cant_semi"], fila["extra_semi"], TIPO_MPR_SEMI_ELABORADO),
-                (fila["cant_2da"], fila["extra_2da"], TIPO_MPR_2DA_SELECCION),
-                (fila["cant_scrap"], fila["extra_scrap"], TIPO_MPR_SCRAP),
-            ):
-                if cant > 0:
-                    items.append({
-                        "id_articulo": id_art,
-                        "tipo_origen": TIPO_MPR_PRODUCCION,
-                        "tipo_destino": destino,
-                        "cantidad": cant,
-                        "cantidad_extra": extra,
-                        "id_operario": id_operario,
-                        "operario_nombre": operario_nombre,
-                        "fecha_produccion": fecha_obj,
-                        "id_mpr_turno": id_turno_ef,
-                    })
-                    clasificado_turno_por_art[id_art] = (
-                        clasificado_turno_por_art.get(id_art, Decimal("0")) + cant
-                    )
-
-        for id_art, total_cls in clasificado_turno_por_art.items():
-            disponible_real = Decimal(str(stock_real.get(id_art, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
-            # La clasificación descuenta de Producción, y ``disponible_real`` es el saldo vivo
-            # (ya neto de las clasificaciones previas del turno). Solo se compara lo que se
-            # clasifica ahora contra ese saldo: sumar el acumulado previo duplicaría el descuento
-            # y bloquearía falsamente cuando parte del stock clasificado ya salió del pipeline
-            # (p. ej. Semi Elaborado consumido en el armado del pack BOM).
-            if total_cls > disponible_real:
-                dj_messages.error(
-                    request,
-                    f"Stock Producción insuficiente para artículo {id_art}: "
-                    f"disponible {disponible_real:g}, solicitado {total_cls:g}.",
-                )
-                items = [it for it in items if it.get("id_articulo") != id_art]
-
-        if items:
-            resultado = transferir_stock_lote(base_empresa, id_usuario, items, fecha=fecha_obj)
-            n_ok = int(resultado.get("exitosas") or 0)
-            errs = resultado.get("errores") or []
-            if n_ok and not errs:
-                request.session["clasificacion_feedback_modal"] = {
-                    "tipo": "success",
-                    "titulo": "Listo",
-                    "mensaje": "Control de calidad guardado correctamente.",
-                }
-                from mpr.repositories.clasificacion_borrador import eliminar_borrador
-
-                for tid_b in turnos_post:
-                    eliminar_borrador(base_empresa, fecha_obj, int(tid_b))
-            elif n_ok and errs:
-                request.session["clasificacion_feedback_modal"] = {
-                    "tipo": "warning",
-                    "titulo": "Atención",
-                    "mensaje": "Control de calidad parcial: algunas transferencias no se completaron.",
-                }
-                from mpr.repositories.clasificacion_borrador import eliminar_borrador
-
-                for tid_b in turnos_post:
-                    eliminar_borrador(base_empresa, fecha_obj, int(tid_b))
-            elif errs:
-                request.session["clasificacion_feedback_modal"] = {
-                    "tipo": "error",
-                    "titulo": "Aviso",
-                    "mensaje": "No se pudo completar el control de calidad.",
-                }
-            for id_art_err, msg_err in errs:
-                logger.warning(
-                    "Clasificación artículo %s: %s", id_art_err, msg_err
-                )
-
-        return _redirect_clasificacion_produccion(
-            request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+        resultado = confirmar_cc_consolidado(
+            base_empresa, id_usuario, fecha_obj, payload
         )
+        ok_ids = resultado.get("ok") or []
+        errs = resultado.get("errores") or []
+        if ok_ids and not errs:
+            request.session["clasificacion_feedback_modal"] = {
+                "tipo": "success",
+                "titulo": "Listo",
+                "mensaje": "Control de calidad guardado correctamente.",
+            }
+        elif ok_ids and errs:
+            detalle = "; ".join(f"Art. {aid}: {msg}" for aid, msg in errs[:3])
+            request.session["clasificacion_feedback_modal"] = {
+                "tipo": "warning",
+                "titulo": "Atención",
+                "mensaje": (
+                    "Control de calidad parcial: algunas transferencias no se completaron. "
+                    + detalle
+                ).strip(),
+            }
+        elif errs:
+            detalle = "; ".join(f"Art. {aid}: {msg}" for aid, msg in errs[:3])
+            request.session["clasificacion_feedback_modal"] = {
+                "tipo": "error",
+                "titulo": "Aviso",
+                "mensaje": detalle or "No se pudo completar el control de calidad.",
+            }
+        for id_art_err, msg_err in errs:
+            logger.warning("Clasificación artículo %s: %s", id_art_err, msg_err)
+
+        return _redirect_clasificacion_produccion(request, fecha_str=fecha_str)
 
 
 class ManualUsuarioMprView(MprLoginRequiredMixin, MprTableroVerMixin, View):

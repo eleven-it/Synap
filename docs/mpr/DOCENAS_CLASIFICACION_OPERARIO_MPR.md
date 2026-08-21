@@ -4,6 +4,8 @@
 **Estado:** Implementado en Desarrollo — aplicar migración MySQL en cada base empresa.  
 **Fecha:** 08/07/2026
 
+> **Nota 20/08/2026 — CC consolidado por artículo:** la grilla de control de calidad migró al modelo **consolidado por artículo** (change `mpr-cc-consolidado-articulo`). Semi único por artículo; 2da/scrap por operario+turno; tope = saldo Producción. Ver [PLAN_CC_CONSOLIDADO_POR_ARTICULO.md](PLAN_CC_CONSOLIDADO_POR_ARTICULO.md). Las notas históricas de abajo describen el modelo **por celda** previo y se conservan como referencia de evolución.
+
 ### Prerrequisito esquema MySQL
 
 Control de calidad (clasificación por operario) requiere columnas en `mpr_transicion_lote`: `id_operario`, `operario_nombre`, `fecha_produccion`, `id_mpr_turno`. Si falta alguna:
@@ -27,26 +29,35 @@ Dos mejoras coordinadas para alinear MPR con la planta textil:
 
 ## Decisiones de producto
 
-| Tema | Decisión |
+| Tema | Decisión (modelo consolidado 20/08/2026) |
 |------|----------|
 | Default presentación | Docenas en flujo operativo |
 | Toggle | Sesión `mpr_presentacion_cantidad` |
 | Divisor componentes | 12 u./docena |
+| Bloques clasificación | **Un bloque por artículo**; subfilas **(operario, turno)** para 2da/scrap; máquinas colapsadas |
+| Alcance pendiente | Fecha obligatoria; **sin filtro Turno** en encabezado (día completo) |
+| Columnas grilla CC | Artículo, **Saldo producción**, Semi (único por bloque), Turno, Operario, 2da, Scrap |
+| Semi elaborado | **Un ingreso por artículo/día**; ledger con `id_operario` y `id_mpr_turno` nulos; tope = saldo Producción del artículo |
+| 2da / Scrap | Por **(operario, turno)** del parte; `id_operario` obligatorio en ledger |
+| Artículo huérfano | Saldo Prod > 0 sin parte: solo Semi editable |
+| Validación CC | `semi + Σ 2da + Σ scrap ≤ saldo Producción` (lock `FOR UPDATE`); 2da/scrap además ≤ atribuible operario+turno |
+| Solo pendiente | Oculta artículos sin saldo Prod y operarios con 2da/scrap confirmados |
+| Bloqueo parte | Dual: 2da/scrap o Semi **histórico con operario** bloquean turno; Semi nuevo sin operario **no** bloquea |
+| Borrador | Tablas `mpr_cc_borrador` / `_linea` (007); cabecera por fecha; borrador viejo por turno incompatible |
+| Corrección post-CC | Transferencia interna / movimiento de stock (sin reverse en grilla) |
+| Reporte operario | Semi con `id_operario NULL` **no** suma al operario; fila «Sin atribución» para agregados NULL |
+| Ledger | Semi nuevo: `id_operario` NULL; 2da/scrap: fabricante; `id_usuario` = quien guardó |
+
+### Modelo anterior por celda (hasta 19/08/2026)
+
+| Tema | Decisión (histórico) |
+|------|----------|
 | Filas clasificación | (máquina × artículo × turno × operario), pendiente > 0 o ya clasificadas (roster completo) |
 | Alcance pendiente | Fecha obligatoria; turno opcional (vacío = todos los turnos del día) |
-| Columnas grilla CC | Máquina, Artículo, Turno, Operario, **Parte** (referencial, fab. del parte), Semi, 2da, Scrap |
-| Semi elaborado | Editable (docenas/pares). Precarga = remanente **atribuible del Parte** (no incluye extra). Tope fila = `max_clasificable` = atribuible + extra pool. **Descuento automático UI:** al cambiar 2da o Desperdicio, se descuenta el **delta** (en pares) del semi actual; semi sigue editable a mano; si `2da + desperdicio > max_clasificable` → semi = 0 y fila en error (`excede`) |
-| Extra producción (CC) | `max(0, stock Producción − Σ atribuible_parte)` por artículo; tope fila = atribuible + extra pool; consumo secuencial en POST |
-| Edición CC | **Semi elaborado**, **2da selección** y **Desperdicio** editables hasta `max_clasificable` |
-| Validación CC | `semi + 2da + desperdicio ≤ max_clasificable` (UI Alpine + servidor); guarda física: Σ clasificado ≤ saldo vivo Prod |
-| Solo lectura CC | Cuando `max_clasificable ≤ 0` **o** la celda tiene CC confirmada y agotó su atribuible del parte (`asignado_total > 0` y `atribuible ≤ 0`), sin depender de Ver roster. UI: mismos casilleros docenas/pares, en solo lectura (sin POST). |
-| Persistencia extra | `mpr_transicion_lote.cantidad_extra` por ítem (semi/2da/scrap), reparto secuencial del extra de la celda |
+| Columnas grilla CC | Máquina, Artículo, Turno, Operario, **Parte** (referencial), Semi, 2da, Scrap |
+| Semi elaborado | Editable por celda; tope fila = atribuible + extra pool |
+| Extra producción (CC) | `max(0, stock Producción − Σ atribuible_parte)` por artículo repartido por celda |
 | Bloqueo parte | Si un turno tiene CC en `mpr_transicion_lote` (fecha+turno), ese turno del parte queda bloqueado |
-| Corrección post-CC | No se edita ni se revierte en la grilla CC. Reclasificar Semi/2da/Desperdicio vía **Ingreso de movimiento de stock** → transferencia interna (AdministraNET) |
-| Clasificación parcial | Sí |
-| Parte sin operario | Bloquear clasificación por rendimiento |
-| Reportes | Mismo release que la grilla |
-| Ledger | `id_operario` = fabricante; `id_usuario` = quien guardó |
 
 ---
 

@@ -12,6 +12,50 @@ from mpr.db import mysql_cursor
 TIPOS_DESTINO_CLASIFICACION = frozenset({"SemiElaborado", "2daSeleccion", "Scrap"})
 
 
+def crear_transicion_lote_en_cursor(
+    cursor,
+    id_articulo: int,
+    tipo_origen: str,
+    tipo_destino: str,
+    cantidad: Decimal,
+    codigo_movimiento: Optional[int],
+    id_usuario: int,
+    *,
+    id_operario: Optional[int] = None,
+    operario_nombre: Optional[str] = None,
+    fecha_produccion: Optional[date] = None,
+    id_mpr_turno: Optional[int] = None,
+    cantidad_extra: Decimal = Decimal("0"),
+) -> int:
+    """Inserta el ledger usando el cursor de la transacción llamadora."""
+    qty = to_decimal_or_none(cantidad) or Decimal("0")
+    qty_extra = to_decimal_or_none(cantidad_extra) or Decimal("0")
+    id_op = to_int_or_none(id_operario)
+    cursor.execute(
+        """
+        INSERT INTO mpr_transicion_lote
+            (id_articulo, tipo_origen, tipo_destino, cantidad, cantidad_extra,
+             codigo_movimiento, id_usuario, id_operario, operario_nombre,
+             fecha_produccion, id_mpr_turno)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        [
+            int(id_articulo),
+            str(tipo_origen),
+            str(tipo_destino),
+            qty,
+            qty_extra,
+            to_int_or_none(codigo_movimiento),
+            int(id_usuario),
+            id_op,
+            str_or_default(operario_nombre, "-") if id_op is not None else "-",
+            to_date_or_none(fecha_produccion),
+            to_int_or_none(id_mpr_turno),
+        ],
+    )
+    return int(cursor.lastrowid)
+
+
 def crear_transicion_lote(
     base_empresa: str,
     id_articulo: int,
@@ -28,36 +72,106 @@ def crear_transicion_lote(
     cantidad_extra: Decimal = Decimal("0"),
 ) -> int:
     base = (base_empresa or "").strip()
-    qty = to_decimal_or_none(cantidad) or Decimal("0")
-    qty_extra = to_decimal_or_none(cantidad_extra) or Decimal("0")
-    id_op = to_int_or_none(id_operario)
-    nombre_op = str_or_default(operario_nombre, "-") if id_op is not None else "-"
-    f_prod = to_date_or_none(fecha_produccion)
-    id_turno = to_int_or_none(id_mpr_turno)
     with mysql_cursor(base) as cursor:
-        cursor.execute(
-            """
-            INSERT INTO mpr_transicion_lote
-                (id_articulo, tipo_origen, tipo_destino, cantidad, cantidad_extra,
-                 codigo_movimiento, id_usuario, id_operario, operario_nombre,
-                 fecha_produccion, id_mpr_turno)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            [
-                int(id_articulo),
-                str(tipo_origen),
-                str(tipo_destino),
-                qty,
-                qty_extra,
-                to_int_or_none(codigo_movimiento),
-                int(id_usuario),
-                id_op,
-                nombre_op,
-                f_prod,
-                id_turno,
-            ],
+        return crear_transicion_lote_en_cursor(
+            cursor,
+            id_articulo,
+            tipo_origen,
+            tipo_destino,
+            cantidad,
+            codigo_movimiento,
+            id_usuario,
+            id_operario=id_operario,
+            operario_nombre=operario_nombre,
+            fecha_produccion=fecha_produccion,
+            id_mpr_turno=id_mpr_turno,
+            cantidad_extra=cantidad_extra,
         )
-        return int(cursor.lastrowid)
+
+
+def semi_agregado_por_articulo_fecha(
+    base_empresa: str,
+    fecha: date,
+    id_articulos: Optional[List[int]] = None,
+) -> Dict[int, Decimal]:
+    """Suma Semi desde Producción por artículo y fecha, incluido histórico."""
+    base = (base_empresa or "").strip()
+    f_prod = to_date_or_none(fecha)
+    if not base or f_prod is None:
+        return {}
+    params: List[Any] = [f_prod, "Produccion", "SemiElaborado"]
+    filtro_art = ""
+    if id_articulos is not None:
+        ids = [x for x in (to_int_or_none(v) for v in id_articulos) if x is not None]
+        if not ids:
+            return {}
+        filtro_art = f" AND id_articulo IN ({','.join(['%s'] * len(ids))})"
+        params.extend(ids)
+    resultado: Dict[int, Decimal] = {}
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            f"""
+            SELECT id_articulo, COALESCE(SUM(cantidad), 0) AS total
+            FROM mpr_transicion_lote
+            WHERE fecha_produccion = %s
+              AND tipo_origen = %s
+              AND tipo_destino = %s
+              {filtro_art}
+            GROUP BY id_articulo
+            """,
+            params,
+        )
+        for row in cursor.fetchall() or []:
+            aid = to_int_or_none(row.get("id_articulo"))
+            if aid is not None:
+                resultado[aid] = to_decimal_or_none(row.get("total")) or Decimal("0")
+    return resultado
+
+
+def clasificado_segunda_scrap_por_celda_fecha(
+    base_empresa: str,
+    fecha: date,
+    id_articulos: Optional[List[int]] = None,
+) -> Dict[Tuple[int, int, int], Decimal]:
+    """Suma 2da/scrap por artículo, operario y turno del día completo."""
+    base = (base_empresa or "").strip()
+    f_prod = to_date_or_none(fecha)
+    if not base or f_prod is None:
+        return {}
+    params: List[Any] = [f_prod, "2daSeleccion", "Scrap"]
+    filtro_art = ""
+    if id_articulos is not None:
+        ids = [x for x in (to_int_or_none(v) for v in id_articulos) if x is not None]
+        if not ids:
+            return {}
+        filtro_art = f" AND id_articulo IN ({','.join(['%s'] * len(ids))})"
+        params.extend(ids)
+    resultado: Dict[Tuple[int, int, int], Decimal] = {}
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            f"""
+            SELECT id_articulo, id_operario, id_mpr_turno,
+                   COALESCE(SUM(cantidad), 0) AS total
+            FROM mpr_transicion_lote
+            WHERE fecha_produccion = %s
+              AND tipo_destino IN (%s, %s)
+              AND id_operario IS NOT NULL
+              AND id_mpr_turno IS NOT NULL
+              {filtro_art}
+            GROUP BY id_articulo, id_operario, id_mpr_turno
+            """,
+            params,
+        )
+        for row in cursor.fetchall() or []:
+            aid = to_int_or_none(row.get("id_articulo"))
+            oid = to_int_or_none(row.get("id_operario"))
+            tid = to_int_or_none(row.get("id_mpr_turno"))
+            if aid is None or oid is None or tid is None:
+                continue
+            resultado[(aid, oid, tid)] = (
+                to_decimal_or_none(row.get("total")) or Decimal("0")
+            )
+    return resultado
 
 
 def listar_por_articulo(
@@ -244,24 +358,26 @@ def sumar_clasificado_rendimiento_operario(
 
 
 def turnos_con_control_calidad(base_empresa: str, fecha: date) -> set[int]:
-    """Turnos de ``fecha`` con al menos una clasificación CC (semi/2da/scrap) con operario."""
+    """Turnos bloqueados por 2da/scrap o por Semi histórico con operario."""
     base = (base_empresa or "").strip()
     if not base:
         return set()
-    destinos = tuple(TIPOS_DESTINO_CLASIFICACION)
-    ph_dest = ",".join(["%s"] * len(destinos))
     turnos: set[int] = set()
     with mysql_cursor(base, dict_cursor=True) as cursor:
         cursor.execute(
-            f"""
+            """
             SELECT DISTINCT id_mpr_turno
             FROM mpr_transicion_lote
             WHERE fecha_produccion = %s
-              AND id_operario IS NOT NULL
               AND id_mpr_turno IS NOT NULL
-              AND tipo_destino IN ({ph_dest})
+              AND (
+                    tipo_destino IN ('2daSeleccion', 'Scrap')
+                    OR (
+                        tipo_destino = 'SemiElaborado' AND id_operario IS NOT NULL
+                    )
+              )
             """,
-            [fecha, *destinos],
+            [fecha],
         )
         for row in cursor.fetchall() or []:
             tid = to_int_or_none(row.get("id_mpr_turno"))

@@ -19,6 +19,7 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [ARTICULO_CE_TALLES_COLOR.md](ARTICULO_CE_TALLES_COLOR.md) | **Desarrollo** — Campos especiales CE TALLES/COLOR: tablas, lectura en UI, inferencia/carga masiva. |
 | [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md) | **Implementación:** cómo se identifican pack y componente (`articulo`, BOM, OPT, armado surtido). |
 | [GLOSARIO_MPR.md](GLOSARIO_MPR.md) | Glosario de términos MPR. |
+| [PLAN_CC_CONSOLIDADO_POR_ARTICULO.md](PLAN_CC_CONSOLIDADO_POR_ARTICULO.md) | **Implementado 20/08/2026** — Control de calidad consolidado por artículo (Semi único, 2da/scrap por operario+turno, saldo Producción). |
 | [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.md) | SDD — Armado surtido desde 2.ª selección (MVP implementado). |
 | [SDD_ARMADO_SURTIDO_MULTI_LOTE.md](SDD_ARMADO_SURTIDO_MULTI_LOTE.md) | SDD — Armado surtido multi-pack (lote / carrito). |
 | [SPEC_ARMADO_SURTIDO_MULTI_LOTE.md](SPEC_ARMADO_SURTIDO_MULTI_LOTE.md) | Especificación normativa — lote multi-pack armado surtido. |
