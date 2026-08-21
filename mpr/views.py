@@ -277,8 +277,12 @@ def _abrir_url_parte_consulta(parte: dict, session_id_usuario: int | None) -> st
 
 def _context_flags_tablero(user) -> dict:
     puede_enviar = _usuario_puede_enviar_desde_tablero(user)
+    # Pack|Par y Docenas|Pares: mismo umbral que envío (mpr.ver). Lectura con
+    # solo mpr.tablero_ver no cambia consolidación ni unidad de presentación.
+    puede_cambiar_vista = _usuario_tiene_permiso_mpr(user, "mpr.ver")
     return {
         "puede_enviar": puede_enviar,
+        "puede_cambiar_vista_tablero": puede_cambiar_vista,
         "solo_lectura_tablero": _usuario_puede_ver_tablero_produccion(user) and not puede_enviar,
         "puede_anular_envios": _usuario_puede_anular_envios(user) and puede_enviar,
     }
