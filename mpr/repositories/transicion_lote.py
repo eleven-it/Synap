@@ -174,6 +174,77 @@ def clasificado_segunda_scrap_por_celda_fecha(
     return resultado
 
 
+def desglose_cc_confirmado_por_celda_fecha(
+    base_empresa: str,
+    fecha: date,
+    id_articulos: Optional[List[int]] = None,
+) -> Dict[Tuple[int, int, int], Dict[str, Any]]:
+    """Desglose semi / 2da / scrap confirmado por (artículo, operario, turno).
+
+    Incluye Semi histórico con operario+turno. El Semi consolidado (op/turno NULL)
+    no entra aquí: se lee con ``semi_agregado_por_articulo_fecha``.
+    """
+    base = (base_empresa or "").strip()
+    f_prod = to_date_or_none(fecha)
+    if not base or f_prod is None:
+        return {}
+    destinos = tuple(TIPOS_DESTINO_CLASIFICACION)
+    params: List[Any] = [f_prod, *destinos]
+    filtro_art = ""
+    if id_articulos is not None:
+        ids = [x for x in (to_int_or_none(v) for v in id_articulos) if x is not None]
+        if not ids:
+            return {}
+        filtro_art = f" AND id_articulo IN ({','.join(['%s'] * len(ids))})"
+        params.extend(ids)
+    ph_dest = ",".join(["%s"] * len(destinos))
+    resultado: Dict[Tuple[int, int, int], Dict[str, Any]] = {}
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            f"""
+            SELECT id_articulo, id_operario, id_mpr_turno, tipo_destino,
+                   MAX(operario_nombre) AS operario_nombre,
+                   COALESCE(SUM(cantidad), 0) AS total
+            FROM mpr_transicion_lote
+            WHERE fecha_produccion = %s
+              AND tipo_destino IN ({ph_dest})
+              AND id_operario IS NOT NULL
+              AND id_mpr_turno IS NOT NULL
+              {filtro_art}
+            GROUP BY id_articulo, id_operario, id_mpr_turno, tipo_destino
+            """,
+            params,
+        )
+        for row in cursor.fetchall() or []:
+            aid = to_int_or_none(row.get("id_articulo"))
+            oid = to_int_or_none(row.get("id_operario"))
+            tid = to_int_or_none(row.get("id_mpr_turno"))
+            if aid is None or oid is None or tid is None:
+                continue
+            clave = (aid, oid, tid)
+            entry = resultado.setdefault(
+                clave,
+                {
+                    "semi": Decimal("0"),
+                    "segunda": Decimal("0"),
+                    "scrap": Decimal("0"),
+                    "operario_nombre": str_or_default(row.get("operario_nombre"), "-"),
+                },
+            )
+            nombre = str_or_default(row.get("operario_nombre"), "-")
+            if nombre and nombre != "-":
+                entry["operario_nombre"] = nombre
+            dest = str(row.get("tipo_destino") or "")
+            total = to_decimal_or_none(row.get("total")) or Decimal("0")
+            if dest == "SemiElaborado":
+                entry["semi"] += total
+            elif dest == "2daSeleccion":
+                entry["segunda"] += total
+            elif dest == "Scrap":
+                entry["scrap"] += total
+    return resultado
+
+
 def listar_por_articulo(
     base_empresa: str,
     id_articulo: int,
