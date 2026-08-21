@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand
 
 from core.mysql_pool import mysql_cursor
 from core.utils.administranet_types import to_int_or_none, to_date_or_none
+from mpr.services import _sql_qty_pendiente_comercial_stockp
 
 logger = logging.getLogger(__name__)
 
@@ -136,21 +137,26 @@ class Command(BaseCommand):
             if not codigos_ped:
                 return
             placeholders = ",".join(["%s"] * len(codigos_ped))
+            qty_expr = _sql_qty_pendiente_comercial_stockp(cursor, tbl_stockp)
+            qty_orig_expr = "COALESCE(sp.cantidad, sp.Cantidad, 0)"
             cursor.execute(
                 f"""
                 SELECT sp.CodigoMovimiento, sp.IDArt AS id_articulo,
-                       COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0) AS cantidad
+                       ({qty_expr}) AS cantidad,
+                       ({qty_orig_expr}) AS cantidad_original
                 FROM {tbl_stockp} sp
                 WHERE sp.CodigoMovimiento IN ({placeholders})
+                  AND ({qty_expr}) > 0
                 ORDER BY sp.CodigoMovimiento, sp.IDArt
                 """,
                 codigos_ped,
             )
             renglones = cursor.fetchall()
             self.stdout.write("")
-            self.stdout.write("2) RENGLONES EN STOCKP (de esos pedidos):")
+            self.stdout.write("2) RENGLONES EN STOCKP (de esos pedidos, saldo comercial > 0):")
             if not renglones:
-                self.stdout.write(self.style.WARNING("   No hay renglones en stockp para estos pedidos."))
+                self.stdout.write(self.style.WARNING("   No hay renglones con saldo comercial pendiente para estos pedidos."))
+                self.stdout.write("   Puede haber renglones remitidos/facturados (cantidad_pendiente=0) que el tablero excluye.")
                 self.stdout.write("   Sin renglones, Actualizar no puede agregar nada a lista_produccion_agrupada.")
                 return
             ids_articulos = list({to_int_or_none(_normalize_row(r).get("id_articulo")) for r in renglones if to_int_or_none(_normalize_row(r).get("id_articulo")) is not None})
@@ -205,10 +211,15 @@ class Command(BaseCommand):
                 id_art = to_int_or_none(row.get("id_articulo"))
                 cod_mov = to_int_or_none(row.get("codigomovimiento"))
                 qty = row.get("cantidad") or 0
+                qty_orig = row.get("cantidad_original") or 0
                 try:
                     qty = int(float(qty))
                 except (TypeError, ValueError):
                     qty = 0
+                try:
+                    qty_orig = int(float(qty_orig))
+                except (TypeError, ValueError):
+                    qty_orig = 0
                 art = arts.get(id_art) if id_art is not None else {}
                 tipo = (art.get("tipo_art_fab") or "").strip() if art else ""
                 cumple = tipo == "Terminado"
@@ -220,14 +231,14 @@ class Command(BaseCommand):
                 tipo_ok = "SÍ (Terminado)" if cumple else f"NO (tipo_art_fab='{tipo or '(vacío/NULL)'}')"
                 self.stdout.write(
                     f"   Pedido {cod_mov} | IDArt={id_art} ({art.get('codigo')} {art.get('nombre') or ''}) "
-                    f"cantidad={qty} | tipo_art_fab: {tipo_ok}"
+                    f"saldo_comercial={qty} cantidad_original={qty_orig} | tipo_art_fab: {tipo_ok}"
                 )
 
             self.stdout.write("")
             self.stdout.write(self.style.MIGRATE_HEADING("RESUMEN:"))
             self.stdout.write(f"   Pedidos pendientes (con filtros): {len(pedidos)}")
-            self.stdout.write(f"   Renglones en stockp: {len(renglones)}")
-            self.stdout.write(f"   Renglones que SÍ cumplen (tipo_art_fab='Terminado' y cantidad > 0): {cualifican}")
+            self.stdout.write(f"   Renglones con saldo comercial > 0: {len(renglones)}")
+            self.stdout.write(f"   Renglones que SÍ cumplen (tipo_art_fab='Terminado' y saldo comercial > 0): {cualifican}")
             self.stdout.write(f"   Renglones que NO cumplen: {len(no_cualifican)}")
             if cualifican == 0 and renglones:
                 self.stdout.write("")

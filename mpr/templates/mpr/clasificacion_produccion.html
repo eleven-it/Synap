@@ -9,6 +9,16 @@
   .clasif-grilla input[type="number"]::-webkit-outer-spin-button,
   .clasif-grilla input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .clasif-grilla input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+  /* Sin bordes/anillo azules al enfocar (mismo comportamiento que Semi elaborado). */
+  .clasif-grilla .clasif-qty-group input[type="number"],
+  .clasif-grilla .clasif-qty-group input[type="number"]:focus,
+  .clasif-grilla .clasif-qty-group input[type="number"]:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+  }
   .clasif-col-tint-0 { border-left-color: rgb(134 239 172 / 0.55) !important; background-color: rgb(240 253 244 / 0.88); }
   .dark .clasif-col-tint-0 { border-left-color: rgb(21 128 61 / 0.4) !important; background-color: rgb(20 83 45 / 0.18); }
   .clasif-col-tint-1 { border-left-color: rgb(125 211 252 / 0.65) !important; background-color: rgb(240 249 255 / 0.9); }
@@ -78,18 +88,25 @@
               @submit="onSubmit($event)">
             {% csrf_token %}
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
-            {% if turno_id %}<input type="hidden" name="turno_id" value="{{ turno_id }}">{% endif %}
             <input type="hidden" name="accion" id="id_accion_clasificacion" value="confirmar">
         {% endif %}
 
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            {% if aviso_borrador %}
+            <div class="flex-shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/50 dark:bg-amber-950/30 sm:px-5">
+                <div class="flex items-start gap-3">
+                    <span class="material-icons text-amber-600 dark:text-amber-400" aria-hidden="true">info</span>
+                    <p class="text-sm font-medium text-amber-900 dark:text-amber-100">{{ aviso_borrador }}</p>
+                </div>
+            </div>
+            {% endif %}
             {% if requiere_fecha %}
             <div class="flex-shrink-0 border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/50 dark:bg-blue-950/30 sm:px-5">
                 <div class="flex items-start gap-3">
                     <span class="material-icons text-blue-600 dark:text-blue-400" aria-hidden="true">info</span>
                     <div>
                         <p class="text-sm font-medium text-blue-900 dark:text-blue-100">Seleccioná la fecha del parte a controlar.</p>
-                        <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">El turno es opcional: vacío carga todos los turnos del día. Pulsá <strong>Cargar grilla</strong>.</p>
+                        <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">La grilla abarca el día completo. Pulsá <strong>Cargar grilla</strong>.</p>
                     </div>
                 </div>
             </div>
@@ -104,12 +121,12 @@
                                 ({{ confirmadas_ocultas }} fila{% if confirmadas_ocultas != 1 %}s{% endif %}).
                             </p>
                             <p class="mt-1 text-xs text-teal-800 dark:text-teal-300">
-                                No quedan pendientes de clasificar. Para consultar el desglose (semi / 2da / desperdicio), abrí el roster.
+                                No quedan pendientes de clasificar. Para consultar el desglose, abrí el roster.
                             </p>
                         </div>
                     </div>
                     {% if puede_ver_roster_completo %}
-                    <a href="?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}&amp;ver_roster=1&amp;presentacion={{ modo_presentacion }}"
+                    <a href="?fecha={{ fecha_str|urlencode }}&amp;ver_roster=1&amp;presentacion={{ modo_presentacion }}"
                        class="inline-flex h-9 shrink-0 items-center gap-1.5 self-center rounded-lg border border-teal-600 bg-teal-700 px-3 text-xs font-semibold text-white hover:bg-teal-600">
                         <span class="material-icons text-base" aria-hidden="true">list_alt</span>
                         Ver roster
@@ -123,91 +140,132 @@
                     <span class="material-icons text-blue-600 dark:text-blue-400" aria-hidden="true">info</span>
                     <div>
                         <p class="text-sm font-medium text-blue-900 dark:text-blue-100">
-                            No hay filas de control de calidad para <strong>{{ fecha_str }}</strong>
-                            {% if turno_nombre %}· turno <strong>{{ turno_nombre }}</strong>{% endif %}.
+                            No hay filas de control de calidad para <strong>{{ fecha_str }}</strong>.
                         </p>
                         <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
                             Registrá producción en el
-                            <a href="{% url 'mpr:parte_produccion' %}?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}" class="font-semibold underline">parte</a>
-                            o elegí otro turno/fecha arriba.
+                            <a href="{% url 'mpr:parte_produccion' %}?fecha={{ fecha_str|urlencode }}" class="font-semibold underline">parte</a>
+                            o elegí otra fecha arriba.
                         </p>
                     </div>
                 </div>
             </div>
             {% endif %}
 
-            {% if bloqueos and not requiere_fecha and not filas_vacio %}
-            <div class="flex-shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                {% for b in bloqueos %}
-                <p>{{ b.codigo_manual }} — {{ b.mensaje }} <a href="{% url 'mpr:parte_produccion' %}?fecha={{ fecha_str }}&amp;turno_id={{ turno_id }}" class="font-semibold underline">Ir al parte</a></p>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            <div class="min-h-0 flex-1 overflow-auto" role="region" aria-label="Grilla control de calidad por máquina, artículo y operario">
-                <table class="clasif-grilla w-full border-collapse" style="min-width: 72rem;">
-                    <caption class="sr-only">Control de calidad — {% if filas %}{{ filas|length }} filas{% else %}sin filas{% endif %}</caption>
+            <div class="min-h-0 flex-1 overflow-auto" role="region" aria-label="Grilla control de calidad por artículo">
+                <table class="clasif-grilla w-full border-collapse" style="min-width: 64rem;">
+                    <caption class="sr-only">Control de calidad — {% if bloques %}{{ bloques|length }} artículo{% if bloques|length != 1 %}s{% endif %}{% else %}sin filas{% endif %}</caption>
                     {% include "mpr/includes/clasificacion_tabla_thead.html" %}
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700/80">
                         {% if not requiere_fecha and not filas_vacio %}
-                            {% for fila in filas %}
-                            <tr class="group/row clasif-grilla-fila{% if fila.solo_lectura %} opacity-70{% endif %}{% if fila.show_maquina and not forloop.first %} clasif-inicio-maquina{% endif %}"
-                                data-descripcion="{{ fila.maquina_nombre|lower }} {{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }} {{ fila.turno_nombre|lower }} {{ fila.operario_nombre|lower }}"
-                                data-codigo="{{ fila.codigo_manual|lower }}"
-                                data-articulo="{{ fila.descripcion|lower }}"
+                            {% for bloque in bloques %}
+                            {% with nfilas=bloque.filas|length %}
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700/80"
+                                   x-data="clasificacionBloque({{ bloque.id_articulo }}, {{ bloque.saldo_produccion|default:0 }}, {{ unidades_por_docena_clasificacion|default:12 }}, {{ bloque.ini_semi_input|default:0 }}, {{ bloque.solo_lectura|yesno:'true,false' }}, {{ bloque.huerfano|yesno:'true,false' }}, {{ nfilas }})"
+                                   x-init="initOpFilas([{% for fila in bloque.filas %}{seg2da: {{ fila.borrador_segunda|default:0 }}, scrap: {{ fila.borrador_scrap|default:0 }}}{% if not forloop.last %},{% endif %}{% endfor %}])">
+                            {% for fila in bloque.filas %}
+                            <tr class="group/row clasif-grilla-fila{% if bloque.solo_lectura %} opacity-70{% endif %}{% if forloop.first and not forloop.parentloop.first %} clasif-inicio-maquina{% endif %}"
+                                data-descripcion="{{ bloque.descripcion|lower }} {{ bloque.codigo_manual|lower }} {{ fila.turno_nombre|lower }} {{ fila.operario_nombre|lower }}"
+                                data-codigo="{{ bloque.codigo_manual|lower }}"
+                                data-articulo="{{ bloque.descripcion|lower }}"
                                 x-show="$store.clasificacionCc.coincide($el.dataset.descripcion)"
-                                x-data="clasificacionFila({{ fila.id_articulo }}, {{ fila.base_clasificable|floatformat:0 }}, {{ unidades_por_docena_clasificacion|default:12 }}, {{ fila.ini_seg2da|default:0 }}, {{ fila.ini_scrap|default:0 }}, {{ fila.solo_lectura|yesno:'true,false' }}, {{ fila.ini_semi|default:0 }})"
                                 :class="excede ? 'bg-red-50/40 dark:bg-red-950/15' : ''">
-                                <td x-show="$store.clasificacionCc.activa"
-                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 px-2 py-2 text-center align-top dark:border-slate-700 clasif-maq-tint-{{ fila.maquina_tint|default:0 }}">
-                                    <span class="inline-flex max-w-full items-center justify-center rounded-md px-2 py-1 text-sm font-semibold leading-tight clasif-maq-chip-{{ fila.maquina_tint|default:0 }}"
-                                          title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
-                                </td>
-                                {% if fila.show_maquina %}
-                                <td x-show="!$store.clasificacionCc.activa"
-                                    rowspan="{{ fila.rowspan_maquina|default:1 }}"
-                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 px-2 py-2 text-center align-top dark:border-slate-700 clasif-maq-tint-{{ fila.maquina_tint|default:0 }}">
-                                    <span class="inline-flex max-w-full items-center justify-center rounded-md px-2 py-1 text-sm font-semibold leading-tight clasif-maq-chip-{{ fila.maquina_tint|default:0 }}"
-                                          title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
+                                {% if forloop.first %}
+                                <td rowspan="{{ nfilas }}"
+                                    class="sticky left-0 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-2 align-top dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
+                                    <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
+                                          title="Código {{ bloque.codigo_manual }} · {{ bloque.descripcion }}">{{ bloque.descripcion }}</span>
+                                    <span class="mt-0.5 block text-[11px] tabular-nums text-slate-500 dark:text-slate-400">{{ bloque.codigo_manual }}</span>
                                 </td>
                                 {% endif %}
-                                <td x-show="$store.clasificacionCc.activa"
-                                    class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-2 align-top dark:border-slate-700 dark:bg-slate-800">
-                                    <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
-                                          title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
+                                <td class="px-3 py-2 text-sm text-slate-700 dark:text-slate-300 align-top">{{ fila.turno_nombre }}</td>
+                                <td class="px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 align-top">{{ fila.operario_nombre }}</td>
+                                {% if forloop.first %}
+                                <td rowspan="{{ nfilas }}"
+                                    class="px-3 py-2 text-center align-top"
+                                    title="Saldo vivo depósito Producción (enteros)">
+                                    {% include "mpr/includes/clasif_enteros_docenas_pares.html" with docenas=bloque.saldo_produccion_docenas pares=bloque.saldo_produccion_pares only %}
                                 </td>
-                                {% if fila.show_articulo %}
-                                <td x-show="!$store.clasificacionCc.activa"
-                                    rowspan="{{ fila.rowspan_articulo|default:1 }}"
-                                    class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-2 align-top dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
-                                    <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
-                                          title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
-                                </td>
-                                {% endif %}
-                                <td class="px-3 py-2 text-sm text-slate-700 dark:text-slate-300 align-top{% if fila.turno_franja %} clasif-turno-tint-{{ fila.turno_franja }}{% endif %}">{{ fila.turno_nombre }}</td>
-                                <td class="px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 align-top{% if fila.turno_franja %} clasif-turno-tint-{{ fila.turno_franja }}{% endif %}">{{ fila.operario_nombre }}</td>
-                                <td class="px-3 py-2 text-center text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200 align-top{% if fila.turno_franja %} clasif-turno-tint-{{ fila.turno_franja }}{% endif %}"
-                                    title="{{ fila.parte_texto }}{% if fila.extra_disponible %} · Extra prod. {{ fila.extra_docenas|default:0 }} doc + {{ fila.extra_unidades|default:0 }} pares{% endif %}">
-                                    <span class="block leading-tight">{{ fila.parte_docenas|default:0 }} docenas</span>
-                                    <span class="block leading-tight text-slate-500 dark:text-slate-400">{{ fila.parte_unidades|default:0 }} pares</span>
-                                    {% if fila.show_articulo and fila.extra_disponible %}
-                                    <span class="mt-1 block text-[10px] font-medium leading-tight text-teal-700 dark:text-teal-300">+{{ fila.extra_docenas|default:0 }}d {{ fila.extra_unidades|default:0 }}p extra</span>
+                                <td rowspan="{{ nfilas }}" class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-0">
+                                    {% if bloque.semi_mostrar > 0 %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=bloque.id_articulo consolidado_articulo=True operario_nombre="" codigo=bloque.codigo_manual destino_label="semi elaborado" casilla_fija=True valor_docenas=bloque.semi_mostrar_docenas valor_pares=bloque.semi_mostrar_pares valor_total=bloque.semi_mostrar only %}
+                                    {% elif not bloque.solo_lectura %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=bloque.id_articulo consolidado_articulo=True operario_nombre="" codigo=bloque.codigo_manual destino_label="semi elaborado" model_doc="semiDoc" model_uni="semiUni" subtotal_alpine="semiUnidades" ring_class="focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/25" readonly=False only %}
+                                    {% else %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=bloque.id_articulo consolidado_articulo=True operario_nombre="" codigo=bloque.codigo_manual destino_label="semi elaborado" casilla_fija=True valor_docenas=0 valor_pares=0 valor_total=0 only %}
                                     {% endif %}
                                 </td>
-                                <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-0">
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="semi elaborado" model_doc="semiDoc" model_uni="semiUni" subtotal_alpine="semiUnidades" ring_class="focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/25" readonly=fila.solo_lectura only %}
-                                </td>
+                                {% endif %}
                                 <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-1">
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="seg2da" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="2da selección" model_doc="seg2daDoc" model_uni="seg2daUni" subtotal_alpine="seg2daUnidades" ring_class="focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/25" readonly=fila.solo_lectura only %}
+                                    {% if fila.clasificado_segunda > 0 %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="seg2da" id_art=bloque.id_articulo consolidado_articulo=False operario_nombre=fila.operario_nombre codigo=bloque.codigo_manual destino_label="2da selección" casilla_fija=True valor_docenas=fila.clasificado_segunda_docenas valor_pares=fila.clasificado_segunda_pares valor_total=fila.clasificado_segunda only %}
+                                    {% elif fila.editable_2da_scrap and not bloque.solo_lectura %}
+                                    <div class="clasif-celda-cantidad mx-auto flex w-full max-w-[9rem] flex-col items-center" data-clasif-dest="seg2da" data-id-art="{{ bloque.id_articulo }}">
+                                        <div class="clasif-qty-group flex w-full overflow-hidden rounded-lg border border-slate-300/90 bg-white shadow-sm focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/25 dark:border-slate-500 dark:bg-slate-900"
+                                             :class="excede ? 'border-red-400 ring-2 ring-red-500/30' : ''">
+                                            <label class="flex min-w-0 flex-1 flex-col">
+                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Docenas</span>
+                                                <input type="number" name="seg2da_{{ bloque.id_articulo }}_op_{{ fila.id_operario }}_t_{{ fila.id_mpr_turno }}_docenas" min="0" step="1" inputmode="numeric" placeholder="0"
+                                                       x-model.number="opFilas[{{ forloop.counter0 }}].seg2daDoc" @focus="$event.target.select()" data-clasif-qty-input data-clasif-part="docenas"
+                                                       class="clasif-input-docenas h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-600"
+                                                       aria-label="Docenas 2da selección {{ bloque.codigo_manual }} — {{ fila.operario_nombre }}">
+                                            </label>
+                                            <div class="flex w-5 shrink-0 flex-col items-center justify-center border-x border-slate-200 bg-slate-50/90 dark:border-slate-600 dark:bg-slate-800/80" aria-hidden="true"><span class="text-[10px] font-bold text-slate-300">+</span></div>
+                                            <label class="flex min-w-0 flex-1 flex-col">
+                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Pares</span>
+                                                <input type="number" name="seg2da_{{ bloque.id_articulo }}_op_{{ fila.id_operario }}_t_{{ fila.id_mpr_turno }}_unidades" min="0" step="1" inputmode="numeric" placeholder="0"
+                                                       x-model.number="opFilas[{{ forloop.counter0 }}].seg2daUni" @focus="$event.target.select()" data-clasif-qty-input data-clasif-part="unidades"
+                                                       class="clasif-input-unidades h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-600"
+                                                       aria-label="Pares 2da selección {{ bloque.codigo_manual }} — {{ fila.operario_nombre }}">
+                                            </label>
+                                        </div>
+                                        <p class="clasif-celda-subtotal mt-1 min-h-[1rem] w-full text-center text-[10px] font-medium tabular-nums leading-4"
+                                           x-text="'= ' + unidadesDest(opFilas[{{ forloop.counter0 }}].seg2daDoc, opFilas[{{ forloop.counter0 }}].seg2daUni) + ' pares'"
+                                           :class="unidadesDest(opFilas[{{ forloop.counter0 }}].seg2daDoc, opFilas[{{ forloop.counter0 }}].seg2daUni) > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-slate-300 dark:text-slate-600'"></p>
+                                    </div>
+                                    {% else %}
+                                    <span class="block px-1 py-2 text-center text-[11px] text-slate-400">—</span>
+                                    {% endif %}
                                 </td>
                                 <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-2">
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="scrap" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="desperdicio" model_doc="scrapDoc" model_uni="scrapUni" subtotal_alpine="scrapUnidades" ring_class="focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/25" readonly=fila.solo_lectura only %}
+                                    {% if fila.clasificado_scrap > 0 %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="scrap" id_art=bloque.id_articulo consolidado_articulo=False operario_nombre=fila.operario_nombre codigo=bloque.codigo_manual destino_label="desperdicio" casilla_fija=True valor_docenas=fila.clasificado_scrap_docenas valor_pares=fila.clasificado_scrap_pares valor_total=fila.clasificado_scrap only %}
+                                    {% elif fila.editable_2da_scrap and not bloque.solo_lectura %}
+                                    <div class="clasif-celda-cantidad mx-auto flex w-full max-w-[9rem] flex-col items-center" data-clasif-dest="scrap" data-id-art="{{ bloque.id_articulo }}">
+                                        <div class="clasif-qty-group flex w-full overflow-hidden rounded-lg border border-slate-300/90 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/25 dark:border-slate-500 dark:bg-slate-900"
+                                             :class="excede ? 'border-red-400 ring-2 ring-red-500/30' : ''">
+                                            <label class="flex min-w-0 flex-1 flex-col">
+                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Docenas</span>
+                                                <input type="number" name="scrap_{{ bloque.id_articulo }}_op_{{ fila.id_operario }}_t_{{ fila.id_mpr_turno }}_docenas" min="0" step="1" inputmode="numeric" placeholder="0"
+                                                       x-model.number="opFilas[{{ forloop.counter0 }}].scrapDoc" @focus="$event.target.select()" data-clasif-qty-input data-clasif-part="docenas"
+                                                       class="clasif-input-docenas h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-600"
+                                                       aria-label="Docenas desperdicio {{ bloque.codigo_manual }} — {{ fila.operario_nombre }}">
+                                            </label>
+                                            <div class="flex w-5 shrink-0 flex-col items-center justify-center border-x border-slate-200 bg-slate-50/90 dark:border-slate-600 dark:bg-slate-800/80" aria-hidden="true"><span class="text-[10px] font-bold text-slate-300">+</span></div>
+                                            <label class="flex min-w-0 flex-1 flex-col">
+                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Pares</span>
+                                                <input type="number" name="scrap_{{ bloque.id_articulo }}_op_{{ fila.id_operario }}_t_{{ fila.id_mpr_turno }}_unidades" min="0" step="1" inputmode="numeric" placeholder="0"
+                                                       x-model.number="opFilas[{{ forloop.counter0 }}].scrapUni" @focus="$event.target.select()" data-clasif-qty-input data-clasif-part="unidades"
+                                                       class="clasif-input-unidades h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-600"
+                                                       aria-label="Pares desperdicio {{ bloque.codigo_manual }} — {{ fila.operario_nombre }}">
+                                            </label>
+                                        </div>
+                                        <p class="clasif-celda-subtotal mt-1 min-h-[1rem] w-full text-center text-[10px] font-medium tabular-nums leading-4"
+                                           x-text="'= ' + unidadesDest(opFilas[{{ forloop.counter0 }}].scrapDoc, opFilas[{{ forloop.counter0 }}].scrapUni) + ' pares'"
+                                           :class="unidadesDest(opFilas[{{ forloop.counter0 }}].scrapDoc, opFilas[{{ forloop.counter0 }}].scrapUni) > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-slate-300 dark:text-slate-600'"></p>
+                                    </div>
+                                    {% else %}
+                                    <span class="block px-1 py-2 text-center text-[11px] text-slate-400">—</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
+                            </tbody>
+                            {% endwith %}
+                            {% endfor %}
                         {% else %}
+                    <tbody>
                             <tr>
-                                <td colspan="8" class="px-4 py-12 text-center sm:px-6 sm:py-16">
+                                <td colspan="7" class="px-4 py-12 text-center sm:px-6 sm:py-16">
                                     <span class="material-icons mb-3 text-5xl text-slate-300 dark:text-slate-600" aria-hidden="true">{% if requiere_fecha %}event{% else %}inventory_2{% endif %}</span>
                                     <p class="text-sm font-medium text-slate-600 dark:text-slate-300">
                                         {% if requiere_fecha %}
@@ -220,20 +278,20 @@
                                     </p>
                                     <p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                                         {% if requiere_fecha %}
-                                            Elegí fecha (turno opcional) y cargá la grilla para ver el parte por máquina, artículo y operario.
+                                            Elegí fecha y cargá la grilla para ver el saldo de producción por artículo.
                                         {% elif confirmadas_ocultas %}
                                             Hay {{ confirmadas_ocultas }} fila{% if confirmadas_ocultas != 1 %}s{% endif %} confirmada{% if confirmadas_ocultas != 1 %}s{% endif %} en solo lectura.
                                             {% if puede_ver_roster_completo %}
                                             Pulsá <strong>Ver roster</strong> en el encabezado para consultarlas.
                                             {% endif %}
                                         {% else %}
-                                            Sin filas pendientes de control de calidad, o registrá producción en el parte con desglose por operario.
+                                            Sin filas pendientes de control de calidad, o registrá producción en el parte.
                                         {% endif %}
                                     </p>
                                 </td>
                             </tr>
-                        {% endif %}
                     </tbody>
+                        {% endif %}
                 </table>
             </div>
 
@@ -250,7 +308,7 @@
             <div class="relative z-20 flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800 sm:gap-3 sm:px-5">
                 <p x-show="hayExcedida" x-cloak class="text-xs font-medium text-red-600 dark:text-red-400">
                     <span class="material-icons align-text-bottom text-sm" aria-hidden="true">error_outline</span>
-                    Corregí las filas donde semi + 2da + desperdicio superan lo clasificable (parte + extra producción) antes de guardar.
+                    Corregí los bloques donde semi + 2da + desperdicio superan el saldo de producción antes de guardar.
                 </p>
                 <p x-show="!hayExcedida" class="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
                     {{ filas|length }} fila{% if filas|length != 1 %}s{% endif %} en la grilla
@@ -430,68 +488,19 @@ document.addEventListener('alpine:init', function () {
     });
     Alpine.data('clasificacionFiltros', function () {
         return {
-            open: false,
-            query: '',
-            selectedId: '{{ turno_id|default:"" }}',
-            highlight: -1,
             fechaIso: '',
-            options: [
-                {% for t in turnos_activos %}{ id: '{{ t.id }}', nombre: '{{ t.nombre|escapejs }}' }{% if not forloop.last %},{% endif %}
-                {% endfor %}
-            ],
             init: function () {
                 var raw = '{{ fecha_str|default:fecha_hoy|escapejs }}';
                 if (raw && raw.indexOf('/') > -1) {
                     var p = raw.split('/');
                     this.fechaIso = p[2] + '-' + p[1] + '-' + p[0];
                 }
-                var m = this.options.find(function (o) { return String(o.id) === String(this.selectedId); }, this);
-                if (m) { this.query = m.nombre; }
             },
             get fechaDdmmyyyy() {
                 if (!this.fechaIso) { return ''; }
                 var p = this.fechaIso.split('-');
                 if (p.length !== 3) { return ''; }
                 return p[2] + '/' + p[1] + '/' + p[0];
-            },
-            seleccionExacta: function () {
-                var self = this;
-                var m = this.options.find(function (o) { return String(o.id) === String(self.selectedId); });
-                return !!m && m.nombre === this.query;
-            },
-            get filtered() {
-                var q = (this.query || '').trim().toLowerCase();
-                if (!q || this.seleccionExacta()) { return this.options; }
-                return this.options.filter(function (o) {
-                    return o.nombre.toLowerCase().indexOf(q) > -1;
-                });
-            },
-            onInput: function () {
-                this.open = true;
-                this.selectedId = '';
-                this.highlight = -1;
-            },
-            select: function (opt) {
-                this.selectedId = opt.id;
-                this.query = opt.nombre;
-                this.open = false;
-                this.highlight = -1;
-            },
-            clearSel: function () {
-                this.selectedId = '';
-                this.query = '';
-                this.open = true;
-            },
-            move: function (dir) {
-                if (!this.open) { this.open = true; return; }
-                var n = this.filtered.length;
-                if (!n) { return; }
-                this.highlight = (this.highlight + dir + n) % n;
-            },
-            enter: function () {
-                if (this.open && this.highlight >= 0 && this.filtered[this.highlight]) {
-                    this.select(this.filtered[this.highlight]);
-                }
             },
             onSubmit: function (e) {
                 if (!this.fechaDdmmyyyy) {
@@ -500,16 +509,16 @@ document.addEventListener('alpine:init', function () {
             }
         };
     });
-    Alpine.data('clasificacionFila', function (idArt, base, upd, ini2da, iniScrap, soloLectura, iniSemi) {
+    Alpine.data('clasificacionBloque', function (idArt, saldo, upd, iniSemi, soloLectura, huerfano, nFilas) {
         return {
             idArt: idArt,
-            base: base || 0,
+            saldo: saldo || 0,
             upd: upd || 12,
             soloLectura: !!soloLectura,
-            iniSemi: iniSemi || 0,
-            semiDoc: 0, semiUni: 0,
-            seg2daDoc: 0, seg2daUni: 0,
-            scrapDoc: 0, scrapUni: 0,
+            huerfano: !!huerfano,
+            semiDoc: 0,
+            semiUni: 0,
+            opFilas: [],
             parseQty: function (v) {
                 var n = parseInt(String(v || '0').trim(), 10);
                 return isNaN(n) || n < 0 ? 0 : n;
@@ -517,14 +526,18 @@ document.addEventListener('alpine:init', function () {
             unidadesDest: function (doc, uni) {
                 return this.parseQty(doc) * this.upd + this.parseQty(uni);
             },
-            get seg2daUnidades() { return this.unidadesDest(this.seg2daDoc, this.seg2daUni); },
-            get scrapUnidades() { return this.unidadesDest(this.scrapDoc, this.scrapUni); },
             get semiUnidades() {
                 return this.unidadesDest(this.semiDoc, this.semiUni);
             },
+            totalOtras: function () {
+                var self = this;
+                return (this.opFilas || []).reduce(function (acc, f) {
+                    return acc + self.unidadesDest(f.seg2daDoc, f.seg2daUni) + self.unidadesDest(f.scrapDoc, f.scrapUni);
+                }, 0);
+            },
             get excede() {
                 if (this.soloLectura) { return false; }
-                return this.semiUnidades + this.seg2daUnidades + this.scrapUnidades > this.base + 1e-9;
+                return this.semiUnidades + this.totalOtras() > this.saldo + 1e-9;
             },
             coerceQtyField: function (field, el) {
                 if (this.soloLectura) { return; }
@@ -543,64 +556,29 @@ document.addEventListener('alpine:init', function () {
                     el.value = String(n);
                 }
             },
-            asignarSemiDesdePares: function (pares) {
-                var p = Math.max(0, pares);
-                this.semiDoc = Math.floor(p / this.upd);
-                this.semiUni = p % this.upd;
-            },
-            aplicarDescuentoOtros: function (prevOtros, nuevosOtros) {
-                if (this.soloLectura) { return; }
-                var prev = (typeof prevOtros === 'number' && !isNaN(prevOtros)) ? prevOtros : 0;
-                var curr = (typeof nuevosOtros === 'number' && !isNaN(nuevosOtros)) ? nuevosOtros : 0;
-                var delta = curr - prev;
-                if (delta === 0) { return; }
-                var nuevoSemi = Math.max(0, this.semiUnidades - delta);
-                if (curr > this.base + 1e-9) {
-                    nuevoSemi = 0;
-                }
-                this.asignarSemiDesdePares(nuevoSemi);
-            },
-            init: function () {
+            initOpFilas: function (seed) {
                 var self = this;
-                // Solo lectura y borrador: mostrar desglose. Editable: ini_semi llega en 0.
+                var upd = this.upd;
+                this.opFilas = (seed || []).map(function (s) {
+                    var s2 = s.seg2da || 0;
+                    var sc = s.scrap || 0;
+                    return {
+                        seg2daDoc: Math.floor(s2 / upd),
+                        seg2daUni: s2 % upd,
+                        scrapDoc: Math.floor(sc / upd),
+                        scrapUni: sc % upd
+                    };
+                });
                 var ism = this.iniSemi || 0;
-                this.semiDoc = Math.floor(ism / this.upd);
-                this.semiUni = ism % this.upd;
-                var i2 = ini2da || 0;
-                this.seg2daDoc = Math.floor(i2 / this.upd);
-                this.seg2daUni = i2 % this.upd;
-                var isc = iniScrap || 0;
-                this.scrapDoc = Math.floor(isc / this.upd);
-                this.scrapUni = isc % this.upd;
-                if (!this.soloLectura) {
-                    this.$watch(function () {
-                        return self.seg2daUnidades + self.scrapUnidades;
-                    }, function (nuevo, viejo) {
-                        self.aplicarDescuentoOtros(viejo, nuevo);
-                    });
-                }
+                this.semiDoc = Math.floor(ism / upd);
+                this.semiUni = ism % upd;
                 this.$watch(function () {
-                    return self.semiUnidades + self.seg2daUnidades + self.scrapUnidades;
+                    return self.semiUnidades + self.totalOtras();
                 }, function () {
                     self.$dispatch('fila-excede', { id: self.idArt, excede: self.excede });
                 });
-                if (!this.soloLectura) {
-                    ['semiDoc', 'semiUni', 'seg2daDoc', 'seg2daUni', 'scrapDoc', 'scrapUni'].forEach(function (field) {
-                        self.$watch(field, function (val) {
-                            if (val === '' || val === null || (typeof val === 'number' && isNaN(val))) {
-                                self[field] = 0;
-                            }
-                        });
-                    });
-                    this.$nextTick(function () {
-                        self.$el.querySelectorAll('[data-clasif-qty-input]').forEach(function (inp) {
-                            if (inp.value === '') {
-                                inp.value = '0';
-                            }
-                        });
-                    });
-                }
-            }
+            },
+            iniSemi: iniSemi || 0
         };
     });
     Alpine.data('clasificacionProduccion', function () {

@@ -3522,6 +3522,39 @@ def _sincronizar_demanda_reserva_lista_detalle(
             continue
 
 
+def _sql_qty_pendiente_comercial_stockp(cursor, tbl_stockp: str) -> str:
+    """Expresión SQL del saldo comercial pendiente de un renglón PED."""
+    saldos: List[str] = []
+    if columna_existe(cursor, tbl_stockp, "cantidad_pendiente"):
+        saldos.append("COALESCE(sp.cantidad_pendiente, 0)")
+    if columna_existe(cursor, tbl_stockp, "cantidad_entregada"):
+        saldos.append(
+            "(COALESCE(sp.Cantidad, sp.cantidad, 0) "
+            "- COALESCE(sp.cantidad_entregada, 0))"
+        )
+    if saldos:
+        return f"GREATEST(0, {', '.join(saldos)})"
+    return "COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0)"
+
+
+def _sql_filtros_ped_demanda_comercial(
+    cursor,
+    tbl_comp_ped: str,
+    tbl_stockp: str,
+) -> str:
+    """Filtros SQL opcionales que excluyen renglones PED comercialmente cerrados."""
+    filtros: List[str] = []
+    if columna_existe(cursor, tbl_comp_ped, "Estado"):
+        filtros.append(
+            "AND COALESCE(cp.Estado, '') NOT IN ('Facturado', 'Cerrado')"
+        )
+    if columna_existe(cursor, tbl_stockp, "remitido_facturado"):
+        filtros.append(
+            "AND COALESCE(sp.remitido_facturado, 'No') <> 'Si'"
+        )
+    return "\n                  ".join(filtros)
+
+
 def listar_demanda_pack_desde_pedidos(
     base_empresa: str,
     limit: int = 200,
@@ -3535,9 +3568,10 @@ def listar_demanda_pack_desde_pedidos(
     Demanda de packs terminados en vivo desde pedidos PED y colchón de reserva (solo-reserva),
     sin leer ni escribir lista_produccion_*.
 
-    P_ped = suma de cantidades pendientes por artículo en pedidos PED no anulados
-    (estado_pedido_opt Pendiente/Parcial si la columna existe). R = articulo.stock_reserva;
-    S = stock terminado (depósitos suma_stock='Si').
+    P_ped = suma del saldo comercial pendiente por artículo en pedidos PED no anulados
+    (cantidad_pendiente y cantidad original menos entregada, según columnas disponibles;
+    excluye estados comerciales cerrados). R = articulo.stock_reserva; S = stock terminado
+    (depósitos suma_stock='Si').
     cantidad_a_fabricar = max(0, P_ped + R − S); solo devuelve filas con cantidad_a_fabricar > 0.
 
     Incluye terminados con R > 0 aunque P_ped = 0 (quiebre solo-reserva). Los filtros de fecha
@@ -3565,9 +3599,15 @@ def listar_demanda_pack_desde_pedidos(
             if columna_existe(cursor, tbl_cp, "FechaEntrega"):
                 col_fecha_entrega = ", cp.FechaEntrega AS fecha_entrega"
 
+            qty_pendiente_sql = _sql_qty_pendiente_comercial_stockp(
+                cursor, tbl_stockp
+            )
+            filtros_comerciales_sql = _sql_filtros_ped_demanda_comercial(
+                cursor, tbl_cp, tbl_stockp
+            )
             sql_origin = f"""
                 SELECT sp.IDArt AS id_articulo,
-                       COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0) AS cantidad
+                       {qty_pendiente_sql} AS cantidad
                        {col_fecha_entrega}
                 FROM {tbl_stockp} sp
                 INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
@@ -3575,6 +3615,8 @@ def listar_demanda_pack_desde_pedidos(
                   AND COALESCE(TRIM(a.tipo_art_fab), '') = 'Terminado'
                 WHERE COALESCE(cp.Anulado, 'No') = 'No'
                   AND COALESCE(cp.TipoComprobante, '') = 'PED'
+                  {filtros_comerciales_sql}
+                  AND {qty_pendiente_sql} > 0
             """
             params_origin: List[Any] = []
             try:
@@ -15781,13 +15823,11 @@ def _calcular_stock_proceso_componente(
     suma_comp: Dict[str, Any],
     tipos_suma: frozenset,
 ) -> float:
-    """Stock en pipeline sin Terminado (paridad PCP col G / stock PP)."""
-    from mpr.pipeline import TIPO_MPR_TERMINADO
-
+    """Cobertura de 1.ª: solo Producción + Semi; excluye 2.ª, Terminado y Scrap."""
+    _ = tipos_suma  # Firma estable para callers que aún pasan TIPOS_QUE_SUMAN_STOCK.
     return sum(
-        float(suma_comp.get(t, 0.0) or 0)
-        for t in tipos_suma
-        if t != TIPO_MPR_TERMINADO
+        float(suma_comp.get(tipo, 0.0) or 0)
+        for tipo in (TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO)
     )
 
 
@@ -16146,7 +16186,8 @@ def listar_tablero_por_articulo(
         (dem_ped, dem_res_brecha para Urgente/a_enviar; dem_res_ui = R maestro para columna Reserva)
     4.  comp_ids = demanda ∪ envíos directos
     5.  Enviado/Fabricando = max(0, Σ envíos − acreditado) por componente
-    6.  stock_proceso = total sin Terminado; resta_urgente = resta_total = brecha demanda total (PCP)
+    6.  stock_proceso = Producción + Semi (sin 2.ª, Terminado ni Scrap);
+        resta_urgente = resta_total = brecha demanda total (PCP)
     7.  a_enviar = max(0, resta_urgente − Fabricando)
 
     La columna Reserva del modo Par muestra el colchón objetivo del pack (``coef × stock_reserva``),
@@ -19164,7 +19205,166 @@ def _registrar_delta_stock_ajuste(
             raise MprSchemaError(f"Error al registrar delta físico del ajuste: {e}") from e
 
 
-def transferir_stock_entre_etapas(
+def _transferir_etapa_en_cursor(
+    cursor,
+    *,
+    base_empresa: str,
+    id_usuario: int,
+    id_articulo: int,
+    tipo_origen: str,
+    tipo_destino: str,
+    cantidad: Any,
+    fecha: "Optional[date]" = None,
+) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
+    """Ejecuta una transición con un cursor existente, sin commit ni rollback."""
+    from mpr.pipeline import validar_transicion
+
+    cantidad_dec = to_decimal_or_none(cantidad)
+    if cantidad_dec is None or cantidad_dec <= 0:
+        return False, None, None, "La cantidad debe ser mayor a cero."
+    deposito_origen_id = _get_deposito_por_tipo_mpr(base_empresa, tipo_origen)
+    deposito_destino_id = _get_deposito_por_tipo_mpr(base_empresa, tipo_destino)
+    if not deposito_origen_id:
+        return False, None, None, f"No se encontró el depósito de origen '{tipo_origen}' en la base de datos."
+    if not deposito_destino_id:
+        return False, None, None, f"No se encontró el depósito de destino '{tipo_destino}' en la base de datos."
+
+    tbl_codmov = _nombre_tabla(cursor, "codmov")
+    tbl_talonarios = _nombre_tabla(cursor, "talonarios")
+    tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+    tbl_stock = _nombre_tabla(cursor, "stock")
+    tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+    tablas = {
+        "codmov": tbl_codmov,
+        "talonarios": tbl_talonarios,
+        "movimiento_stock": tbl_mov,
+        "stock": tbl_stock,
+        "stock_deposito": tbl_sd,
+    }
+    if not all(tablas.values()):
+        faltan = [nombre for nombre, tabla in tablas.items() if not tabla]
+        return False, None, None, f"Faltan tablas para la transición: {', '.join(faltan)}."
+
+    cursor.execute(
+        f"SELECT saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+        [id_articulo, deposito_origen_id],
+    )
+    fila_saldo = cursor.fetchone()
+    saldo_origen = Decimal(str(fila_saldo[0] or 0)) if fila_saldo else Decimal("0")
+    ok_real, error_real = validar_transicion(
+        tipo_origen, tipo_destino, cantidad_dec, saldo_origen=saldo_origen
+    )
+    if not ok_real:
+        return False, None, None, error_real
+
+    cursor.execute(f"SELECT CodigoMovimiento FROM {tbl_codmov} WHERE codigo = 1 FOR UPDATE")
+    fila_codigo = cursor.fetchone()
+    if not fila_codigo:
+        return False, None, None, "No se pudo obtener código de movimiento para la transición."
+    codigo_mov = int(fila_codigo[0] or 0) + 1
+    cursor.execute(
+        f"UPDATE {tbl_codmov} SET CodigoMovimiento = %s WHERE codigo = 1",
+        [codigo_mov],
+    )
+
+    id_pv = 1
+    cursor.execute(
+        f"SELECT Orden, Nro FROM {tbl_talonarios} "
+        "WHERE TipoComprobante = 'MSTOCK' AND id_punto_venta = %s FOR UPDATE",
+        [id_pv],
+    )
+    fila_talonario = cursor.fetchone()
+    if not fila_talonario:
+        return False, None, None, "No existe talonario MSTOCK para la transición."
+    orden_talonario, numero_actual = fila_talonario[0], int(fila_talonario[1] or 0)
+    cursor.execute(
+        f"UPDATE {tbl_talonarios} SET Nro = %s WHERE Orden = %s",
+        [numero_actual + 1, orden_talonario],
+    )
+    comprobante = _formato_nro_comprobante_mstock(id_pv, numero_actual)
+    fecha_mov = (fecha or date.today()).isoformat()
+    detalle = f"Transición MPR {tipo_origen}->{tipo_destino} art.{id_articulo}"
+    params_mov = [
+        codigo_mov, comprobante, MOTIVO_OPP_TEXTO, fecha_mov,
+        deposito_origen_id, deposito_destino_id, detalle, id_usuario,
+        1, None, None, None, TIPO_MOV_OPP, id_pv, numero_actual,
+    ]
+    _mpr_ejecutar_insert_intentos(
+        cursor,
+        [
+            (
+                f"""
+                INSERT INTO {tbl_mov}
+                (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha,
+                 deposito_origen, deposito_destino, detalle, id_usuario,
+                 tipo_comprobante, anulado, id_ref_movstock, id_proyecto,
+                 id_cliente, id_vendedor, tipo_mov, id_pv, nro_comprobante_busq)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No',
+                        %s, %s, %s, %s, %s, %s, %s)
+                """,
+                params_mov,
+            ),
+            (
+                f"""
+                INSERT INTO {tbl_mov}
+                (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha,
+                 deposito_origen, deposito_destino, detalle, id_usuario,
+                 tipo_comprobante, anulado, id_ref_movstock, id_proyecto,
+                 id_cliente, id_vendedor, tipo_mov, id_pv)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No',
+                        %s, %s, %s, %s, %s, %s)
+                """,
+                params_mov[:14],
+            ),
+        ],
+    )
+
+    sql_stock = f"""
+        INSERT INTO {tbl_stock}
+        (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada,
+         Salida, saldo, CodDeposito, id_ref_movstock, Orden, IdUsuario, Tipo,
+         TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
+    """
+    saldos_finales: List[Tuple[int, Decimal, bool]] = []
+    for deposito, es_entrada, orden in (
+        (deposito_origen_id, False, 1),
+        (deposito_destino_id, True, 2),
+    ):
+        cursor.execute(
+            f"SELECT id_stock_deposito, saldo FROM {tbl_sd} "
+            "WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+            [id_articulo, deposito],
+        )
+        fila = cursor.fetchone()
+        saldo_base = Decimal(str(fila[1] or 0)) if fila else Decimal("0")
+        saldo_final = saldo_base + cantidad_dec if es_entrada else saldo_base - cantidad_dec
+        cursor.execute(
+            sql_stock,
+            [
+                codigo_mov, id_articulo, str(id_articulo), "-", fecha_mov,
+                cantidad_dec if es_entrada else Decimal("0"),
+                Decimal("0") if es_entrada else cantidad_dec,
+                saldo_final, deposito, 1, orden, id_usuario,
+                MOTIVO_OPP_TEXTO, comprobante, None,
+            ],
+        )
+        saldos_finales.append((deposito, saldo_final, fila is not None))
+        if fila:
+            cursor.execute(
+                f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                [saldo_final, fila[0]],
+            )
+        else:
+            cursor.execute(
+                f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                [id_articulo, deposito, saldo_final],
+            )
+    return True, codigo_mov, comprobante, None
+
+
+def _transferir_stock_entre_etapas_legacy(
     base_empresa: str,
     id_usuario: int,
     id_articulo: int,
@@ -19435,6 +19635,111 @@ def transferir_stock_entre_etapas(
             "transferir_stock_entre_etapas: no se pudo crear registro trazabilidad tras commit MySQL: %s", e
         )
 
+    return True, codigo_mov, nro_comprobante, None
+
+
+def transferir_stock_entre_etapas(
+    base_empresa: str,
+    id_usuario: int,
+    id_articulo: int,
+    tipo_origen: str,
+    tipo_destino: str,
+    cantidad: Any,
+    notas: str = "",
+    fecha: "Optional[date]" = None,
+    *,
+    id_operario: Optional[int] = None,
+    operario_nombre: Optional[str] = None,
+    fecha_produccion: "Optional[date]" = None,
+    id_mpr_turno: Optional[int] = None,
+    cantidad_extra: Any = None,
+) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
+    """Transfiere una etapa y conserva el ledger post-commit histórico."""
+    from mpr.pipeline import validar_transicion
+
+    cantidad_dec = to_decimal_or_none(cantidad)
+    if not (base_empresa or "").strip():
+        return False, None, None, "Base de datos no indicada."
+    if not id_articulo or not tipo_origen or not tipo_destino:
+        return False, None, None, "Faltan parámetros obligatorios (articulo, origen, destino)."
+    if cantidad_dec is None or cantidad_dec <= 0:
+        return False, None, None, "La cantidad debe ser mayor a cero."
+    ok_legal, error_legal = validar_transicion(
+        tipo_origen,
+        tipo_destino,
+        cantidad_dec,
+        saldo_origen=Decimal("9999999"),
+    )
+    if not ok_legal:
+        return False, None, None, error_legal
+
+    try:
+        with get_connection(base_empresa) as conn:
+            conn.autocommit(False)
+            cursor = conn.cursor()
+            try:
+                ok, codigo_mov, nro_comprobante, error = _transferir_etapa_en_cursor(
+                    cursor,
+                    base_empresa=base_empresa,
+                    id_usuario=id_usuario,
+                    id_articulo=id_articulo,
+                    tipo_origen=tipo_origen,
+                    tipo_destino=tipo_destino,
+                    cantidad=cantidad_dec,
+                    fecha=fecha,
+                )
+                if not ok:
+                    conn.rollback()
+                    return False, None, None, error
+                conn.commit()
+            except Exception as exc:
+                conn.rollback()
+                if isinstance(exc, MprSchemaError):
+                    raise
+                return False, None, None, f"Error al procesar la transición: {exc}"
+    except MprSchemaError as exc:
+        return False, None, None, str(exc)
+    except Exception as exc:
+        return False, None, None, f"Error inesperado en la transición: {exc}"
+
+    from mpr.repositories.ledger_backend import mpr_writes_mysql, mpr_writes_postgres
+
+    try:
+        if mpr_writes_mysql():
+            from mpr.repositories.transicion_lote import crear_transicion_lote
+
+            crear_transicion_lote(
+                base_empresa,
+                id_articulo,
+                tipo_origen,
+                tipo_destino,
+                cantidad_dec,
+                codigo_mov,
+                id_usuario,
+                id_operario=id_operario,
+                operario_nombre=operario_nombre,
+                fecha_produccion=fecha_produccion or fecha,
+                id_mpr_turno=id_mpr_turno,
+                cantidad_extra=to_decimal_or_none(cantidad_extra) or Decimal("0"),
+            )
+        if mpr_writes_postgres():
+            from mpr.models import MprTransicionLote
+
+            MprTransicionLote.objects.create(
+                base_empresa=base_empresa,
+                id_articulo=id_articulo,
+                tipo_origen=tipo_origen,
+                tipo_destino=tipo_destino,
+                cantidad=cantidad_dec,
+                codigo_movimiento=codigo_mov,
+                id_usuario=id_usuario,
+            )
+    except Exception as exc:
+        logger.warning(
+            "transferir_stock_entre_etapas: no se pudo crear registro "
+            "trazabilidad tras commit MySQL: %s",
+            exc,
+        )
     return True, codigo_mov, nro_comprobante, None
 
 
@@ -20352,12 +20657,22 @@ def construir_grilla_clasificacion_produccion(
     ver_roster_completo: bool = False,
     marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> Dict[str, Any]:
-    """Grilla clasificación por máquina × artículo × turno × operario fabricante.
+    """Delega en la grilla CC por artículo.
 
-    Fecha obligatoria para cargar filas; turno opcional (vacío = todos los turnos del día).
-    Filas editables: ``ini_semi``/2da/scrap = 0 (sin precarga del parte). Solo lectura y
-    borrador conservan el desglose guardado.
+    ``turno_id`` se conserva por compatibilidad de firma y se ignora: el control
+    de calidad consolidado siempre abarca el día completo.
     """
+    from mpr.services_cc_consolidado import construir_bloques_cc_articulo
+
+    return construir_bloques_cc_articulo(
+        base_empresa,
+        fecha,
+        solo_pendiente=not ver_roster_completo,
+        marcas_incluidos=marcas_incluidos,
+    )
+
+    # Implementación histórica conservada temporalmente como referencia del
+    # contrato de salida durante la migración de views/templates.
     vacio: Dict[str, Any] = {
         "filas": [],
         "filas_vacio": True,
