@@ -77,8 +77,9 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 | **Stock terminado** | Suma de saldos en depósitos con `deposito.suma_stock = 'Si'`. Usado en Pedido producción trabajo (OPT)/Unidades para “cantidad a fabricar” y “cantidad urgente”. |
 | **Cant. parcial fabricada (ventana demanda)** | Unidades de producto terminado (pack) ya armadas en la campaña: se lee de `cantidad_fabricada_acumulada` si la columna existe; si no, respaldo algebraico Cant. pedida − Pendiente producción. |
 | **Stock reserva** | Campo en artículo (`stock_reserva`): indicador **R** de stock mínimo a garantizar; no es saldo. En ventana OPT/Packs: **P_ped** = suma en detalle con código de pedido ≠ 0; **Q_res** = fila código 0; **S** = stock terminado. **Cant. a fabricar** = max(0, **P_ped + R − S**) (un solo pool **S**; no se suma **Q_res** otra vez). **Urgente** = max(0, **P_ped − S**). |
+| **P_ped (tablero)** | Columna **Pedido** (`dem_ped`) del tablero MPR: suma del **saldo comercial** de renglones PED abiertos (`stockp.cantidad_pendiente`; lo que falta remitir/facturar). **No** es la cantidad original del PED. Al remitir/facturar baja Pedido, PED Urgente y Urgente. |
 | **Depósito suma_stock** | Campo en `deposito`: 'Si' o 'No'. Solo los depósitos con suma_stock = 'Si' entran en el cálculo de stock terminado y en indicadores de Pack/Unidades. |
-| **2da selección** | Productos con defectos aptos para venta a menor costo. Se suele usar un depósito específico (ej. “Depósito 2da selección”) y reclasificación desde producción. |
+| **2da selección** | Productos con defectos aptos para venta a menor costo. Depósito `tipo_mpr=2daSeleccion`. **No** cubre pedidos de terminado de 1.ª: el tablero Par no la resta en `stock_proceso` (Urgente / PED Urgente); hay que rehacer esa cantidad. |
 | **Scrap** | Desecho no vendible. Depósito dedicado o motivo de movimiento para dar de baja producto descartado. |
 
 ---
@@ -107,12 +108,14 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 
 | Término | Descripción |
 |--------|-------------|
-| **Tablero de producción** | Demanda consolidada por **componente** (explosión BOM desde packs PED). Columnas PCP: pedido, reserva, resta total/urgente, **Fabricando**, stock pipeline (sin Terminado en componentes), Enviar. Ruta: `/mpr/tablero-produccion/`. |
+| **Tablero de producción** | Demanda consolidada por **componente** (explosión BOM desde packs PED). Columnas PCP: pedido, reserva, **TOT Urgente**, **PED Urgente**, **Fabricando**, stock pipeline (sin Terminado en componentes), Enviar. Entrada default **Par / Docenas**. Ruta: `/mpr/tablero-produccion/`. |
+| **TOT Urgente** | Columna del tablero: `max(0, Pedido + Reserva − stock de 1.ª)`. Base de Enviar y de «Solo urgentes». El total bajo el título se recorta con la búsqueda. |
+| **Cambiar vista (tablero)** | Permiso `mpr.tablero_cambiar_vista`: muestra Pack\|Par y Docenas\|Pares. Sin él el tablero queda en Par / Docenas. |
 | **Fabricando** | Cupo virtual: `max(0, envíos tablero − acreditado)`. Acreditado = `max(Semi+2da+Scrap, CC) + max(0, partes − CC)`. **Producción no acredita.** Un parte nuevo siempre baja Fabricando. |
 
 | **Enviar a producción** | Registro en `mpr_envio_produccion` (ledger). No mueve stock hasta el parte. |
 | **Parte de producción (E8)** | Grilla componente × operario; solo filas con Fabricando > 0. Registra `mpr_parte_linea` e ingresa stock a **Producido**. |
-| **Control de calidad (clasificación / CC)** | Clasificación desde **Producido** hacia Semi / 2da / Scrap en **bloques por artículo** (sin columna máquina ni filtro Turno). Columna **Saldo producción** = saldo vivo en depósito `tipo_mpr = Produccion` (único tope por artículo). **Semi:** un ingreso por artículo/día; ledger nuevo con `id_operario` y `id_mpr_turno` nulos. **2da y Scrap:** por **(operario, turno)** del parte (máquinas colapsadas). **Artículo huérfano** (saldo Prod > 0 sin parte): solo Semi editable. Bloqueo dual del parte: 2da/scrap o Semi **histórico con operario** bloquean turno; Semi nuevo sin operario **no** bloquea. Ruta: `/mpr/tablero-produccion/clasificacion-produccion/`. Plan: [PLAN_CC_CONSOLIDADO_POR_ARTICULO.md](PLAN_CC_CONSOLIDADO_POR_ARTICULO.md). No confundir con la planilla impresa. |
+| **Control de calidad (clasificación / CC)** | Clasificación desde **Producido** hacia Semi / 2da / Scrap, por **operario fabricante**. Tope fila = remanente atribuible del parte + **extra producción** (`stock Prod − Σ atribuible parte`). Semi/2da/scrap **arrancan en 0** y se cargan a mano (sin precarga ni recálculo de Semi). Borrador y filas confirmadas (solo lectura) sí muestran el desglose guardado. Ledger: `mpr_transicion_lote` (`cantidad_extra`). Ruta: `/mpr/clasificacion-produccion/`. No confundir con la planilla impresa. |
 | **Planilla Control de Calidad** | Hoja A4 horizontal impresa desde **Asignar artículo a máquina**: máquina, artículo, color, talle y casilleros de turnos/observaciones para completar a mano. Respeta filtros de pantalla. |
 | **TALLES / COLOR (CE)** | Campos especiales de artículo (`articulo_ce` / `articulo_val_ce` / `articulo_valor_ce`). Se muestran en grilla de máquinas e inventario por etapa. |
 | **Clasificado (reportes)** | Suma de `mpr_transicion_lote` con `tipo_origen = Produccion` en el período. |

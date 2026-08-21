@@ -223,6 +223,7 @@ Borra: `mpr_envio_produccion`, partes, transiciones, armado surtido, roster. **N
 | Acción / URL | `mpr.ver` | `mpr.tablero_ver` (sin `mpr.ver`) | `mpr.reportes` (sin `mpr.ver`) |
 |--------------|-----------|-----------------------------------|----------------------------------|
 | GET `/mpr/tablero-produccion/` | Sí (completo) | Sí (solo lectura) | **403** |
+| Pack\|Par y Docenas\|Pares | Solo con `mpr.tablero_cambiar_vista` (opt-in; no lo incluye `mpr.ver`) | Idem | — |
 | POST `/mpr/tablero-produccion/actualizar/` | Sí | Sí | **403** |
 | GET `/mpr/manual/` | Sí | Sí | Según vista (manual abierto) |
 | POST `/mpr/tablero-produccion/enviar/` | Sí | **403** | **403** |
@@ -231,7 +232,7 @@ Borra: `mpr_envio_produccion`, partes, transiciones, armado surtido, roster. **N
 | GET `/mpr/reportes/` | Sí | **403** | Sí |
 | Menú MPR | Completo | Solo «Tablero de producción» | Solo «Reportes MPR» |
 
-Perfil **operario + tablero:** `mpr.parte_operario` + `mpr.tablero_ver`, sin `mpr.ver`. Landing en `/mpr/mi-parte/`; consulta demanda en el tablero sin mutar ledger ni abrir CC/reportes. Flags de contexto: `puede_enviar=False`, `solo_lectura_tablero=True`.
+Perfil **operario + tablero:** `mpr.parte_operario` + `mpr.tablero_ver`, sin `mpr.ver`. Landing en `/mpr/mi-parte/`; consulta demanda en el tablero sin mutar ledger ni abrir CC/reportes. Flags de contexto: `puede_enviar=False`, `solo_lectura_tablero=True`. Sin `mpr.tablero_cambiar_vista` no ve Pack\|Par ni Docenas\|Pares (queda Par / Docenas).
 
 Perfil **solo reportes:** `mpr.reportes` sin `mpr.ver`. Landing y menú en `/mpr/reportes/`; sin Parte, CC, Armado ni tablero.
 

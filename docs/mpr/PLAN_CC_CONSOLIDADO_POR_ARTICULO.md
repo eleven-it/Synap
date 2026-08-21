@@ -1,7 +1,7 @@
 # Plan — Control de calidad consolidado por artículo
 
 **Fecha:** 20/08/2026  
-**Estado:** Implementado 20/08/2026 (PR1–PR5, `size:exception` 3500 líneas). Change OpenSpec: `openspec/changes/mpr-cc-consolidado-articulo/`.  
+**Estado:** Plan de producto e implementación (sin código aún)  
 **Pantalla:** `/mpr/tablero-produccion/clasificacion-produccion/`  
 **Principio rector:** el stock físico y el ledger histórico no se reescriben. El cambio es de **cómo se clasifica de ahora en más** y de **cómo se lee** lo ya guardado.
 
@@ -118,7 +118,7 @@ Nuevo (vía catálogo `mpr_core_tables`, no SQL suelto):
 - `id_mpr_maquina` deja de formar la UK (siempre 0 o se elimina de la UK).
 - `id_operario` pasa a NULL.
 
-Borradores abiertos al corte: **no se convierten**. UI: si hay cabecera vieja `(fecha, turno)` y no hay cabecera nueva del día, mostrar aviso “El borrador anterior no es compatible; volvé a cargar” y no precargar cantidades.
+Borradores abiertos al corte: **no se convierten**. Al abrir la grilla consolidada (o al confirmar un artículo), si existe cabecera vieja `(fecha, turno)` se **elimina** automáticamente; no se muestra aviso ni se precargan cantidades del shape legacy.
 
 ---
 
@@ -135,7 +135,7 @@ semi_mostrar(artículo, fecha) =
       AND tipo_destino = 'SemiElaborado'
 ```
 
-Da igual que las filas viejas tengan operario. El usuario ve **un** número. El detalle por operario sigue en la tabla para auditoría, no en la grilla.
+Da igual que las filas viejas tengan operario. El usuario ve **un** número en **Cargado** (docenas y pares enteros). El detalle por operario sigue en la tabla para auditoría. Los casilleros de carga nueva no se rellenan con ese histórico (evitar doble POST).
 
 ### 4.2 2da / desperdicio por operario
 

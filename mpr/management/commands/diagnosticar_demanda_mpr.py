@@ -11,6 +11,10 @@ from django.core.management.base import BaseCommand
 
 from core.mysql_pool import mysql_cursor
 from core.utils.administranet_types import to_int_or_none, to_date_or_none
+from mpr.services import (
+    _sql_filtros_ped_demanda_comercial,
+    _sql_qty_pendiente_comercial_stockp,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,15 +110,18 @@ class Command(BaseCommand):
             self.stdout.write("")
 
             # 1) Query de pedidos pendientes (origen de actualizar_pedidos_produccion → detalle → agrupada → vista)
+            qty_expr = _sql_qty_pendiente_comercial_stockp(cursor, tbl_stockp)
             sql_origin = f"""
                 SELECT cp.CodigoMovimiento AS codigo_movimiento_pedido, cp.Fecha AS fecha_pedido,
-                       sp.IDArt AS id_articulo, COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0) AS cantidad
+                       sp.IDArt AS id_articulo, ({qty_expr}) AS cantidad
                 FROM {tbl_stockp} sp
                 INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
                 INNER JOIN {tbl_articulo} a ON a.IDArt = sp.IDArt AND COALESCE(TRIM(a.tipo_art_fab), '') = 'Terminado'
                 WHERE COALESCE(cp.Anulado, 'No') = 'No'
                   AND COALESCE(cp.TipoComprobante, '') = 'PED'
+                  AND ({qty_expr}) > 0
             """
+            sql_origin += _sql_filtros_ped_demanda_comercial(cursor, tbl_cp, tbl_stockp)
             params_origin = []
             try:
                 cursor.execute("SHOW COLUMNS FROM {} LIKE %s".format(tbl_cp), ["estado_pedido_opt"])
@@ -136,12 +143,14 @@ class Command(BaseCommand):
             cursor.execute(sql_origin, params_origin)
             filas_origen = cursor.fetchall()
 
-            self.stdout.write("1) PEDIDOS PENDIENTES (origen de Actualizar — comp_ped + stockp + articulo tipo_art_fab='Terminado'):")
+            self.stdout.write("1) PEDIDOS PENDIENTES (origen de Actualizar — saldo comercial comp_ped + stockp + articulo tipo_art_fab='Terminado'):")
             if not filas_origen:
                 self.stdout.write(self.style.WARNING("   Ninguna fila. Los pedidos no entran porque:"))
                 self.stdout.write("   - comp_ped: Anulado='No', TipoComprobante='PED', estado_pedido_opt IN ('Pendiente','Parcial')")
+                self.stdout.write("   - comp_ped: Estado NOT IN ('Facturado','Cerrado') si existe columna Estado")
+                self.stdout.write("   - stockp: remitido_facturado <> 'Si' si existe la columna")
                 self.stdout.write("   - articulo: tipo_art_fab = 'Terminado' (exacto, sin espacios)")
-                self.stdout.write("   - stockp: cantidad > 0 (se usa COALESCE(cantidad, cantidad_pendiente, Cantidad, 0))")
+                self.stdout.write(f"   - stockp: saldo comercial > 0 ({qty_expr})")
                 if fecha_desde or fecha_hasta:
                     self.stdout.write("   - comp_ped.Fecha dentro del rango indicado")
                 return
@@ -165,12 +174,12 @@ class Command(BaseCommand):
                 if cod_ped is not None and id_art is not None and qty > 0:
                     filas_validas.append((cod_ped, id_art, qty, fecha_str))
 
-            self.stdout.write(f"   Total filas origen: {len(filas_origen)}. Con cantidad > 0 (válidas para INSERT): {len(filas_validas)}")
+            self.stdout.write(f"   Total filas origen: {len(filas_origen)}. Con saldo comercial > 0 (válidas para INSERT): {len(filas_validas)}")
             if len(filas_origen) != len(filas_validas):
-                self.stdout.write(self.style.WARNING("   Hay filas con cantidad 0 o NULL que Actualizar ignora."))
+                self.stdout.write(self.style.WARNING("   Hay filas con saldo comercial 0 que Actualizar ignora."))
             for item in filas_validas[:20]:
                 cod_ped, id_art, qty, fecha_str = item[0], item[1], item[2], item[3]
-                self.stdout.write(f"   Pedido={cod_ped} IDArt={id_art} cantidad={qty} fecha={fecha_str}")
+                self.stdout.write(f"   Pedido={cod_ped} IDArt={id_art} saldo_comercial={qty} fecha={fecha_str}")
             if len(filas_validas) > 20:
                 self.stdout.write(f"   ... y {len(filas_validas) - 20} más.")
 
@@ -376,14 +385,15 @@ class Command(BaseCommand):
             if not filas_validas:
                 self.stdout.write(
                     self.style.ERROR(
-                        "Ninguna fila válida (cantidad > 0) en pedidos pendientes. Actualizar no insertará nada; "
-                        "la vista Demanda estará vacía. Revise: tipo_art_fab='Terminado', estado_pedido_opt IN ('Pendiente','Parcial'), filtros de fecha/búsqueda."
+                        "Ninguna fila válida (saldo comercial > 0) en pedidos pendientes. Actualizar no insertará nada; "
+                        "la vista Demanda estará vacía. Revise: tipo_art_fab='Terminado', estado_pedido_opt IN ('Pendiente','Parcial'), "
+                        "Estado NOT IN ('Facturado','Cerrado'), remitido_facturado <> 'Si', filtros de fecha/búsqueda."
                     )
                 )
             else:
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"Hay {len(articulos_origen)} artículo(s) en pedidos pendientes con cantidad > 0. "
+                        f"Hay {len(articulos_origen)} artículo(s) en pedidos pendientes con saldo comercial > 0. "
                         "Tras Actualizar, la agrupada refleja el detalle; la vista Demanda además **excluye** filas con "
                         "`lista_produccion_agrupada.codigo_movimiento_opt > 0` (OPT ya liberada). "
                         "Si un artículo tiene pendiente solo en filas excluidas, **no** saldrá en ventana-pack. "

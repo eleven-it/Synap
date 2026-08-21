@@ -1,6 +1,6 @@
 # Tablero de Demanda Consolidado por Artículo — MPR Etapa 2
 
-**Fecha:** 2026-07-02 (actualizado 04/07/2026 — desacople OPT/OPP del flujo diario)  
+**Fecha:** 2026-07-02 (actualizado 20/08/2026 — Pedido = saldo comercial pendiente de remitir/facturar)  
 **Change:** `mpr-pipeline-etapa2-tablero-consolidado`  
 **Artefactos SDD:** Proposal #969, Spec #970, Design #971, Tasks #973  
 
@@ -34,22 +34,24 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 
 ---
 
-## Columnas del tablero (alineación PCP — actualizado 24/07/2026)
+## Columnas del tablero (alineación PCP — actualizado 20/08/2026)
 
 | # | Columna | Tipo | Descripción |
 |---|---------|------|-------------|
 | 1 | **Artículo** | metadato | Código manual + descripción. Sticky-left. |
-| 2 | **Pedido** | `dem_ped` | Pares (entero) |
+| 2 | **Pedido** | `dem_ped` | Saldo comercial pendiente de remitir/facturar (suma de `stockp.cantidad_pendiente` en PED abiertos; **no** la cantidad original del PED). Pares (entero). |
 | 3 | **Reserva** | `dem_res` | Pares (entero); explosión BOM reserva pack (modo Par) |
-| 4 | **Urgente** | `resta_urgente` | Pares + Docenas (÷12, decimal PCP); base del **Enviar** |
+| 4 | **TOT Urgente** | `resta_urgente` | Pares + Docenas (÷12, decimal PCP); base del **Enviar**. Resta Producido + Semi; **no** 2.ª. En UI el título es **TOT Urgente**; el total bajo el encabezado se recorta con la búsqueda. |
 | 4b | **PED Urgente** | `resta_urgente_ped` | Igual brecha **sin Reserva**: `max(0, dem_ped − stock_proceso)`; solo visualización |
 | 5 | **Fabricando** | virtual | `max(0, Σ envíos − acreditado)`. Acreditado = `max(Semi+2da+Scrap, CC) + max(0, partes − CC)`. **Producción no acredita.** |
 | 6–8 | **Etapas stock** | físico | Producido, 2da, Semi. **Sin Terminado** (componentes). Desperdicio (Scrap) deja de mostrarse en el tablero Par. |
-| 9 | **Total** | derivado | Suma etapas sin Scrap ni Terminado. |
+| 9 | **Total** | derivado | Suma física Producido + 2.ª + Semi (sin Scrap ni Terminado). **No** es el stock que cubre Urgente. |
 | — | **Enviado** (En curso) | ledger | Σ `mpr_envio_produccion` no anulados; distinto de Fabricando. |
 | 11 | **Enviar** | acción | Inputs docenas/pares; tope = `a_enviar`. |
 
-`stock_proceso` = total sin Terminado (paridad PCP col G).
+`stock_proceso` = Producción + Semi (sin Terminado, Scrap ni **2.ª selección**).
+La 2.ª no entrega pedidos de terminado de primera: lo clasificado ahí hay que rehacerlo.
+La columna **Total** sigue mostrando 2.ª (stock físico). **Fabricando** sigue acreditando 2.ª (esas unidades ya se produjeron).
 
 ```
 resta_urgente     = resta_total = MAX(0, demanda − stock_proceso)   # demanda = dem_ped + dem_res
@@ -64,7 +66,8 @@ a_enviar          = MAX(0, urgente − fabricando)   # tope también acotado por
 stock previo ahí **no** baja Fabricando. Tras Enviar, el cupo queda disponible para cargar
 Parte aunque haya unidades ya en Producción. Semi/2da/CC y partes sí acreditan; un parte
 nuevo siempre suma al acreditado (no lo tapa un `max` con 2da previa).
-La columna **Urgente** muestra la brecha PCP unificada; **Enviar** usa `a_enviar` para precargar, deshabilitar inputs y validar el POST (hidden `pendiente_*` / `resta_urgente_*`).
+La columna **TOT Urgente** muestra la brecha PCP unificada; **Enviar** usa `a_enviar` para precargar, deshabilitar inputs y validar el POST (hidden `pendiente_*` / `resta_urgente_*`).
+Los totales de **TOT Urgente** y **PED Urgente** viven bajo el título de cada columna (no en el chrome oscuro) y se recalculan en el cliente según el recorte de la búsqueda.
 
 Filtro por defecto: **Solo urgentes** (`resta_urgente > 0`, demanda total). Diseño UX: `docs/mpr/DISENO_TABLERO_PRODUCCION_REFACTOR_PCP.md`.
 
@@ -83,6 +86,13 @@ Filtro por defecto: **Solo urgentes** (`resta_urgente > 0`, demanda total). Dise
 ```
 Paso 1:  listar_demanda_pack_desde_pedidos(base, limit*2, fecha_desde, fecha_hasta)
          → filas_pack (demanda en vivo desde stockp + comp_ped PED)
+
+         P_ped usa el **saldo comercial** del renglón: `GREATEST(cantidad_pendiente,
+         Cantidad − cantidad_entregada, 0)` (fuente principal `stockp.cantidad_pendiente`;
+         al remitir en VB6 baja y con ello bajan Pedido, PED Urgente y Urgente).
+         Excluye PED Anulado, no-PED, `estado_pedido_opt` distinto de Pendiente/Parcial
+         (si existe la columna), `comp_ped.Estado IN ('Facturado','Cerrado')` y renglones
+         con `remitido_facturado='Si'`. **No** excluye Estado «En remito» (puede ser parcial).
 
 Paso 2:  _query_enviados_todos_componentes(base)
          → componentes con envío directo al tablero (sin demanda pack)
@@ -105,6 +115,7 @@ La demanda **no** depende de «Actualizar demanda» ni de `lista_produccion_*`. 
 - `enviado` (Fabricando) y `produccion` (Producido) son **independientes**: Fabricando viene de `mpr_envio_produccion`; Producido de `stock_deposito`.
 - `desperdicio` (**Scrap**) **no se incluye en `total`**. Está separado visualmente.
 - `pendiente` nunca es negativo (`max(0, ...)`).
+- `stock_proceso` no incluye 2.ª selección (ni Terminado ni Scrap): la 2.ª no cubre PED de 1.ª.
 
 ---
 

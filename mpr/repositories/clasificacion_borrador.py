@@ -378,6 +378,27 @@ def eliminar_borrador(
         )
 
 
+def eliminar_borrador_legacy_fecha(base_empresa: str, fecha: date) -> int:
+    """Descarta todos los borradores legacy (por turno) de la fecha.
+
+    El CC consolidado no migra ese shape: se elimina para no dejar el aviso
+    de incompatibilidad ni precargas viejas.
+    """
+    base = (base_empresa or "").strip()
+    f_prod = to_date_or_none(fecha)
+    if not base or f_prod is None:
+        return 0
+    with mysql_cursor(base) as cursor:
+        cursor.execute(
+            """
+            DELETE FROM mpr_clasificacion_borrador
+            WHERE fecha_produccion = %s
+            """,
+            [f_prod],
+        )
+        return int(cursor.rowcount or 0)
+
+
 def migrar_borrador_operario_entre_turnos(
     base_empresa: str,
     fecha: date,

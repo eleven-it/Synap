@@ -36,9 +36,9 @@ componente BOM (base del envío a producción)."*
 
 ## Columnas por modo
 
-- **Par:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · **Urgente** · **PED Urgente** · Fabricando · **Enviado** ·
+- **Par:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · **TOT Urgente** · **PED Urgente** · Fabricando · **Enviado** ·
   Producido · 2da Selección · Semi Elaborado · Total · Enviar.
-- **Pack:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · Terminado · **Urgente** · **PED Urgente**. (La fecha de entrega del PED queda en el servicio pero **no** se muestra en la grilla.)
+- **Pack:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · Terminado · **TOT Urgente** · **PED Urgente**. (La fecha de entrega del PED queda en el servicio pero **no** se muestra en la grilla.)
 
 ### Indicadores Fabricando y Enviado (solo modo Par)
 
@@ -59,12 +59,14 @@ queda como eyebrow. Hover sobre «Máquina N» muestra tooltip estilo BO
 
 La columna **Enviado** muestra la suma del ledger `mpr_envio_produccion` (envíos no
 anulados). **No** confundir con **Fabricando** (`enviado` = envíos − acreditado en
-stock del pipeline). El tope de la columna **Enviar** es `máx(0, Urgente − Enviado)`.
+stock del pipeline). El tope de la columna **Enviar** es `máx(0, TOT Urgente − Enviado)`.
 
-La columna **Resta total** se eliminó en ambos modos: **Urgente** unifica la brecha
+La columna **Resta total** se eliminó en ambos modos: **TOT Urgente** unifica la brecha
 a fabricar (`max(0, Pedido + Reserva − stock)`). **PED Urgente** muestra la misma
 brecha **sin Reserva** (`max(0, Pedido − stock)`), solo para cubrir demanda de pedidos.
 No altera KPI, filtro «Solo urgentes» ni el tope de **Enviar**.
+Los totales de TOT/PED viven **bajo el título de columna** y se recortan con la búsqueda
+(client-side). Entrada al tablero sin query: **Par** y **Docenas**.
 
 ### Aviso «Sin receta» (modo Pack)
 
@@ -89,7 +91,8 @@ Sobre `listar_demanda_pack_desde_pedidos` (sin escribir en `lista_produccion_*`)
 
 - Fuente: pedidos PED abiertos **+** terminados con `stock_reserva > 0` (solo-reserva).
 - Los filtros de **fecha** aplican solo a líneas PED; la parte solo-reserva no depende de fechas.
-- `dem_ped` (Pedido) = `cantidad_pedida_pedido` (P_ped del pack; 0 si solo-reserva).
+- `dem_ped` (Pedido) = suma del **saldo comercial** de PED abiertos (`cantidad_pendiente` en `stockp`; P_ped del pack; 0 si solo-reserva). **No** es la cantidad original del PED.
+- Al **remitir o facturar** un renglón, baja el saldo comercial → bajan Pedido y, por tanto, PED Urgente y TOT Urgente al recargar el tablero.
 - `dem_res` (Reserva) = `stock_reserva` (R maestro del terminado; colchón objetivo).
 - `resta_urgente` = `resta_total` = `cantidad_a_fabricar` = `max(0, Pedido + Reserva − Terminado)`.
 - `resta_urgente_ped` (**PED Urgente**) = `cantidad_urgente_abs` = `max(0, Pedido − Terminado)`.
@@ -100,18 +103,23 @@ Sobre `listar_demanda_pack_desde_pedidos` (sin escribir en `lista_produccion_*`)
 Tooltips UI:
 
 - **Reserva (Pack):** colchón objetivo del terminado (`articulo.stock_reserva`).
-- **Urgente (Pack/Par):** `max(0, Pedido + Reserva − stock)`; hueco de stock frente a demanda (no indica cuánto enviar; ver Enviar / Enviado).
+- **TOT Urgente (Pack/Par):** `max(0, Pedido + Reserva − stock)`; hueco de stock frente a demanda (no indica cuánto enviar; ver Enviar / Enviado). Total bajo el título, recortado por la búsqueda.
 - **PED Urgente (Pack/Par):** `max(0, Pedido − stock)`; sin Reserva. Solo demanda de pedidos.
 - **Reserva (Par):** colchón objetivo del pack terminado explotado por BOM
   (`coef × articulo.stock_reserva`), misma semántica que Reserva en modo Pack.
   La brecha operativa (Urgente / a_enviar) sigue usando `n_res_tail` tras descontar
   stock terminado del pack; Fabricando no depende de esta columna.
-  En Par, `resta_urgente_ped` = `max(0, dem_ped − stock_proceso)`.
+  En Par, `stock_proceso` = Producción + Semi (**sin 2.ª**): la 2.ª no cubre PED de
+  terminado de 1.ª y hay que rehacerla. `resta_urgente_ped` = `max(0, dem_ped − stock_proceso)`.
 
 Los **KPIs del encabezado** (`calcular_kpis_tablero_produccion`) suman `resta_urgente` y
 `resta_total`; en modo Pack ambos coinciden (Urgente unificado).
 
 ## Persistencia de filtros
+
+El toggle **Pack|Par** (y **Docenas|Pares**) solo se muestra con el permiso
+`mpr.tablero_cambiar_vista`. Sin él, el tablero queda en **Par / Docenas** y se ignora
+`?modo=` / `?presentacion=` en la URL.
 
 El toggle **Pack|Par** preserva `fecha_desde/hasta`, marcas y
 `presentacion` (docenas/pares). El toggle **Docenas|Pares** preserva a su vez `modo`.

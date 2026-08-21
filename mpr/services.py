@@ -3522,6 +3522,39 @@ def _sincronizar_demanda_reserva_lista_detalle(
             continue
 
 
+def _sql_qty_pendiente_comercial_stockp(cursor, tbl_stockp: str) -> str:
+    """Expresión SQL del saldo comercial pendiente de un renglón PED."""
+    saldos: List[str] = []
+    if columna_existe(cursor, tbl_stockp, "cantidad_pendiente"):
+        saldos.append("COALESCE(sp.cantidad_pendiente, 0)")
+    if columna_existe(cursor, tbl_stockp, "cantidad_entregada"):
+        saldos.append(
+            "(COALESCE(sp.Cantidad, sp.cantidad, 0) "
+            "- COALESCE(sp.cantidad_entregada, 0))"
+        )
+    if saldos:
+        return f"GREATEST(0, {', '.join(saldos)})"
+    return "COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0)"
+
+
+def _sql_filtros_ped_demanda_comercial(
+    cursor,
+    tbl_comp_ped: str,
+    tbl_stockp: str,
+) -> str:
+    """Filtros SQL opcionales que excluyen renglones PED comercialmente cerrados."""
+    filtros: List[str] = []
+    if columna_existe(cursor, tbl_comp_ped, "Estado"):
+        filtros.append(
+            "AND COALESCE(cp.Estado, '') NOT IN ('Facturado', 'Cerrado')"
+        )
+    if columna_existe(cursor, tbl_stockp, "remitido_facturado"):
+        filtros.append(
+            "AND COALESCE(sp.remitido_facturado, 'No') <> 'Si'"
+        )
+    return "\n                  ".join(filtros)
+
+
 def listar_demanda_pack_desde_pedidos(
     base_empresa: str,
     limit: int = 200,
@@ -3535,9 +3568,10 @@ def listar_demanda_pack_desde_pedidos(
     Demanda de packs terminados en vivo desde pedidos PED y colchón de reserva (solo-reserva),
     sin leer ni escribir lista_produccion_*.
 
-    P_ped = suma de cantidades pendientes por artículo en pedidos PED no anulados
-    (estado_pedido_opt Pendiente/Parcial si la columna existe). R = articulo.stock_reserva;
-    S = stock terminado (depósitos suma_stock='Si').
+    P_ped = suma del saldo comercial pendiente por artículo en pedidos PED no anulados
+    (cantidad_pendiente y cantidad original menos entregada, según columnas disponibles;
+    excluye estados comerciales cerrados). R = articulo.stock_reserva; S = stock terminado
+    (depósitos suma_stock='Si').
     cantidad_a_fabricar = max(0, P_ped + R − S); solo devuelve filas con cantidad_a_fabricar > 0.
 
     Incluye terminados con R > 0 aunque P_ped = 0 (quiebre solo-reserva). Los filtros de fecha
@@ -3565,9 +3599,15 @@ def listar_demanda_pack_desde_pedidos(
             if columna_existe(cursor, tbl_cp, "FechaEntrega"):
                 col_fecha_entrega = ", cp.FechaEntrega AS fecha_entrega"
 
+            qty_pendiente_sql = _sql_qty_pendiente_comercial_stockp(
+                cursor, tbl_stockp
+            )
+            filtros_comerciales_sql = _sql_filtros_ped_demanda_comercial(
+                cursor, tbl_cp, tbl_stockp
+            )
             sql_origin = f"""
                 SELECT sp.IDArt AS id_articulo,
-                       COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0) AS cantidad
+                       {qty_pendiente_sql} AS cantidad
                        {col_fecha_entrega}
                 FROM {tbl_stockp} sp
                 INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
@@ -3575,6 +3615,8 @@ def listar_demanda_pack_desde_pedidos(
                   AND COALESCE(TRIM(a.tipo_art_fab), '') = 'Terminado'
                 WHERE COALESCE(cp.Anulado, 'No') = 'No'
                   AND COALESCE(cp.TipoComprobante, '') = 'PED'
+                  {filtros_comerciales_sql}
+                  AND {qty_pendiente_sql} > 0
             """
             params_origin: List[Any] = []
             try:
@@ -15781,13 +15823,11 @@ def _calcular_stock_proceso_componente(
     suma_comp: Dict[str, Any],
     tipos_suma: frozenset,
 ) -> float:
-    """Stock en pipeline sin Terminado (paridad PCP col G / stock PP)."""
-    from mpr.pipeline import TIPO_MPR_TERMINADO
-
+    """Cobertura de 1.ª: solo Producción + Semi; excluye 2.ª, Terminado y Scrap."""
+    _ = tipos_suma  # Firma estable para callers que aún pasan TIPOS_QUE_SUMAN_STOCK.
     return sum(
-        float(suma_comp.get(t, 0.0) or 0)
-        for t in tipos_suma
-        if t != TIPO_MPR_TERMINADO
+        float(suma_comp.get(tipo, 0.0) or 0)
+        for tipo in (TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO)
     )
 
 
@@ -16146,7 +16186,8 @@ def listar_tablero_por_articulo(
         (dem_ped, dem_res_brecha para Urgente/a_enviar; dem_res_ui = R maestro para columna Reserva)
     4.  comp_ids = demanda ∪ envíos directos
     5.  Enviado/Fabricando = max(0, Σ envíos − acreditado) por componente
-    6.  stock_proceso = total sin Terminado; resta_urgente = resta_total = brecha demanda total (PCP)
+    6.  stock_proceso = Producción + Semi (sin 2.ª, Terminado ni Scrap);
+        resta_urgente = resta_total = brecha demanda total (PCP)
     7.  a_enviar = max(0, resta_urgente − Fabricando)
 
     La columna Reserva del modo Par muestra el colchón objetivo del pack (``coef × stock_reserva``),

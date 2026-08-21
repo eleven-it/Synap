@@ -28,7 +28,7 @@ Ver §6.
 |------|----------|
 | Look | Barra **slate-800** alineada al hub Pedidos (`pedidos_hub.html`): título blanco, búsqueda oscura, toggles púrpura/sky, CTAs `slate-700` / primario púrpura |
 | Migas | **Eliminadas** en Tablero, **Parte** y **Control de calidad** |
-| KPI cabecera | Solo **resta urgente** (+ chip Solo urgentes en Par). Sin «resta total» — solo Tablero |
+| KPI cabecera | Totales **TOT Urgente** / **PED Urgente** bajo el título de columna (recortan con la búsqueda). Chip Solo urgentes en Par. Sin KPI en el chrome oscuro. |
 | Atajos visibles | Orden canónico: Tablero prod (emerald) → Parte (púrpura) → CC (teal) → Tablero KPI (ámbar) → `help_outline` (slate). Include: `chrome_nav_flujo.html` |
 | Menú `⋯ Más` | Armado, Anular envíos (si permiso) — **solo Tablero**; KPI ya no está en el menú (ícono ámbar) |
 | Ayuda | Ícono `help_outline` → ancla del manual de cada pantalla |
@@ -73,14 +73,14 @@ Sin Pack\|Par ni KPI urgente fuera del Tablero. Fecha / línea / máquina / turn
 ## 4. Arquitectura de información (una barra)
 
 ```
-[ Tablero de producción ] [ Buscar artículo… ]  [Pack|Par] [Docenas|Pares] [Urgente · Solo urgentes]
+[ Tablero de producción ] [ Buscar artículo… ]  [Pack|Par] [Docenas|Pares] [Solo urgentes]
                                                     [Actualizar] [Parte][CC][⋯][?] [Enviar]
 ```
 
 - Título `h1` blanco `text-lg/xl font-bold` (mismo peso que «Pedidos»).
 - Contenedor: `rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md`.
 - Filtros **Desde / Hasta / Marcas / Filtrar** permanecen en el DOM con clase `hidden`.
-- KPI urgente en **una sola línea** sobre fondo rose tenue en la barra oscura.
+- Totales **TOT Urgente** / **PED Urgente** bajo el título de columna (recortan con la búsqueda). Entrada default **Par / Docenas**. Búsqueda persistente hasta que el usuario la limpia. **Pack|Par** y **Docenas|Pares** solo si el puesto tiene `mpr.tablero_cambiar_vista`.
 - Orden de filas (Par): máquina asignada → número de máquina 1…N → marca → descripción.
 - Modal Fabricando: artículo como título; tabla por fila
   (`Fila | Mañana/Tarde/Noche + operarios` + una fila de datos por máquina).

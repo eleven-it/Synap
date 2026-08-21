@@ -22,6 +22,7 @@ from mpr.services import (
 )
 
 _CERO = Decimal("0")
+_UNIDADES_POR_DOCENA = 12
 _RE_SEMI = re.compile(r"^semi_(\d+)(?:_(docenas|unidades))?$")
 _RE_LINEA = re.compile(
     r"^(seg2da|scrap)_(\d+)_op_(\d+)_t_(\d+)(?:_(docenas|unidades))?$"
@@ -35,6 +36,15 @@ def _cantidad_post(valor: Any, componente: Optional[str], unidades_por_docena: i
     if componente == "docenas":
         return cantidad * Decimal(int(unidades_por_docena))
     return cantidad
+
+
+def _enteros_docenas_pares(cantidad: Any) -> Tuple[int, int, int]:
+    """Pares enteros → (total, docenas, pares sueltos). Sin decimales."""
+    total = int(to_decimal_or_none(cantidad) or 0)
+    if total < 0:
+        total = 0
+    docenas, pares = divmod(total, _UNIDADES_POR_DOCENA)
+    return total, docenas, pares
 
 
 def parsear_post_cc_consolidado(
@@ -120,6 +130,60 @@ def _pivot_saldo_produccion(
     return resultado
 
 
+def _nombres_turno(base_empresa: str) -> Dict[int, str]:
+    from mpr.repositories.turno_roster import listar_turnos_dict
+
+    try:
+        return {
+            int(t["id"]): str_or_default(t.get("nombre"), "-")
+            for t in listar_turnos_dict(base_empresa, solo_activos=False)
+            if to_int_or_none(t.get("id")) is not None
+        }
+    except Exception:
+        return {}
+
+
+def _anotar_enteros_cantidad(destino: Dict[str, Any], campo: str, cantidad: Any) -> None:
+    total, docenas, pares = _enteros_docenas_pares(cantidad)
+    destino[campo] = total
+    destino[f"{campo}_docenas"] = docenas
+    destino[f"{campo}_pares"] = pares
+
+
+def _enriquecer_fila_operario(
+    fila: Dict[str, Any],
+    *,
+    aid: int,
+    desglose_confirmado: Dict[Tuple[int, int, int], Dict[str, Any]],
+    clasificado_celdas: Dict[Tuple[int, int, int], Decimal],
+    borrador_celdas: Dict[Tuple[int, int, int], Dict[str, Decimal]],
+) -> None:
+    oid = to_int_or_none(fila.get("id_operario"))
+    tid = to_int_or_none(fila.get("id_mpr_turno"))
+    if oid is None or tid is None:
+        fila["clasificado_2da_scrap"] = _CERO
+        fila["clasificado_segunda"] = 0
+        fila["clasificado_segunda_docenas"] = 0
+        fila["clasificado_segunda_pares"] = 0
+        fila["clasificado_scrap"] = 0
+        fila["clasificado_scrap_docenas"] = 0
+        fila["clasificado_scrap_pares"] = 0
+        fila["borrador_segunda"] = _CERO
+        fila["borrador_scrap"] = _CERO
+        fila["editable_2da_scrap"] = False
+        return
+    clave = (aid, oid, tid)
+    conf = desglose_confirmado.get(clave, {})
+    segunda = to_decimal_or_none(conf.get("segunda")) or _CERO
+    scrap = to_decimal_or_none(conf.get("scrap")) or _CERO
+    fila["clasificado_2da_scrap"] = clasificado_celdas.get(clave, segunda + scrap)
+    fila["borrador_segunda"] = (borrador_celdas.get(clave) or {}).get("segunda", _CERO)
+    fila["borrador_scrap"] = (borrador_celdas.get(clave) or {}).get("scrap", _CERO)
+    _anotar_enteros_cantidad(fila, "clasificado_segunda", segunda)
+    _anotar_enteros_cantidad(fila, "clasificado_scrap", scrap)
+    _anotar_enteros_cantidad(fila, "clasificado_semi_op", conf.get("semi") or _CERO)
+
+
 def construir_bloques_cc_articulo(
     base_empresa: str,
     fecha: date,
@@ -132,11 +196,13 @@ def construir_bloques_cc_articulo(
     from mpr.repositories.parte import acumular_celdas_clasificacion_maquina_turno
     from mpr.repositories.clasificacion_borrador import (
         listar_lineas_borrador_cc_consolidado,
+        eliminar_borrador_legacy_fecha,
         tiene_borrador,
         tiene_borrador_cc_consolidado,
     )
     from mpr.repositories.transicion_lote import (
         clasificado_segunda_scrap_por_celda_fecha,
+        desglose_cc_confirmado_por_celda_fecha,
         semi_agregado_por_articulo_fecha,
     )
     from mpr.services import _fetch_descripciones_articulo, _filtrar_ids_por_marcas
@@ -180,10 +246,17 @@ def construir_bloques_cc_articulo(
         for aid, por_tipo in stock.items()
         if (to_decimal_or_none(por_tipo.get(TIPO_MPR_PRODUCCION)) or _CERO) > 0
     }
+    try:
+        desglose_confirmado = desglose_cc_confirmado_por_celda_fecha(
+            base_empresa, fecha, None
+        )
+    except Exception:
+        desglose_confirmado = {}
+    ids_ledger = {clave[0] for clave in desglose_confirmado}
     semi = semi_agregado_por_articulo_fecha(
-        base_empresa, fecha, sorted(ids_parte | set(stock))
+        base_empresa, fecha, sorted(ids_parte | set(stock) | ids_ledger)
     )
-    universo = ids_parte | ids_saldo | set(semi)
+    universo = ids_parte | ids_saldo | set(semi) | ids_ledger
     if marcas_incluidos:
         universo &= _filtrar_ids_por_marcas(
             base_empresa, sorted(universo), list(marcas_incluidos)
@@ -195,6 +268,7 @@ def construir_bloques_cc_articulo(
         )
     except Exception:
         clasificado_celdas = {}
+    nombres_turno = _nombres_turno(base_empresa)
     try:
         borrador_nuevo = tiene_borrador_cc_consolidado(base_empresa, fecha)
         lineas_borrador = (
@@ -209,7 +283,14 @@ def construir_bloques_cc_articulo(
         borrador_viejo = tiene_borrador(base_empresa, fecha, None)
     except Exception:
         borrador_viejo = False
-    borrador_incompatible = bool(borrador_viejo and not borrador_nuevo)
+    # Shape viejo (fecha+turno) no se migra: se descarta para no mostrar aviso
+    # ni precargar cantidades incompatibles con la grilla consolidada.
+    if borrador_viejo:
+        try:
+            eliminar_borrador_legacy_fecha(base_empresa, fecha)
+        except Exception:
+            pass
+    borrador_incompatible = False
     borrador_semi: Dict[int, Decimal] = {}
     borrador_celdas: Dict[Tuple[int, int, int], Dict[str, Decimal]] = {}
     for linea in lineas_borrador:
@@ -230,7 +311,6 @@ def construir_bloques_cc_articulo(
         }
 
     bloques: List[Dict[str, Any]] = []
-    filas_legacy: List[Dict[str, Any]] = []
     confirmadas_ocultas = 0
     for aid in sorted(universo):
         saldo = to_decimal_or_none(
@@ -244,18 +324,50 @@ def construir_bloques_cc_articulo(
             if art == aid
         ]
         tenia_parte = bool(filas)
+        claves_parte = {
+            (int(fila["id_operario"]), int(fila["id_mpr_turno"]))
+            for fila in filas
+        }
+        for (art, oid, tid), conf in desglose_confirmado.items():
+            if art != aid or (oid, tid) in claves_parte:
+                continue
+            filas.append({
+                "id_articulo": aid,
+                "id_operario": oid,
+                "id_mpr_turno": tid,
+                "operario_nombre": str_or_default(
+                    conf.get("operario_nombre"), "-"
+                ),
+                "turno_nombre": nombres_turno.get(tid, "—"),
+                "fabricado": _CERO,
+                "desde_parte": False,
+                "huerfano": False,
+                "editable_2da_scrap": False,
+            })
         for fila in filas:
-            clave_celda = (
-                aid,
-                int(fila["id_operario"]),
-                int(fila["id_mpr_turno"]),
+            fila["desde_parte"] = (
+                tenia_parte
+                and (int(fila["id_operario"]), int(fila["id_mpr_turno"]))
+                in claves_parte
             )
-            fila["clasificado_2da_scrap"] = clasificado_celdas.get(
-                clave_celda, _CERO
+            fila["editable_2da_scrap"] = bool(fila.get("desde_parte"))
+            if fila.get("turno_nombre") in (None, "", "-") and fila.get("id_mpr_turno"):
+                fila["turno_nombre"] = nombres_turno.get(
+                    int(fila["id_mpr_turno"]), "—"
+                )
+            _enriquecer_fila_operario(
+                fila,
+                aid=aid,
+                desglose_confirmado=desglose_confirmado,
+                clasificado_celdas=clasificado_celdas,
+                borrador_celdas=borrador_celdas,
             )
-            borrador_celda = borrador_celdas.get(clave_celda, {})
-            fila["borrador_segunda"] = borrador_celda.get("segunda", _CERO)
-            fila["borrador_scrap"] = borrador_celda.get("scrap", _CERO)
+        filas.sort(
+            key=lambda f: (
+                str(f.get("turno_nombre") or ""),
+                str(f.get("operario_nombre") or ""),
+            )
+        )
         if solo_pendiente:
             filas_pendientes = [
                 fila
@@ -268,42 +380,73 @@ def construir_bloques_cc_articulo(
             confirmadas_ocultas += len(filas) - len(filas_pendientes)
             filas = filas_pendientes
         huerfano = not tenia_parte
-        if huerfano:
+        if not filas:
             filas = [{
                 "id_articulo": aid,
                 "id_operario": None,
                 "id_mpr_turno": None,
-                "operario_nombre": "Sin operario en el parte",
+                "operario_nombre": (
+                    "Sin operario en el parte" if huerfano else "—"
+                ),
                 "turno_nombre": "—",
                 "fabricado": _CERO,
-                "huerfano": True,
+                "huerfano": huerfano,
+                "editable_2da_scrap": False,
+                "borrador_segunda": _CERO,
+                "borrador_scrap": _CERO,
+                "clasificado_segunda": 0,
+                "clasificado_segunda_docenas": 0,
+                "clasificado_segunda_pares": 0,
+                "clasificado_scrap": 0,
+                "clasificado_scrap_docenas": 0,
+                "clasificado_scrap_pares": 0,
             }]
         codigo, descripcion = descripciones.get(aid, ("-", "-"))
-        bloque = {
+        semi_dia = semi.get(aid, _CERO)
+        solo_lectura = saldo <= 0
+        bloque: Dict[str, Any] = {
             "id_articulo": aid,
             "codigo_manual": str_or_default(codigo, "-"),
             "descripcion": str_or_default(descripcion, "-"),
-            "saldo_produccion": saldo,
             "tope_confirmacion": saldo,
-            "semi_mostrar": semi.get(aid, _CERO),
             "borrador_semi": borrador_semi.get(aid, _CERO),
-            "solo_lectura": saldo <= 0,
+            "solo_lectura": solo_lectura,
             "huerfano": huerfano,
+            "tiene_operarios": any(
+                to_int_or_none(f.get("id_operario")) is not None
+                for f in filas
+            ),
             "filas": filas,
+            "ini_semi_input": _enteros_docenas_pares(
+                borrador_semi.get(aid, _CERO)
+            )[0],
         }
+        _anotar_enteros_cantidad(bloque, "saldo_produccion", saldo)
+        _anotar_enteros_cantidad(bloque, "semi_mostrar", semi_dia)
         bloques.append(bloque)
-        for indice, fila in enumerate(filas):
+
+    bloques.sort(
+        key=lambda b: (
+            0 if b.get("tiene_operarios") else 1,
+            str(b.get("codigo_manual") or "").lower(),
+            str(b.get("descripcion") or "").lower(),
+            int(b.get("id_articulo") or 0),
+        )
+    )
+    filas_legacy: List[Dict[str, Any]] = []
+    for bloque in bloques:
+        for indice, fila in enumerate(bloque["filas"]):
             legacy = dict(fila)
             legacy.update({
                 "codigo_manual": bloque["codigo_manual"],
                 "descripcion": bloque["descripcion"],
-                "saldo_produccion": float(saldo),
-                "max_clasificable": float(saldo),
-                "base_clasificable": float(saldo),
-                "disponible": float(saldo),
+                "saldo_produccion": bloque["saldo_produccion"],
+                "max_clasificable": float(bloque["saldo_produccion"]),
+                "base_clasificable": float(bloque["saldo_produccion"]),
+                "disponible": float(bloque["saldo_produccion"]),
                 "solo_lectura": bloque["solo_lectura"],
                 "show_articulo": indice == 0,
-                "rowspan_articulo": len(filas) if indice == 0 else 1,
+                "rowspan_articulo": len(bloque["filas"]) if indice == 0 else 1,
             })
             filas_legacy.append(legacy)
 
@@ -654,6 +797,14 @@ def confirmar_cc_consolidado(
             _borrador_lineas_articulo(
                 base_empresa, fecha, aid, eliminar=True
             )
+            try:
+                from mpr.repositories.clasificacion_borrador import (
+                    eliminar_borrador_legacy_fecha,
+                )
+
+                eliminar_borrador_legacy_fecha(base_empresa, fecha)
+            except Exception:
+                pass
             resultado["ok"].append(aid)
         except Exception as exc:
             resultado["errores"].append((aid, str(exc)))

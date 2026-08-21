@@ -125,7 +125,13 @@ Excluye archivos innecesarios del contexto de construcción:
 - Logs y archivos temporales
 - Media y static files (se montan como volúmenes)
 - Documentación y tests
-- Node modules
+- Node modules **anidados** (`**/node_modules`: `theme/` y `support/frontend/`)
+- Git anidado y copias (`.git.corrupt-*`, `**/.git` dentro de `administraNET-ecom/`)
+- Árboles locales que no usa la imagen `Synap_app`: `administraNET-ecom/`, `administranet_vb6/`, `Best Sox/`, `support/`
+
+`.gitignore` **no** se aplica a `docker compose build`. Si un directorio está en gitignore pero no en `.dockerignore`, Docker Desktop igual lo transfiere. En un build de 20/08/2026 el contexto llegó a ~686 MB y el paso `load build context` pasó de 50 minutos (Excel de Best Sox + `.git.corrupt-*` + clone de ecom) sin haber llegado a `pip install`.
+
+No ignorar `pyafipws/`: el Dockerfile lo instala si está en el contexto (ver `docs/self_checkout/PYAFIPWS_DOCKER.md`).
 
 ### 6. Script de Construcción Optimizada
 

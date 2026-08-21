@@ -1,0 +1,10 @@
+{# Cantidad en enteros: N docenas + M pares. Sin decimales. #}
+<div class="flex flex-col items-center justify-center tabular-nums leading-tight {% if compact %}gap-0{% else %}gap-0.5{% endif %}">
+    <span class="block text-sm font-semibold text-slate-800 dark:text-slate-100">{{ docenas|default:0 }}</span>
+    <span class="block text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">docenas</span>
+    <span class="mt-1 block text-sm font-semibold text-slate-800 dark:text-slate-100">{{ pares|default:0 }}</span>
+    <span class="block text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">pares</span>
+    {% if etiqueta %}
+    <span class="mt-1 block text-[10px] font-medium text-teal-700 dark:text-teal-300">{{ etiqueta }}</span>
+    {% endif %}
+</div>

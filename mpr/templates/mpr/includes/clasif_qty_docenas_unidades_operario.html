@@ -1,4 +1,31 @@
-{# Inputs docenas+pares CC. consolidado_articulo=True → semi_{art}; si no → seg2da/scrap_{art}_op_{op}_t_{turno}. #}
+{% if casilla_fija %}
+<div class="clasif-celda-cantidad mx-auto flex w-full max-w-[9rem] flex-col items-center"
+     data-clasif-dest="{{ prefix }}"
+     data-id-art="{{ id_art }}">
+    <div class="clasif-qty-group flex w-full overflow-hidden rounded-lg border border-slate-200 bg-white opacity-90 shadow-sm dark:border-slate-600 dark:bg-slate-900">
+        <label class="flex min-w-0 flex-1 flex-col">
+            <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Docenas</span>
+            <input type="number" value="{{ valor_docenas|default:0 }}" readonly tabindex="-1" inputmode="numeric"
+                   class="clasif-input-docenas h-9 w-full cursor-default border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-600 focus:outline-none focus:ring-0 dark:text-slate-300"
+                   aria-label="Docenas {{ destino_label }} {{ codigo }}{% if operario_nombre %} — {{ operario_nombre }}{% endif %} (solo lectura)"
+                   aria-readonly="true">
+        </label>
+        <div class="flex w-5 shrink-0 flex-col items-center justify-center border-x border-slate-200 bg-slate-50/90 dark:border-slate-600 dark:bg-slate-800/80" aria-hidden="true">
+            <span class="text-[10px] font-bold leading-none text-slate-300 dark:text-slate-600">+</span>
+        </div>
+        <label class="flex min-w-0 flex-1 flex-col">
+            <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Pares</span>
+            <input type="number" value="{{ valor_pares|default:0 }}" readonly tabindex="-1" inputmode="numeric"
+                   class="clasif-input-unidades h-9 w-full cursor-default border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-600 focus:outline-none focus:ring-0 dark:text-slate-300"
+                   aria-label="Pares sueltos {{ destino_label }} {{ codigo }}{% if operario_nombre %} — {{ operario_nombre }}{% endif %} (solo lectura)"
+                   aria-readonly="true">
+        </label>
+    </div>
+    <p class="clasif-celda-subtotal mt-1 min-h-[1rem] w-full text-center text-[10px] font-medium tabular-nums leading-4 {% if valor_total|default:0 > 0 %}text-purple-600 dark:text-purple-400{% else %}text-slate-300 dark:text-slate-600{% endif %}">
+        = {{ valor_total|default:0 }} pares
+    </p>
+</div>
+{% else %}
 <div class="clasif-celda-cantidad mx-auto flex w-full max-w-[9rem] flex-col items-center"
      data-clasif-dest="{{ prefix }}"
      data-id-art="{{ id_art }}"
@@ -46,3 +73,4 @@
        x-text="'= ' + {{ subtotal_alpine }} + ' pares'"
        :class="{{ subtotal_alpine }} > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-slate-300 dark:text-slate-600'"></p>
 </div>
+{% endif %}

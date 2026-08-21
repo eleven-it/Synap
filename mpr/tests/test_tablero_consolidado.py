@@ -19,7 +19,9 @@ from mpr.services import (
     _calcular_fabricando_componente,
     _calcular_fabricando_para_parte,
     _calcular_pendiente_componente,
+    _calcular_stock_proceso_componente,
     _enviado_produccion_por_componente,
+    calcular_kpis_tablero_produccion,
     listar_tablero_por_articulo,
 )
 
@@ -67,6 +69,42 @@ def _desc_map_simple():
 # ---------------------------------------------------------------------------
 # Fase 5.2: Tests de helpers puros
 # ---------------------------------------------------------------------------
+
+class TestCalcularStockProcesoComponente(SimpleTestCase):
+    """stock_proceso cubre demanda de 1.ª: Producción + Semi; no 2.ª ni Terminado."""
+
+    def test_incluye_produccion_y_semi(self):
+        stock = {
+            TIPO_MPR_PRODUCCION: 10.0,
+            TIPO_MPR_SEMI_ELABORADO: 4.0,
+            TIPO_MPR_2DA_SELECCION: 7.0,
+            TIPO_MPR_TERMINADO: 20.0,
+            TIPO_MPR_SCRAP: 3.0,
+        }
+        self.assertAlmostEqual(
+            _calcular_stock_proceso_componente(stock, TIPOS_QUE_SUMAN_STOCK),
+            14.0,
+        )
+
+    def test_2da_no_cubre_demanda_primera(self):
+        """Lo clasificado en 2.ª hay que rehacerlo para pedidos de terminado de 1.ª."""
+        stock = {
+            TIPO_MPR_PRODUCCION: 5.0,
+            TIPO_MPR_2DA_SELECCION: 7.0,
+            TIPO_MPR_SEMI_ELABORADO: 0.0,
+        }
+        self.assertAlmostEqual(
+            _calcular_stock_proceso_componente(stock, TIPOS_QUE_SUMAN_STOCK),
+            5.0,
+        )
+
+    def test_terminado_no_suma(self):
+        stock = {TIPO_MPR_PRODUCCION: 5.0, TIPO_MPR_TERMINADO: 100.0}
+        self.assertAlmostEqual(
+            _calcular_stock_proceso_componente(stock, TIPOS_QUE_SUMAN_STOCK),
+            5.0,
+        )
+
 
 class TestCalcularFabricandoComponente(SimpleTestCase):
     """Fabricando: Producción no acredita; Semi/2da/Scrap/parte/CC sí."""
@@ -377,6 +415,7 @@ class TestListarTableroPorArticulo(SimpleTestCase):
             patch("mpr.services.bulk_bom_detalle", return_value=bom_map),
             patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(stock_pivot, stock_suma_pivot)),
             patch("mpr.services._fetch_descripciones_articulo", return_value=desc_map),
+            patch("mpr.services._fetch_codigo_marca_articulo", return_value={}),
             patch("mpr.services._query_enviado_tablero_componente", return_value=enviado_tablero_map),
             patch(
                 "mpr.repositories.transicion_lote.sumar_salidas_desde_produccion_por_articulo",
@@ -475,7 +514,7 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         self.assertAlmostEqual(fila["pendiente"], 20.0)
 
     def test_pendiente_reducido_por_stock(self):
-        """REQ-025 Esc.25.2: demanda=20, enviado=0, total=12 → pendiente=8."""
+        """demanda=20, Producción=5, 2.ª=7: Total físico 12; cobertura 1.ª=5 → pendiente=15."""
         stock_pivot = {
             10: {
                 TIPO_MPR_PRODUCCION: 5.0,
@@ -490,9 +529,10 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         resultado = self._call_con_parches(patches)
 
         fila = resultado[0]
-        # demanda=20, total=12, enviado=0 → pendiente=8
+        # Total sigue mostrando 2.ª; Urgente no la resta (hay que rehacerla).
         self.assertAlmostEqual(fila["total"], 12.0)
-        self.assertAlmostEqual(fila["pendiente"], 8.0)
+        self.assertAlmostEqual(fila["stock_proceso"], 5.0)
+        self.assertAlmostEqual(fila["pendiente"], 15.0)
 
     def test_pendiente_reducido_por_enviado_y_stock(self):
         """REQ-025 Esc.25.3: resta PCP no descuenta envíos; Fabricando sí refleja envíos no acreditados."""
@@ -512,12 +552,13 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         resultado = self._call_con_parches(patches)
 
         fila = resultado[0]
-        # demanda=20, stock_proceso=12 → resta_total=8 (PCP); envíos no restan brecha
-        # Fabricando = envíos 13 − 2da 7 = 6 (Producción no acredita)
+        # demanda=20, stock_proceso=5 (sin 2.ª) → resta_total=15; envíos no restan brecha
+        # Fabricando = envíos 13 − 2da 7 = 6 (Producción no acredita; 2.ª sí acredita Fabricando)
         self.assertAlmostEqual(fila["enviado"], 6.0)
         self.assertAlmostEqual(fila["total"], 12.0)
-        self.assertAlmostEqual(fila["resta_total"], 8.0)
-        self.assertAlmostEqual(fila["pendiente"], 8.0)
+        self.assertAlmostEqual(fila["stock_proceso"], 5.0)
+        self.assertAlmostEqual(fila["resta_total"], 15.0)
+        self.assertAlmostEqual(fila["pendiente"], 15.0)
 
     def test_enviado_diferente_de_produccion(self):
         """Enviado/Fabricando (virtual) ≠ produccion (físico): Producción no acredita."""
@@ -592,8 +633,29 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         for r in resultado:
             self.assertGreater(r["resta_total"], 0)
 
+    def test_resta_urgente_excluye_2da_del_stock_proceso(self):
+        """2.ª no cubre PED de 1.ª: Urgente y PED Urgente suben en esa cantidad."""
+        stock_pivot = {
+            10: {
+                TIPO_MPR_PRODUCCION: 5.0,
+                TIPO_MPR_2DA_SELECCION: 7.0,
+                TIPO_MPR_SEMI_ELABORADO: 3.0,
+                TIPO_MPR_SCRAP: 0.0,
+                TIPO_MPR_TERMINADO: 0.0,
+            }
+        }
+        patches = self._patch_servicio(stock_pivot=stock_pivot)
+        resultado = self._call_con_parches(patches)
+        fila = resultado[0]
+        # stock_proceso = 5+3 = 8 (sin 2.ª); dem_ped=20 → PED Urgente=12
+        self.assertAlmostEqual(fila["stock_proceso"], 8.0)
+        self.assertAlmostEqual(fila["segunda_seleccion"], 7.0)
+        self.assertAlmostEqual(fila["total"], 15.0)
+        self.assertAlmostEqual(fila["resta_urgente_ped"], 12.0)
+        self.assertAlmostEqual(fila["resta_urgente"], 12.0)
+
     def test_resta_urgente_excluye_terminado_del_stock(self):
-        """stock_proceso no incluye Terminado — paridad PCP col G."""
+        """stock_proceso no incluye Terminado."""
         stock_pivot = {
             10: {
                 TIPO_MPR_PRODUCCION: 5.0,
@@ -857,3 +919,18 @@ class TestTiposQueSumanStock(SimpleTestCase):
             self.assertIn(tipo, TIPOS_QUE_SUMAN_STOCK, f"{tipo} debe estar en TIPOS_QUE_SUMAN_STOCK")
         self.assertNotIn(TIPO_MPR_PLANCHADO, TIPOS_QUE_SUMAN_STOCK,
                          "Planchado ya no suma al Total (Etapa 10)")
+
+
+class TestCalcularKpisTableroProduccion(SimpleTestCase):
+    """TOT Urgente y PED Urgente se agregan por separado."""
+
+    def test_suma_urgente_y_ped(self):
+        filas = [
+            {"resta_urgente": 24.0, "resta_urgente_ped": 12.0, "resta_total": 24.0},
+            {"resta_urgente": 12.0, "resta_urgente_ped": 0.0, "resta_total": 12.0},
+        ]
+        kpis = calcular_kpis_tablero_produccion(filas)
+        self.assertEqual(kpis["pares_resta_urgente"], 36)
+        self.assertEqual(kpis["pares_resta_urgente_ped"], 12)
+        self.assertEqual(kpis["docenas_resta_urgente"], 3)
+        self.assertEqual(kpis["docenas_resta_urgente_ped"], 1)
