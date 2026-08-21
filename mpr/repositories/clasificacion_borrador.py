@@ -9,11 +9,214 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
+from core.utils.administranet_types import to_date_or_none, to_decimal_or_none, to_int_or_none
 
 from mpr.db import mysql_cursor
 
 ClaveLineaBorrador = Tuple[int, int, int, int]
+
+
+def normalizar_linea_cc_borrador(linea: Dict[str, Any]) -> Dict[str, Any]:
+    """Normaliza una línea 007 y traduce el centinela Semi 0 a ``None``."""
+    id_operario = to_int_or_none(linea.get("id_operario"))
+    id_turno = to_int_or_none(linea.get("id_mpr_turno"))
+    return {
+        "id_articulo": to_int_or_none(linea.get("id_articulo")),
+        "id_operario": id_operario if id_operario and id_operario > 0 else None,
+        "id_mpr_turno": id_turno if id_turno and id_turno > 0 else None,
+        "cant_semi": to_decimal_or_none(linea.get("cant_semi")) or Decimal("0"),
+        "cant_2da": to_decimal_or_none(linea.get("cant_2da")) or Decimal("0"),
+        "cant_scrap": to_decimal_or_none(linea.get("cant_scrap")) or Decimal("0"),
+    }
+
+
+def _lineas_cc_consolidado_validas(lineas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Separa Semi consolidado de 2da/scrap y aplica el centinela MySQL."""
+    acumulado: Dict[Tuple[int, int, int], Dict[str, Any]] = {}
+
+    def _sumar(
+        aid: int,
+        oid: int,
+        tid: int,
+        *,
+        semi: Decimal = Decimal("0"),
+        segunda: Decimal = Decimal("0"),
+        scrap: Decimal = Decimal("0"),
+    ) -> None:
+        destino = acumulado.setdefault(
+            (aid, oid, tid),
+            {
+                "id_articulo": aid,
+                "id_operario": oid,
+                "id_mpr_turno": tid,
+                "cant_semi": Decimal("0"),
+                "cant_2da": Decimal("0"),
+                "cant_scrap": Decimal("0"),
+            },
+        )
+        destino["cant_semi"] += semi
+        destino["cant_2da"] += segunda
+        destino["cant_scrap"] += scrap
+
+    for linea in lineas or []:
+        normalizada = normalizar_linea_cc_borrador(linea)
+        aid = normalizada["id_articulo"]
+        if aid is None:
+            continue
+        semi = normalizada["cant_semi"]
+        if semi > 0:
+            _sumar(aid, 0, 0, semi=semi)
+        segunda = normalizada["cant_2da"]
+        scrap = normalizada["cant_scrap"]
+        oid = normalizada["id_operario"]
+        tid = normalizada["id_mpr_turno"]
+        if (segunda > 0 or scrap > 0) and oid is not None and tid is not None:
+            _sumar(aid, oid, tid, segunda=segunda, scrap=scrap)
+    return list(acumulado.values())
+
+
+def upsert_borrador_cc_consolidado(
+    base_empresa: str,
+    fecha: date,
+    id_usuario: int,
+    lineas: List[Dict[str, Any]],
+) -> None:
+    """Reemplaza el borrador 007 de una fecha sin tocar stock ni ledger."""
+    base = (base_empresa or "").strip()
+    f_prod = to_date_or_none(fecha)
+    uid = to_int_or_none(id_usuario)
+    if not base or f_prod is None or uid is None:
+        return
+    lineas_validas = _lineas_cc_consolidado_validas(lineas)
+    with mysql_cursor(base) as cursor:
+        if not lineas_validas:
+            cursor.execute(
+                "DELETE FROM mpr_cc_borrador WHERE fecha_produccion = %s",
+                [f_prod],
+            )
+            return
+        cursor.execute(
+            """
+            INSERT INTO mpr_cc_borrador (fecha_produccion, id_usuario)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE
+                id_usuario = VALUES(id_usuario),
+                actualizado_en = CURRENT_TIMESTAMP
+            """,
+            [f_prod, uid],
+        )
+        cursor.execute(
+            """
+            SELECT id_mpr_cc_borrador
+            FROM mpr_cc_borrador
+            WHERE fecha_produccion = %s
+            LIMIT 1
+            """,
+            [f_prod],
+        )
+        row = cursor.fetchone()
+        if not row:
+            return
+        id_borrador = to_int_or_none(
+            row.get("id_mpr_cc_borrador") if isinstance(row, dict) else row[0]
+        )
+        if id_borrador is None:
+            return
+        cursor.execute(
+            "DELETE FROM mpr_cc_borrador_linea WHERE id_mpr_cc_borrador = %s",
+            [id_borrador],
+        )
+        for linea in lineas_validas:
+            cursor.execute(
+                """
+                INSERT INTO mpr_cc_borrador_linea (
+                    id_mpr_cc_borrador, id_articulo, id_operario, id_mpr_turno,
+                    cant_semi, cant_2da, cant_scrap
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                [
+                    id_borrador,
+                    linea["id_articulo"],
+                    linea["id_operario"],
+                    linea["id_mpr_turno"],
+                    linea["cant_semi"],
+                    linea["cant_2da"],
+                    linea["cant_scrap"],
+                ],
+            )
+
+
+def listar_lineas_borrador_cc_consolidado(
+    base_empresa: str,
+    fecha: date,
+) -> List[Dict[str, Any]]:
+    """Lista el shape 007 y traduce los centinelas de Semi a ``None``."""
+    base = (base_empresa or "").strip()
+    f_prod = to_date_or_none(fecha)
+    if not base or f_prod is None:
+        return []
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT l.id_articulo, l.id_operario, l.id_mpr_turno,
+                   l.cant_semi, l.cant_2da, l.cant_scrap
+            FROM mpr_cc_borrador b
+            INNER JOIN mpr_cc_borrador_linea l
+              ON l.id_mpr_cc_borrador = b.id_mpr_cc_borrador
+            WHERE b.fecha_produccion = %s
+            ORDER BY l.id_articulo, l.id_operario, l.id_mpr_turno
+            """,
+            [f_prod],
+        )
+        return [
+            normalizar_linea_cc_borrador(linea)
+            for linea in (cursor.fetchall() or [])
+        ]
+
+
+def eliminar_borrador_cc_articulo(
+    base_empresa: str,
+    fecha: date,
+    id_articulo: int,
+    *,
+    cursor=None,
+) -> None:
+    """Borra solo las líneas 007 del artículo indicado."""
+    base = (base_empresa or "").strip()
+    f_prod = to_date_or_none(fecha)
+    aid = to_int_or_none(id_articulo)
+    if not base or f_prod is None or aid is None:
+        return
+    def _eliminar(cur) -> None:
+        cur.execute(
+            """
+            DELETE l
+            FROM mpr_cc_borrador_linea l
+            INNER JOIN mpr_cc_borrador b
+              ON b.id_mpr_cc_borrador = l.id_mpr_cc_borrador
+            WHERE b.fecha_produccion = %s AND l.id_articulo = %s
+            """,
+            [f_prod, aid],
+        )
+    if cursor is not None:
+        _eliminar(cursor)
+        return
+    with mysql_cursor(base) as propio_cursor:
+        _eliminar(propio_cursor)
+
+
+def tiene_borrador_cc_consolidado(base_empresa: str, fecha: date) -> bool:
+    """Indica si existe una cabecera nueva 007 para la fecha."""
+    base = (base_empresa or "").strip()
+    f_prod = to_date_or_none(fecha)
+    if not base or f_prod is None:
+        return False
+    with mysql_cursor(base) as cursor:
+        cursor.execute(
+            "SELECT 1 FROM mpr_cc_borrador WHERE fecha_produccion = %s LIMIT 1",
+            [f_prod],
+        )
+        return cursor.fetchone() is not None
 
 
 def _linea_tiene_cantidad(linea: Dict[str, Any]) -> bool:

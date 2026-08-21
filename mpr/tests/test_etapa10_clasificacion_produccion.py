@@ -58,9 +58,21 @@ def _celdas_parte_mock(id_art=42, cantidad=15.0, id_op=ID_OPERARIO, turno=TURNO_
 
 
 def _post_clasif_base(**extra):
-    data = {"fecha": FECHA_OK, "turno_id": str(TURNO_ID)}
+    data = {"fecha": FECHA_OK, "accion": "confirmar"}
     data.update(extra)
     return data
+
+
+def _post_cc_keys(id_art=42, id_op=ID_OPERARIO, turno=TURNO_ID, **cantidades):
+    """Claves POST canónicas consolidado: semi_{art}, seg2da/scrap_{art}_op_{op}_t_{t}."""
+    out = {}
+    if "semi" in cantidades:
+        out[f"semi_{id_art}"] = str(cantidades["semi"])
+    if "seg2da" in cantidades:
+        out[f"seg2da_{id_art}_op_{id_op}_t_{turno}"] = str(cantidades["seg2da"])
+    if "scrap" in cantidades:
+        out[f"scrap_{id_art}_op_{id_op}_t_{turno}"] = str(cantidades["scrap"])
+    return out
 
 
 def _pivot_con_produccion(id_art=42, saldo=15.0):
@@ -105,83 +117,52 @@ def _add_messages(request):
 # ---------------------------------------------------------------------------
 
 class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
-    """La grilla lista filas (artículo × operario) con pendiente de clasificación."""
+    """Grilla consolidada: día completo, saldo Producción, sin filtro turno."""
 
     def setUp(self):
-        self._patch_listar_borrador = patch(
-            "mpr.repositories.clasificacion_borrador.listar_lineas_borrador",
-            return_value={},
-        )
-        self._patch_tiene_borrador = patch(
-            "mpr.repositories.clasificacion_borrador.tiene_borrador",
-            return_value=False,
-        )
-        self._patch_listar_borrador.start()
-        self._patch_tiene_borrador.start()
+        self._patches = [
+            patch("mpr.repositories.clasificacion_borrador.listar_lineas_borrador", return_value={}),
+            patch("mpr.repositories.clasificacion_borrador.tiene_borrador", return_value=False),
+            patch("mpr.repositories.clasificacion_borrador.tiene_borrador_cc_consolidado", return_value=False),
+            patch("mpr.repositories.clasificacion_borrador.listar_lineas_borrador_cc_consolidado", return_value=[]),
+            patch("mpr.repositories.transicion_lote.semi_agregado_por_articulo_fecha", return_value={}),
+            patch("mpr.repositories.transicion_lote.clasificado_segunda_scrap_por_celda_fecha", return_value={}),
+        ]
+        for p in self._patches:
+            p.start()
 
     def tearDown(self):
-        self._patch_tiene_borrador.stop()
-        self._patch_listar_borrador.stop()
+        for p in self._patches:
+            p.stop()
 
     def test_sin_fecha_requiere_seleccion(self):
         resultado = construir_grilla_clasificacion_produccion(EMPRESA)
         self.assertTrue(resultado["requiere_fecha"])
-        self.assertTrue(resultado["requiere_fecha_turno"])
         self.assertEqual(resultado["filas"], [])
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={42: {"Produccion": 15.0}})
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_grilla_sin_turno_lista_filas(self, _fetch, mock_celdas, _cls, _desglose):
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    def test_grilla_sin_turno_lista_filas(self, mock_celdas, _fetch, _pivot):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
         resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ)
         self.assertFalse(resultado["filas_vacio"])
-        self.assertEqual(len(resultado["filas"]), 1)
-        self.assertEqual(resultado["filas"][0]["id_mpr_turno"], TURNO_ID)
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+        self.assertEqual(len(resultado["bloques"]), 1)
+        self.assertEqual(resultado["bloques"][0]["saldo_produccion"], Decimal("15"))
+        mock_celdas.assert_called_with(EMPRESA, FECHA_OBJ, None)
+
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={42: {"Produccion": 10.0}})
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_con_turno_id_filtra_acumular(self, _fetch, mock_celdas, _cls, _desglose):
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    def test_turno_id_ignorado_pasa_none(self, mock_celdas, _fetch, _pivot):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
         construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        mock_celdas.assert_called_once_with(EMPRESA, FECHA_OBJ, TURNO_ID)
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_rowspan_maquina_y_articulo_coherentes(self, _fetch, mock_celdas, _cls, _desglose):
-        mock_celdas.return_value = {
-            (1, 42, ID_OPERARIO, TURNO_ID): {
-                "cantidad": Decimal("10"),
-                "operario_nombre": "Op A",
-                "maquina_nombre": "1",
-                "turno_nombre": "Mañana",
-            },
-            (1, 43, ID_OPERARIO, TURNO_ID): {
-                "cantidad": Decimal("5"),
-                "operario_nombre": "Op A",
-                "maquina_nombre": "1",
-                "turno_nombre": "Mañana",
-            },
-        }
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        filas = resultado["filas"]
-        self.assertEqual(len(filas), 2)
-        self.assertTrue(filas[0]["show_maquina"])
-        self.assertEqual(filas[0]["rowspan_maquina"], 2)
-        self.assertFalse(filas[1]["show_maquina"])
+        mock_celdas.assert_called_once_with(EMPRESA, FECHA_OBJ, None)
 
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={42: {"Produccion": 24.0}})
+    @patch("mpr.services._fetch_descripciones_articulo", return_value={42: ("C-42", "Art 42")})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch(
-        "mpr.services._fetch_descripciones_articulo",
-        return_value={42: ("C-42", "Art 42")},
-    )
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(), _pivot_con_produccion()))
-    def test_rowspan_articulo_no_cruza_maquinas(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
-        """Mismo artículo en Máq. 20 y 21: cada bloque muestra su celda de artículo."""
+    def test_colapsa_maquinas_mismo_operario_turno(self, mock_celdas, _fetch, _pivot):
         mock_celdas.return_value = {
             (20, 42, ID_OPERARIO, TURNO_ID): {
                 "cantidad": Decimal("12"),
@@ -191,195 +172,29 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
             },
             (21, 42, ID_OPERARIO, TURNO_ID): {
                 "cantidad": Decimal("12"),
-                "operario_nombre": "Op B",
+                "operario_nombre": "Op A",
                 "maquina_nombre": "Maquina 21",
-                "turno_nombre": "Tarde",
+                "turno_nombre": "Mañana",
             },
         }
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        filas = resultado["filas"]
-        self.assertEqual(len(filas), 2)
-        self.assertTrue(filas[0]["show_articulo"])
-        self.assertEqual(filas[0]["rowspan_articulo"], 1)
-        self.assertTrue(filas[1]["show_articulo"])
-        self.assertEqual(filas[1]["rowspan_articulo"], 1)
-        self.assertNotEqual(filas[0]["maquina_tint"], filas[1]["maquina_tint"])
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(), _pivot_con_produccion()))
-    def test_retorna_fila_con_pendiente_operario(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        self.assertFalse(resultado["filas_vacio"])
-        self.assertEqual(len(resultado["filas"]), 1)
-        fila = resultado["filas"][0]
-        self.assertEqual(fila["id_articulo"], 42)
-        self.assertEqual(fila["id_operario"], ID_OPERARIO)
-        self.assertAlmostEqual(fila["disponible"], 15.0)
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno", return_value={})
-    def test_sin_parte_retorna_vacio(self, *_mocks):
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        self.assertTrue(resultado["filas_vacio"])
-        self.assertEqual(resultado["filas"], [])
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ)
+        self.assertEqual(len(resultado["bloques"]), 1)
+        self.assertEqual(len(resultado["bloques"][0]["filas"]), 1)
+        self.assertEqual(resultado["bloques"][0]["filas"][0]["fabricado"], Decimal("24"))
 
-    def test_base_empresa_vacia_retorna_vacio(self):
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={99: {"Produccion": 50.0}})
+    @patch("mpr.services._fetch_descripciones_articulo", return_value={99: ("H", "Huerfano")})
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno", return_value={})
+    def test_huerfano_solo_semi(self, _celdas, _fetch, _pivot):
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ)
+        self.assertEqual(len(resultado["bloques"]), 1)
+        self.assertTrue(resultado["bloques"][0]["huerfano"])
+        self.assertEqual(len(resultado["bloques"][0]["filas"]), 1)
+
+    def test_base_empresa_vacia(self):
         resultado = construir_grilla_clasificacion_produccion("")
         self.assertTrue(resultado["filas_vacio"])
-        self.assertEqual(resultado["filas"], [])
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): {"semi": Decimal("6"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
-    )
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): Decimal("6")},
-    )
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_pendiente_resta_clasificado_previo(self, mock_pivot, _fetch, mock_celdas, _cls, _desglose):
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=15.0)
-        mock_pivot.return_value = (pivot, pivot)
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        # atribuible=9 + extra_pool=6 (stock 15 − atribuible 9)
-        self.assertAlmostEqual(resultado["filas"][0]["base_clasificable"], 15.0)
-        self.assertAlmostEqual(resultado["filas"][0]["disponible"], 15.0)
-        self.assertAlmostEqual(resultado["filas"][0]["parte"], 15.0)
-        self.assertAlmostEqual(resultado["filas"][0]["extra_disponible"], 6.0)
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(saldo=24.0), {}))
-    def test_grilla_expone_parte_y_base_editable(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=24.0)
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        fila = resultado["filas"][0]
-        self.assertAlmostEqual(fila["parte"], 24.0)
-        self.assertAlmostEqual(fila["base_clasificable"], 24.0)
-        self.assertEqual(fila["ini_semi"], 0)
-        self.assertEqual(fila["ini_seg2da"], 0)
-        self.assertEqual(fila["ini_scrap"], 0)
-        self.assertFalse(fila["solo_lectura"])
 
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(saldo=24.0), {}))
-    def test_editable_no_precarga_semi_desde_parte(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
-        """Semi/2da/scrap editables arrancan en 0; el parte no se copia a Semi."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=24.0)
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        fila = resultado["filas"][0]
-        self.assertFalse(fila["solo_lectura"])
-        self.assertAlmostEqual(fila["parte"], 24.0)
-        self.assertAlmostEqual(fila["atribuible_parte"], 24.0)
-        self.assertEqual(fila["ini_semi"], 0)
-        self.assertEqual(fila["ini_seg2da"], 0)
-        self.assertEqual(fila["ini_scrap"], 0)
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): {"semi": Decimal("15"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
-    )
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): Decimal("15")},
-    )
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(saldo=0.0), {}))
-    def test_fila_completa_solo_lectura_sin_extra(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
-        resultado = construir_grilla_clasificacion_produccion(
-            EMPRESA, FECHA_OBJ, TURNO_ID, ver_roster_completo=True,
-        )
-        fila = resultado["filas"][0]
-        self.assertTrue(fila["solo_lectura"])
-        self.assertEqual(fila["ini_semi"], 15)
-        self.assertAlmostEqual(fila["base_clasificable"], 0.0)
-
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): {"semi": Decimal("15"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
-    )
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): Decimal("15")},
-    )
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(saldo=30.0), {}))
-    def test_fila_parte_completo_solo_lectura_con_extra_stock(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
-        """Un CC confirmado no se reabre aunque quede stock extra; en pendiente no aparece."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
-        pendiente = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        self.assertTrue(pendiente["filas_vacio"])
-        self.assertFalse(pendiente["hay_filas_editables"])
-        self.assertEqual(pendiente["confirmadas_ocultas"], 1)
-
-        roster = construir_grilla_clasificacion_produccion(
-            EMPRESA, FECHA_OBJ, TURNO_ID, ver_roster_completo=True,
-        )
-        fila = roster["filas"][0]
-        self.assertTrue(fila["solo_lectura"])
-        self.assertEqual(fila["ini_semi"], 15)
-        self.assertAlmostEqual(fila["atribuible_parte"], 0.0)
-        self.assertAlmostEqual(fila["extra_disponible"], 30.0)
-        self.assertAlmostEqual(fila["max_clasificable"], 30.0)
-        self.assertFalse(roster["hay_filas_editables"])
-        self.assertEqual(roster["confirmadas_ocultas"], 0)
-
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
-        return_value={
-            (42, ID_OPERARIO): {
-                "semi": Decimal("12"),
-                "segunda": Decimal("2"),
-                "scrap": Decimal("1"),
-            }
-        },
-    )
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): Decimal("15")},
-    )
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(saldo=30.0), {}))
-    def test_roster_muestra_desglose_confirmado_aun_con_extra(
-        self, _pivot, _fetch, mock_celdas, _cls, _desglose
-    ):
-        """Solo pendiente oculta CC confirmado; roster muestra el desglose histórico."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
-
-        pendiente = construir_grilla_clasificacion_produccion(
-            EMPRESA, FECHA_OBJ, TURNO_ID, ver_roster_completo=False,
-        )
-        self.assertTrue(pendiente["filas_vacio"])
-        self.assertFalse(pendiente["hay_filas_editables"])
-        self.assertEqual(pendiente["confirmadas_ocultas"], 1)
-
-        roster = construir_grilla_clasificacion_produccion(
-            EMPRESA, FECHA_OBJ, TURNO_ID, ver_roster_completo=True,
-        )
-        fila = roster["filas"][0]
-        self.assertTrue(fila["solo_lectura"])
-        self.assertEqual(fila["ini_semi"], 12)
-        self.assertEqual(fila["ini_seg2da"], 2)
-        self.assertEqual(fila["ini_scrap"], 1)
-        self.assertFalse(roster["hay_filas_editables"])
-        self.assertEqual(roster["confirmadas_ocultas"], 0)
-
-
-# ---------------------------------------------------------------------------
-# TestTransferirStockLoteFecha
-# ---------------------------------------------------------------------------
 
 class TestTransferirStockLoteFecha(SimpleTestCase):
     """transferir_stock_lote best-effort y propagación de la fecha del parte."""
@@ -463,8 +278,7 @@ class TestClasificacionProduccionViewGet(TestCase):
             request.user = MagicMock(is_authenticated=False)
         _add_messages(request)
         return ClasificacionProduccionView.as_view()(request)
-    @patch("mpr.services.listar_turnos", return_value=[])
-    def test_get_200_con_contexto(self, _turnos):
+    def test_get_200_con_contexto(self):
         resp = self._get()
         self.assertEqual(resp.status_code, 200)
 
@@ -476,13 +290,13 @@ class TestClasificacionProduccionViewGet(TestCase):
         resp = self._get(autenticado=False)
         self.assertEqual(resp.status_code, 302)
 
-    @patch("mpr.services.listar_turnos", return_value=[])
     @patch("mpr.services.construir_grilla_clasificacion_produccion")
-    def test_default_ver_roster_completo(self, mock_grilla, _turnos):
+    def test_default_ver_roster_completo(self, mock_grilla):
         """Sin param ver_roster: se pide roster completo (default)."""
         from mpr.views import ClasificacionProduccionView
 
         mock_grilla.return_value = {
+            "bloques": [],
             "filas": [],
             "filas_vacio": True,
             "hay_filas_editables": False,
@@ -493,6 +307,8 @@ class TestClasificacionProduccionViewGet(TestCase):
             "componentes": [],
             "componentes_vacio": True,
             "tiene_borrador": False,
+            "aviso_borrador": "",
+            "borrador_incompatible": False,
         }
         request = self.factory.get(
             reverse("mpr:clasificacion_produccion"),
@@ -505,14 +321,15 @@ class TestClasificacionProduccionViewGet(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(mock_grilla.called)
         self.assertTrue(mock_grilla.call_args.kwargs.get("ver_roster_completo"))
+        self.assertIsNone(mock_grilla.call_args.args[2] if len(mock_grilla.call_args.args) > 2 else None)
 
-    @patch("mpr.services.listar_turnos", return_value=[])
     @patch("mpr.services.construir_grilla_clasificacion_produccion")
-    def test_ver_roster_0_solo_pendiente(self, mock_grilla, _turnos):
+    def test_ver_roster_0_solo_pendiente(self, mock_grilla):
         """ver_roster=0 activa filtro solo pendiente."""
         from mpr.views import ClasificacionProduccionView
 
         mock_grilla.return_value = {
+            "bloques": [],
             "filas": [],
             "filas_vacio": True,
             "hay_filas_editables": False,
@@ -523,6 +340,8 @@ class TestClasificacionProduccionViewGet(TestCase):
             "componentes": [],
             "componentes_vacio": True,
             "tiene_borrador": False,
+            "aviso_borrador": "",
+            "borrador_incompatible": False,
         }
         request = self.factory.get(
             reverse("mpr:clasificacion_produccion"),
@@ -541,181 +360,111 @@ class TestClasificacionProduccionViewGet(TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRegistrarClasificacionProduccionViewPost(TestCase):
-    """POST RegistrarClasificacionProduccionView — reparto válido y bloqueos."""
+    """POST consolidado: parsear + confirmar; sin transferir_stock_lote directo."""
 
     def setUp(self):
         self.factory = RequestFactory()
         self.user = _crear_usuario()
-        self._patch_eliminar_borrador = patch(
-            "mpr.repositories.clasificacion_borrador.eliminar_borrador"
-        )
-        self.mock_eliminar_borrador = self._patch_eliminar_borrador.start()
-
-    def tearDown(self):
-        self._patch_eliminar_borrador.stop()
 
     def _post(self, data, empresa=EMPRESA):
         from mpr.views import RegistrarClasificacionProduccionView
         request = self.factory.post(reverse("mpr:clasificacion_produccion_registrar"), data=data)
-        request.session = {"user": {"id_usuario": 1, "base_empresa": empresa}}
+        session = {"user": {"id_usuario": 1, "base_empresa": empresa}}
+        request.session = session
         request.user = self.user
         _add_messages(request)
-        return RegistrarClasificacionProduccionView.as_view()(request)
+        resp = RegistrarClasificacionProduccionView.as_view()(request)
+        resp._test_session = session
+        return resp
 
-    @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 3, "fallidas": 0, "errores": [], "comprobantes": ["A", "B", "C"]})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_reparto_docenas_unidades(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """2 u. 2da → semi calculado 18 y 2 unidades al lote."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=20.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=20.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = _post_clasif_base(
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}_docenas": "0",
-                f"seg2da_42_op_{ID_OPERARIO}_unidades": "2",
-                f"scrap_42_op_{ID_OPERARIO}_docenas": "0",
-                f"scrap_42_op_{ID_OPERARIO}_unidades": "0",
-            }
-        )
-        resp = self._post(data)
-
-        self.assertEqual(resp.status_code, 302)
-        items = mock_lote.call_args.args[2]
-        self.assertEqual(len(items), 2)
-        por_destino = {i["tipo_destino"]: float(i["cantidad"]) for i in items}
-        self.assertEqual(por_destino[TIPO_MPR_SEMI_ELABORADO], 18.0)
-        self.assertEqual(por_destino[TIPO_MPR_2DA_SELECCION], 2.0)
-        self.assertEqual(items[0]["id_operario"], ID_OPERARIO)
-
-    @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_post_con_turno_maq_en_names(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """Sin 2da/scrap el servidor clasifica todo el atribuible como semi."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0, id_maq=2)
-        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = _post_clasif_base(
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}_turno_{TURNO_ID}_maq_2_docenas": "0",
-                f"seg2da_42_op_{ID_OPERARIO}_turno_{TURNO_ID}_maq_2_unidades": "0",
-            }
-        )
+    @patch("mpr.services.transferir_stock_lote")
+    @patch(
+        "mpr.services_cc_consolidado.confirmar_cc_consolidado",
+        return_value={"ok": [42], "errores": [], "comprobantes": ["A"]},
+    )
+    def test_reparto_semi_y_2da_via_confirmar(self, mock_confirmar, mock_lote):
+        data = _post_clasif_base(**_post_cc_keys(semi=18, seg2da=2, scrap=0))
         resp = self._post(data)
         self.assertEqual(resp.status_code, 302)
-        mock_lote.assert_called_once()
-        items = mock_lote.call_args.args[2]
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]["id_mpr_turno"], TURNO_ID)
-        self.assertEqual(float(items[0]["cantidad"]), 10.0)
+        mock_confirmar.assert_called_once()
+        payload = mock_confirmar.call_args.args[3]
+        self.assertEqual(payload[42]["semi"], Decimal("18"))
+        self.assertEqual(payload[42]["lineas"][0][3], Decimal("2"))
+        mock_lote.assert_not_called()
+        self.assertEqual(resp._test_session["clasificacion_feedback_modal"]["tipo"], "success")
 
-    @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 3, "fallidas": 0, "errores": [], "comprobantes": ["A", "B", "C"]})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_reparto_valido_tres_destinos(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """2da=2, scrap=1, atribuible=8 → semi=5 por fallback (atribuible − 2da − scrap)."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=8.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=8.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = _post_clasif_base(
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}": "2",
-                f"scrap_42_op_{ID_OPERARIO}": "1",
-            }
-        )
+    @patch("mpr.services.transferir_stock_lote")
+    @patch(
+        "mpr.services_cc_consolidado.confirmar_cc_consolidado",
+        return_value={"ok": [42], "errores": [], "comprobantes": ["A"]},
+    )
+    def test_reparto_valido_tres_destinos(self, mock_confirmar, mock_lote):
+        data = _post_clasif_base(**_post_cc_keys(semi=5, seg2da=2, scrap=1))
         resp = self._post(data)
-
         self.assertEqual(resp.status_code, 302)
         self.assertIn("clasificacion-produccion", resp["Location"])
-        items = mock_lote.call_args.args[2]
-        self.assertEqual(len(items), 3)
-        destinos = {i["tipo_destino"]: float(i["cantidad"]) for i in items}
-        self.assertEqual(destinos[TIPO_MPR_SEMI_ELABORADO], 5.0)
-        self.assertEqual(destinos[TIPO_MPR_2DA_SELECCION], 2.0)
-        self.assertEqual(destinos[TIPO_MPR_SCRAP], 1.0)
-
-    @patch("mpr.services.transferir_stock_lote")
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_bloqueo_suma_excede_disponible(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """2da=3, scrap=3 (=6) > atribuible=5 → BLOQUEO, sin lote."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=5.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=5.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = _post_clasif_base(
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}": "3",
-                f"scrap_42_op_{ID_OPERARIO}": "3",
-            }
-        )
-        resp = self._post(data)
-
-        self.assertEqual(resp.status_code, 302)
+        payload = mock_confirmar.call_args.args[3]
+        self.assertEqual(payload[42]["semi"], Decimal("5"))
+        destinos = {ln[2]: ln[3] for ln in payload[42]["lineas"]}
+        self.assertEqual(destinos["2da"], Decimal("2"))
+        self.assertEqual(destinos["scrap"], Decimal("1"))
         mock_lote.assert_not_called()
 
     @patch("mpr.services.transferir_stock_lote")
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_hidden_manipulado_server_revalida(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """Atribuible=5 pero POST pide 80 en 2da → bloqueo sin lote."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=5.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=5.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = _post_clasif_base(**{f"seg2da_42_op_{ID_OPERARIO}": "80"})
+    @patch(
+        "mpr.services_cc_consolidado.confirmar_cc_consolidado",
+        return_value={
+            "ok": [],
+            "errores": [(42, "La cantidad total supera el saldo Producción disponible.")],
+            "comprobantes": [],
+        },
+    )
+    def test_bloqueo_suma_excede_disponible(self, mock_confirmar, mock_lote):
+        """Stock safety: exceso semi+2da+scrap → error feedback, sin lote."""
+        data = _post_clasif_base(**_post_cc_keys(semi=100, seg2da=30, scrap=0))
         resp = self._post(data)
-
         self.assertEqual(resp.status_code, 302)
+        mock_confirmar.assert_called_once()
         mock_lote.assert_not_called()
-
-    @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_fecha_se_propaga_al_lote(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """La fecha dd/MM/yyyy se parsea y se pasa como date al servicio de lote."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = _post_clasif_base(
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}": "0",
-                f"scrap_42_op_{ID_OPERARIO}": "0",
-            }
-        )
-        resp = self._post(data)
-
-        self.assertEqual(resp.status_code, 302)
-        self.assertEqual(mock_lote.call_args.kwargs["fecha"], date(2026, 7, 3))
+        fb = resp._test_session["clasificacion_feedback_modal"]
+        self.assertEqual(fb["tipo"], "error")
+        self.assertIn("saldo", fb["mensaje"].lower())
 
     @patch("mpr.services.transferir_stock_lote")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_fecha_invalida_bloquea(self, mock_pivot, mock_lote):
-        """Sin fecha (o inválida) → redirige sin invocar el servicio de lote."""
-        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = {"semi_42": "5"}  # sin fecha
+    @patch(
+        "mpr.services_cc_consolidado.confirmar_cc_consolidado",
+        return_value={
+            "ok": [],
+            "errores": [(42, "La cantidad total supera el saldo Producción disponible.")],
+            "comprobantes": [],
+        },
+    )
+    def test_hidden_manipulado_server_revalida(self, mock_confirmar, mock_lote):
+        data = _post_clasif_base(**_post_cc_keys(semi=0, seg2da=80, scrap=0))
         resp = self._post(data)
-
         self.assertEqual(resp.status_code, 302)
+        mock_confirmar.assert_called_once()
+        mock_lote.assert_not_called()
+
+    @patch("mpr.services.transferir_stock_lote")
+    @patch(
+        "mpr.services_cc_consolidado.confirmar_cc_consolidado",
+        return_value={"ok": [42], "errores": [], "comprobantes": ["A"]},
+    )
+    def test_fecha_se_propaga_al_confirmar(self, mock_confirmar, mock_lote):
+        data = _post_clasif_base(**_post_cc_keys(semi=10, seg2da=0, scrap=0))
+        resp = self._post(data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(mock_confirmar.call_args.args[2], date(2026, 7, 3))
+        mock_lote.assert_not_called()
+
+    @patch("mpr.services.transferir_stock_lote")
+    @patch("mpr.services_cc_consolidado.confirmar_cc_consolidado")
+    def test_fecha_invalida_bloquea(self, mock_confirmar, mock_lote):
+        data = {"semi_42": "5"}
+        resp = self._post(data)
+        self.assertEqual(resp.status_code, 302)
+        mock_confirmar.assert_not_called()
         mock_lote.assert_not_called()
 
     def test_sin_empresa_redirige(self):
@@ -724,196 +473,69 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
         self.assertEqual(resp.status_code, 302)
 
     @patch("mpr.services.transferir_stock_lote")
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno", return_value={})
-    def test_cantidades_cero_ignoradas(self, _celdas, _cls, _desglose, mock_lote):
-        """Cantidades=0 → sin items → warning, sin lote."""
-        data = _post_clasif_base(
-            **{
-                f"semi_42_op_{ID_OPERARIO}": "0",
-                f"seg2da_42_op_{ID_OPERARIO}": "0",
-                f"scrap_42_op_{ID_OPERARIO}": "0",
-            }
-        )
+    @patch("mpr.services_cc_consolidado.confirmar_cc_consolidado")
+    def test_cantidades_cero_ignoradas(self, mock_confirmar, mock_lote):
+        data = _post_clasif_base(**_post_cc_keys(semi=0, seg2da=0, scrap=0))
         resp = self._post(data)
         self.assertEqual(resp.status_code, 302)
+        mock_confirmar.assert_not_called()
         mock_lote.assert_not_called()
-
-    @patch(
-        "mpr.services.transferir_stock_lote",
-        return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]},
-    )
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): {"semi": Decimal("190"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
-    )
-    @patch(
-        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
-        return_value={(42, ID_OPERARIO): Decimal("190")},
-    )
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_clasificado_previo_consumido_no_bloquea(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """Regresión: atribuible=10 con saldo vivo Producción=10 clasifica 10 como semi."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=200.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = _post_clasif_base(
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}": "0",
-                f"scrap_42_op_{ID_OPERARIO}": "0",
-            }
-        )
-        resp = self._post(data)
-
-        self.assertEqual(resp.status_code, 302)
-        mock_lote.assert_called_once()
-        items = mock_lote.call_args.args[2]
-        self.assertEqual(len(items), 1)
-        self.assertEqual(float(items[0]["cantidad"]), 10.0)
-        self.assertEqual(items[0]["tipo_destino"], TIPO_MPR_SEMI_ELABORADO)
 
     @patch("mpr.services.transferir_stock_lote")
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_bloqueo_si_supera_saldo_vivo_produccion(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """La guarda física sigue vigente: atribuible=200 pero saldo vivo=10 → no lote."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=200.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        data = _post_clasif_base(
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}": "0",
-                f"scrap_42_op_{ID_OPERARIO}": "0",
-            }
-        )
+    @patch(
+        "mpr.services_cc_consolidado.confirmar_cc_consolidado",
+        return_value={"ok": [42], "errores": [], "comprobantes": ["A"]},
+    )
+    def test_semi_explicito_consume_saldo(self, mock_confirmar, mock_lote):
+        """Semi consolidado se envía explícito (no auto-atribuible)."""
+        data = _post_clasif_base(**_post_cc_keys(semi=25, seg2da=0, scrap=0))
         resp = self._post(data)
-
         self.assertEqual(resp.status_code, 302)
+        self.assertEqual(mock_confirmar.call_args.args[3][42]["semi"], Decimal("25"))
         mock_lote.assert_not_called()
-
-    @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_clasifica_mas_que_parte_con_stock_extra(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """Parte=10, stock Prod=25 → debe enviar semi=25 explícito para consumir extra."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=25.0)
-        mock_pivot.return_value = (pivot, pivot)
-        data = _post_clasif_base(
-            **{
-                f"semi_42_op_{ID_OPERARIO}": "25",
-                f"seg2da_42_op_{ID_OPERARIO}": "0",
-                f"scrap_42_op_{ID_OPERARIO}": "0",
-            }
-        )
-        resp = self._post(data)
-        self.assertEqual(resp.status_code, 302)
-        items = mock_lote.call_args.args[2]
-        self.assertEqual(len(items), 1)
-        self.assertEqual(float(items[0]["cantidad"]), 25.0)
-        self.assertEqual(float(items[0]["cantidad_extra"]), 15.0)
-
-    @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_sin_semi_en_post_clasifica_solo_atribuible(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """Sin claves semi y stock extra → clasifica solo atribuible (10), cantidad_extra=0."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=25.0)
-        mock_pivot.return_value = (pivot, pivot)
-        data = _post_clasif_base(
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}": "0",
-                f"scrap_42_op_{ID_OPERARIO}": "0",
-            }
-        )
-        resp = self._post(data)
-        self.assertEqual(resp.status_code, 302)
-        items = mock_lote.call_args.args[2]
-        self.assertEqual(len(items), 1)
-        self.assertEqual(float(items[0]["cantidad"]), 10.0)
-        self.assertEqual(float(items[0]["cantidad_extra"]), 0.0)
 
     @patch("mpr.services.transferir_stock_lote")
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_bloqueo_excede_tope_fila_con_extra(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """Parte=10, stock=25 pero pide 2da=30 → bloqueo por tope fila."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=25.0)
-        mock_pivot.return_value = (pivot, pivot)
-        data = _post_clasif_base(**{f"seg2da_42_op_{ID_OPERARIO}": "30"})
+    @patch(
+        "mpr.services_cc_consolidado.confirmar_cc_consolidado",
+        return_value={
+            "ok": [],
+            "errores": [(42, "La cantidad total supera el saldo Producción disponible.")],
+            "comprobantes": [],
+        },
+    )
+    def test_bloqueo_si_supera_saldo_vivo_produccion(self, mock_confirmar, mock_lote):
+        data = _post_clasif_base(**_post_cc_keys(semi=200, seg2da=0, scrap=0))
         resp = self._post(data)
         self.assertEqual(resp.status_code, 302)
         mock_lote.assert_not_called()
+        self.assertEqual(resp._test_session["clasificacion_feedback_modal"]["tipo"], "error")
 
-    @patch("mpr.repositories.clasificacion_borrador.upsert_borrador")
     @patch("mpr.services.transferir_stock_lote")
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_post_borrador_no_llama_transferir_stock(
-        self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote, mock_upsert
-    ):
-        """accion=borrador persiste borrador sin MSTOCK."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
-        mock_pivot.return_value = (pivot, pivot)
-        data = _post_clasif_base(
-            accion="borrador",
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}": "2",
-                f"scrap_42_op_{ID_OPERARIO}": "0",
-            },
-        )
+    @patch("mpr.repositories.clasificacion_borrador.upsert_borrador_cc_consolidado")
+    @patch("mpr.services_cc_consolidado.confirmar_cc_consolidado")
+    def test_post_borrador_no_llama_transferir_stock(self, mock_confirmar, mock_upsert, mock_lote):
+        data = _post_clasif_base(accion="borrador", **_post_cc_keys(semi=8, seg2da=2, scrap=0))
         resp = self._post(data)
         self.assertEqual(resp.status_code, 302)
         mock_lote.assert_not_called()
+        mock_confirmar.assert_not_called()
         mock_upsert.assert_called_once()
-        lineas = mock_upsert.call_args.args[4]
-        self.assertEqual(len(lineas), 1)
-        self.assertEqual(float(lineas[0]["cant_2da"]), 2.0)
+        lineas = mock_upsert.call_args.args[3]
+        self.assertTrue(any(float(ln.get("cant_2da") or 0) == 2.0 for ln in lineas))
 
-    @patch("mpr.repositories.clasificacion_borrador.eliminar_borrador")
+    @patch("mpr.services.transferir_stock_lote")
     @patch(
-        "mpr.services.transferir_stock_lote",
-        return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]},
+        "mpr.services_cc_consolidado.confirmar_cc_consolidado",
+        return_value={"ok": [42], "errores": [], "comprobantes": ["A"]},
     )
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_post_confirmar_elimina_borrador(
-        self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote, mock_eliminar
-    ):
-        """Confirmación exitosa elimina borrador del turno."""
-        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
-        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
-        mock_pivot.return_value = (pivot, pivot)
-        data = _post_clasif_base(
-            accion="confirmar",
-            **{
-                f"seg2da_42_op_{ID_OPERARIO}": "0",
-                f"scrap_42_op_{ID_OPERARIO}": "0",
-            },
-        )
+    def test_post_confirmar_ok_feedback(self, mock_confirmar, mock_lote):
+        """Confirmación OK deja feedback para mprShowAviso; borrador se limpia en el servicio."""
+        data = _post_clasif_base(**_post_cc_keys(semi=10, seg2da=0, scrap=0))
         resp = self._post(data)
         self.assertEqual(resp.status_code, 302)
-        mock_lote.assert_called_once()
-        mock_eliminar.assert_called_once_with(EMPRESA, FECHA_OBJ, TURNO_ID)
+        mock_confirmar.assert_called_once()
+        mock_lote.assert_not_called()
+        self.assertEqual(resp._test_session["clasificacion_feedback_modal"]["tipo"], "success")
 
 
 class TestClasificacionBorradorRepo(SimpleTestCase):
@@ -957,47 +579,43 @@ class TestClasificacionBorradorRepo(SimpleTestCase):
 
 
 class TestConstruirGrillaBorradorPrecarga(TestCase):
-    """La grilla precarga ini_* desde borrador guardado."""
+    """La grilla precarga borrador 007 (Semi consolidado + 2da/scrap)."""
 
-    def setUp(self):
-        self._patch_listar_default = patch(
-            "mpr.repositories.clasificacion_borrador.listar_lineas_borrador",
-            return_value={},
-        )
-        self._patch_tiene_default = patch(
-            "mpr.repositories.clasificacion_borrador.tiene_borrador",
-            return_value=False,
-        )
-        self._patch_listar_default.start()
-        self._patch_tiene_default.start()
-
-    def tearDown(self):
-        self._patch_tiene_default.stop()
-        self._patch_listar_default.stop()
-
-    @patch("mpr.repositories.clasificacion_borrador.tiene_borrador", return_value=True)
-    @patch("mpr.repositories.clasificacion_borrador.listar_lineas_borrador")
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.clasificacion_borrador.tiene_borrador", return_value=False)
+    @patch("mpr.repositories.clasificacion_borrador.tiene_borrador_cc_consolidado", return_value=True)
+    @patch("mpr.repositories.clasificacion_borrador.listar_lineas_borrador_cc_consolidado")
+    @patch("mpr.repositories.transicion_lote.semi_agregado_por_articulo_fecha", return_value={})
+    @patch("mpr.repositories.transicion_lote.clasificado_segunda_scrap_por_celda_fecha", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_precarga_ini_desde_borrador(
-        self, _fetch, mock_celdas, _cls, _desglose, mock_listar, mock_tiene
-    ):
+    @patch("mpr.services_cc_consolidado._pivot_saldo_produccion", return_value={42: {"Produccion": 15.0}})
+    def test_precarga_borrador_007(self, _pivot, _fetch, mock_celdas, *_rest):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
-        mock_listar.return_value = {
-            (ID_MAQUINA, 42, ID_OPERARIO, TURNO_ID): {
-                "semi": Decimal("6"),
-                "segunda": Decimal("2"),
-                "scrap": Decimal("1"),
-            }
-        }
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
+        mock_listar = _rest[2]
+        mock_listar.return_value = [
+            {
+                "id_articulo": 42,
+                "id_operario": None,
+                "id_mpr_turno": None,
+                "cant_semi": Decimal("6"),
+                "cant_2da": Decimal("0"),
+                "cant_scrap": Decimal("0"),
+            },
+            {
+                "id_articulo": 42,
+                "id_operario": ID_OPERARIO,
+                "id_mpr_turno": TURNO_ID,
+                "cant_semi": Decimal("0"),
+                "cant_2da": Decimal("2"),
+                "cant_scrap": Decimal("1"),
+            },
+        ]
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ)
         self.assertTrue(resultado["tiene_borrador"])
-        fila = resultado["filas"][0]
-        self.assertEqual(fila["ini_semi"], 6)
-        self.assertEqual(fila["ini_seg2da"], 2)
-        self.assertEqual(fila["ini_scrap"], 1)
+        bloque = resultado["bloques"][0]
+        self.assertEqual(bloque["borrador_semi"], Decimal("6"))
+        self.assertEqual(bloque["filas"][0]["borrador_segunda"], Decimal("2"))
+        self.assertEqual(bloque["filas"][0]["borrador_scrap"], Decimal("1"))
 
 
 class TestTurnoTieneControlCalidad(SimpleTestCase):

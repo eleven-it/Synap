@@ -324,43 +324,46 @@ Si el día ya tiene **control de calidad confirmado**, no podrá modificar el pa
 
 ## 5. Control de calidad
 
-**Menú:** Producción → Control de calidad.
+**Menú:** Producción → Control de calidad.  
+**Ruta:** `/mpr/tablero-produccion/clasificacion-produccion/`
 
 ### Para qué sirve
 
-Distribuir lo del **Parte** (y eventual extra en Producción) entre **Semi elaborado** (primera), **2da selección** y **Desperdicio**.
+Distribuir el saldo del depósito **Producción** de cada artículo entre **Semi elaborado** (primera, **una vez por artículo**), **2da selección** y **Desperdicio** (por **operario y turno** que fabricó en el parte).
 
 ### Cómo usarlo
 
-1. Elija **Fecha** (y **Turno** opcional) → **Cargar grilla**. En la barra oscura también puede **buscar** artículo y alternar **Solo pendiente** / **Ver roster**.
-2. La columna **Parte** muestra lo fabricado (referencial). Cargue **Semi elaborado**, **2da selección** y **Desperdicio** (docenas / pares).
-   - Al abrir la grilla, **Semi / 2da / Desperdicio** arrancan en **0**. Completá celda por celda; el parte no se copia a Semi.
-   - Al cargar **2da selección** o **Desperdicio**, si Semi ya tiene cantidad, la pantalla **descuenta automáticamente** ese delta de Semi (en pares equivalentes). Ejemplo: semi 5 docenas (60 pares) + 6 pares en 2da → semi queda en 4 docenas y 6 pares.
-   - **Semi elaborado sigue siendo editable** a mano. Si después modifica 2da o desperdicio, el descuento se calcula sobre el semi **actual**.
-   - **Buscar artículo** es predictivo: al tipear aparecen coincidencias de código/descripción de la grilla cargada y la tabla se filtra en vivo.
-   - Si 2da + desperdicio superan el tope clasificable de la fila, Semi baja a 0 y la fila se marca en rojo hasta corregir.
-3. Los botones quedan fijos al pie de la grilla (siempre visibles):
-   - **Guardar borrador** — guarda semi/2da/scrap **sin mover stock**. Puede cerrar y volver otro día: la grilla **precarga** lo guardado y muestra el chip *Borrador* en la barra.
-   - **Guardar control de calidad** — **confirma**: transfiere stock de Producción → Semi / 2da / Scrap y deja registro oficial. **Elimina** el borrador de esa fecha+turno.
-4. Solo el CC **confirmado** bloquea el Parte y cuenta como “hay control de calidad”. El **borrador no bloquea** el parte ni mueve Fabricando/stock.
-5. En **Ver roster**, las filas ya confirmadas se muestran con los **mismos casilleros** (docenas/pares) en solo lectura. **No se puede reeditar** un CC confirmado desde esta pantalla.
+1. Elija **Fecha** → **Cargar grilla**. En la barra oscura puede **buscar** artículo y alternar **Solo pendiente** / **Ver roster**. **No hay filtro Turno** en el encabezado: la grilla abarca el día completo.
+2. Cada **bloque de artículo** muestra:
+   - **Saldo producción** — saldo vivo en depósito Producción (tope único del artículo).
+   - **Semi elaborado** — un solo control por bloque (no por operario).
+   - Subfilas **Operario + Turno** con **2da selección** y **Desperdicio** (máquinas del mismo operario+turno colapsadas en una fila).
+3. **Artículo huérfano:** si hay saldo en Producción pero no hubo parte ese día, aparece una fila con Semi editable y 2da/Desperdicio deshabilitados.
+4. Los botones quedan fijos al pie de la grilla:
+   - **Guardar borrador** — guarda cantidades **sin mover stock**. Cabecera **una por fecha** (tablas `mpr_cc_borrador`). Si quedó un borrador del modelo anterior (por turno), la pantalla avisa que no es compatible y pide recargar.
+   - **Guardar control de calidad** — **confirma** atómicamente por artículo: transfiere stock y registra en `mpr_transicion_lote`. Feedback con **`mprShowAviso`** (sin diálogos nativos del navegador).
+5. **Bloqueo dual del parte:**
+   - Confirmar **solo Semi** (modelo nuevo, sin operario en ledger) **no bloquea** ningún turno del parte.
+   - Confirmar **2da o Desperdicio** **sí bloquea** el turno correspondiente.
+   - **Semi histórico** guardado con operario (antes del consolidado) **sí bloquea** ese turno.
+6. En **Ver roster**, filas ya confirmadas se muestran en solo lectura. **Solo pendiente** oculta artículos con saldo Producción 0 y operarios con 2da/scrap ya confirmados.
 
 ### Borrador vs confirmado (resumen)
 
 | Acción | ¿Mueve stock? | ¿Bloquea el Parte? | ¿Se pierde al salir? |
 |--------|---------------|--------------------|----------------------|
 | Guardar borrador | No | No | No (queda guardado) |
-| Guardar control de calidad | Sí | Sí (turno/fecha) | — (borra el borrador) |
+| Guardar control de calidad | Sí | Solo si hubo 2da/scrap o Semi histórico con operario | — (borra borrador del artículo OK) |
 
 ### Correcciones después de confirmar
 
-Para reclasificar entre Semi / 2da / Desperdicio use **Ingreso de movimiento de stock** con una **transferencia interna**. En esta versión **no** se puede corregir un control de calidad confirmado desde la misma pantalla (a diferencia del parte).
+Para reclasificar entre Semi / 2da / Desperdicio use **Ingreso de movimiento de stock** con una **transferencia interna**. No se puede corregir un control de calidad confirmado desde la misma pantalla.
 
 ### Avisos frecuentes
 
-- Sin filas: falta parte con desglose por operario para esa fecha, o todo ya está clasificado (las filas completas se ven en solo lectura).
-- Corrija las filas en rojo (cantidades que superan el tope clasificable) antes de confirmar.
-- Puede guardar borrador a mitad de carga aunque todavía falten filas.
+- Sin bloques: no hay parte con operarios ni saldo en Producción para esa fecha (o todo ya clasificado con **Solo pendiente** activo).
+- Corrija filas en rojo (cantidades que superan saldo producción o atribuible del operario) antes de confirmar.
+- Puede guardar borrador a mitad de carga.
 
 ---
 

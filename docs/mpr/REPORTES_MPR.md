@@ -72,19 +72,24 @@ acreditado(comp) = max(
 
 Ver: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md), [PARTE_PRODUCCION.md](PARTE_PRODUCCION.md), [ENVIO_PRODUCCION_TABLERO.md](ENVIO_PRODUCCION_TABLERO.md).
 
-### Control de calidad (clasificación por operario)
+### Control de calidad (clasificación consolidada por artículo)
 
-Documento de referencia: [DOCENAS_CLASIFICACION_OPERARIO_MPR.md](DOCENAS_CLASIFICACION_OPERARIO_MPR.md).
+Documentos de referencia: [PLAN_CC_CONSOLIDADO_POR_ARTICULO.md](PLAN_CC_CONSOLIDADO_POR_ARTICULO.md), [DOCENAS_CLASIFICACION_OPERARIO_MPR.md](DOCENAS_CLASIFICACION_OPERARIO_MPR.md).
 
 | Concepto | Regla |
 |----------|-------|
-| Fila CC | Artículo × **operario fabricante** (el que registró el parte) |
-| Pendiente CC | Solo unidades en **Producido** sin clasificar para fecha+turno del clasificador |
-| Bloqueo falso positivo | No bloquea si la fila ya está 100 % clasificada o sin cantidad sin operario |
-| Ledger | `mpr_transicion_lote.id_operario` = fabricante; `id_usuario` = quien guardó la clasificación |
-| Destinos | Semi elaborado, 2da selección, Scrap (desde Producción) |
+| Bloque CC | **Un bloque por artículo**; subfilas **operario + turno** para 2da/scrap |
+| Semi | **Un ingreso por artículo/día**; ledger nuevo con `id_operario IS NULL` |
+| Tope | **Saldo vivo** depósito Producción (`FOR UPDATE` por artículo) |
+| Artículo huérfano | Solo Semi; 2da/scrap rechazadas server-side |
+| Bloqueo parte | Dual: 2da/scrap o Semi histórico **con operario** bloquean turno; Semi nuevo sin operario **no** |
+| Ledger 2da/scrap | `mpr_transicion_lote.id_operario` = fabricante del parte |
 
-El reporte **Por operario** cruza **parte** (`mpr_parte_linea`) con **clasificación por fabricante** (`sumar_clasificado_rendimiento_operario`) para semi / 2da / scrap y % apto / % scrap.
+El reporte **Por operario** cruza **parte** (`mpr_parte_linea`) con **clasificación por fabricante** (`sumar_clasificado_rendimiento_operario`):
+
+- **Semi** con `id_operario IS NULL` (CC consolidado) **no** incrementa columnas ni stack del operario nombrado.
+- **2da y Scrap** con `id_operario` del operario **sí** suman en columnas y apilado.
+- Transiciones Semi/agregados sin operario aparecen en fila **«Sin atribución»** cuando el reporte los expone; **no** se prorratean entre operarios.
 
 ### Presentación docenas | pares
 
@@ -152,9 +157,10 @@ Ranking de **productividad** (parte) y **rendimiento de clasificación** (CC).
 | Campo | Fuente |
 |-------|--------|
 | Unidades / partes / componentes | `mpr_parte_linea` agrupado por `id_operario` |
-| Semi / 2da / Scrap | `mpr_transicion_lote` con `id_operario` fabricante (`sumar_clasificado_rendimiento_operario`) |
-| % apto (semi) | `semi / unidades_parte × 100` |
+| Semi / 2da / Scrap | `mpr_transicion_lote` con `id_operario` fabricante (`sumar_clasificado_rendimiento_operario`); **Semi con `id_operario IS NULL` excluido** del operario |
+| % apto (semi) | `semi / unidades_parte × 100` (solo Semi atribuido al operario) |
 | % scrap | `scrap / unidades_parte × 100` |
+| Sin atribución | Semi/agregados con `id_operario IS NULL` en fila **«Sin atribución»**; no duplican columnas de operarios |
 
 **Gráfico:** barras horizontales top 12 por unidades; variante apilada semi · 2da · scrap.
 
