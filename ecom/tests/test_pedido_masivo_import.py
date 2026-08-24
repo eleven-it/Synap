@@ -477,9 +477,10 @@ class TestImportarMatrizExcel(TestCase):
         )
         res = importar_matriz_excel(d, raw, consultar_arts=lookup)
         self.assertFalse(res["ok"])
-        self.assertTrue(
-            any(e["code"] == "articulo_nombre_no_coincide" for e in res["errores"])
-        )
+        err = next(e for e in res["errores"] if e["code"] == "articulo_nombre_no_coincide")
+        self.assertEqual(err["fila"], 3)
+        self.assertEqual(err["codigo_articulo"], "906807")
+        self.assertIn("ERRÓNEO", err["nombre_articulo"])
         self.assertEqual(d.celdas.count(), 0)
 
     def test_codigo_numerico_prioriza_id_manual_sobre_idart(self):

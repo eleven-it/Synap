@@ -655,6 +655,35 @@ function pedidoMasivoCore() {
       this.importErrores = [];
       this.importErroresTotal = 0;
     },
+    _ordenarErroresImport(lista) {
+      return [...(lista || [])].sort((a, b) => {
+        const fa = Number(a?.fila);
+        const fb = Number(b?.fila);
+        const ha = Number.isFinite(fa) && fa > 0;
+        const hb = Number.isFinite(fb) && fb > 0;
+        if (ha && hb && fa !== fb) return fa - fb;
+        if (ha && !hb) return -1;
+        if (!ha && hb) return 1;
+        return String(a?.mensaje || '').localeCompare(String(b?.mensaje || ''), 'es');
+      });
+    },
+    importErroresRestantes() {
+      const total = Number(this.importErroresTotal || this.importErrores.length || 0);
+      const shown = (this.importErrores || []).length;
+      return Math.max(0, total - shown);
+    },
+    encabezadoErrorImport(er) {
+      const partes = [];
+      const fila = Number(er?.fila);
+      if (Number.isFinite(fila) && fila > 0) partes.push(`Fila ${fila}`);
+      const cod = String(er?.codigo_articulo || '').trim();
+      if (cod) partes.push(`Código ${cod}`);
+      const col = String(er?.columna || '').trim();
+      if (col) partes.push(`Col. ${col}`);
+      const suc = String(er?.sucursal || '').trim();
+      if (suc) partes.push(suc);
+      return partes.join(' · ') || 'Error de importación';
+    },
     descargarPlantillaExcel() {
       if (!this.draftId || !this.urls.plantilla_excel) return;
       const u = `${this.urls.plantilla_excel}?draft_id=${encodeURIComponent(this.draftId)}`;
@@ -681,7 +710,9 @@ function pedidoMasivoCore() {
         });
         const data = await r.json().catch(() => ({}));
         if (!data.ok) {
-          this.importErrores = Array.isArray(data.errores) ? data.errores : [];
+          this.importErrores = this._ordenarErroresImport(
+            Array.isArray(data.errores) ? data.errores : [],
+          );
           this.importErroresTotal = Number(data.errores_total || this.importErrores.length);
           if (!this.importErrores.length) {
             this.mostrarAviso(data.error || 'No se pudo importar el Excel.', 'error');

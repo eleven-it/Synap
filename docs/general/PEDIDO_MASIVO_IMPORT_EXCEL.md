@@ -5,7 +5,7 @@
 | Col | Campo | Uso en importación |
 |-----|--------|-------------------|
 | **A** | Código | Clave de búsqueda en `articulo` (`id_manual`, `IDArt`, `CodigoArticuloT`, códigos de barras, `CodArtProv`). |
-| **B** | Artículo (nombre) | Desambiguación cuando el código devuelve más de un candidato. |
+| **B** | Artículo (nombre) | Desambiguación cuando el código devuelve más de un candidato. Debe coincidir **exactamente** con `NombreArticulo`. |
 | **C** | `id_articulo` (oculta, plantilla v4) | Si tiene valor, resuelve el artículo por `IDArt` sin ambigüedad. |
 | **D+** | Cantidades (packs) | Una columna por sucursal; el encabezado identifica la sucursal (nro/calle). |
 
