@@ -353,9 +353,9 @@
           <ul class="mt-1 list-disc space-y-0.5 pl-4">
             <template x-for="(er, ei) in importErrores" :key="ei">
               <li>
-                <span x-show="er.fila" x-text="'Fila ' + er.fila + (er.columna ? ' · ' + er.columna : '') + ': '"></span>
+                <span x-show="er.columna" class="font-medium" x-text="'Columna ' + er.columna + ': '"></span>
+                <span x-show="!er.columna && er.fila" x-text="'Fila ' + er.fila + ': '"></span>
                 <span x-text="er.mensaje"></span>
-                <span x-show="er.sucursal" class="text-rose-600/80 dark:text-rose-300/80" x-text="' (' + er.sucursal + ')'"></span>
               </li>
             </template>
           </ul>

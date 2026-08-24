@@ -573,6 +573,81 @@ def _rotulo_sucursal_id(
     return _etiqueta_suc(s)
 
 
+def _texto_match_sucursal(val: Any) -> str:
+    return " ".join(str_or_default(val, "").replace("…", "").strip().lower().split())
+
+
+def _calle_desde_encabezado_columna(etiqueta: str) -> str:
+    lineas = _celda_str(etiqueta).split("\n")
+    if len(lineas) < 2:
+        return _texto_match_sucursal(etiqueta)
+    segunda = re.sub(r"^\d+\s*-\s*", "", lineas[1].strip())
+    return _texto_match_sucursal(segunda)
+
+
+def _filtrar_candidatos_por_encabezado(
+    candidatos: Sequence[int],
+    etiqueta: str,
+    by_id: Dict[int, Dict[str, Any]],
+) -> List[int]:
+    """Desambigua por rótulo completo o calle del encabezado (plantilla v4)."""
+    if len(candidatos) <= 1:
+        return list(candidatos)
+    key = _texto_match_sucursal(etiqueta)
+    key_plano = _texto_match_sucursal(etiqueta.replace("\n", " "))
+    calle_hdr = _calle_desde_encabezado_columna(etiqueta)
+    matched: List[int] = []
+    for idd in candidatos:
+        s = by_id.get(idd, {})
+        rot = _texto_match_sucursal(_rotulo_columna_suc(s))
+        calle = _texto_match_sucursal(str_or_default(s.get("calle"), ""))
+        etiq = _texto_match_sucursal(_etiqueta_suc(s))
+        if key == rot or key_plano == rot or key_plano in rot or rot in key_plano:
+            matched.append(idd)
+            continue
+        if calle_hdr and (
+            calle_hdr in calle
+            or calle in calle_hdr
+            or calle_hdr in etiq
+            or calle_hdr in rot
+        ):
+            matched.append(idd)
+    return matched
+
+
+def _mensaje_sucursal_ambigua_nro(
+    letra: str,
+    nro_hdr: str,
+    candidatos: Sequence[int],
+    by_id: Dict[int, Dict[str, Any]],
+    etiqueta: str,
+) -> str:
+    hdr_corto = _celda_str(etiqueta).replace("\n", " — ").strip()
+    if len(hdr_corto) > 88:
+        hdr_corto = hdr_corto[:86].rstrip() + "…"
+    detalle = "; ".join(
+        f"{_rotulo_sucursal_id(idd, by_id)} ({_etiqueta_suc(by_id.get(idd, {}))})"
+        for idd in candidatos[:5]
+    )
+    if len(candidatos) > 5:
+        detalle = f"{detalle}; y {len(candidatos) - 5} más"
+    return (
+        f"Columna {letra} («{hdr_corto}»): el número «{nro_hdr}» coincide con más de un "
+        f"domicilio del cliente ({detalle}). No es una columna repetida en el Excel."
+    )
+
+
+def _resolver_candidatos_nro(
+    candidatos: Sequence[int],
+    etiqueta: str,
+    by_id: Dict[int, Dict[str, Any]],
+) -> List[int]:
+    cand = list(candidatos)
+    if len(cand) > 1:
+        cand = _filtrar_candidatos_por_encabezado(cand, etiqueta, by_id)
+    return cand
+
+
 def _mapear_columnas_sucursal(
     headers_id: Sequence[Any],
     headers_nom: Sequence[Any],
@@ -630,16 +705,17 @@ def _mapear_columnas_sucursal(
         if "\n" in etiqueta:
             nro_hdr = _extraer_nro_sucursal_header(etiqueta)
             if nro_hdr:
-                cand_nro = by_nro.get(nro_hdr) or []
+                cand_nro = _resolver_candidatos_nro(
+                    by_nro.get(nro_hdr) or [], etiqueta, by_id
+                )
                 if len(cand_nro) == 1:
                     out.append((col, cand_nro[0], etiqueta))
                     continue
                 if len(cand_nro) > 1:
                     errores.append(
                         _err(
-                            (
-                                f"El número de sucursal «{nro_hdr}» coincide con más de un domicilio. "
-                                "Usá la plantilla descargada sin modificar encabezados."
+                            _mensaje_sucursal_ambigua_nro(
+                                letra, nro_hdr, cand_nro, by_id, etiqueta
                             ),
                             code="sucursal_ambigua",
                             fila=1,
@@ -674,9 +750,18 @@ def _mapear_columnas_sucursal(
             out.append((col, candidatos[0], etiqueta))
             continue
         if len(candidatos) > 1:
+            candidatos = _filtrar_candidatos_por_encabezado(candidatos, etiqueta, by_id)
+        if len(candidatos) == 1:
+            out.append((col, candidatos[0], etiqueta))
+            continue
+        if len(candidatos) > 1:
+            hdr_corto = _celda_str(etiqueta).replace("\n", " — ").strip()[:88]
             errores.append(
                 _err(
-                    "Sucursal ambigua (mismo nombre en más de un domicilio). Usá la plantilla descargada.",
+                    (
+                        f"Columna {letra} («{hdr_corto}»): sucursal ambigua "
+                        "(mismo nombre en más de un domicilio del cliente)."
+                    ),
                     code="sucursal_ambigua",
                     fila=1,
                     columna=letra,
@@ -687,16 +772,17 @@ def _mapear_columnas_sucursal(
             continue
         nro_hdr = _extraer_nro_sucursal_header(etiqueta)
         if nro_hdr:
-            cand_nro = by_nro.get(nro_hdr) or []
+            cand_nro = _resolver_candidatos_nro(
+                by_nro.get(nro_hdr) or [], etiqueta, by_id
+            )
             if len(cand_nro) == 1:
                 out.append((col, cand_nro[0], etiqueta))
                 continue
             if len(cand_nro) > 1:
                 errores.append(
                     _err(
-                        (
-                            f"El número de sucursal «{nro_hdr}» coincide con más de un domicilio. "
-                            "Usá la plantilla descargada sin modificar encabezados."
+                        _mensaje_sucursal_ambigua_nro(
+                            letra, nro_hdr, cand_nro, by_id, etiqueta
                         ),
                         code="sucursal_ambigua",
                         fila=1,
@@ -752,8 +838,9 @@ def _mapear_columnas_sucursal(
             errores.append(
                 _err(
                     (
-                        f"La sucursal «{_rotulo_sucursal_id(idd, by_id)}» está repetida "
-                        f"en las columnas {prev} y {letra}."
+                        f"Columna {letra}: la sucursal "
+                        f"«{_rotulo_sucursal_id(idd, by_id)}» ya está en la columna {prev} "
+                        "(columna duplicada en el archivo)."
                     ),
                     code="sucursal_duplicada",
                     fila=1,
