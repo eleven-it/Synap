@@ -35,3 +35,7 @@
 |---------|---------|
 | **Ubicar en la tabla** (barra superior, ícono lupa) | Filtra / salta a filas ya cargadas (client-side). |
 | **Buscar artículo** (fila celeste dentro de la matriz) | Agrega artículos del catálogo (API). Si el artículo ya está en la tabla, avisa y resalta la fila existente. |
+
+## Errores de importación (modal)
+
+Cada error incluye `fila`, `codigo_articulo`, `nombre_articulo` (columna B), `columna`, `sucursal` y `mensaje`. El modal los muestra en una lista apilada ordenada por fila de Excel.
