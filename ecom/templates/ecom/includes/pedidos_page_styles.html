@@ -1663,6 +1663,115 @@
     box-sizing: border-box;
   }
 
+  /*
+   * Modo claro: contraste legible en matriz (inputs, fechas, totales).
+   * Sin color explícito ni color-scheme, algunos navegadores pintan texto
+   * claro sobre fondo blanco y los bordes slate-300 casi desaparecen.
+   */
+  .pm-matrix-viewport {
+    color-scheme: light;
+  }
+  .dark .pm-matrix-viewport {
+    color-scheme: dark;
+  }
+  .pm-matrix-viewport input[type="text"],
+  .pm-matrix-viewport input[type="search"],
+  .pm-matrix-viewport input[type="number"],
+  .pm-matrix-viewport input[type="date"],
+  .pm-matrix-viewport select {
+    color: rgb(15 23 42);
+  }
+  .dark .pm-matrix-viewport input[type="text"],
+  .dark .pm-matrix-viewport input[type="search"],
+  .dark .pm-matrix-viewport input[type="number"],
+  .dark .pm-matrix-viewport input[type="date"],
+  .dark .pm-matrix-viewport select {
+    color: rgb(241 245 249);
+  }
+  .pm-matrix-viewport input.pm-qty-input,
+  .pm-matrix-viewport .pm-input-dense {
+    border-color: rgb(148 163 184);
+    background-color: #fff;
+    color: rgb(15 23 42);
+    font-weight: 500;
+  }
+  .dark .pm-matrix-viewport input.pm-qty-input,
+  .dark .pm-matrix-viewport .pm-input-dense {
+    border-color: rgb(71 85 105);
+    background-color: rgb(15 23 42);
+    color: rgb(241 245 249);
+    font-weight: 400;
+  }
+  .pm-matrix-viewport input.pm-qty-input:disabled,
+  .pm-matrix-viewport .pm-input-dense:disabled {
+    color: rgb(100 116 139);
+    background-color: rgb(241 245 249);
+    opacity: 1;
+  }
+  .dark .pm-matrix-viewport input.pm-qty-input:disabled,
+  .dark .pm-matrix-viewport .pm-input-dense:disabled {
+    color: rgb(148 163 184);
+    background-color: rgb(30 41 59);
+  }
+  /* Celdas sucursal: fondo sutil para separar inputs del blanco de la fila */
+  .pm-zone-mid .pm-c-suc {
+    background: rgb(241 245 249);
+  }
+  .dark .pm-zone-mid .pm-c-suc {
+    background: transparent;
+  }
+  .pm-zone-mid .pm-zrow-buscador .pm-c-suc {
+    background: rgb(248 250 252);
+  }
+  .dark .pm-zone-mid .pm-zrow-buscador .pm-c-suc {
+    background: transparent;
+  }
+  /* Rayas alternadas en modo claro (las 3 zonas comparten índice de fila) */
+  .pm-ztable tbody tr.pm-zrow:not(.pm-zrow-buscador):nth-child(even) td {
+    background: rgb(248 250 252);
+  }
+  .pm-zone-mid tbody tr.pm-zrow:not(.pm-zrow-buscador):nth-child(even) td.pm-c-suc {
+    background: rgb(226 232 240);
+  }
+  .dark .pm-ztable tbody tr.pm-zrow:not(.pm-zrow-buscador):nth-child(even) td {
+    background: rgb(15 23 42);
+  }
+  .dark .pm-zone-mid tbody tr.pm-zrow:not(.pm-zrow-buscador):nth-child(even) td.pm-c-suc {
+    background: rgb(15 23 42);
+  }
+  .pm-ztable tbody tr.pm-zrow:not(.pm-zrow-buscador):hover td {
+    background: rgb(224 242 254);
+  }
+  .pm-zone-mid tbody tr.pm-zrow:not(.pm-zrow-buscador):hover td.pm-c-suc {
+    background: rgb(186 230 253);
+  }
+  /* Encabezados sucursal: texto más legible en claro */
+  .pm-zhead-suc {
+    color: rgb(30 41 59);
+    font-weight: 700;
+  }
+  .dark .pm-zhead-suc {
+    color: rgb(226 232 240);
+  }
+  /* Barra totales: números más marcados en claro */
+  .pm-matrix-totales-bar {
+    border-top-color: rgb(100 116 139);
+    background: rgb(203 213 225);
+  }
+  .pm-totales-left,
+  .pm-totales-right,
+  .pm-totales-suc {
+    background: rgb(203 213 225);
+  }
+  .pm-totales-suc .pm-tot-qty {
+    color: rgb(15 23 42);
+    font-weight: 700;
+  }
+  .pm-totales-grand {
+    color: rgb(15 23 42);
+    font-weight: 700;
+  }
+
   /* ── Pedido simple (desktop lg+): la descripción del artículo predomina en
    * ancho; la única columna de cantidad se limita a ~6 dígitos y no se estira.
    * Masivo NO recibe esta variante: conserva mid con scroll-x (min-width:100%).
