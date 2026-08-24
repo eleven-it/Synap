@@ -72,12 +72,14 @@ def _err(
     fila: Optional[int] = None,
     columna: Optional[str] = None,
     codigo_articulo: str = "",
+    nombre_articulo: str = "",
     sucursal: str = "",
 ) -> Dict[str, Any]:
     return {
         "fila": fila,
         "columna": columna or "",
         "codigo_articulo": codigo_articulo or "",
+        "nombre_articulo": nombre_articulo or "",
         "sucursal": sucursal or "",
         "mensaje": mensaje,
         "code": code,
@@ -1031,6 +1033,7 @@ def _elegir_articulo(
                 fila=fila,
                 columna="A",
                 codigo_articulo=codigo,
+                nombre_articulo=nombre_excel,
             )
         )
         return None
@@ -1044,11 +1047,13 @@ def _elegir_articulo(
         if not por_nombre:
             errores.append(
                 _err(
-                    "El nombre del artículo no coincide con ningún artículo del código.",
+                    "El nombre no coincide con ningún artículo del código. "
+                    "Copiá el texto exacto desde la plantilla Synap.",
                     code="articulo_nombre_no_coincide",
                     fila=fila,
                     columna="B",
                     codigo_articulo=codigo,
+                    nombre_articulo=nombre_excel,
                 )
             )
             return None
@@ -1060,6 +1065,7 @@ def _elegir_articulo(
                     fila=fila,
                     columna="B",
                     codigo_articulo=codigo,
+                    nombre_articulo=nombre_excel,
                 )
             )
             return None
@@ -1089,6 +1095,7 @@ def _elegir_articulo(
                     fila=fila,
                     columna="A",
                     codigo_articulo=codigo,
+                    nombre_articulo=nombre_excel,
                 )
             )
             return None
@@ -1100,6 +1107,7 @@ def _elegir_articulo(
                 fila=fila,
                 columna="A",
                 codigo_articulo=codigo,
+                nombre_articulo=nombre_excel,
             )
         )
         return None
@@ -1292,6 +1300,7 @@ def importar_matriz_excel(
                         fila=fila,
                         columna="A",
                         codigo_articulo=codigo,
+                        nombre_articulo=nombre_excel,
                     )
                 )
                 continue
@@ -1330,6 +1339,7 @@ def importar_matriz_excel(
                         fila=fila,
                         columna="A",
                         codigo_articulo=codigo,
+                        nombre_articulo=nombre_excel,
                     )
                 )
             continue
@@ -1350,6 +1360,7 @@ def importar_matriz_excel(
                         fila=fila,
                         columna=letra,
                         codigo_articulo=codigo,
+                        nombre_articulo=nombre_excel,
                         sucursal=etiqueta,
                     )
                 )
@@ -1366,6 +1377,7 @@ def importar_matriz_excel(
                         fila=fila,
                         columna=letra,
                         codigo_articulo=codigo,
+                        nombre_articulo=nombre_excel,
                         sucursal=etiqueta,
                     )
                 )
@@ -1379,6 +1391,7 @@ def importar_matriz_excel(
                         fila=fila,
                         columna=letra,
                         codigo_articulo=codigo,
+                        nombre_articulo=nombre_excel,
                         sucursal=etiqueta,
                     )
                 )
