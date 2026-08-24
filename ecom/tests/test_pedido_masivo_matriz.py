@@ -534,6 +534,51 @@ class TestSerializarMatriz(TestCase):
         self.assertEqual(m["sucursales"][0]["id_cliente_domicilio"], 9)
         self.assertEqual(m["celdas"]["4:9"], "1")
 
+    @patch("ecom.services.pedido_masivo_matriz._stock_disponible_packs_map", return_value={})
+    @patch(
+        "ecom.services.pedido_masivo_matriz.listar_sucursales_cliente",
+        return_value=[{"id_cliente_domicilio": 9, "etiqueta": "Suc A"}],
+    )
+    @patch("ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo")
+    @patch("ecom.services.pedido_masivo_matriz._nombres_articulos")
+    def test_articulos_ordenados_por_nombre(self, mock_n, mock_ctx, _s, _stock):
+        mock_ctx.return_value = {
+            "descRenglon": Decimal("0"),
+            "descPie": Decimal("0"),
+            "lista_id": 1,
+        }
+        mock_n.return_value = {
+            500: {
+                "codigo": "900500",
+                "descripcion": "906978-21 T4 Puma Unisex Quarter",
+                "precio_unitario_neto": 10.0,
+                "precio_lista1": 10.0,
+            },
+            100: {
+                "codigo": "900100",
+                "descripcion": "880966-05 T4 Puma Invisible Sneaker",
+                "precio_unitario_neto": 10.0,
+                "precio_lista1": 10.0,
+            },
+        }
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=10,
+        )
+        for aid in (500, 100):
+            EcomPedidoMasivoDraftCelda.objects.create(
+                draft=d,
+                id_articulo=aid,
+                id_cliente_domicilio=9,
+                cantidad_packs=Decimal("6"),
+            )
+        m = serializar_matriz(d, "emp_m")
+        self.assertEqual(
+            [a["id_articulo"] for a in m["articulos"]],
+            [100, 500],
+        )
+
 
 class TestApiCelda(TestCase):
     @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
