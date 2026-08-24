@@ -23,6 +23,7 @@
 
 - Usar siempre la **plantilla descargada desde Synap** (v4): columna A con `id_manual` completo y columna C con `IDArt`.
 - No reemplazar el código de la columna A por el **SuperArt** padre (ej. `906807` en lugar de `906807-03`): varios SKUs comparten ese valor y la fila puede asignarse al talle/color incorrecto.
+- Varias filas con el mismo SuperArt en columna A pero distinto nombre (ej. T4 y T5) son válidas: el importador desambigua por nombre y detecta duplicados solo por `IDArt` resuelto, no por el código de columna A.
 - Si se edita el Excel a mano, mantener alineadas las columnas A, B y C de cada fila.
 
 ## Stock en pantalla
