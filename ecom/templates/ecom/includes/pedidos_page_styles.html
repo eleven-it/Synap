@@ -1461,6 +1461,13 @@
     font-size: 0.875rem;
   }
   .pm-ztable-left { width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-desc) + var(--pm-col-stock)); }
+  .pm-matrix-shell--sin-desc .pm-ztable-left {
+    width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-stock));
+  }
+  .pm-matrix-shell--sin-desc .pm-c-desc,
+  .pm-matrix-viewport--sin-desc .pm-desc-mob {
+    display: none !important;
+  }
   .pm-ztable-right { width: calc(var(--pm-col-total) + var(--pm-col-delete)); }
   .pm-ztable-mid { width: max-content; min-width: 100%; }
   .pm-zhead {

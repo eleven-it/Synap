@@ -1006,7 +1006,12 @@ def _puntuar_candidato(codigo: str, art: Dict[str, Any], nombre_excel: str) -> i
         tok_excel = _tokens_busqueda(nombre_excel)
         tok_art = _tokens_busqueda(nom)
         if tok_excel:
-            score += min(len(tok_excel & tok_art) * 4, 24)
+            comunes = tok_excel & tok_art
+            score += min(len(comunes) * 4, 24)
+            solo_excel = tok_excel - tok_art
+            solo_art = tok_art - tok_excel
+            score -= min(len(solo_excel) * 8, 24)
+            score -= min(len(solo_art) * 8, 24)
     return score
 
 
@@ -1243,39 +1248,13 @@ def importar_matriz_excel(
     lookup_ids = consultar_ids or consultar_articulos_por_ids
     arts_por_id = lookup_ids(draft.base_empresa, ids_filas) if es_v4 else {}
 
-    vistos: Dict[str, int] = {}
-    vistos_id: Dict[int, int] = {}
+    vistos_filas: Dict[int, int] = {}
     celdas_ok: List[Tuple[int, int, Decimal]] = []
     arts_ok: Dict[int, Dict[str, Any]] = {}
 
     for fila, codigo, row in codigos_filas:
         id_art_fila = to_int_or_none(row[2]) if es_v4 and len(row) > 2 else None
         nombre_excel = _celda_str(row[1]) if len(row) > 1 else ""
-        prev = vistos_id.get(id_art_fila) if id_art_fila is not None else vistos.get(codigo.lower())
-        if prev:
-            hay_qty_dup = False
-            for col, _idd, _et in cols:
-                idx = col - 1
-                if idx < len(row):
-                    qty, qerr = _qty_celda(row[idx])
-                    if qty is not None or qerr:
-                        hay_qty_dup = True
-                        break
-            if hay_qty_dup:
-                errores.append(
-                    _err(
-                        f"Artículo repetido (ya aparece en la fila {prev}).",
-                        code="articulo_duplicado",
-                        fila=fila,
-                        columna="A",
-                        codigo_articulo=codigo,
-                    )
-                )
-            continue
-        if id_art_fila is not None:
-            vistos_id[id_art_fila] = fila
-        else:
-            vistos[codigo.lower()] = fila
         if id_art_fila is not None:
             art = arts_por_id.get(id_art_fila)
             if not art:
@@ -1306,6 +1285,28 @@ def importar_matriz_excel(
             if not art:
                 continue
         aid = int(art["id_articulo"])
+        prev = vistos_filas.get(aid)
+        if prev:
+            hay_qty_dup = False
+            for col, _idd, _et in cols:
+                idx = col - 1
+                if idx < len(row):
+                    qty, qerr = _qty_celda(row[idx])
+                    if qty is not None or qerr:
+                        hay_qty_dup = True
+                        break
+            if hay_qty_dup:
+                errores.append(
+                    _err(
+                        f"Artículo repetido (ya aparece en la fila {prev}).",
+                        code="articulo_duplicado",
+                        fila=fila,
+                        columna="A",
+                        codigo_articulo=codigo,
+                    )
+                )
+            continue
+        vistos_filas[aid] = fila
         arts_ok[aid] = art
         marca = to_int_or_none(art.get("codigo_marca"))
         multiplo = multiplo_empaque_venta(art.get("multiplo_cantidad_vta"))
