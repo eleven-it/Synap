@@ -500,6 +500,50 @@ class TestImportarMatrizExcel(TestCase):
         self.assertTrue(res["ok"], res)
         self.assertEqual(d.celdas.count(), 2)
 
+    @patch(
+        "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+        return_value=[5],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+    )
+    def test_v4_desambigua_mismo_nro_por_calle_encabezado(self, mock_suc, _m):
+        mock_suc.return_value = [
+            {
+                "id_cliente_domicilio": 30,
+                "nro": "142",
+                "calle": "MONTE AGUDO 2323/27",
+                "etiqueta": "MONTE AGUDO 2323/27",
+                "nombre": "MONTE AGUDO 2323/27",
+            },
+            {
+                "id_cliente_domicilio": 31,
+                "nro": "142",
+                "calle": "OTRA CALLE DISTINTA",
+                "etiqueta": "OTRA CALLE DISTINTA",
+                "nombre": "OTRA CALLE DISTINTA",
+            },
+        ]
+        d = _draft()
+        raw = _xlsx_plantilla_v4(
+            [30, 31],
+            ["142\n142 - MONTE AGUDO 2323/27 - FLORENCIO VA"],
+            {"2401": [6]},
+        )
+
+        def lookup_ids(_b, ids):
+            return {i: dict(ART_OK) for i in ids if i == 101}
+
+        res = importar_matriz_excel(
+            d,
+            raw,
+            consultar_arts=lambda *_a, **_k: {},
+            consultar_ids=lookup_ids,
+        )
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.get(id_cliente_domicilio=30).cantidad_packs, Decimal("6"))
+        self.assertFalse(d.celdas.filter(id_cliente_domicilio=31).exists())
+
 
 def _xlsx_plantilla_v4(ids_suc, header_labels, qtys_por_codigo, id_cliente=368, cod_viajante=30):
     """Plantilla v4 con encabezados de sucursal personalizados."""
