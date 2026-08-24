@@ -310,10 +310,7 @@ def listar_articulos_plantilla_vcm(draft: EcomPedidoMasivoDraft) -> List[Dict[st
           AND articulo.ecommerce = 'Si'
           AND COALESCE(TRIM(articulo.tipo_art_fab), '') = 'Terminado'
           AND articulo.CodigoMarca IN ({ph})
-        ORDER BY
-            CASE WHEN articulo.id_manual IS NULL OR articulo.id_manual = '' THEN 1 ELSE 0 END,
-            articulo.id_manual,
-            articulo.NombreArticulo
+        ORDER BY articulo.NombreArticulo, articulo.IDArt
         LIMIT %s
     """
     out: List[Dict[str, Any]] = []

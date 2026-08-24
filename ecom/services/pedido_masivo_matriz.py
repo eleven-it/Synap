@@ -339,6 +339,19 @@ def _clave_orden_nro_sucursal(suc: Dict[str, Any]) -> tuple:
     return (1, id_dom, 0)
 
 
+def _clave_orden_nombre_articulo(
+    nombres: Dict[int, Dict[str, Any]], aid: int
+) -> tuple:
+    """Orden alfabético por nombre visible en la matriz (descripción / código)."""
+    info = nombres.get(aid) or {}
+    etiqueta = (
+        str_or_default(info.get("descripcion"), "")
+        or str_or_default(info.get("codigo"), "")
+        or f"art. {aid}"
+    ).strip().lower()
+    return (etiqueta, aid)
+
+
 def credito_cliente_masivo(base_empresa: str, id_cliente: int) -> Dict[str, Any]:
     """
     Datos de crédito/cuenta del cliente para el widget hero (REQ-PSU-07).
@@ -1032,17 +1045,21 @@ def serializar_matriz(
         ]
         if not sucursales:
             sucursales = [_sucursal_fallback(id_dom_fijo)]
-    art_ids = sorted({c.id_articulo for c in celdas_qs})
+    art_ids_set = {c.id_articulo for c in celdas_qs}
     ctx_cli = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
     lista_id = int(ctx_cli.get("lista_id") or 1)
     desc_cli = _clamp_pct(ctx_cli.get("descRenglon"))
     desc_map = descuentos_fila_efectivos(draft, base_empresa)
     nombres = _nombres_articulos(
         base_empresa,
-        art_ids,
+        sorted(art_ids_set),
         id_cliente=draft.id_cliente,
         lista_id=lista_id,
         descuento_cliente=desc_cli,
+    )
+    art_ids = sorted(
+        art_ids_set,
+        key=lambda aid: _clave_orden_nombre_articulo(nombres, aid),
     )
     stock_packs = _stock_disponible_packs_map(base_empresa, art_ids, nombres)
 
