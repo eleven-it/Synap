@@ -84,6 +84,23 @@ def _err(
     }
 
 
+def _aviso(
+    mensaje: str,
+    *,
+    code: str,
+    columna: str = "",
+) -> Dict[str, Any]:
+    return {
+        "fila": None,
+        "columna": columna,
+        "codigo_articulo": "",
+        "sucursal": "",
+        "mensaje": mensaje,
+        "code": code,
+        "tipo": "aviso",
+    }
+
+
 def _celda_str(val: Any) -> str:
     if val is None:
         return ""
@@ -648,6 +665,95 @@ def _resolver_candidatos_nro(
     return cand
 
 
+def _formato_packs_total(qty: Decimal) -> str:
+    if qty == qty.to_integral_value():
+        return str(int(qty))
+    return format(qty.normalize(), "f")
+
+
+def _avisos_cantidades_sin_sucursal(
+    data_rows: Sequence[Sequence[Any]],
+    cols: Sequence[Tuple[int, Optional[int], str]],
+    headers_nom: Sequence[Any],
+    *,
+    col_primera: int,
+) -> List[Dict[str, Any]]:
+    """Cantidades en columnas sin sucursal válida: no se importan; se informa por columna."""
+    avisos: List[Dict[str, Any]] = []
+    cols_con_suc = {col for col, idd, _ in cols if idd is not None}
+    cols_sin_suc = {col for col, idd, _ in cols if idd is None}
+    etiqueta_por_col = {col: etiqueta for col, _idd, etiqueta in cols}
+    max_col = max(
+        len(headers_nom),
+        max((len(row) for row in data_rows), default=0),
+    )
+    for col in range(col_primera, max_col + 1):
+        if col in cols_con_suc:
+            continue
+        idx = col - 1
+        letra = get_column_letter(col)
+        header = _celda_str(headers_nom[idx] if idx < len(headers_nom) else "")
+        total_qty = Decimal("0")
+        filas_qty = 0
+        for row in data_rows:
+            if idx >= len(row):
+                continue
+            qty, _ = _qty_celda(row[idx])
+            if qty is None:
+                continue
+            total_qty += qty
+            filas_qty += 1
+        if filas_qty == 0:
+            continue
+        packs_txt = _formato_packs_total(total_qty)
+        filas_txt = "fila" if filas_qty == 1 else "filas"
+        if not header:
+            avisos.append(
+                _aviso(
+                    (
+                        f"Columna {letra}: hay cantidades en {filas_qty} {filas_txt} "
+                        f"(total {packs_txt} packs) pero no tiene encabezado de sucursal. "
+                        "Esas cantidades no se importaron."
+                    ),
+                    code="columna_sin_encabezado",
+                    columna=letra,
+                )
+            )
+            continue
+        if col in cols_sin_suc:
+            hdr = header.replace("\n", " — ").strip()
+            if len(hdr) > 72:
+                hdr = hdr[:70].rstrip() + "…"
+            avisos.append(
+                _aviso(
+                    (
+                        f"Columna {letra} («{hdr}»): hay cantidades en {filas_qty} {filas_txt} "
+                        f"(total {packs_txt} packs) pero la sucursal no pudo identificarse. "
+                        "Esas cantidades no se importaron."
+                    ),
+                    code="columna_sucursal_no_importada",
+                    columna=letra,
+                )
+            )
+            continue
+        hdr = etiqueta_por_col.get(col) or header
+        hdr = _celda_str(hdr).replace("\n", " — ").strip()[:72]
+        avisos.append(
+            _aviso(
+                (
+                    f"Columna {letra}"
+                    + (f" («{hdr}»)" if hdr else "")
+                    + f": hay cantidades en {filas_qty} {filas_txt} "
+                    f"(total {packs_txt} packs) sin sucursal válida. "
+                    "Esas cantidades no se importaron."
+                ),
+                code="columna_sin_sucursal",
+                columna=letra,
+            )
+        )
+    return avisos
+
+
 def _mapear_columnas_sucursal(
     headers_id: Sequence[Any],
     headers_nom: Sequence[Any],
@@ -1069,6 +1175,12 @@ def importar_matriz_excel(
         errores,
         col_primera=col_suc,
     )
+    avisos_import: List[Dict[str, Any]] = _avisos_cantidades_sin_sucursal(
+        data_rows,
+        cols,
+        headers_nom,
+        col_primera=col_suc,
+    )
     if not cols:
         errores.append(
             _err(
@@ -1288,16 +1400,22 @@ def importar_matriz_excel(
         )
 
     n_suc = len({idd for _a, idd, _q in celdas_ok})
+    message = (
+        f"Se importaron {len(celdas_ok)} cantidad(es) "
+        f"en {len(arts_ok)} artículo(s) y {n_suc} sucursal(es)."
+    )
+    if avisos_import:
+        message += (
+            f" Hay {len(avisos_import)} columna(s) con cantidades que no se importaron."
+        )
     return {
         "ok": True,
-        "message": (
-            f"Se importaron {len(celdas_ok)} cantidad(es) "
-            f"en {len(arts_ok)} artículo(s) y {n_suc} sucursal(es)."
-        ),
+        "message": message,
         "celdas": len(celdas_ok),
         "articulos": len(arts_ok),
         "sucursales": n_suc,
         "errores": [],
+        "avisos": avisos_import,
     }
 
 

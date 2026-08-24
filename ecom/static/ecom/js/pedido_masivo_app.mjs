@@ -673,6 +673,15 @@ function pedidoMasivoCore() {
         this.cerrarDialogo();
         if (data.matriz) this.aplicarMatriz(data.matriz);
         this.catalogoDesplegado = false;
+        const avisos = Array.isArray(data.avisos) ? data.avisos : [];
+        if (avisos.length) {
+          const detalle = avisos.map((a) => a.mensaje).filter(Boolean).join('\n');
+          this.mostrarAviso(
+            detalle || 'Hay cantidades en columnas sin sucursal válida que no se importaron.',
+            'warning',
+            'Cantidades no importadas',
+          );
+        }
         this.mostrarAviso(data.message || 'Pedido importado.', 'success');
       } catch (e) {
         this.mostrarAviso('No se pudo importar el Excel.', 'error');

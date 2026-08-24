@@ -1001,6 +1001,7 @@ class PedidoMasivoImportarAPIView(APIView):
                 "celdas": result.get("celdas"),
                 "articulos": result.get("articulos"),
                 "sucursales": result.get("sucursales"),
+                "avisos": result.get("avisos") or [],
                 "matriz": _serializar_matriz_ui(draft, base),
             }
         )

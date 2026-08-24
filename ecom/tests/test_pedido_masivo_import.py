@@ -544,6 +544,46 @@ class TestImportarMatrizExcel(TestCase):
         self.assertEqual(d.celdas.get(id_cliente_domicilio=30).cantidad_packs, Decimal("6"))
         self.assertFalse(d.celdas.filter(id_cliente_domicilio=31).exists())
 
+    def test_v4_avisa_cantidades_en_columna_sin_encabezado(self):
+        d = _draft()
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Pedido"
+        ws.cell(1, 1, "Código")
+        ws.cell(1, 2, "Artículo")
+        ws.cell(1, 3, MARKER_IDART)
+        ws.cell(1, 4, "127\nMORÓN - 25 de Mayo")
+        ws.cell(2, 1, "2401")
+        ws.cell(2, 2, "nombre")
+        ws.cell(2, 3, 101)
+        ws.cell(2, 4, 6)
+        ws.cell(2, 5, 99)
+        ws.cell(3, 5, 12)
+        ws_m = wb.create_sheet(HOJA_META)
+        ws_m.append(["id_cliente", 368])
+        ws_m.append(["cod_viajante", 30])
+        ws_m.append(["plantilla_version", 4])
+        ws_m.append(["sucursal_ids", 10])
+        ws_m.append(["col_primera_sucursal", 4])
+        bio = BytesIO()
+        wb.save(bio)
+
+        def lookup_ids(_b, ids):
+            return {i: dict(ART_OK) for i in ids if i == 101}
+
+        res = importar_matriz_excel(
+            d,
+            bio.getvalue(),
+            consultar_arts=lambda *_a, **_k: {},
+            consultar_ids=lookup_ids,
+        )
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.count(), 1)
+        self.assertEqual(len(res.get("avisos") or []), 1)
+        self.assertEqual(res["avisos"][0]["code"], "columna_sin_encabezado")
+        self.assertEqual(res["avisos"][0]["columna"], "E")
+        self.assertIn("no se importaron", res["avisos"][0]["mensaje"].lower())
+
 
 def _xlsx_plantilla_v4(ids_suc, header_labels, qtys_por_codigo, id_cliente=368, cod_viajante=30):
     """Plantilla v4 con encabezados de sucursal personalizados."""
