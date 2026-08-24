@@ -1036,8 +1036,35 @@ def _elegir_articulo(
         return None
     vendibles = [a for a in candidatos if _articulo_vendible(a)]
     pool = vendibles or list(candidatos)
+    nombre_n = _norm_txt(nombre_excel)
     elegido: Optional[Dict[str, Any]] = None
-    if len(pool) == 1:
+
+    if nombre_n:
+        por_nombre = [a for a in pool if _norm_txt(a.get("nombre")) == nombre_n]
+        if not por_nombre:
+            errores.append(
+                _err(
+                    "El nombre del artículo no coincide con ningún artículo del código.",
+                    code="articulo_nombre_no_coincide",
+                    fila=fila,
+                    columna="B",
+                    codigo_articulo=codigo,
+                )
+            )
+            return None
+        if len(por_nombre) > 1:
+            errores.append(
+                _err(
+                    "Nombre de artículo ambiguo: coincide con más de un artículo.",
+                    code="articulo_ambiguo",
+                    fila=fila,
+                    columna="B",
+                    codigo_articulo=codigo,
+                )
+            )
+            return None
+        elegido = por_nombre[0]
+    elif len(pool) == 1:
         elegido = pool[0]
     else:
         ranked = sorted(

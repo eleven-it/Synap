@@ -76,7 +76,7 @@ def _xlsx_plantilla(
     fila = 3
     for codigo, qtys in qtys_por_codigo.items():
         ws.cell(fila, 1, codigo)
-        ws.cell(fila, 2, (nombres or {}).get(codigo, "x"))
+        ws.cell(fila, 2, (nombres or {}).get(codigo, ""))
         for i, q in enumerate(qtys):
             if q is not None:
                 ws.cell(fila, 3 + i, q)
@@ -451,6 +451,36 @@ class TestImportarMatrizExcel(TestCase):
         self.assertEqual(celdas.get((401, 14)), 24.0)
         self.assertEqual(celdas.get((402, 14)), 12.0)
         self.assertEqual(celdas.get((402, 20)), 6.0)
+
+    def test_nombre_excel_debe_coincidir_exacto(self):
+        d = _draft()
+        art_t4 = dict(
+            ART_OK,
+            id_articulo=501,
+            id_manual="906807-15",
+            nombre="906807-15 T4 Puma Invisible Sneaker Bl/Ne/Gm 3P",
+        )
+        art_t5 = dict(
+            ART_OK,
+            id_articulo=502,
+            id_manual="906807-15",
+            nombre="906807-15 T5 Puma Invisible Sneaker Bl/Ne/Gm 3P",
+        )
+
+        def lookup(_b, codigos):
+            return {c: [art_t4, art_t5] for c in codigos}
+
+        raw = _xlsx_plantilla(
+            [14],
+            {"906807": [24]},
+            nombres={"906807": art_t5["nombre"]},
+        )
+        res = importar_matriz_excel(d, raw, consultar_arts=lookup)
+        self.assertFalse(res["ok"])
+        self.assertTrue(
+            any(e["code"] == "articulo_nombre_no_coincide" for e in res["errores"])
+        )
+        self.assertEqual(d.celdas.count(), 0)
 
     def test_codigo_numerico_prioriza_id_manual_sobre_idart(self):
         d = _draft()
