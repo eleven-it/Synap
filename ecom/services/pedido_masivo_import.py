@@ -971,6 +971,13 @@ def _articulo_vendible(art: Dict[str, Any]) -> bool:
     return disc in ("no", "") and ecom in ("si", "sí") and tipo == "Terminado"
 
 
+def _tokens_busqueda(val: str) -> Set[str]:
+    raw = _norm_txt(val)
+    if not raw:
+        return set()
+    return {t for t in re.split(r"[\s\-/]+", raw) if len(t) >= 2}
+
+
 def _puntuar_candidato(codigo: str, art: Dict[str, Any], nombre_excel: str) -> int:
     """Mayor puntaje gana. IDArt solo suma 1: un SuperArt numérico no debe perder contra otro SKU."""
     codigo_n = (codigo or "").strip().lower()
@@ -993,6 +1000,13 @@ def _puntuar_candidato(codigo: str, art: Dict[str, Any], nombre_excel: str) -> i
         score += 16
     if cap and nombre_n and (nombre_n == cap or nombre_n.startswith(cap + " ")):
         score += 12
+    if idm and nombre_n and (nombre_n.startswith(idm) or f" {idm} " in f" {nombre_n} "):
+        score += 10
+    if nombre_n and nom:
+        tok_excel = _tokens_busqueda(nombre_excel)
+        tok_art = _tokens_busqueda(nom)
+        if tok_excel:
+            score += min(len(tok_excel & tok_art) * 4, 24)
     return score
 
 

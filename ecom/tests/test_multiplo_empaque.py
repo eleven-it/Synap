@@ -44,5 +44,5 @@ class TestMultiploEmpaqueVenta(SimpleTestCase):
     def test_disponible_unidades_a_packs(self):
         self.assertEqual(disponible_unidades_a_packs(0, 6), 0.0)
         self.assertEqual(disponible_unidades_a_packs(24, 6), 4.0)
-        self.assertEqual(disponible_unidades_a_packs(25, 6), 4.167)
+        self.assertEqual(disponible_unidades_a_packs(25, 6), 4.0)
         self.assertEqual(disponible_unidades_a_packs(10, None), 10.0)
