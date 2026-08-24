@@ -129,10 +129,42 @@ def _qty_celda(val: Any) -> Tuple[Optional[Decimal], Optional[str]]:
     return qty, None
 
 
+def _codigo_prefijo_desde_nombre(nombre: str) -> str:
+    """Primer token del nombre si parece ``id_manual`` (ej. ``906807-03``)."""
+    tok = _celda_str(nombre).split(None, 1)[0] if nombre else ""
+    if not tok or "-" not in tok:
+        return ""
+    if re.match(r"^[\w./-]+$", tok):
+        return tok
+    return ""
+
+
+def _candidatos_desde_catalogo(
+    catalogo: Dict[str, List[Dict[str, Any]]],
+    codigo: str,
+    nombre_excel: str = "",
+) -> List[Dict[str, Any]]:
+    """Une candidatos del código de columna A y del prefijo del nombre (SKU)."""
+    arts: List[Dict[str, Any]] = []
+    seen_ids: Set[int] = set()
+    claves = [codigo]
+    pref = _codigo_prefijo_desde_nombre(nombre_excel)
+    if pref and pref != codigo:
+        claves.append(pref)
+    for clave in claves:
+        for art in catalogo.get(clave) or []:
+            aid = to_int_or_none(art.get("id_articulo"))
+            if aid is None or aid in seen_ids:
+                continue
+            seen_ids.add(aid)
+            arts.append(art)
+    return arts
+
+
 def consultar_articulos_por_codigos(
     base_empresa: str, codigos: Sequence[str]
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Resuelve códigos Excel → candidatos de ``articulo`` (exacto)."""
+    """Resuelve códigos Excel → candidatos de ``articulo`` (exacto + SuperArt)."""
     out: Dict[str, List[Dict[str, Any]]] = {}
     unicos = []
     seen: Set[str] = set()
@@ -144,7 +176,7 @@ def consultar_articulos_por_codigos(
         unicos.append(k)
     if not unicos:
         return out
-    sql = """
+    sql_base = """
         SELECT
             articulo.IDArt,
             COALESCE(articulo.id_manual, '') AS id_manual,
@@ -163,15 +195,27 @@ def consultar_articulos_por_codigos(
            OR articulo.NroCodBarra = %s
            OR articulo.NroCodBarraF = %s
            OR articulo.CodArtProv = %s
-        LIMIT 40
     """
+    sql_superart = (
+        sql_base
+        + """
+           OR articulo.id_manual LIKE %s
+           OR articulo.CodArtProv LIKE %s
+        LIMIT 80
+    """
+    )
+    sql_exacto = sql_base + " LIMIT 40"
     try:
         pool = get_mysql_pool()
         with pool.get_connection(base_empresa.strip()) as conn:
             cursor = conn.cursor()
             try:
                 for codigo in unicos:
-                    cursor.execute(sql, [codigo] * 6)
+                    if "-" not in codigo:
+                        like_pref = f"{codigo}-%"
+                        cursor.execute(sql_superart, [codigo] * 6 + [like_pref, like_pref])
+                    else:
+                        cursor.execute(sql_exacto, [codigo] * 6)
                     cols = [d[0] for d in cursor.description] if cursor.description else []
                     rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
                     seen_ids: Set[int] = set()
@@ -1272,7 +1316,16 @@ def importar_matriz_excel(
         codigos_filas.append((fila, codigo, row))
 
     lookup_fn = consultar_arts or consultar_articulos_por_codigos
-    catalogo = lookup_fn(draft.base_empresa, [c for _f, c, _r in codigos_filas])
+    codigos_lookup: List[str] = []
+    seen_codigos: Set[str] = set()
+    for _f, codigo, row in codigos_filas:
+        for clave in (codigo, _codigo_prefijo_desde_nombre(_celda_str(row[1]) if len(row) > 1 else "")):
+            k = (clave or "").strip()
+            if not k or k in seen_codigos:
+                continue
+            seen_codigos.add(k)
+            codigos_lookup.append(k)
+    catalogo = lookup_fn(draft.base_empresa, codigos_lookup)
     ids_filas = []
     if es_v4:
         for _f, _c, row in codigos_filas:
@@ -1313,7 +1366,7 @@ def importar_matriz_excel(
         else:
             art = _elegir_articulo(
                 codigo,
-                catalogo.get(codigo) or [],
+                _candidatos_desde_catalogo(catalogo, codigo, nombre_excel),
                 fila,
                 errores,
                 nombre_excel=nombre_excel,

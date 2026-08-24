@@ -4,8 +4,8 @@
 
 | Col | Campo | Uso en importación |
 |-----|--------|-------------------|
-| **A** | Código | Clave de búsqueda en `articulo` (`id_manual`, `IDArt`, `CodigoArticuloT`, códigos de barras, `CodArtProv`). |
-| **B** | Artículo (nombre) | Desambiguación cuando el código devuelve más de un candidato. Debe coincidir **exactamente** con `NombreArticulo`. |
+| **A** | Código | Clave de búsqueda en `articulo` (`id_manual`, `IDArt`, `CodigoArticuloT`, códigos de barras, `CodArtProv`). Si es un **SuperArt** sin guión (ej. `906807`), también busca variantes `906807-*`. |
+| **B** | Artículo (nombre) | Desambiguación cuando el código devuelve más de un candidato. Debe coincidir **exactamente** con `NombreArticulo`. El primer token del nombre (ej. `906807-03`) se usa como búsqueda adicional. |
 | **C** | `id_articulo` (oculta, plantilla v4) | Si tiene valor, resuelve el artículo por `IDArt` sin ambigüedad. |
 | **D+** | Cantidades (packs) | Una columna por sucursal; el encabezado identifica la sucursal (nro/calle). |
 
