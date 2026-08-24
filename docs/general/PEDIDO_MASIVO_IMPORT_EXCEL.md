@@ -13,10 +13,9 @@
 
 1. Si la plantilla es **v4** y la columna C tiene `IDArt`, se usa ese ID directamente.
 2. Si no, se consulta MySQL con el **código de la columna A**.
-3. Si hay varios candidatos vendibles (Terminado + ecommerce), se puntúa cada uno:
-   - Coincidencia exacta de nombre (col. B) → prioridad máxima.
-   - Tokens compartidos entre nombre Excel y `NombreArticulo` (p. ej. `T4` vs `T5`).
-   - Coincidencia de `id_manual` / `CodArtProv` con el código o prefijo del nombre.
+3. Si hay varios candidatos vendibles (Terminado + ecommerce):
+   - Con **nombre en columna B**: debe coincidir **exactamente** (normalizado) con `NombreArticulo`; si no hay match → error `articulo_nombre_no_coincide`.
+   - Sin nombre en columna B: se usa puntaje por código (solo cuando hay un único candidato o desambiguación legacy).
 4. Si persiste el empate → error `articulo_ambiguo`.
 
 ## Recomendaciones operativas
