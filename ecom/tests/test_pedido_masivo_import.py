@@ -430,6 +430,87 @@ class TestImportarMatrizExcel(TestCase):
         self.assertEqual(res["code"], "archivo_invalido")
         self.assertIn("Pedido", res["error"])
 
+    def test_v4_mapea_cantidad_por_nro_sucursal_en_encabezado(self):
+        d = _draft()
+        raw = _xlsx_plantilla_v4(
+            [10, 20],
+            ["127\nMORÓN - 25 de Mayo", "736\nMERLO - Av. Libertador"],
+            {"2401": [12, 6]},
+        )
+
+        def lookup_ids(_b, ids):
+            return {i: dict(ART_OK) for i in ids if i == 101}
+
+        res = importar_matriz_excel(
+            d,
+            raw,
+            consultar_arts=lambda *_a, **_k: {},
+            consultar_ids=lookup_ids,
+        )
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(
+            d.celdas.get(id_cliente_domicilio=10).cantidad_packs, Decimal("12")
+        )
+        self.assertEqual(
+            d.celdas.get(id_cliente_domicilio=20).cantidad_packs, Decimal("6")
+        )
+
+    def test_v4_rechaza_columnas_desalineadas_con_synap(self):
+        d = _draft()
+        raw = _xlsx_plantilla_v4(
+            [10, 20],
+            ["736\nMERLO - Av. Libertador", "127\nMORÓN - 25 de Mayo"],
+            {"2401": [6, 12]},
+        )
+
+        def lookup_ids(_b, ids):
+            return {i: dict(ART_OK) for i in ids if i == 101}
+
+        res = importar_matriz_excel(
+            d,
+            raw,
+            consultar_arts=lambda *_a, **_k: {},
+            consultar_ids=lookup_ids,
+        )
+        self.assertFalse(res["ok"])
+        codes = {e["code"] for e in res["errores"]}
+        self.assertIn("columna_sucursal_desalineada", codes)
+        self.assertEqual(d.celdas.count(), 0)
+        err = next(e for e in res["errores"] if e["code"] == "columna_sucursal_desalineada")
+        self.assertEqual(err["columna"], "D")
+        self.assertIn("SUC 736", err["mensaje"])
+        self.assertIn("SUC 127", err["mensaje"])
+
+
+def _xlsx_plantilla_v4(ids_suc, header_labels, qtys_por_codigo, id_cliente=368, cod_viajante=30):
+    """Plantilla v4 con encabezados de sucursal personalizados."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Pedido"
+    ws.cell(1, 1, "Código")
+    ws.cell(1, 2, "Artículo")
+    ws.cell(1, 3, MARKER_IDART)
+    for i, lbl in enumerate(header_labels):
+        ws.cell(1, 4 + i, lbl)
+    fila = 2
+    for codigo, qtys in qtys_por_codigo.items():
+        ws.cell(fila, 1, codigo)
+        ws.cell(fila, 2, "nombre")
+        ws.cell(fila, 3, 101)
+        for i, q in enumerate(qtys):
+            if q is not None:
+                ws.cell(fila, 4 + i, q)
+        fila += 1
+    ws_m = wb.create_sheet(HOJA_META)
+    ws_m.append(["id_cliente", id_cliente])
+    ws_m.append(["cod_viajante", cod_viajante])
+    ws_m.append(["plantilla_version", 4])
+    ws_m.append(["sucursal_ids", *ids_suc])
+    ws_m.append(["col_primera_sucursal", 4])
+    bio = BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
 
 class TestPlantillaExcel(TestCase):
     @patch(
