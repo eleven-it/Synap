@@ -452,6 +452,42 @@ class TestImportarMatrizExcel(TestCase):
         self.assertEqual(celdas.get((402, 14)), 12.0)
         self.assertEqual(celdas.get((402, 20)), 6.0)
 
+    def test_superart_usa_prefijo_nombre_si_codigo_padre_vacio(self):
+        d = _draft()
+        art_t5 = dict(
+            ART_OK,
+            id_articulo=601,
+            id_manual="906807-03",
+            cod_art_prov="906807-03",
+            nombre="906807-03 T5 Puma Invisible Sneaker Blanco 3P",
+        )
+        art_t4 = dict(
+            ART_OK,
+            id_articulo=602,
+            id_manual="906807-03",
+            cod_art_prov="906807-03",
+            nombre="906807-03 T4 Puma Invisible Sneaker Blanco 3P",
+        )
+
+        def lookup(_b, codigos):
+            # Simula MySQL real: SuperArt 906807 no matchea exacto; el SKU sí.
+            out = {}
+            for c in codigos:
+                if c == "906807-03":
+                    out[c] = [art_t4, art_t5]
+                else:
+                    out[c] = []
+            return out
+
+        raw = _xlsx_plantilla(
+            [14],
+            {"906807": [12]},
+            nombres={"906807": art_t5["nombre"]},
+        )
+        res = importar_matriz_excel(d, raw, consultar_arts=lookup)
+        self.assertTrue(res["ok"], res.get("errores"))
+        self.assertEqual(d.celdas.get().id_articulo, 601)
+
     def test_nombre_excel_debe_coincidir_exacto(self):
         d = _draft()
         art_t4 = dict(
