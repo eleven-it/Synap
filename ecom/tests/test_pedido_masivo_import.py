@@ -473,7 +473,7 @@ class TestImportarMatrizExcel(TestCase):
         raw = _xlsx_plantilla(
             [14],
             {"906807": [24]},
-            nombres={"906807": art_t5["nombre"]},
+            nombres={"906807": "906807-15 T4 Puma Invisible Sneaker Bl/Ne/Gm 3P ERRÓNEO"},
         )
         res = importar_matriz_excel(d, raw, consultar_arts=lookup)
         self.assertFalse(res["ok"])
