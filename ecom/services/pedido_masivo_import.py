@@ -549,6 +549,33 @@ def _leer_workbook_import(raw: bytes) -> Tuple[List[Tuple[Any, ...]], Dict[str, 
         wb.close()
 
 
+def _extraer_nro_sucursal_header(raw: Any) -> Optional[str]:
+    """Número de sucursal (NroCalle) desde el encabezado de columna de la plantilla."""
+    s = _celda_str(raw).strip()
+    if not s:
+        return None
+    primera = s.split("\n", 1)[0].strip()
+    if primera.isdigit():
+        return primera
+    m = re.match(r"^(\d+)", primera)
+    if m:
+        return m.group(1)
+    m = re.match(r"^suc\s+(\d+)", primera, re.I)
+    return m.group(1) if m else None
+
+
+def _rotulo_sucursal_id(
+    idd: int, by_id: Dict[int, Dict[str, Any]]
+) -> str:
+    s = by_id.get(idd)
+    if not s:
+        return f"id {idd}"
+    nro = str_or_default(s.get("nro"), "").strip()
+    if nro and nro != "-":
+        return f"SUC {nro}"
+    return _etiqueta_suc(s)
+
+
 def _mapear_columnas_sucursal(
     headers_id: Sequence[Any],
     headers_nom: Sequence[Any],
@@ -556,24 +583,38 @@ def _mapear_columnas_sucursal(
     errores: List[Dict[str, Any]],
     *,
     col_primera: int = 3,
+    ids_meta: Optional[Sequence[int]] = None,
 ) -> List[Tuple[int, Optional[int], str]]:
-    """Lista (col_1based, id_domicilio|None, etiqueta_header) desde ``col_primera``."""
+    """Lista (col_1based, id_domicilio|None, etiqueta_header) desde ``col_primera``.
+
+    La sucursal se resuelve por el encabezado visible (número/calle), no por la
+    posición de columna. Si hay ``ids_meta`` de ``_Synap``, se valida que cada
+    columna coincida con la sucursal esperada en esa posición (detecta reorden).
+    """
     by_id = {
         to_int_or_none(s.get("id_cliente_domicilio")): s
         for s in sucursales
         if to_int_or_none(s.get("id_cliente_domicilio")) is not None
     }
+    by_nro: Dict[str, List[int]] = {}
     by_etiq: Dict[str, List[int]] = {}
     for s in sucursales:
         idd = to_int_or_none(s.get("id_cliente_domicilio"))
         if idd is None:
             continue
+        nro = str_or_default(s.get("nro"), "").strip()
+        calle = str_or_default(s.get("calle"), "").strip()
+        if nro and nro != "-":
+            by_nro.setdefault(nro, []).append(idd)
         keys = {
             _etiqueta_suc(s).strip().lower(),
-            str_or_default(s.get("calle"), "").strip().lower(),
-            str_or_default(s.get("nro"), "").strip().lower(),
-            f"suc {str_or_default(s.get('nro'), '')}".strip().lower(),
+            calle.lower(),
+            nro.lower(),
+            f"suc {nro}".strip().lower(),
         }
+        if nro and calle:
+            keys.add(f"{nro}\n{calle}".lower())
+            keys.add(_rotulo_columna_suc(s).strip().lower())
         for k in keys:
             if k:
                 by_etiq.setdefault(k, []).append(idd)
@@ -587,53 +628,123 @@ def _mapear_columnas_sucursal(
         raw_nom = headers_nom[i] if i < len(headers_nom) else None
         letra = get_column_letter(col)
         etiqueta = _celda_str(raw_nom) or _celda_str(raw_id)
+        if not etiqueta:
+            continue
         idd = to_int_or_none(raw_id)
-        if idd is None and _celda_str(raw_id):
-            # Header de ids no numérico: intentar etiqueta.
-            idd = None
-        if idd is not None:
-            if idd not in by_id:
-                errores.append(
-                    _err(
-                        "La sucursal no está en el territorio del vendedor para este cliente.",
-                        code="sucursal_fuera_territorio",
-                        fila=1,
-                        columna=letra,
-                        sucursal=etiqueta or str(idd),
-                    )
-                )
-                out.append((col, None, etiqueta))
-                continue
+        if idd is not None and idd in by_id:
             out.append((col, idd, etiqueta or _etiqueta_suc(by_id[idd])))
             continue
         key = etiqueta.strip().lower()
-        candidatos = by_etiq.get(key) or []
-        if not etiqueta:
-            continue
+        primera_linea = etiqueta.split("\n", 1)[0].strip().lower()
+        candidatos = by_etiq.get(key) or by_etiq.get(primera_linea) or []
         if len(candidatos) == 1:
             out.append((col, candidatos[0], etiqueta))
-        elif len(candidatos) > 1:
+            continue
+        if len(candidatos) > 1:
             errores.append(
                 _err(
                     "Sucursal ambigua (mismo nombre en más de un domicilio). Usá la plantilla descargada.",
                     code="sucursal_ambigua",
-                    fila=2,
+                    fila=1,
                     columna=letra,
                     sucursal=etiqueta,
                 )
             )
             out.append((col, None, etiqueta))
-        else:
+            continue
+        nro_hdr = _extraer_nro_sucursal_header(etiqueta)
+        if nro_hdr:
+            cand_nro = by_nro.get(nro_hdr) or []
+            if len(cand_nro) == 1:
+                out.append((col, cand_nro[0], etiqueta))
+                continue
+            if len(cand_nro) > 1:
+                errores.append(
+                    _err(
+                        (
+                            f"El número de sucursal «{nro_hdr}» coincide con más de un domicilio. "
+                            "Usá la plantilla descargada sin modificar encabezados."
+                        ),
+                        code="sucursal_ambigua",
+                        fila=1,
+                        columna=letra,
+                        sucursal=etiqueta,
+                    )
+                )
+                out.append((col, None, etiqueta))
+                continue
             errores.append(
                 _err(
-                    "Sucursal no reconocida para este vendedor y cliente.",
-                    code="sucursal_desconocida",
-                    fila=2,
+                    (
+                        f"La sucursal «SUC {nro_hdr}» del encabezado no está en el territorio "
+                        "del vendedor para este cliente."
+                    ),
+                    code="sucursal_fuera_territorio",
+                    fila=1,
                     columna=letra,
                     sucursal=etiqueta,
                 )
             )
             out.append((col, None, etiqueta))
+            continue
+        if idd is not None:
+            errores.append(
+                _err(
+                    "La sucursal no está en el territorio del vendedor para este cliente.",
+                    code="sucursal_fuera_territorio",
+                    fila=1,
+                    columna=letra,
+                    sucursal=etiqueta or str(idd),
+                )
+            )
+            out.append((col, None, etiqueta))
+            continue
+        errores.append(
+            _err(
+                "Sucursal no reconocida en el encabezado de columna. Usá la plantilla descargada.",
+                code="sucursal_desconocida",
+                fila=1,
+                columna=letra,
+                sucursal=etiqueta,
+            )
+        )
+        out.append((col, None, etiqueta))
+
+    if ids_meta:
+        for idx, (col, idd, etiqueta) in enumerate(out):
+            if idx >= len(ids_meta):
+                break
+            meta_id = to_int_or_none(ids_meta[idx])
+            if meta_id is None or idd is None:
+                continue
+            if idd != meta_id:
+                letra = get_column_letter(col)
+                errores.append(
+                    _err(
+                        (
+                            f"La columna {letra} indica la sucursal "
+                            f"«{_rotulo_sucursal_id(idd, by_id)}» pero en la posición {idx + 1} "
+                            f"la plantilla Synap esperaba «{_rotulo_sucursal_id(meta_id, by_id)}». "
+                            "No reordene, inserte ni elimine columnas; descargue de nuevo "
+                            "la plantilla de este pedido."
+                        ),
+                        code="columna_sucursal_desalineada",
+                        fila=1,
+                        columna=letra,
+                        sucursal=etiqueta,
+                    )
+                )
+        if len(ids_meta) > len(out):
+            errores.append(
+                _err(
+                    (
+                        f"Faltan columnas de sucursal: la plantilla Synap define {len(ids_meta)} "
+                        f"pero el Excel solo tiene {len(out)} reconocibles en la fila de encabezados."
+                    ),
+                    code="columnas_sucursal_incompletas",
+                    fila=1,
+                )
+            )
     return out
 
 
@@ -795,7 +906,8 @@ def importar_matriz_excel(
         fila_base = 3
         col_suc = 3
     elif ids_meta:
-        headers_id = [""] * (col_suc - 1) + list(ids_meta)
+        # Encabezados visibles (nro + calle); ids_meta solo valida alineación.
+        headers_id = list(rows[0])
         headers_nom = list(rows[0])
         data_rows = rows[1:]
         fila_base = 2
@@ -846,7 +958,12 @@ def importar_matriz_excel(
         )
 
     cols = _mapear_columnas_sucursal(
-        headers_id, headers_nom, sucursales, errores, col_primera=col_suc
+        headers_id,
+        headers_nom,
+        sucursales,
+        errores,
+        col_primera=col_suc,
+        ids_meta=ids_meta if ids_meta else None,
     )
     if not cols:
         errores.append(
