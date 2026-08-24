@@ -161,6 +161,37 @@ def _candidatos_desde_catalogo(
     return arts
 
 
+def _merge_candidatos(*listas: Sequence[Sequence[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Une listas de artículos sin duplicar por ``IDArt``."""
+    arts: List[Dict[str, Any]] = []
+    seen_ids: Set[int] = set()
+    for lista in listas:
+        for art in lista or []:
+            aid = to_int_or_none(art.get("id_articulo"))
+            if aid is None or aid in seen_ids:
+                continue
+            seen_ids.add(aid)
+            arts.append(art)
+    return arts
+
+
+def _candidatos_fila_import(
+    catalogo: Dict[str, List[Dict[str, Any]]],
+    codigo: str,
+    nombre_excel: str,
+    *,
+    id_art_fila: Optional[int] = None,
+    arts_por_id: Optional[Dict[int, Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Candidatos de una fila: catálogo (código + prefijo nombre) + IDArt columna C."""
+    candidatos = _candidatos_desde_catalogo(catalogo, codigo, nombre_excel)
+    if id_art_fila is not None and arts_por_id:
+        art_id = arts_por_id.get(id_art_fila)
+        if art_id:
+            candidatos = _merge_candidatos([art_id], candidatos)
+    return candidatos
+
+
 def consultar_articulos_por_codigos(
     base_empresa: str, codigos: Sequence[str]
 ) -> Dict[str, List[Dict[str, Any]]]:
@@ -1343,36 +1374,22 @@ def importar_matriz_excel(
     for fila, codigo, row in codigos_filas:
         id_art_fila = to_int_or_none(row[2]) if es_v4 and len(row) > 2 else None
         nombre_excel = _celda_str(row[1]) if len(row) > 1 else ""
-        if id_art_fila is not None:
-            art = arts_por_id.get(id_art_fila)
-            if not art:
-                errores.append(
-                    _err(
-                        "Artículo no encontrado.",
-                        code="articulo_no_encontrado",
-                        fila=fila,
-                        columna="A",
-                        codigo_articulo=codigo,
-                        nombre_articulo=nombre_excel,
-                    )
-                )
-                continue
-            vendible = _elegir_articulo(
-                codigo, [art], fila, errores, nombre_excel=nombre_excel
-            )
-            if not vendible:
-                continue
-            art = vendible
-        else:
-            art = _elegir_articulo(
-                codigo,
-                _candidatos_desde_catalogo(catalogo, codigo, nombre_excel),
-                fila,
-                errores,
-                nombre_excel=nombre_excel,
-            )
-            if not art:
-                continue
+        candidatos = _candidatos_fila_import(
+            catalogo,
+            codigo,
+            nombre_excel,
+            id_art_fila=id_art_fila,
+            arts_por_id=arts_por_id if es_v4 else None,
+        )
+        art = _elegir_articulo(
+            codigo,
+            candidatos,
+            fila,
+            errores,
+            nombre_excel=nombre_excel,
+        )
+        if not art:
+            continue
         aid = int(art["id_articulo"])
         prev = vistos_filas.get(aid)
         if prev:

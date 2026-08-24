@@ -488,6 +488,169 @@ class TestImportarMatrizExcel(TestCase):
         self.assertTrue(res["ok"], res.get("errores"))
         self.assertEqual(d.celdas.get().id_articulo, 601)
 
+    def test_v4_idart_erroneo_nombre_correcto_importa_t5(self):
+        """Fila con IDArt de otra variante pero nombre T5: resuelve por catálogo."""
+        d = _draft()
+        art_t5 = dict(
+            ART_OK,
+            id_articulo=601,
+            id_manual="906807-03",
+            cod_art_prov="906807-03",
+            nombre="906807-03 T5 Puma Invisible Sneaker Blanco 3P",
+        )
+        art_t4 = dict(
+            ART_OK,
+            id_articulo=602,
+            id_manual="906807-03",
+            cod_art_prov="906807-03",
+            nombre="906807-03 T4 Puma Invisible Sneaker Blanco 3P",
+        )
+
+        def lookup(_b, codigos):
+            # Solo existe T5 (T4 no está en la base del cliente)
+            out = {}
+            for c in codigos:
+                if c in ("906807", "906807-03"):
+                    out[c] = [art_t5]
+                else:
+                    out[c] = []
+            return out
+
+        def lookup_ids(_b, ids):
+            return {602: art_t4}
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Pedido"
+        ws.cell(1, 1, "Código")
+        ws.cell(1, 2, "Artículo")
+        ws.cell(1, 3, MARKER_IDART)
+        ws.cell(1, 4, "SUC 14")
+        ws.cell(1, 5, "SUC 20")
+        # Fila 11: T4 no existe en catálogo
+        ws.cell(2, 1, "906807")
+        ws.cell(2, 2, art_t4["nombre"])
+        ws.cell(2, 3, 602)
+        ws.cell(2, 4, 6)
+        # Fila 12: T5 existe; columna C con IDArt de T4 (fila copiada)
+        ws.cell(3, 1, "906807")
+        ws.cell(3, 2, art_t5["nombre"])
+        ws.cell(3, 3, 602)
+        ws.cell(3, 4, 12)
+        ws.cell(3, 5, 3)
+        ws_m = wb.create_sheet("_Synap")
+        ws_m.append(["draft_id", d.id])
+        ws_m.append(["id_cliente", d.id_cliente])
+        ws_m.append(["cod_viajante", d.cod_viajante])
+        ws_m.append(["sucursal_ids", 14, 20])
+        ws_m.append(["col_primera_sucursal", 4])
+        bio = BytesIO()
+        wb.save(bio)
+
+        with patch(
+            "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+            return_value=[
+                {"id_cliente_domicilio": 14, "nro": "14"},
+                {"id_cliente_domicilio": 20, "nro": "20"},
+            ],
+        ), patch(
+            "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+            return_value=[5],
+        ), patch(
+            "ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo"
+        ), patch(
+            "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
+            return_value={},
+        ), patch(
+            "ecom.services.pedido_masivo_import._nombre_cliente",
+            return_value="Cliente",
+        ):
+            res = importar_matriz_excel(
+                d,
+                bio.getvalue(),
+                consultar_arts=lookup,
+                consultar_ids=lookup_ids,
+            )
+        self.assertFalse(res["ok"])
+        err_filas = {e["fila"]: e["code"] for e in res["errores"]}
+        self.assertEqual(err_filas.get(3), "articulo_nombre_no_coincide")
+        self.assertNotIn(4, err_filas)
+        self.assertEqual(d.celdas.count(), 0)
+
+    def test_v4_fila_solo_t5_idart_erroneo_importa(self):
+        """Misma fila con IDArt de T4 pero nombre T5: resuelve por catálogo."""
+        d = _draft()
+        art_t5 = dict(
+            ART_OK,
+            id_articulo=601,
+            id_manual="906807-03",
+            cod_art_prov="906807-03",
+            nombre="906807-03 T5 Puma Invisible Sneaker Blanco 3P",
+        )
+        art_t4 = dict(
+            ART_OK,
+            id_articulo=602,
+            id_manual="906807-03",
+            cod_art_prov="906807-03",
+            nombre="906807-03 T4 Puma Invisible Sneaker Blanco 3P",
+        )
+
+        def lookup(_b, codigos):
+            out = {}
+            for c in codigos:
+                if c in ("906807", "906807-03"):
+                    out[c] = [art_t5]
+                else:
+                    out[c] = []
+            return out
+
+        def lookup_ids(_b, ids):
+            return {602: art_t4}
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Pedido"
+        ws.cell(1, 1, "Código")
+        ws.cell(1, 2, "Artículo")
+        ws.cell(1, 3, MARKER_IDART)
+        ws.cell(1, 4, "SUC 14")
+        ws.cell(2, 1, "906807")
+        ws.cell(2, 2, art_t5["nombre"])
+        ws.cell(2, 3, 602)
+        ws.cell(2, 4, 12)
+        ws_m = wb.create_sheet("_Synap")
+        ws_m.append(["draft_id", d.id])
+        ws_m.append(["id_cliente", d.id_cliente])
+        ws_m.append(["cod_viajante", d.cod_viajante])
+        ws_m.append(["sucursal_ids", 14])
+        ws_m.append(["col_primera_sucursal", 4])
+        bio = BytesIO()
+        wb.save(bio)
+
+        with patch(
+            "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+            return_value=[{"id_cliente_domicilio": 14, "nro": "14"}],
+        ), patch(
+            "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+            return_value=[5],
+        ), patch(
+            "ecom.services.pedido_masivo_import.asegurar_descuento_fila_articulo"
+        ), patch(
+            "ecom.services.pedido_masivo_import.leer_contexto_cliente_masivo",
+            return_value={},
+        ), patch(
+            "ecom.services.pedido_masivo_import._nombre_cliente",
+            return_value="Cliente",
+        ):
+            res = importar_matriz_excel(
+                d,
+                bio.getvalue(),
+                consultar_arts=lookup,
+                consultar_ids=lookup_ids,
+            )
+        self.assertTrue(res["ok"], res.get("errores"))
+        self.assertEqual(d.celdas.get().id_articulo, 601)
+
     def test_nombre_excel_debe_coincidir_exacto(self):
         d = _draft()
         art_t4 = dict(

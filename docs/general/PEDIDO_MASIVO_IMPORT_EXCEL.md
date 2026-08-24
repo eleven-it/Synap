@@ -11,12 +11,15 @@
 
 ## Resolución de artículos
 
-1. Si la plantilla es **v4** y la columna C tiene `IDArt`, se usa ese ID directamente.
-2. Si no, se consulta MySQL con el **código de la columna A**.
-3. Si hay varios candidatos vendibles (Terminado + ecommerce):
+1. Si la plantilla es **v4** y la columna C tiene `IDArt`, se agrega como candidato (no reemplaza la búsqueda por código/nombre).
+2. Se consulta MySQL con el **código de la columna A** (y variantes SuperArt `906807-*` si A es el padre).
+3. El **primer token del nombre** en columna B (ej. `906807-03`) se usa como búsqueda adicional.
+4. Si hay varios candidatos vendibles (Terminado + ecommerce):
    - Con **nombre en columna B**: debe coincidir **exactamente** (normalizado) con `NombreArticulo`; si no hay match → error `articulo_nombre_no_coincide`.
    - Sin nombre en columna B: se usa puntaje por código (solo cuando hay un único candidato o desambiguación legacy).
-4. Si persiste el empate → error `articulo_ambiguo`.
+5. Si persiste el empate → error `articulo_ambiguo`.
+
+**Nota:** Si editás filas a mano y la columna C oculta quedó con un `IDArt` de otro talle, el importador **prioriza el nombre de la columna B** sobre ese ID.
 
 ## Recomendaciones operativas
 
