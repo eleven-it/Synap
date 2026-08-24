@@ -455,7 +455,7 @@ class TestImportarMatrizExcel(TestCase):
             d.celdas.get(id_cliente_domicilio=20).cantidad_packs, Decimal("6")
         )
 
-    def test_v4_rechaza_columnas_desalineadas_con_synap(self):
+    def test_v4_importa_columnas_reordenadas_por_encabezado(self):
         d = _draft()
         raw = _xlsx_plantilla_v4(
             [10, 20],
@@ -472,14 +472,33 @@ class TestImportarMatrizExcel(TestCase):
             consultar_arts=lambda *_a, **_k: {},
             consultar_ids=lookup_ids,
         )
-        self.assertFalse(res["ok"])
-        codes = {e["code"] for e in res["errores"]}
-        self.assertIn("columna_sucursal_desalineada", codes)
-        self.assertEqual(d.celdas.count(), 0)
-        err = next(e for e in res["errores"] if e["code"] == "columna_sucursal_desalineada")
-        self.assertEqual(err["columna"], "D")
-        self.assertIn("SUC 736", err["mensaje"])
-        self.assertIn("SUC 127", err["mensaje"])
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(
+            d.celdas.get(id_cliente_domicilio=20).cantidad_packs, Decimal("6")
+        )
+        self.assertEqual(
+            d.celdas.get(id_cliente_domicilio=10).cantidad_packs, Decimal("12")
+        )
+
+    def test_v4_importa_subset_columnas_eliminadas(self):
+        d = _draft()
+        raw = _xlsx_plantilla_v4(
+            [10, 20, 99],
+            ["127\nMORÓN - 25 de Mayo", "736\nMERLO - Av. Libertador"],
+            {"2401": [6, 12]},
+        )
+
+        def lookup_ids(_b, ids):
+            return {i: dict(ART_OK) for i in ids if i == 101}
+
+        res = importar_matriz_excel(
+            d,
+            raw,
+            consultar_arts=lambda *_a, **_k: {},
+            consultar_ids=lookup_ids,
+        )
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.count(), 2)
 
 
 def _xlsx_plantilla_v4(ids_suc, header_labels, qtys_por_codigo, id_cliente=368, cod_viajante=30):
