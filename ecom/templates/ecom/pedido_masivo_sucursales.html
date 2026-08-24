@@ -396,6 +396,11 @@
           <div class="pm-zone pm-zone-left" x-ref="pmZoneLeft">
             <div class="pm-zone-head">
               <table class="pm-ztable pm-ztable-left">
+                <colgroup>
+                  <col class="pm-col-art-w"/>
+                  <col class="pm-col-precio-w"/>
+                  <col class="pm-col-stock-w"/>
+                </colgroup>
                 <thead>
                   <tr>
                     <th class="pm-c-art pm-zhead text-left">
@@ -410,7 +415,6 @@
                       </div>
                     </th>
                     <th class="pm-c-precio pm-zhead">Precio</th>
-                    <th class="pm-c-desc pm-zhead">% Desc.</th>
                     <th class="pm-c-stock pm-zhead">STOCK</th>
                   </tr>
                 </thead>
@@ -418,10 +422,15 @@
             </div>
             <div class="pm-zone-body" x-ref="pmZoneLeftScroll">
               <table class="pm-ztable pm-ztable-left">
+                <colgroup>
+                  <col class="pm-col-art-w"/>
+                  <col class="pm-col-precio-w"/>
+                  <col class="pm-col-stock-w"/>
+                </colgroup>
                 <tbody>
                 {# Fila buscador arriba: el dropdown abre hacia abajo sobre las líneas #}
                 <tr class="pm-zrow pm-zrow-buscador">
-                  <td class="pm-c-art" colspan="4">
+                  <td class="pm-c-art" colspan="3">
                     <div class="relative w-full overflow-visible"
                          @focusout="onFocusOutBuscadorArt($event)" @click.outside="cerrarPanelArt()">
                       <label class="sr-only" for="pm-art">Agregar artículo</label>
@@ -508,14 +517,6 @@
                       </div>
                     </td>
                     <td class="pm-c-precio text-xs tabular-nums text-slate-700 dark:text-slate-200" x-text="fmtPrecio(art.precio_unitario_neto)"></td>
-                    <td class="pm-c-desc">
-                      <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                             class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
-                             :value="descFila(art.id_articulo)"
-                             placeholder="0"
-                             :disabled="!matrizEditable || !puedeEditarDescRenglon"
-                             @change="onDescFila(art.id_articulo, $event.target.value)"/>
-                    </td>
                     <td class="pm-c-stock text-xs tabular-nums">
                       <template x-if="art.stock_disponible_packs == null || art.stock_disponible_packs === undefined">
                         <span class="text-slate-400 dark:text-slate-500">—</span>

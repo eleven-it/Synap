@@ -1252,10 +1252,10 @@
   .pm-matrix-desktop {
     --pm-row-h: 3.25rem;
     --pm-head-h: 3.75rem;
-    --pm-col-art: 15rem;
-    --pm-col-precio: 5rem;
+    --pm-col-art: 22rem;
+    --pm-col-precio: 5.5rem;
     --pm-col-desc: 4.25rem;
-    --pm-col-stock: 5.5rem;
+    --pm-col-stock: 5rem;
     --pm-col-suc: 4.5rem;
     --pm-col-total: 5.5rem;
     --pm-col-delete: 2.75rem;
@@ -1380,7 +1380,7 @@
   }
   .pm-totales-left {
     flex: 0 0 auto;
-    width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-desc) + var(--pm-col-stock));
+    width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-stock));
     display: flex;
     align-items: center;
     padding: 0 0.5rem;
@@ -1460,11 +1460,10 @@
     table-layout: fixed;
     font-size: 0.875rem;
   }
-  .pm-ztable-left { width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-desc) + var(--pm-col-stock)); }
-  .pm-matrix-shell--sin-desc .pm-ztable-left {
-    width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-stock));
-  }
-  .pm-matrix-shell--sin-desc .pm-c-desc,
+  .pm-ztable-left { width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-stock)); }
+  .pm-ztable-left .pm-col-art-w { width: var(--pm-col-art); }
+  .pm-ztable-left .pm-col-precio-w { width: var(--pm-col-precio); }
+  .pm-ztable-left .pm-col-stock-w { width: var(--pm-col-stock); }
   .pm-matrix-viewport--sin-desc .pm-desc-mob {
     display: none !important;
   }
@@ -1652,11 +1651,11 @@
     overflow: hidden;
   }
   .pm-cell-art .pm-art-nombre {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    display: block;
     overflow: hidden;
     word-break: break-word;
+    line-height: 1.25;
+    max-height: calc(var(--pm-row-h) - 0.5rem);
   }
   .pm-c-suc .pm-qty-input {
     width: 100%;
