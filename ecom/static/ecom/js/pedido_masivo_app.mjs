@@ -91,6 +91,11 @@ function pedidoMasivoCore() {
     ultimoError: {},
     articulosBusqueda: [],
     qArt: '',
+    qTabla: '',
+    panelTabla: false,
+    idxTabla: 0,
+    filaResaltadaId: null,
+    _flashFilaTimer: null,
     panelArt: false,
     idxArt: 0,
     cargandoArt: false,
@@ -304,6 +309,13 @@ function pedidoMasivoCore() {
     get cantidadSeleccionados() {
       return Object.keys(this.articulosSeleccionados || {}).length;
     },
+    get sugerenciasTabla() {
+      const q = (this.qTabla || '').trim().toLowerCase();
+      if (!q) return [];
+      return (this.articulos || [])
+        .filter((a) => this._textoBusquedaArticulo(a).includes(q))
+        .slice(0, 8);
+    },
     /** Un PED está cargado o consultado → habilita PDF / repetir / mail. */
     get pedidoCargado() {
       return Boolean(this.modoSimple && this.pedidoCodMov);
@@ -389,14 +401,19 @@ function pedidoMasivoCore() {
     _bindMatrixScrollSync() {
       const mid = this.$refs.pmZoneMid;
       if (!mid || mid._pmSyncBound) return;
+      const midHead = this.$refs.pmZoneMidHead;
+      const leftScroll = this.$refs.pmZoneLeftScroll;
+      const rightScroll = this.$refs.pmZoneRightScroll;
       const left = this.$refs.pmZoneLeft;
       const right = this.$refs.pmZoneRight;
       const mirror = () => {
         const t = mid.scrollTop;
-        if (left) left.scrollTop = t;
-        if (right) right.scrollTop = t;
+        const x = mid.scrollLeft;
+        if (leftScroll) leftScroll.scrollTop = t;
+        if (rightScroll) rightScroll.scrollTop = t;
+        if (midHead) midHead.scrollLeft = x;
         const totMid = this.$refs.pmTotalesMid;
-        if (totMid) totMid.scrollLeft = mid.scrollLeft;
+        if (totMid) totMid.scrollLeft = x;
       };
       mid.addEventListener('scroll', () => {
         mirror();
@@ -405,12 +422,13 @@ function pedidoMasivoCore() {
       // Reenvía la rueda vertical sobre las zonas fijas hacia la zona media,
       // excepto cuando el puntero está sobre el dropdown de artículos (debe scrollear el listbox).
       const fwdWheel = (e) => {
-        if (!e.deltaY) return;
+        if (!e.deltaY && !e.deltaX) return;
         if (e.target && typeof e.target.closest === 'function'
             && e.target.closest('.pm-art-dropdown')) {
           return;
         }
-        mid.scrollTop += e.deltaY;
+        if (e.deltaY) mid.scrollTop += e.deltaY;
+        if (e.deltaX) mid.scrollLeft += e.deltaX;
         mirror();
         e.preventDefault();
       };
@@ -439,7 +457,7 @@ function pedidoMasivoCore() {
       if (left && leftEl) leftEl.style.width = `${left.offsetWidth}px`;
       if (right && rightEl) rightEl.style.width = `${right.offsetWidth}px`;
 
-      const ths = mid.querySelectorAll('thead th.pm-c-suc');
+      const ths = (this.$refs.pmZoneMidHead || mid).querySelectorAll('thead th.pm-c-suc');
       const cells = totInner ? totInner.querySelectorAll('.pm-totales-suc') : [];
       let innerW = 0;
       ths.forEach((th, i) => {
@@ -1193,10 +1211,7 @@ function pedidoMasivoCore() {
       if (v == null || v === undefined) return '—';
       const n = Number(v);
       if (Number.isNaN(n)) return '—';
-      if (Math.abs(n - Math.round(n)) < 1e-9) {
-        return Math.round(n).toLocaleString('es-AR');
-      }
-      return n.toLocaleString('es-AR', { maximumFractionDigits: 3 });
+      return Math.floor(n).toLocaleString('es-AR');
     },
     /** Sublínea PWA: «stock 12» / «sin stock» / «stock —». */
     stockPacksTexto(art) {
@@ -1252,6 +1267,87 @@ function pedidoMasivoCore() {
     estaSeleccionado(a) {
       const id = this._idArticuloKey(a);
       return !!(id && (this.articulosSeleccionados || {})[id]);
+    },
+    estaEnTabla(a) {
+      const id = Number(a?.id_articulo ?? a?.IDArt ?? 0);
+      if (!id) return false;
+      return (this.articulos || []).some((x) => Number(x.id_articulo) === id);
+    },
+    _textoBusquedaArticulo(a) {
+      return [
+        a?.id_manual,
+        a?.codigo,
+        a?.nombre,
+        a?.descripcion,
+        a?.id_articulo != null ? String(a.id_articulo) : '',
+      ]
+        .map((x) => String(x || '').trim())
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+    },
+    coincideBusquedaTabla(art) {
+      const q = (this.qTabla || '').trim().toLowerCase();
+      if (!q) return true;
+      return this._textoBusquedaArticulo(art).includes(q);
+    },
+    contadorFilasTablaVisible() {
+      const q = (this.qTabla || '').trim();
+      if (!q) return (this.articulos || []).length;
+      return (this.articulos || []).filter((a) => this.coincideBusquedaTabla(a)).length;
+    },
+    limpiarBusquedaTabla() {
+      this.qTabla = '';
+      this.panelTabla = false;
+      this.idxTabla = 0;
+      this.filaResaltadaId = null;
+    },
+    abrirPanelTabla() {
+      this.panelTabla = true;
+    },
+    moverSelTabla(delta) {
+      const n = this.sugerenciasTabla.length;
+      if (!n) return;
+      this.idxTabla = (this.idxTabla + delta + n) % n;
+    },
+    aplicarSugerenciaTablaActiva() {
+      const item = this.sugerenciasTabla[this.idxTabla];
+      if (item) this.seleccionarFilaTabla(item);
+    },
+    seleccionarFilaTabla(art) {
+      const id = Number(art?.id_articulo);
+      if (!id) return;
+      this.qTabla = art.id_manual || art.nombre || String(id);
+      this.panelTabla = false;
+      this.idxTabla = 0;
+      this.irAFilaArticulo(id);
+    },
+    irAFilaArticulo(idArt, { scroll = true, flash = true } = {}) {
+      const id = Number(idArt);
+      if (!id) return;
+      if (flash) {
+        this.filaResaltadaId = id;
+        clearTimeout(this._flashFilaTimer);
+        this._flashFilaTimer = setTimeout(() => {
+          this.filaResaltadaId = null;
+        }, 2500);
+      }
+      if (!scroll) return;
+      this.$nextTick(() => {
+        const mid = this.$refs.pmZoneMid;
+        const row = mid?.querySelector(`tr[data-pm-fila="${id}"]`)
+          || document.querySelector(`[data-pm-fila="${id}"]`);
+        if (row && mid) {
+          const top = row.offsetTop - (mid.clientHeight / 2) + (row.offsetHeight / 2);
+          mid.scrollTop = Math.max(0, top);
+          const leftScroll = this.$refs.pmZoneLeftScroll;
+          const rightScroll = this.$refs.pmZoneRightScroll;
+          if (leftScroll) leftScroll.scrollTop = mid.scrollTop;
+          if (rightScroll) rightScroll.scrollTop = mid.scrollTop;
+        } else if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
     },
     _idArticuloKey(a) {
       const n = Number(a?.id_articulo ?? a?.IDArt ?? 0);
@@ -1345,12 +1441,31 @@ function pedidoMasivoCore() {
         const existentes = new Set((this.articulos || []).map((x) => Number(x.id_articulo)));
         const nuevos = [];
         let ultimoAgregado = null;
+        let duplicados = 0;
         for (const a of items) {
           const id = Number(a.id_articulo || a.IDArt);
-          if (!id || existentes.has(id)) continue;
+          if (!id) continue;
+          if (existentes.has(id)) {
+            duplicados += 1;
+            this.irAFilaArticulo(id);
+            continue;
+          }
           nuevos.push(this._mapArticuloFila(a));
           existentes.add(id);
           ultimoAgregado = id;
+        }
+        if (duplicados && !nuevos.length) {
+          this.mostrarAviso(
+            duplicados === 1
+              ? 'Ese artículo ya está en la tabla.'
+              : `${duplicados} artículos ya estaban en la tabla.`,
+            'info',
+          );
+        } else if (duplicados) {
+          this.mostrarAviso(
+            `Se agregaron ${nuevos.length} artículo(s). ${duplicados} ya estaban en la tabla.`,
+            'info',
+          );
         }
         if (nuevos.length) {
           this.articulos = [...(this.articulos || []), ...nuevos];
@@ -1748,11 +1863,12 @@ function pedidoMasivoCore() {
     /** Baja la matriz hasta la fila-buscador (línea nueva al pie). */
     scrollBuscadorIntoView() {
       const mid = this.$refs.pmZoneMid;
+      const leftScroll = this.$refs.pmZoneLeftScroll;
+      const rightScroll = this.$refs.pmZoneRightScroll;
       if (mid) mid.scrollTop = mid.scrollHeight;
-      const left = this.$refs.pmZoneLeft;
-      const right = this.$refs.pmZoneRight;
-      if (left) left.scrollTop = mid ? mid.scrollTop : left.scrollHeight;
-      if (right) right.scrollTop = mid ? mid.scrollTop : right.scrollHeight;
+      const top = mid ? mid.scrollTop : 0;
+      if (leftScroll) leftScroll.scrollTop = top;
+      if (rightScroll) rightScroll.scrollTop = top;
     },
     focusBuscadorArt() {
       this.$nextTick(() => {
@@ -1910,16 +2026,19 @@ function pedidoMasivoCore() {
       const id = Number(a.id_articulo || a.IDArt);
       if (!id) return;
       const ya = this.articulos.some(x => Number(x.id_articulo) === id);
-      if (!ya) {
-        this.articulos.push(this._mapArticuloFila(a));
-      }
       this.qArt = '';
       this.articulosBusqueda = [];
       this.artBusquedaHecha = false;
       this._limpiarSeleccionArticulos();
       this.cerrarPanelArt();
-      if (!ya) this.marcarTotalesEstimados();
-      if (ya || !this.sucursales.length) {
+      if (ya) {
+        this.mostrarAviso('Ese artículo ya está en la tabla.', 'info');
+        this.irAFilaArticulo(id);
+        return;
+      }
+      this.articulos.push(this._mapArticuloFila(a));
+      this.marcarTotalesEstimados();
+      if (!this.sucursales.length) {
         this.focusBuscadorArt();
       } else {
         this.focusPrimeraCantidad(id);

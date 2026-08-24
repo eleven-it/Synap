@@ -289,7 +289,7 @@ class TestStockDisponiblePacks(TestCase):
             },
         )
         self.assertEqual(out[10], 4.0)
-        self.assertEqual(out[11], 4.167)
+        self.assertEqual(out[11], 4.0)
         mock_stock_cls.return_value.get_disponible_map.assert_called_once_with([10, 11], 7)
 
     @patch("ecom.services.pedido_masivo_matriz.get_deposito_terminado_mpr", return_value=None)

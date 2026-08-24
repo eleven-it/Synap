@@ -314,6 +314,70 @@
         Solo artículos Terminado con e-commerce activo · marcas de tu territorio
       </p>
 
+      {# Ubicar filas ya cargadas (client-side; distinto del buscador para agregar) #}
+      <div x-show="draftId && sucursales.length" x-cloak
+           class="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
+        <div class="relative min-w-0 flex-1 sm:max-w-lg"
+             @click.outside="panelTabla = false">
+          <label class="sr-only" for="pm-tabla-buscar">Ubicar en la tabla</label>
+          <span class="material-icons pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
+          <input type="search"
+                 id="pm-tabla-buscar"
+                 x-ref="pmTablaInput"
+                 x-model="qTabla"
+                 @input="panelTabla = true; idxTabla = 0"
+                 @focus="abrirPanelTabla()"
+                 @keydown.escape="limpiarBusquedaTabla()"
+                 @keydown.arrow-down.prevent="moverSelTabla(1)"
+                 @keydown.arrow-up.prevent="moverSelTabla(-1)"
+                 @keydown.enter.prevent="aplicarSugerenciaTablaActiva()"
+                 placeholder="Ubicar en la tabla…"
+                 autocomplete="off"
+                 role="combobox"
+                 aria-autocomplete="list"
+                 aria-controls="pm-tabla-sugerencias"
+                 :aria-expanded="panelTabla && sugerenciasTabla.length ? 'true' : 'false'"
+                 class="h-9 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/25 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"/>
+          <button type="button"
+                  x-show="qTabla.trim() !== ''"
+                  x-cloak
+                  @click="limpiarBusquedaTabla()"
+                  class="absolute right-1.5 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                  aria-label="Limpiar búsqueda en tabla">
+            <span class="material-icons text-base" aria-hidden="true">close</span>
+          </button>
+          <ul id="pm-tabla-sugerencias"
+              x-show="panelTabla && sugerenciasTabla.length"
+              x-cloak
+              role="listbox"
+              class="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800">
+            <template x-for="(item, idx) in sugerenciasTabla" :key="'tabla-' + item.id_articulo">
+              <li>
+                <button type="button"
+                        role="option"
+                        :aria-selected="idx === idxTabla ? 'true' : 'false'"
+                        @mousedown.prevent="seleccionarFilaTabla(item)"
+                        :class="idx === idxTabla ? 'bg-slate-100 text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700/60'"
+                        class="flex w-full flex-col gap-0.5 px-3 py-2 text-left">
+                  <span class="text-sm font-semibold tabular-nums" x-text="item.id_manual || ('#' + item.id_articulo)"></span>
+                  <span class="line-clamp-1 text-xs text-slate-500 dark:text-slate-400" x-text="item.nombre || item.descripcion"></span>
+                </button>
+              </li>
+            </template>
+          </ul>
+        </div>
+        <div class="flex shrink-0 flex-col items-start gap-0.5 sm:items-end sm:pt-1">
+          <p class="text-xs text-slate-500 dark:text-slate-400" x-show="qTabla.trim() !== ''" x-cloak>
+            <span x-text="contadorFilasTablaVisible()"></span>
+            <span x-text="contadorFilasTablaVisible() === 1 ? ' resultado' : ' resultados'"></span>
+          </p>
+          <p class="text-[11px] text-slate-400 dark:text-slate-500" x-show="qTabla.trim() === '' && articulos.length" x-cloak>
+            <span x-text="articulos.length"></span>
+            <span x-text="articulos.length === 1 ? ' artículo en la tabla' : ' artículos en la tabla'"></span>
+          </p>
+        </div>
+      </div>
+
       {# Desktop (lg+): shell de 3 zonas — izq. fija · sucursales scroll-x · der. fija #}
       <div class="pm-matrix-desktop hidden min-h-0 w-full min-w-0 flex-1 flex-col gap-0 lg:flex">
         {# Empty-state (sin borrador) — mismo mensaje que móvil #}
@@ -333,26 +397,31 @@
              role="region" aria-label="Matriz packs por sucursal">
           {# Zona izquierda fija: Artículo · Precio · % Desc. · STOCK DISP. #}
           <div class="pm-zone pm-zone-left" x-ref="pmZoneLeft">
-            <table class="pm-ztable pm-ztable-left">
-              <thead>
-                <tr>
-                  <th class="pm-c-art pm-zhead text-left">
-                    <div class="pm-zhead-art">
-                      <span class="pm-zhead-art-label">Artículo</span>
-                      <button type="button"
-                              @click="toggleCatalogo()"
-                              :disabled="!puedeToggleCatalogo"
-                              class="pm-chip-catalogo"
-                              :class="catalogoDesplegado ? 'pm-chip-catalogo--activo' : ''"
-                              x-text="catalogoDesplegado ? 'Ocultar todos' : 'Mostrar todos'"></button>
-                    </div>
-                  </th>
-                  <th class="pm-c-precio pm-zhead">Precio</th>
-                  <th class="pm-c-desc pm-zhead">% Desc.</th>
-                  <th class="pm-c-stock pm-zhead">STOCK</th>
-                </tr>
-              </thead>
-              <tbody>
+            <div class="pm-zone-head">
+              <table class="pm-ztable pm-ztable-left">
+                <thead>
+                  <tr>
+                    <th class="pm-c-art pm-zhead text-left">
+                      <div class="pm-zhead-art">
+                        <span class="pm-zhead-art-label">Artículo</span>
+                        <button type="button"
+                                @click="toggleCatalogo()"
+                                :disabled="!puedeToggleCatalogo"
+                                class="pm-chip-catalogo"
+                                :class="catalogoDesplegado ? 'pm-chip-catalogo--activo' : ''"
+                                x-text="catalogoDesplegado ? 'Ocultar todos' : 'Mostrar todos'"></button>
+                      </div>
+                    </th>
+                    <th class="pm-c-precio pm-zhead">Precio</th>
+                    <th class="pm-c-desc pm-zhead">% Desc.</th>
+                    <th class="pm-c-stock pm-zhead">STOCK</th>
+                  </tr>
+                </thead>
+              </table>
+            </div>
+            <div class="pm-zone-body" x-ref="pmZoneLeftScroll">
+              <table class="pm-ztable pm-ztable-left">
+                <tbody>
                 {# Fila buscador arriba: el dropdown abre hacia abajo sobre las líneas #}
                 <tr class="pm-zrow pm-zrow-buscador">
                   <td class="pm-c-art" colspan="4">
@@ -403,6 +472,10 @@
                                 <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
                                 <span class="text-slate-500"> — </span>
                                 <span x-text="a.nombre"></span>
+                                <span x-show="estaEnTabla(a)" x-cloak
+                                      class="ml-1.5 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                  En tabla
+                                </span>
                               </span>
                             </li>
                           </template>
@@ -428,7 +501,10 @@
                   </td>
                 </tr>
                 <template x-for="art in articulos" :key="'l-' + art.id_articulo">
-                  <tr class="pm-zrow">
+                  <tr class="pm-zrow"
+                      x-show="coincideBusquedaTabla(art)"
+                      :class="filaResaltadaId === art.id_articulo ? 'pm-fila-resaltada' : ''"
+                      :data-pm-fila="art.id_articulo">
                     <td class="pm-c-art">
                       <div class="pm-cell-art">
                         <p class="pm-art-nombre text-xs font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
@@ -456,30 +532,36 @@
                     </td>
                   </tr>
                 </template>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {# Zona media: solo sucursales (scroll-x + scroll-y maestro) #}
-          <div class="pm-zone pm-zone-mid" x-ref="pmZoneMid">
-            <table class="pm-ztable pm-ztable-mid">
-              <thead>
-                <tr>
-                  <template x-for="(s, si) in sucursales" :key="s.id_cliente_domicilio">
-                    <th class="pm-c-suc pm-zhead pm-zhead-suc cursor-pointer select-none"
-                        role="button"
-                        tabindex="0"
-                        :title="etiquetaSucursalCompleta(s)"
-                        :aria-label="'Ver datos de sucursal ' + nroSucursal(s)"
-                        @click="abrirDetalleSucursal(s)"
-                        @keydown.enter.prevent="abrirDetalleSucursal(s)"
-                        @keydown.space.prevent="abrirDetalleSucursal(s)">
-                      <span class="line-clamp-2 font-bold tabular-nums" x-text="'Suc ' + nroSucursal(s)"></span>
-                    </th>
-                  </template>
-                </tr>
-              </thead>
-              <tbody>
+          <div class="pm-zone pm-zone-mid" x-ref="pmZoneMidWrap">
+            <div class="pm-zone-head pm-zone-mid-head" x-ref="pmZoneMidHead">
+              <table class="pm-ztable pm-ztable-mid">
+                <thead>
+                  <tr>
+                    <template x-for="(s, si) in sucursales" :key="s.id_cliente_domicilio">
+                      <th class="pm-c-suc pm-zhead pm-zhead-suc cursor-pointer select-none"
+                          role="button"
+                          tabindex="0"
+                          :title="etiquetaSucursalCompleta(s)"
+                          :aria-label="'Ver datos de sucursal ' + nroSucursal(s)"
+                          @click="abrirDetalleSucursal(s)"
+                          @keydown.enter.prevent="abrirDetalleSucursal(s)"
+                          @keydown.space.prevent="abrirDetalleSucursal(s)">
+                        <span class="line-clamp-2 font-bold tabular-nums" x-text="'Suc ' + nroSucursal(s)"></span>
+                      </th>
+                    </template>
+                  </tr>
+                </thead>
+              </table>
+            </div>
+            <div class="pm-zone-body pm-zone-mid-body" x-ref="pmZoneMid">
+              <table class="pm-ztable pm-ztable-mid">
+                <tbody>
                 <tr class="pm-zrow pm-zrow-buscador" aria-hidden="true">
                   <template x-for="s in sucursales" :key="'nb-' + s.id_cliente_domicilio">
                     <td class="pm-c-suc">
@@ -488,7 +570,10 @@
                   </template>
                 </tr>
                 <template x-for="art in articulos" :key="'m-' + art.id_articulo">
-                  <tr class="pm-zrow">
+                  <tr class="pm-zrow"
+                      x-show="coincideBusquedaTabla(art)"
+                      :class="filaResaltadaId === art.id_articulo ? 'pm-fila-resaltada' : ''"
+                      :data-pm-fila="art.id_articulo">
                     <template x-for="(s, si) in sucursales" :key="art.id_articulo + '-' + s.id_cliente_domicilio">
                       <td class="pm-c-suc">
                         <input type="number" min="0" step="0.001" inputmode="decimal"
@@ -505,22 +590,28 @@
                     </template>
                   </tr>
                 </template>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {# Zona derecha fija: Total · Eliminar #}
           <div class="pm-zone pm-zone-right" x-ref="pmZoneRight">
-            <table class="pm-ztable pm-ztable-right">
-              <thead>
-                <tr>
-                  <th class="pm-c-total pm-zhead">Total</th>
-                  <th class="pm-c-delete pm-zhead" aria-label="Quitar">
-                    <span class="material-icons text-sm leading-none" aria-hidden="true">delete_outline</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <div class="pm-zone-head">
+              <table class="pm-ztable pm-ztable-right">
+                <thead>
+                  <tr>
+                    <th class="pm-c-total pm-zhead">Total</th>
+                    <th class="pm-c-delete pm-zhead" aria-label="Quitar">
+                      <span class="material-icons text-sm leading-none" aria-hidden="true">delete_outline</span>
+                    </th>
+                  </tr>
+                </thead>
+              </table>
+            </div>
+            <div class="pm-zone-body" x-ref="pmZoneRightScroll">
+              <table class="pm-ztable pm-ztable-right">
+                <tbody>
                 <tr class="pm-zrow pm-zrow-buscador">
                   <td class="pm-c-total text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                     Agregar
@@ -528,7 +619,10 @@
                   <td class="pm-c-delete" aria-hidden="true"></td>
                 </tr>
                 <template x-for="art in articulos" :key="'r-' + art.id_articulo">
-                  <tr class="pm-zrow">
+                  <tr class="pm-zrow"
+                      x-show="coincideBusquedaTabla(art)"
+                      :class="filaResaltadaId === art.id_articulo ? 'pm-fila-resaltada' : ''"
+                      :data-pm-fila="art.id_articulo">
                     <td class="pm-c-total text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200" x-text="sumaFila(art.id_articulo)"></td>
                     <td class="pm-c-delete">
                       <button type="button"
@@ -542,8 +636,9 @@
                     </td>
                   </tr>
                 </template>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -632,6 +727,10 @@
                       <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
                       <span class="text-slate-500"> — </span>
                       <span x-text="a.nombre"></span>
+                      <span x-show="estaEnTabla(a)" x-cloak
+                            class="ml-1.5 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        En tabla
+                      </span>
                     </span>
                   </li>
                 </template>
@@ -673,7 +772,10 @@
           <template x-if="modoSimple && sucursales.length">
             <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <template x-for="art in articulos" :key="'simple-' + art.id_articulo">
-                <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700">
+                <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700"
+                     x-show="coincideBusquedaTabla(art)"
+                     :class="filaResaltadaId === art.id_articulo ? 'pm-fila-resaltada' : ''"
+                     :data-pm-fila="art.id_articulo">
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0 flex-1">
                       <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
@@ -761,7 +863,10 @@
               </summary>
               <div class="border-t border-slate-100 px-3 py-2 dark:border-slate-700">
                 <template x-for="art in articulos" :key="s.id_cliente_domicilio + '-' + art.id_articulo">
-                  <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700">
+                  <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700"
+                       x-show="coincideBusquedaTabla(art)"
+                       :class="filaResaltadaId === art.id_articulo ? 'pm-fila-resaltada' : ''"
+                       :data-pm-fila="art.id_articulo">
                     <div class="flex items-start justify-between gap-2">
                       <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>

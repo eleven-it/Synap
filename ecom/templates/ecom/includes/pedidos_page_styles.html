@@ -1275,14 +1275,56 @@
     position: relative;
   }
   .pm-zone-left,
+  .pm-zone-right,
+  .pm-zone-mid {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .pm-zone-left,
   .pm-zone-right {
     flex: 0 0 auto;
-    overflow: hidden;
+    overflow: visible;
   }
   .pm-zone-left { box-shadow: 4px 0 8px -4px rgba(15, 23, 42, 0.18); z-index: 1; }
   .pm-zone-right { box-shadow: -4px 0 8px -4px rgba(15, 23, 42, 0.18); z-index: 1; }
-  /* Con el buscador abierto, la zona izq. deja ver el dropdown hacia abajo. */
-  .pm-matrix-shell--buscador-abierto .pm-zone-left {
+  .pm-zone-head {
+    flex: 0 0 auto;
+    z-index: 4;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgb(226 232 240);
+  }
+  .dark .pm-zone-head {
+    box-shadow: 0 1px 0 rgb(51 65 85);
+  }
+  .pm-zone-mid-head {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .pm-zone-mid-head::-webkit-scrollbar {
+    display: none;
+  }
+  .pm-zone-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .pm-zone-mid {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .pm-zone-mid-body {
+    overflow-x: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .pm-zone-head .pm-zhead {
+    position: static;
+    top: auto;
+  }
+  /* Con el buscador abierto, el cuerpo izq. deja ver el dropdown hacia abajo. */
+  .pm-matrix-shell--buscador-abierto .pm-zone-left .pm-zone-body {
     overflow: visible;
     z-index: 5;
   }
@@ -1294,6 +1336,22 @@
   }
   .pm-zrow-buscador .pm-c-art {
     overflow: visible;
+  }
+  .pm-fila-resaltada td,
+  .pm-fila-resaltada.pm-accordion-row {
+    animation: pm-fila-flash 2.5s ease-out;
+  }
+  @keyframes pm-fila-flash {
+    0%, 15% { background-color: rgb(254 249 195); }
+    100% { background-color: transparent; }
+  }
+  .dark .pm-fila-resaltada td,
+  .dark .pm-fila-resaltada.pm-accordion-row {
+    animation: pm-fila-flash-dark 2.5s ease-out;
+  }
+  @keyframes pm-fila-flash-dark {
+    0%, 15% { background-color: rgb(113 63 18 / 0.35); }
+    100% { background-color: transparent; }
   }
   /* Barra de totales debajo del shell (no va dentro de las 3 tablas) */
   .pm-matrix-totales-bar {
@@ -1395,9 +1453,6 @@
   .pm-zone-mid {
     flex: 1 1 0;
     min-width: 0;
-    overflow-x: auto;
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
   .pm-ztable {
     border-collapse: separate;
@@ -1456,6 +1511,9 @@
   .pm-c-art.pm-zhead {
     position: relative;
     overflow: visible;
+  }
+  .pm-zone-head .pm-c-art.pm-zhead {
+    position: relative;
   }
   .pm-zhead-art {
     display: flex;
@@ -1616,6 +1674,8 @@
   }
   .pm-matrix-shell--simple .pm-zone-mid {
     flex: 0 0 auto; /* deja de crecer: solo el ancho de la columna cantidad */
+  }
+  .pm-matrix-shell--simple .pm-zone-mid-body {
     overflow-x: visible;
   }
   .pm-matrix-shell--simple .pm-ztable-mid {

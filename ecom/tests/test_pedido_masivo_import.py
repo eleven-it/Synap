@@ -350,6 +350,35 @@ class TestImportarMatrizExcel(TestCase):
         self.assertTrue(res["ok"], res)
         self.assertEqual(d.celdas.get().id_articulo, 203)
 
+    def test_superart_desambigua_talle_por_tokens_nombre(self):
+        d = _draft()
+        art_t4 = dict(
+            ART_OK,
+            id_articulo=301,
+            id_manual="906807-03",
+            cod_art_prov="906807-03",
+            nombre="906807-03 T4 Puma Invisible Sneaker Blanco 3P",
+        )
+        art_t5 = dict(
+            ART_OK,
+            id_articulo=302,
+            id_manual="906807-03",
+            cod_art_prov="906807-03",
+            nombre="906807-03 T5 Puma Invisible Sneaker Blanco 3P",
+        )
+
+        def lookup(_b, codigos):
+            return {c: [art_t4, art_t5] for c in codigos}
+
+        raw = _xlsx_plantilla(
+            [14],
+            {"906807": [36]},
+            nombres={"906807": art_t4["nombre"]},
+        )
+        res = importar_matriz_excel(d, raw, consultar_arts=lookup)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(d.celdas.get().id_articulo, 301)
+
     def test_codigo_numerico_prioriza_id_manual_sobre_idart(self):
         d = _draft()
         por_manual = dict(
