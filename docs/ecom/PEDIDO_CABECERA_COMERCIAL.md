@@ -17,6 +17,7 @@ Cabecera comercial unificada para checkout mayorista y pedido masivo: fechas edi
 | Lista (`lista_id`) | `cliente.ListaPrecio` (1–5) | Supervisor **o** `permisos_sistema.mod_lista_de_precio` |
 | Descuento pie | Default del cliente | Supervisor **o** `mod_descuento_pie` |
 | Descuento renglón | Default del cliente | Supervisor **o** `mod_descuento_renglon` |
+| Precio de línea (masivo/simple) | Precio de la lista | Supervisor **o** `mod_precio_pedido` |
 
 - El vencimiento **no** usa offset fijo +30 días.
 - Overrides de lista/condición/vencimiento enviados por vendedor se **ignoran** en servidor.
@@ -28,7 +29,7 @@ Cabecera comercial unificada para checkout mayorista y pedido masivo: fechas edi
 
 - `resolver_cabecera_comercial()` — resolver único simple + masivo
 - `puede_editar_cabecera_comercial()` — supervisor (`supervisor_venta` / `permiso_supervisor_venta_web`)
-- `flags_edicion_comercial()` — lista/condición/descuentos: supervisor **o** flags de `permisos_sistema` del puesto (Archivo → Permiso en sistema)
+- `flags_edicion_comercial()` — lista/condición/descuentos/precio de línea: supervisor **o** flags de `permisos_sistema` del puesto (Archivo → Permiso en sistema)
 - `calcular_fecha_entrega_desde_vencimiento()` — vencimiento + 10, lunes si fin de semana
 - `condiciones_venta_relay_json()` en `precio_relays.py` — catálogo `cond_venta` (`Codigo`, `Descripcion`, `Dias`)
 

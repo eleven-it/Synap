@@ -175,6 +175,163 @@ def guardar_descuento_pie(
     return True, "Descuento pie guardado."
 
 
+def _lista_id_efectiva(
+    draft: EcomPedidoMasivoDraft,
+    base_empresa: str,
+    lista_id: Optional[int] = None,
+) -> int:
+    lid = to_int_or_none(lista_id)
+    if lid is not None and 1 <= lid <= 5:
+        return int(lid)
+    ctx = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
+    return int(ctx.get("lista_id") or 1)
+
+
+def precios_fila_efectivos(
+    draft: EcomPedidoMasivoDraft,
+    base_empresa: str,
+    *,
+    lista_id: Optional[int] = None,
+) -> Dict[int, Decimal]:
+    """Mapa id_articulo → precio unitario neto (override de fila o lista)."""
+    ctx = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
+    lista_ef = _lista_id_efectiva(draft, base_empresa, lista_id)
+    desc_cli = _clamp_pct(ctx.get("descRenglon"))
+    stored = draft.precios_fila if isinstance(draft.precios_fila, dict) else {}
+    art_ids = {c.id_articulo for c in draft.celdas.all()}
+    out: Dict[int, Decimal] = {}
+    for aid in art_ids:
+        raw = stored.get(str(aid))
+        if raw is not None:
+            p = to_decimal_or_none(raw)
+            if p is not None:
+                out[int(aid)] = p
+                continue
+        lista = _precio_real_articulo(
+            base_empresa,
+            int(aid),
+            lista_id=lista_ef,
+            id_cliente=draft.id_cliente,
+            descuento_cliente=desc_cli,
+        )
+        out[int(aid)] = lista if lista is not None else Decimal("0")
+    return out
+
+
+def asegurar_precio_fila_articulo(
+    draft: EcomPedidoMasivoDraft,
+    id_articulo: int,
+    base_empresa: str,
+    *,
+    lista_id: Optional[int] = None,
+) -> None:
+    """Precarga el precio de lista al registrar un artículo, si aún no hay override."""
+    aid = to_int_or_none(id_articulo)
+    if aid is None:
+        return
+    stored = dict(draft.precios_fila or {})
+    if str(aid) in stored:
+        return
+    ctx = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
+    lista_ef = _lista_id_efectiva(draft, base_empresa, lista_id)
+    precio = _precio_real_articulo(
+        base_empresa,
+        int(aid),
+        lista_id=lista_ef,
+        id_cliente=draft.id_cliente,
+        descuento_cliente=_clamp_pct(ctx.get("descRenglon")),
+    )
+    stored[str(aid)] = float(precio if precio is not None else Decimal("0"))
+    draft.precios_fila = stored
+    draft.save(update_fields=["precios_fila", "updated_at"])
+
+
+def guardar_precio_fila(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    id_articulo: int,
+    precio_unitario_neto: Any,
+) -> Tuple[bool, str]:
+    if draft.estado not in (
+        EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+    ):
+        return False, "El borrador no es editable."
+    aid = to_int_or_none(id_articulo)
+    if aid is None:
+        return False, "Artículo inválido."
+    precio = to_decimal_or_none(precio_unitario_neto)
+    if precio is None:
+        return False, "El precio no es válido."
+    if precio < 0:
+        return False, "El precio no puede ser negativo."
+    stored = dict(draft.precios_fila or {})
+    stored[str(aid)] = float(precio)
+    draft.precios_fila = stored
+    draft.save(update_fields=["precios_fila", "updated_at"])
+    return True, "Precio de fila guardado."
+
+
+def recalcular_precios_fila_desde_lista(
+    draft: EcomPedidoMasivoDraft,
+    base_empresa: str,
+    *,
+    lista_id: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """Reemplaza los precios de línea con los de la lista indicada."""
+    if draft.estado not in (
+        EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+    ):
+        return False, "El borrador no es editable."
+    ctx = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
+    lista_ef = _lista_id_efectiva(draft, base_empresa, lista_id)
+    desc_cli = _clamp_pct(ctx.get("descRenglon"))
+    stored: Dict[str, float] = {}
+    for aid in {c.id_articulo for c in draft.celdas.all()}:
+        precio = _precio_real_articulo(
+            base_empresa,
+            int(aid),
+            lista_id=lista_ef,
+            id_cliente=draft.id_cliente,
+            descuento_cliente=desc_cli,
+        )
+        stored[str(int(aid))] = float(precio if precio is not None else Decimal("0"))
+    draft.precios_fila = stored
+    draft.save(update_fields=["precios_fila", "updated_at"])
+    return True, "Precios recalculados con la lista seleccionada."
+
+
+def lineas_con_precio_cero(
+    draft: EcomPedidoMasivoDraft,
+    base_empresa: str,
+    *,
+    lista_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Artículos con cantidad > 0 y precio efectivo ≤ 0."""
+    precios = precios_fila_efectivos(draft, base_empresa, lista_id=lista_id)
+    qty_por_art: Dict[int, Decimal] = {}
+    for c in draft.celdas.all():
+        aid = to_int_or_none(c.id_articulo)
+        if aid is None:
+            continue
+        qty_por_art[aid] = qty_por_art.get(aid, Decimal("0")) + _dec(c.cantidad_packs)
+    out: List[Dict[str, Any]] = []
+    for aid, qty in qty_por_art.items():
+        if qty <= 0:
+            continue
+        precio = precios.get(aid, Decimal("0"))
+        if precio <= 0:
+            out.append(
+                {
+                    "id_articulo": aid,
+                    "cantidad_packs": float(qty),
+                    "precio_unitario_neto": float(precio),
+                }
+            )
+    return out
+
+
 def marcas_asignadas_viajante_cliente(
     base_empresa: str,
     cod_viajante: int,
@@ -1050,6 +1207,7 @@ def serializar_matriz(
     lista_id = int(ctx_cli.get("lista_id") or 1)
     desc_cli = _clamp_pct(ctx_cli.get("descRenglon"))
     desc_map = descuentos_fila_efectivos(draft, base_empresa)
+    precio_map = precios_fila_efectivos(draft, base_empresa, lista_id=lista_id)
     nombres = _nombres_articulos(
         base_empresa,
         sorted(art_ids_set),
@@ -1081,8 +1239,9 @@ def serializar_matriz(
             "nombre": nombres.get(aid, {}).get("descripcion", f"Art. {aid}"),
             "descripcion": nombres.get(aid, {}).get("descripcion", f"Art. {aid}"),
             "precio_unitario_neto": float(
-                nombres.get(aid, {}).get("precio_unitario_neto") or 0
+                precio_map.get(aid, nombres.get(aid, {}).get("precio_unitario_neto") or 0)
             ),
+            "precio_lista": float(nombres.get(aid, {}).get("precio_unitario_neto") or 0),
             "precio_lista1": float(nombres.get(aid, {}).get("precio_lista1") or 0),
             "alicuota_iva": float(nombres.get(aid, {}).get("alicuota_iva") or 21),
             "porcentaje_descuento": float(desc_map.get(aid, desc_cli)),
@@ -1115,6 +1274,7 @@ def serializar_matriz(
         "codigos_movimiento": draft.codigos_movimiento or [],
         "desc_pie_pct": float(draft.descuento_pie_pct or 0),
         "descuentos_fila": descuentos_fila_out,
+        "precios_fila": {str(k): float(v) for k, v in precio_map.items()},
         "lista_id": lista_id,
         "sucursales": sucursales,
         "articulos": articulos,
@@ -1149,7 +1309,10 @@ def eliminar_fila_articulo(
         stored = dict(draft.descuentos_fila or {})
         stored.pop(str(aid), None)
         draft.descuentos_fila = stored
-        draft.save(update_fields=["descuentos_fila", "updated_at"])
+        precios = dict(draft.precios_fila or {})
+        precios.pop(str(aid), None)
+        draft.precios_fila = precios
+        draft.save(update_fields=["descuentos_fila", "precios_fila", "updated_at"])
     return True, "Artículo quitado de la matriz."
 
 
@@ -1209,6 +1372,7 @@ def guardar_celda(
             defaults={"cantidad_packs": qty},
         )
         asegurar_descuento_fila_articulo(draft, aid, draft.base_empresa)
+        asegurar_precio_fila_articulo(draft, aid, draft.base_empresa)
         draft.save(update_fields=["updated_at"])
         if qty == qty.to_integral_value():
             qty_s = str(int(qty))

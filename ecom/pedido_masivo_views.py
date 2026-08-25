@@ -31,6 +31,8 @@ from ecom.services.pedido_masivo_matriz import (
     guardar_celda,
     guardar_descuento_fila,
     guardar_descuento_pie,
+    guardar_precio_fila,
+    recalcular_precios_fila_desde_lista,
     listar_clientes_con_ternas,
     listar_sucursales_cliente,
     obtener_o_crear_draft,
@@ -283,6 +285,10 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
                         "preview": reverse("ecom:api_pedido_masivo_preview"),
                         "descuento_fila": reverse("ecom:api_pedido_masivo_descuento_fila"),
                         "descuento_pie": reverse("ecom:api_pedido_masivo_descuento_pie"),
+                        "precio_fila": reverse("ecom:api_pedido_masivo_precio_fila"),
+                        "recalcular_precios": reverse(
+                            "ecom:api_pedido_masivo_recalcular_precios"
+                        ),
                         "confirmar": reverse("ecom:api_pedido_masivo_confirmar"),
                         "anular": reverse("ecom:api_pedido_masivo_anular"),
                         "importar": reverse("ecom:api_pedido_masivo_importar"),
@@ -830,12 +836,14 @@ class PedidoMasivoPreviewAPIView(APIView):
             cabecera=cabecera,
         )
         body = {
-            "ok": True,
+            "ok": bool(preview.get("ok", True)),
             "matriz": _serializar_matriz_ui(draft, base),
             **preview,
         }
         if preview.get("warning"):
             body["warning"] = preview["warning"]
+        if not body["ok"]:
+            return Response(body, status=409)
         return Response(body)
 
 
@@ -870,6 +878,91 @@ class PedidoMasivoDescuentoFilaAPIView(APIView):
             draft,
             id_articulo=to_int_or_none(data.get("id_articulo")),
             porcentaje_descuento=data.get("porcentaje_descuento"),
+        )
+        if not ok:
+            return _err(msg)
+        return Response(
+            {
+                "ok": True,
+                "message": msg,
+                "matriz": _serializar_matriz_ui(draft, base),
+            }
+        )
+
+
+class PedidoMasivoPrecioFilaAPIView(APIView):
+    """POST persiste precio unitario neto por artículo en el borrador."""
+
+    permission_classes = [EcomPedidoCapturaPermission]
+
+    def post(self, request: Request) -> Response:
+        base = _session_base_empresa(request)
+        sess = _sess_user(request)
+        if not base:
+            return _err("Sin base_empresa.", "sin_base_empresa")
+        data = request.data if isinstance(request.data, dict) else {}
+        draft_id = to_int_or_none(data.get("draft_id"))
+        id_u = to_int_or_none(sess.get("id_usuario"))
+        if draft_id is None or id_u is None:
+            return _err("Falta draft_id.")
+        draft = EcomPedidoMasivoDraft.objects.filter(
+            pk=draft_id, base_empresa=base, id_usuario=id_u
+        ).first()
+        if not draft:
+            return _err("Borrador no encontrado.", "no_encontrado", 404)
+        flags = _flags_cabecera_masivo(request)
+        if not flags["puede_editar_precio_linea"]:
+            return _err(
+                "No tiene permiso para modificar el precio de la línea.",
+                "sin_permiso",
+                403,
+            )
+        ok, msg = guardar_precio_fila(
+            draft,
+            id_articulo=to_int_or_none(data.get("id_articulo")),
+            precio_unitario_neto=data.get("precio_unitario_neto"),
+        )
+        if not ok:
+            return _err(msg)
+        return Response(
+            {
+                "ok": True,
+                "message": msg,
+                "matriz": _serializar_matriz_ui(draft, base),
+            }
+        )
+
+
+class PedidoMasivoRecalcularPreciosAPIView(APIView):
+    """POST reemplaza precios de línea con la lista de cabecera."""
+
+    permission_classes = [EcomPedidoCapturaPermission]
+
+    def post(self, request: Request) -> Response:
+        base = _session_base_empresa(request)
+        sess = _sess_user(request)
+        if not base:
+            return _err("Sin base_empresa.", "sin_base_empresa")
+        data = request.data if isinstance(request.data, dict) else {}
+        draft_id = to_int_or_none(data.get("draft_id"))
+        id_u = to_int_or_none(sess.get("id_usuario"))
+        if draft_id is None or id_u is None:
+            return _err("Falta draft_id.")
+        draft = EcomPedidoMasivoDraft.objects.filter(
+            pk=draft_id, base_empresa=base, id_usuario=id_u
+        ).first()
+        if not draft:
+            return _err("Borrador no encontrado.", "no_encontrado", 404)
+        flags = _flags_cabecera_masivo(request)
+        if not flags["puede_editar_lista"]:
+            return _err(
+                "No tiene permiso para cambiar la lista de precio.",
+                "sin_permiso",
+                403,
+            )
+        lista_id = to_int_or_none(data.get("lista_id"))
+        ok, msg = recalcular_precios_fila_desde_lista(
+            draft, base, lista_id=lista_id
         )
         if not ok:
             return _err(msg)
@@ -979,7 +1072,12 @@ class PedidoMasivoImportarAPIView(APIView):
         if not nombre.endswith((".xlsx", ".xlsm")):
             return _err("El archivo debe ser .xlsx.", "archivo_invalido")
         raw = upload.read()
-        result = importar_matriz_excel(draft, raw)
+        flags = _flags_cabecera_masivo(request)
+        result = importar_matriz_excel(
+            draft,
+            raw,
+            aplicar_precios=bool(flags.get("puede_editar_precio_linea")),
+        )
         if not result.get("ok"):
             status = 409 if result.get("code") == "validacion" else 400
             return Response(
