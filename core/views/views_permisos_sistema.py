@@ -258,7 +258,7 @@ def editar_permisos_puesto_view(request, id_puesto):
             'fiscal_codigo_linea_comp', 'abmcli_mod_desc', 'abmcli_mod_vendedor',
             'bloquea_oc', 'oe_deposito_origenxarticulo', 'ajuste_cta_cte',
             'informes_vendedor', 'nc_ruta_cerrada', 'mod_fecha_venta',
-            'mod_item_pre_ped'
+            'mod_item_pre_ped', 'mod_precio_pedido'
         ]
         
         for campo in campos_booleanos:
@@ -304,6 +304,7 @@ def editar_permisos_puesto_view(request, id_puesto):
             'mod_lista_de_precio': 'Cambiar lista de precio',
             'mod_descuento_pie': 'Modificar descuento pie',
             'mod_descuento_renglon': 'Modificar descuento renglón',
+            'mod_precio_pedido': 'Modificar precio de línea en pedido',
             'acceso_pv': 'Acceso a puntos de venta',
             'acceso_comp_ventas_talonario': 'Acceso comprobantes por talonario',
             'carga_comp_venta': 'Cargar comprobantes de venta',

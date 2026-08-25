@@ -59,6 +59,8 @@ from ecom.pedido_masivo_views import (
     PedidoMasivoAnularAPIView,
     PedidoMasivoDescuentoFilaAPIView,
     PedidoMasivoDescuentoPieAPIView,
+    PedidoMasivoPrecioFilaAPIView,
+    PedidoMasivoRecalcularPreciosAPIView,
     PedidoMasivoEliminarFilaAPIView,
     PedidoMasivoImportarAPIView,
     PedidoMasivoMatrizAPIView,
@@ -296,6 +298,16 @@ urlpatterns = [
         "api/mayoristapp/pedido-masivo/descuento-pie/",
         PedidoMasivoDescuentoPieAPIView.as_view(),
         name="api_pedido_masivo_descuento_pie",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/precio-fila/",
+        PedidoMasivoPrecioFilaAPIView.as_view(),
+        name="api_pedido_masivo_precio_fila",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/recalcular-precios/",
+        PedidoMasivoRecalcularPreciosAPIView.as_view(),
+        name="api_pedido_masivo_recalcular_precios",
     ),
     path(
         "api/mayoristapp/pedido-masivo/confirmar/",

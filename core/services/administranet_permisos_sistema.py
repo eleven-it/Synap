@@ -149,6 +149,7 @@ class AdministraNETPermisosSistemaService:
             'cambia_talonario': 'Si',
             'mod_descuento_pie': 'Si',
             'mod_descuento_renglon': 'Si',
+            'mod_precio_pedido': 'No',
             'visualizar_comprobantes': 'Si',
             'anular_comprobantes': 'Si',
             'reimprimir_comprobantes': 'Si',

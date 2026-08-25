@@ -10,6 +10,7 @@ from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
 from ecom.pedido_masivo_views import (
     PedidoMasivoCeldaAPIView,
     PedidoMasivoDescuentoFilaAPIView,
+    PedidoMasivoPrecioFilaAPIView,
     PedidoMasivoPreviewAPIView,
 )
 from ecom.services.pedido_masivo_matriz import (
@@ -20,6 +21,8 @@ from ecom.services.pedido_masivo_matriz import (
     guardar_celda,
     guardar_descuento_fila,
     guardar_descuento_pie,
+    guardar_precio_fila,
+    lineas_con_precio_cero,
     marcas_asignadas_viajante_cliente,
     obtener_o_crear_draft,
     serializar_matriz,
@@ -36,6 +39,18 @@ class _User:
 
 
 class TestGuardarCelda(TestCase):
+    def setUp(self):
+        self._p_desc = patch(
+            "ecom.services.pedido_masivo_matriz.asegurar_descuento_fila_articulo"
+        )
+        self._p_precio = patch(
+            "ecom.services.pedido_masivo_matriz.asegurar_precio_fila_articulo"
+        )
+        self._p_desc.start()
+        self._p_precio.start()
+        self.addCleanup(self._p_desc.stop)
+        self.addCleanup(self._p_precio.stop)
+
     @patch(
         "ecom.services.pedido_masivo_matriz._multiplos_articulos",
         return_value={5: {"multiplo_empaque": 6, "multiplo_cantidad_vta": 6}},
@@ -426,6 +441,7 @@ class TestSerializarMatriz(TestCase):
             id_usuario=1,
             id_cliente=10,
             descuentos_fila={"4": 10.0},
+            precios_fila={"4": 85.0},
             descuento_pie_pct=Decimal("5"),
         )
         EcomPedidoMasivoDraftCelda.objects.create(
@@ -471,6 +487,7 @@ class TestSerializarMatriz(TestCase):
             id_cliente=10,
             estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
             cod_viajante=26,
+            precios_fila={"4": 10.0},
         )
         EcomPedidoMasivoDraftCelda.objects.create(
             draft=d,
@@ -519,6 +536,7 @@ class TestSerializarMatriz(TestCase):
             modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
             id_domicilio_fijo=9,
             cod_mov_origen=7001,
+            precios_fila={"4": 10.0},
         )
         EcomPedidoMasivoDraftCelda.objects.create(
             draft=d,
@@ -581,8 +599,10 @@ class TestSerializarMatriz(TestCase):
 
 
 class TestApiCelda(TestCase):
+    @patch("ecom.services.pedido_masivo_matriz.asegurar_precio_fila_articulo")
+    @patch("ecom.services.pedido_masivo_matriz.asegurar_descuento_fila_articulo")
     @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
-    def test_post_guarda(self, _b):
+    def test_post_guarda(self, _b, _d, _p):
         d = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_m",
             id_usuario=55,
@@ -608,6 +628,7 @@ class TestApiCelda(TestCase):
 
 
 class TestDescuentosMasivo(TestCase):
+    @patch("ecom.services.pedido_masivo_matriz.asegurar_precio_fila_articulo")
     @patch(
         "ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo",
         return_value={
@@ -616,7 +637,7 @@ class TestDescuentosMasivo(TestCase):
             "lista_id": 1,
         },
     )
-    def test_precarga_desc_renglon_al_celda(self, _ctx):
+    def test_precarga_desc_renglon_al_celda(self, _ctx, _p):
         d = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_m",
             id_usuario=1,
@@ -723,6 +744,107 @@ class TestApiDescuentoFila(TestCase):
         self.assertEqual(resp.status_code, 200)
         d.refresh_from_db()
         self.assertEqual(d.descuentos_fila.get("3"), 15.0)
+
+
+class TestApiPrecioFila(TestCase):
+    def test_guardar_precio_fila(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=55,
+            id_cliente=1,
+        )
+        ok, _ = guardar_precio_fila(
+            d, id_articulo=7, precio_unitario_neto="99.5"
+        )
+        self.assertTrue(ok)
+        d.refresh_from_db()
+        self.assertEqual(d.precios_fila.get("7"), 99.5)
+
+    def test_lineas_con_precio_cero(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=55,
+            id_cliente=1,
+            precios_fila={"7": 0, "8": 12},
+        )
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=7, id_cliente_domicilio=1, cantidad_packs=Decimal("6")
+        )
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d, id_articulo=8, id_cliente_domicilio=1, cantidad_packs=Decimal("6")
+        )
+        with patch(
+            "ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo",
+            return_value={"descRenglon": Decimal("0"), "descPie": Decimal("0"), "lista_id": 1},
+        ):
+            ceros = lineas_con_precio_cero(d, "emp_m", lista_id=1)
+        ids = {c["id_articulo"] for c in ceros}
+        self.assertEqual(ids, {7})
+
+    @patch(
+        "ecom.pedido_masivo_views._flags_cabecera_masivo",
+        return_value={
+            "es_supervisor": False,
+            "puede_editar": False,
+            "puede_editar_lista": False,
+            "puede_editar_condicion": False,
+            "puede_editar_vencimiento": False,
+            "puede_editar_descuento_pie": False,
+            "puede_editar_descuento_renglon": False,
+            "puede_editar_precio_linea": True,
+        },
+    )
+    @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
+    @patch("ecom.pedido_masivo_views.serializar_matriz", return_value={"draft_id": 1})
+    def test_post_precio_fila(self, _m, _b, _f):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=55,
+            id_cliente=1,
+        )
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/pedido-masivo/precio-fila/",
+            {"draft_id": d.pk, "id_articulo": 3, "precio_unitario_neto": 80},
+            format="json",
+        )
+        req.session = {"user": {"base_empresa": "emp_m", "id_usuario": 55}}
+        force_authenticate(req, user=_User())
+        resp = PedidoMasivoPrecioFilaAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        d.refresh_from_db()
+        self.assertEqual(d.precios_fila.get("3"), 80.0)
+
+    @patch(
+        "ecom.pedido_masivo_views._flags_cabecera_masivo",
+        return_value={
+            "es_supervisor": False,
+            "puede_editar": False,
+            "puede_editar_lista": False,
+            "puede_editar_condicion": False,
+            "puede_editar_vencimiento": False,
+            "puede_editar_descuento_pie": False,
+            "puede_editar_descuento_renglon": False,
+            "puede_editar_precio_linea": False,
+        },
+    )
+    @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
+    def test_post_precio_fila_sin_permiso(self, _b, _f):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=55,
+            id_cliente=1,
+        )
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/pedido-masivo/precio-fila/",
+            {"draft_id": d.pk, "id_articulo": 3, "precio_unitario_neto": 80},
+            format="json",
+        )
+        req.session = {"user": {"base_empresa": "emp_m", "id_usuario": 55}}
+        force_authenticate(req, user=_User())
+        resp = PedidoMasivoPrecioFilaAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 403)
 
 
 class TestOrdenSucursalesNroCalle(TestCase):

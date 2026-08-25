@@ -1,7 +1,8 @@
 """Importación Excel de pedido masivo (matriz artículo × sucursal).
 
-Formato plantilla v4: hoja ``Pedido`` con A=SuperArt, B=nombre, C oculta=IDArt,
-D+=packs. Una fila por SKU (el SuperArt/`id_manual` no es único).
+Formato plantilla v5: hoja ``Pedido`` con A=SuperArt, B=nombre, C oculta=IDArt,
+D=precio unitario neto, E+=packs. Una fila por SKU.
+v4 (sin precio): se importan solo cantidades y el precio sale de la lista.
 v3 (sin columna IDArt): se desambigua por nombre / CodArtProv y se prioriza
 ``id_manual`` frente a colisión con ``IDArt``.
 Hoja oculta ``_Synap`` identifica cliente y vendedor.
@@ -36,7 +37,10 @@ from ecom.services.pedido_masivo_matriz import (
     _clamp_pct,
     _clave_orden_nro_sucursal,
     _nombre_cliente,
+    _lista_id_efectiva,
+    _precio_real_articulo,
     asegurar_descuento_fila_articulo,
+    asegurar_precio_fila_articulo,
     leer_contexto_cliente_masivo,
     listar_sucursales_cliente,
     marcas_asignadas_viajante_cliente,
@@ -49,8 +53,12 @@ HOJA_SUCURSALES = "Sucursales"
 HOJA_INSTRUCCIONES = "Instrucciones"
 HOJA_META = "_Synap"
 MARKER_CODIGO = "codigo_articulo"
-PLANTILLA_VERSION = 4
+PLANTILLA_VERSION = 5
 MARKER_IDART = "id_articulo"
+MARKER_PRECIO = "precio"
+COL_PRECIO = 4
+COL_PRIMERA_SUCURSAL_V5 = 5
+COL_PRIMERA_SUCURSAL_V4 = 4
 MAX_BYTES = 8 * 1024 * 1024
 MAX_ERRORES = 200
 MAX_ARTICULOS_PLANTILLA = 5000  # red de seguridad; administranet prod 13/08/2026: 310 ecommerce Terminado
@@ -458,13 +466,17 @@ def generar_plantilla_excel(
     *,
     articulos: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> bytes:
-    """Plantilla VCM: SuperArt + nombre + cantidades. Sin precios. Identifica al cliente."""
+    """Plantilla VCM: SuperArt + nombre + precio + cantidades. Identifica al cliente."""
     sucursales, _marcas = _territorio(draft)
     if articulos is None:
         articulos = listar_articulos_plantilla_vcm(draft)
     nombre_cli = _nombre_cliente(draft.base_empresa, draft.id_cliente)
     id_cli = to_int_or_none(draft.id_cliente) or 0
     cv = to_int_or_none(draft.cod_viajante)
+    ctx_cli = leer_contexto_cliente_masivo(draft.base_empresa, draft.id_cliente)
+    lista_ef = _lista_id_efectiva(draft, draft.base_empresa, ctx_cli.get("lista_id"))
+    desc_cli = _clamp_pct(ctx_cli.get("descRenglon"))
+    precios_stored = draft.precios_fila if isinstance(draft.precios_fila, dict) else {}
 
     qty_map: Dict[Tuple[int, int], Decimal] = {}
     for cel in draft.celdas.all():
@@ -479,8 +491,8 @@ def generar_plantilla_excel(
     ws_i = wb.active
     ws_i.title = HOJA_INSTRUCCIONES
     instrucciones = [
-        "Plantilla de pedido masivo Synap — solo completá cantidades (packs).",
-        "No agregues columnas, ni precios, ni descuentos: eso sale del cliente.",
+        "Plantilla de pedido masivo Synap — completá cantidades (packs) y, si corresponde, el precio.",
+        "Columna D = precio unitario neto de la fila (todas las sucursales). E+ = packs.",
         "",
         f"Cliente: {id_cli} — {nombre_cli or '—'}",
         f"Vendedor: {cv if cv is not None else '—'}",
@@ -525,7 +537,7 @@ def generar_plantilla_excel(
     ws_m.append(["draft_id", draft.pk or 0])
     ws_m.append(["plantilla_version", PLANTILLA_VERSION])
     ws_m.append(["sucursal_ids", *ids_suc])
-    ws_m.append(["col_primera_sucursal", 4])
+    ws_m.append(["col_primera_sucursal", COL_PRIMERA_SUCURSAL_V5])
     ws_m.sheet_state = "veryHidden"
 
     ws = wb.create_sheet(HOJA_PEDIDO, 0)
@@ -533,13 +545,14 @@ def generar_plantilla_excel(
     ws.cell(1, 1, "Código")
     ws.cell(1, 2, "Artículo")
     ws.cell(1, 3, MARKER_IDART)
+    ws.cell(1, COL_PRECIO, "Precio")
     for idx, s in enumerate(sucursales):
-        col = 4 + idx
+        col = COL_PRIMERA_SUCURSAL_V5 + idx
         ws.cell(1, col, _rotulo_columna_suc(s))
-    for col in range(1, 4 + max(n_suc, 1)):
+    for col in range(1, COL_PRIMERA_SUCURSAL_V5 + max(n_suc, 1)):
         c1 = ws.cell(1, col)
         c1.fill = _FILL_HDR
-        c1.font = _FONT_HDR_SUC if col >= 4 else _FONT_HDR
+        c1.font = _FONT_HDR_SUC if col >= COL_PRIMERA_SUCURSAL_V5 else _FONT_HDR
         c1.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
 
     for ridx, art in enumerate(articulos):
@@ -557,9 +570,24 @@ def generar_plantilla_excel(
         cid = ws.cell(fila, 3, aid)
         cid.fill = _FILL_LOCK
         cid.number_format = "0"
+        raw_p = precios_stored.get(str(aid))
+        if raw_p is not None:
+            precio = to_decimal_or_none(raw_p)
+        else:
+            precio = _precio_real_articulo(
+                draft.base_empresa,
+                aid,
+                lista_id=lista_ef,
+                id_cliente=draft.id_cliente,
+                descuento_cliente=desc_cli,
+            )
+        cp = ws.cell(fila, COL_PRECIO, float(precio) if precio is not None else None)
+        cp.fill = _FILL_QTY
+        cp.alignment = Alignment(horizontal="right", vertical="center")
+        cp.number_format = "0.00"
         ws.row_dimensions[fila].height = 20
         for idx, s in enumerate(sucursales):
-            col = 4 + idx
+            col = COL_PRIMERA_SUCURSAL_V5 + idx
             idd = to_int_or_none(s.get("id_cliente_domicilio"))
             qty = qty_map.get((aid, idd)) if idd is not None else None
             cell = ws.cell(fila, col, qty if qty is not None else None)
@@ -569,10 +597,11 @@ def generar_plantilla_excel(
 
     n_arts = len(articulos)
     last_row = 1 + max(n_arts, 1)
-    last_col = 3 + max(n_suc, 1)
+    last_col = 4 + max(n_suc, 1)
     if n_arts == 0:
+        ws.cell(2, COL_PRECIO).fill = _FILL_QTY
         for idx in range(n_suc):
-            cell = ws.cell(2, 4 + idx)
+            cell = ws.cell(2, COL_PRIMERA_SUCURSAL_V5 + idx)
             cell.fill = _FILL_QTY
 
     ws.row_dimensions[1].height = 56
@@ -580,9 +609,10 @@ def generar_plantilla_excel(
     ws.column_dimensions["B"].width = 52
     ws.column_dimensions["C"].hidden = True
     ws.column_dimensions["C"].width = 10
+    ws.column_dimensions["D"].width = 12
     for idx in range(n_suc):
-        ws.column_dimensions[get_column_letter(4 + idx)].width = 16
-    ws.freeze_panes = "D2"
+        ws.column_dimensions[get_column_letter(COL_PRIMERA_SUCURSAL_V5 + idx)].width = 16
+    ws.freeze_panes = "E2"
     ws.sheet_view.showGridLines = True
     ws.sheet_view.zoomScale = 100
     if n_suc:
@@ -596,8 +626,22 @@ def generar_plantilla_excel(
             errorTitle="Cantidad",
             error="Solo números mayores o iguales a 0 (packs).",
         )
-        dv.add(f"D2:{get_column_letter(last_col)}{max(last_row, 2)}")
+        dv.add(
+            f"{get_column_letter(COL_PRIMERA_SUCURSAL_V5)}2:"
+            f"{get_column_letter(last_col)}{max(last_row, 2)}"
+        )
         ws.add_data_validation(dv)
+        dv_p = DataValidation(
+            type="decimal",
+            operator="greaterThanOrEqual",
+            formula1="0",
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="Precio",
+            error="El precio no puede ser negativo.",
+        )
+        dv_p.add(f"D2:D{max(last_row, 2)}")
+        ws.add_data_validation(dv_p)
 
     bio = io.BytesIO()
     wb.save(bio)
@@ -1099,6 +1143,7 @@ def _elegir_articulo(
     errores: List[Dict[str, Any]],
     *,
     nombre_excel: str = "",
+    candidatos_catalogo: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     if not candidatos:
         errores.append(
@@ -1114,12 +1159,32 @@ def _elegir_articulo(
         return None
     vendibles = [a for a in candidatos if _articulo_vendible(a)]
     pool = vendibles or list(candidatos)
+    pool_catalogo = [
+        a for a in (candidatos_catalogo or []) if _articulo_vendible(a)
+    ] or list(candidatos_catalogo or [])
     nombre_n = _norm_txt(nombre_excel)
     elegido: Optional[Dict[str, Any]] = None
 
     if nombre_n:
-        por_nombre = [a for a in pool if _norm_txt(a.get("nombre")) == nombre_n]
-        if not por_nombre:
+        busqueda_nombre = pool_catalogo if pool_catalogo else pool
+        por_nombre = [
+            a for a in busqueda_nombre if _norm_txt(a.get("nombre")) == nombre_n
+        ]
+        if por_nombre:
+            if len(por_nombre) > 1:
+                errores.append(
+                    _err(
+                        "Nombre de artículo ambiguo: coincide con más de un artículo.",
+                        code="articulo_ambiguo",
+                        fila=fila,
+                        columna="B",
+                        codigo_articulo=codigo,
+                        nombre_articulo=nombre_excel,
+                    )
+                )
+                return None
+            elegido = por_nombre[0]
+        elif pool_catalogo:
             errores.append(
                 _err(
                     "El nombre no coincide con ningún artículo del código. "
@@ -1132,11 +1197,15 @@ def _elegir_articulo(
                 )
             )
             return None
-        if len(por_nombre) > 1:
+        elif len(pool) == 1:
+            # Nombre distinto pero un solo candidato (p. ej. IDArt en plantilla v4).
+            elegido = pool[0]
+        else:
             errores.append(
                 _err(
-                    "Nombre de artículo ambiguo: coincide con más de un artículo.",
-                    code="articulo_ambiguo",
+                    "El nombre no coincide con ningún artículo del código. "
+                    "Copiá el texto exacto desde la plantilla Synap.",
+                    code="articulo_nombre_no_coincide",
                     fila=fila,
                     columna="B",
                     codigo_articulo=codigo,
@@ -1144,7 +1213,6 @@ def _elegir_articulo(
                 )
             )
             return None
-        elegido = por_nombre[0]
     elif len(pool) == 1:
         elegido = pool[0]
     else:
@@ -1195,6 +1263,7 @@ def importar_matriz_excel(
     *,
     consultar_arts=None,
     consultar_ids=None,
+    aplicar_precios: bool = True,
 ) -> Dict[str, Any]:
     """Parsea, valida VCM y reemplaza celdas. All-or-nothing si hay errores."""
     if draft.estado not in (
@@ -1238,8 +1307,18 @@ def importar_matriz_excel(
     c1 = _celda_str(rows[0][2] if rows[0] and len(rows[0]) > 2 else "").lower()
     es_plantilla_v2 = a1.replace(" ", "_") == MARKER_CODIGO
     es_v4 = c1.replace(" ", "_") == MARKER_IDART
+    d1 = _celda_str(rows[0][3] if rows[0] and len(rows[0]) > 3 else "").lower()
+    ver_meta = to_int_or_none(meta.get("plantilla_version")) or 0
+    es_v5 = es_v4 and (
+        ver_meta >= 5 or d1.replace(" ", "_") in (MARKER_PRECIO, "precio_unitario")
+    )
     ids_meta = meta.get("sucursal_ids") if isinstance(meta.get("sucursal_ids"), list) else []
-    col_suc = to_int_or_none(meta.get("col_primera_sucursal")) or (4 if es_v4 else 3)
+    col_suc_default = (
+        COL_PRIMERA_SUCURSAL_V5
+        if es_v5
+        else (COL_PRIMERA_SUCURSAL_V4 if es_v4 else 3)
+    )
+    col_suc = to_int_or_none(meta.get("col_primera_sucursal")) or col_suc_default
     if es_plantilla_v2:
         headers_id = list(rows[0])
         headers_nom = list(rows[1]) if len(rows) > 1 else []
@@ -1256,7 +1335,11 @@ def importar_matriz_excel(
         headers_nom = list(rows[0])
         data_rows = rows[1:]
         fila_base = 2
-        col_suc = 4 if es_v4 else 3
+        col_suc = (
+            COL_PRIMERA_SUCURSAL_V5
+            if es_v5
+            else (COL_PRIMERA_SUCURSAL_V4 if es_v4 else 3)
+        )
 
     id_cli_excel = to_int_or_none(meta.get("id_cliente"))
     if id_cli_excel is None and es_plantilla_v2 and rows and len(rows[0]) > 1:
@@ -1370,10 +1453,14 @@ def importar_matriz_excel(
     vistos_filas: Dict[int, int] = {}
     celdas_ok: List[Tuple[int, int, Decimal]] = []
     arts_ok: Dict[int, Dict[str, Any]] = {}
+    precios_ok: Dict[int, Decimal] = {}
+    ctx_cli_imp = leer_contexto_cliente_masivo(draft.base_empresa, draft.id_cliente)
+    lista_imp = _lista_id_efectiva(draft, draft.base_empresa, ctx_cli_imp.get("lista_id"))
 
     for fila, codigo, row in codigos_filas:
         id_art_fila = to_int_or_none(row[2]) if es_v4 and len(row) > 2 else None
         nombre_excel = _celda_str(row[1]) if len(row) > 1 else ""
+        candidatos_catalogo = _candidatos_desde_catalogo(catalogo, codigo, nombre_excel)
         candidatos = _candidatos_fila_import(
             catalogo,
             codigo,
@@ -1387,6 +1474,7 @@ def importar_matriz_excel(
             fila,
             errores,
             nombre_excel=nombre_excel,
+            candidatos_catalogo=candidatos_catalogo,
         )
         if not art:
             continue
@@ -1417,6 +1505,32 @@ def importar_matriz_excel(
         arts_ok[aid] = art
         marca = to_int_or_none(art.get("codigo_marca"))
         multiplo = multiplo_empaque_venta(art.get("multiplo_cantidad_vta"))
+        precio_fila = None
+        if es_v5 and aplicar_precios and len(row) > 3:
+            raw_p = row[3]
+            if raw_p is not None and str(raw_p).strip() != "":
+                precio_fila = to_decimal_or_none(raw_p)
+                if precio_fila is None:
+                    errores.append(
+                        _err(
+                            "El precio no es válido.",
+                            code="precio_invalido",
+                            fila=fila,
+                            columna="D",
+                            codigo_articulo=codigo,
+                        )
+                    )
+                elif precio_fila < 0:
+                    errores.append(
+                        _err(
+                            "El precio no puede ser negativo.",
+                            code="precio_invalido",
+                            fila=fila,
+                            columna="D",
+                            codigo_articulo=codigo,
+                        )
+                    )
+        qty_esta_fila = 0
         for col, idd, etiqueta in cols:
             letra = get_column_letter(col)
             idx = col - 1
@@ -1467,6 +1581,20 @@ def importar_matriz_excel(
                 )
                 continue
             celdas_ok.append((aid, idd, qty))
+            qty_esta_fila += 1
+        if qty_esta_fila and aplicar_precios and es_v5 and precio_fila is not None:
+            if precio_fila <= 0:
+                errores.append(
+                    _err(
+                        "El precio está en 0. Corregilo antes de importar.",
+                        code="precio_cero",
+                        fila=fila,
+                        columna="D",
+                        codigo_articulo=codigo,
+                    )
+                )
+            else:
+                precios_ok[aid] = precio_fila
 
     if errores:
         return {
@@ -1496,6 +1624,7 @@ def importar_matriz_excel(
     with transaction.atomic():
         EcomPedidoMasivoDraftCelda.objects.filter(draft=draft).delete()
         draft.descuentos_fila = {}
+        draft.precios_fila = {}
         draft.ultimo_error = {}
         if celdas_ok:
             EcomPedidoMasivoDraftCelda.objects.bulk_create(
@@ -1512,12 +1641,21 @@ def importar_matriz_excel(
             )
         for aid in arts_ok:
             asegurar_descuento_fila_articulo(draft, aid, draft.base_empresa)
+            if aid in precios_ok:
+                stored = dict(draft.precios_fila or {})
+                stored[str(aid)] = float(precios_ok[aid])
+                draft.precios_fila = stored
+            else:
+                asegurar_precio_fila_articulo(
+                    draft, aid, draft.base_empresa, lista_id=lista_imp
+                )
         ctx_cli = leer_contexto_cliente_masivo(draft.base_empresa, draft.id_cliente)
         draft.descuento_pie_pct = _clamp_pct(ctx_cli.get("descPie"))
         draft.save(
             update_fields=[
                 "estado",
                 "descuentos_fila",
+                "precios_fila",
                 "descuento_pie_pct",
                 "ultimo_error",
                 "updated_at",
