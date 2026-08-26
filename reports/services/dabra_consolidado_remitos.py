@@ -236,7 +236,7 @@ def validar_totales_fa(
 
 
 def _sql_lineas_fa() -> str:
-    return """
+    return f"""
         SELECT
             cc.CodigoMovimiento AS codigo_movimiento_fa,
             cc.NroComprobante AS fa_nro_comprobante,
