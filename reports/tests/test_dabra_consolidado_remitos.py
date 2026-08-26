@@ -247,6 +247,8 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
         self.assertIn("cc.TipoComprobante = 'FA'", sql_main)
         self.assertIn("cc.Anulado = 'No'", sql_main)
         self.assertIn("cc.Fecha BETWEEN %s AND %s", sql_main)
+        self.assertIn("tipo_art", sql_main)
+        self.assertNotIn("{sql_excluir", sql_main)
         self.assertEqual(params_main[0], CODIGO_CLIENTE_DABRA)
         self.assertEqual(params_main[1], "2026-07-01")
         self.assertEqual(params_main[2], "2026-07-31")
