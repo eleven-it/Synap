@@ -105,7 +105,7 @@ Orden de generadores en el job: CI → PD → ES → VD → FV.
 
 ## 8. Criterios de éxito
 
-- CSV de cada tipo cumple el inventario (headers, reglas NC/ND, consumidor final, un archivo por proveedor).
+- CSV de cada tipo cumple el inventario (headers, reglas NC/ND, consumidor final, **un archivo por categoría** por corrida).
 - Preview muestra los mismos registros que irán al CSV, con formato de pantalla.
 - Operador genera on-demand, descarga y envía por SFTP.
 - Programador UI + `manage.py generar_mtrix --scheduled` produce un job equivalente.

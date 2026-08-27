@@ -58,6 +58,30 @@ class CsvSerializerTests(SimpleTestCase):
         self.assertEqual(nombre_archivo("CI", dt), "CI-INT12082026150405123.csv")
         self.assertNotIn("V19", nombre_archivo("VD", dt))
 
+    def test_ci_acepta_alias_ciudad_vb6(self):
+        _fn, data = serialize(
+            "CI",
+            [
+                {
+                    "CNPJ_CLIENTE": "20123456789",
+                    "RAZAO_SOCIAL": "ACME",
+                    "ENDERECO": "Calle 1",
+                    "BAIRRO": "Centro",
+                    "CEP": "1000",
+                    "CIUDAD": "Rosario",
+                    "ESTADO": "SF",
+                    "NOME_RESPONSAVEL": "NA",
+                    "TELEFONE": "",
+                    "ROTA": "RUTA",
+                    "TIPO_LOJ": "Tienda",
+                    "REPRESENTATIVIDADE": "0,10",
+                }
+            ],
+            CFG,
+            datetime(2026, 8, 12, 10, 0, 0),
+        )
+        self.assertIn("Rosario", data.decode("latin-1"))
+
     def test_encoding_latin1(self):
         filename, data = serialize(
             "CI",
@@ -189,6 +213,81 @@ class CsvSerializerTests(SimpleTestCase):
         )
         linea = data.decode("latin-1").split("\r\n")[1]
         self.assertIn(";N;", linea)
+
+    def test_vd_agrupa_por_cuit_crudo_no_por_cnpj_pantalla(self):
+        agrupados = agregar_vd(
+            [
+                {
+                    "COD_CLIENTE": "0",
+                    "RAZAO_SOCIAL": "CONSUMIDOR FINAL",
+                    "DATA": "20260812",
+                    "NOTA_FISCAL": "50",
+                    "EAN": "779",
+                    "QTDE": 1,
+                    "PRECO": 10,
+                    "VENDEDOR": "1",
+                    "TIPO_COMP": "FA",
+                    "CEP": "0",
+                },
+                {
+                    "COD_CLIENTE": "20111",
+                    "RAZAO_SOCIAL": "CONSUMIDOR FINAL",
+                    "DATA": "20260812",
+                    "NOTA_FISCAL": "50",
+                    "EAN": "779",
+                    "QTDE": 2,
+                    "PRECO": 5,
+                    "VENDEDOR": "1",
+                    "TIPO_COMP": "FA",
+                    "CEP": "0",
+                },
+            ]
+        )
+        self.assertEqual(len(agrupados), 2)
+        self.assertEqual({row["COD_CLIENTE"] for row in agrupados}, {"99999999999"})
+
+    def test_fv_escribe_cuit_crudo_sin_999(self):
+        _fn, data = serialize(
+            "FV",
+            [
+                {
+                    "CNPJ_CLIENTE": "0",
+                    "COD_GERENTE": "1",
+                    "NOME_GERENTE": "GERENTE GENERAL",
+                    "COD_SUPERVISOR": "1",
+                    "NOME_SUPERVISOR": "SUPERVISOR",
+                    "COD_VENDEDOR": "5",
+                    "NOME_VENDEDOR": "JUAN",
+                }
+            ],
+            CFG,
+            datetime(2026, 8, 12, 11, 0, 0),
+        )
+        texto = data.decode("latin-1")
+        self.assertIn(";0;", texto)
+        self.assertNotIn("99999999999", texto)
+
+    def test_pd_codigo_vacio_es_na(self):
+        _fn, data = serialize(
+            "PD",
+            [
+                {
+                    "CODIGO_PRODUTO": "",
+                    "DESCRICAO": "ART",
+                    "DIVISAO_MARCA": "-Ninguno-",
+                    "DIVISAO_RUBRO": "RUBRO",
+                    "EAN": "1",
+                    "TIPO_EMBALAGEM": "0",
+                    "TIPO_COD_BARRAS": "1",
+                    "DISCONTINUO": "No",
+                }
+            ],
+            CFG,
+            datetime(2026, 8, 12, 11, 0, 0),
+        )
+        linea = data.decode("latin-1").split("\r\n")[1]
+        self.assertIn(";NA;", linea)
+        self.assertIn(";-Ninguno-;", linea)
 
     def test_crypto_pepper_distinto_de_backup(self):
         src = Path(crypto_mod.__file__).read_text(encoding="utf-8")

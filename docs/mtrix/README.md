@@ -4,6 +4,8 @@ Exportación de sell-out AdministraNET → portal **MTRIX** (Diversey / DSI-VMI)
 
 Migración del exe VB6 desatendido `Importacion_Accera.exe` (ACCERA V.3.5) a una app Django Synap. La **estructura de los CSV de exportación queda congelada** respecto de `Principal.bas` V.3.5. Synap agrega preview en pantalla, descarga, SFTP y programador.
 
+Cada corrida genera **como máximo un archivo por categoría** (CI, PD, ES, VD, FV). La lista de proveedores filtra PD/ES/VD con `IN (...)`; no se emite un CSV por código.
+
 ## Documentos
 
 | Documento | Contenido |

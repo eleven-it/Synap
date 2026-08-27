@@ -50,15 +50,15 @@ FV: CNPJ FORNECEDOR;CNPJ AGENTE DISTRIBUICAO;IDENTIFICACAO CLIENTE;CODIGO DO GER
 
 - Prefijo `AR` + `CNPJFornecedor` en fornecedor.
 - Distribuidor = `datosempresa.CUIT` sin guiones.
-- Consumidor final / CUIT `0` → `99999999999`.
+- Consumidor final / CUIT `0` → `99999999999` en **CI y VD**. FV escribe el CUIT crudo (`0` si no hay CUIT); no aplica `ObtenerCNPJClienteMTRIX`.
 - CI: `CNPJ_CLIENTE` duplicado (cols 3 y 12). `NOME_RESPONSAVEL=NA`, `ROTA=RUTA`.
 - CI: solo clientes con ventas en el período; `REPRESENTATIVIDADE` como en el SQL VB6 (`FORMAT` `de_DE`, 2 decimales).
-- PD: código = `codartprov`; `DIVISAO` = marca → rubro → `OTROS PRODUCTOS`; `STATUS` I/A según `discontinuo`; razón social fornecedor = `datosempresa.Nombre`.
+- PD: código = `codartprov` (`SanitizarCampoCSV` vacío → `NA`); `DIVISAO` = marca si no es Null/vacío (incluye `-Ninguno-`) → rubro → `OTROS PRODUCTOS`; `STATUS` I/A según `discontinuo`; razón social fornecedor = `datosempresa.Nombre`.
 - ES: `SUM(saldo)` donde `saldo >= 0`.
-- VD: excluye `Anulado='Si'` y `REC`. FA/FB cantidad positiva tipo `N`. NC/ND cantidad negativa tipo `N`. Agrupa por factura+EAN+fecha+cliente+vendedor+tipo+CEP sumando cantidad y precio (`PrecioVentaxU`).
+- VD: excluye `Anulado='Si'` y `REC`. FA/FB cantidad positiva tipo `N`. NC/ND cantidad negativa tipo `N`. Agrupa por factura+EAN+fecha+**COD_CLIENTE crudo**+vendedor+tipo+CEP (no por el `99999999999` de pantalla) y suma cantidad y precio (`PrecioVentaxU`). El CSV emite el CNPJ ya normalizado.
 - FV: gerente `1`/`GERENTE GENERAL`, supervisor `1`/`SUPERVISOR`. Sin tablas nuevas de jerarquía.
 - Sin archivo si el recordset está vacío.
-- Un CSV por proveedor en PD/ES/VD cuando la lista no es «TODOS».
+- **Un CSV por categoría por corrida** (máximo CI, PD, ES, VD, FV). VB6 recorre `CodigoProveedorPrincipal` y escribe un archivo por código; Synap **no replica ese loop**: si hay lista (`23,29,31`) filtra `CodigoProveedor IN (...)` en **una** consulta y emite un solo archivo. Vacío = todos los proveedores, un archivo.
 
 ## 3. Operativa de archivos (VB6 → Synap)
 

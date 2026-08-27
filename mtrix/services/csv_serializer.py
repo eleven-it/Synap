@@ -128,16 +128,15 @@ def agregar_vd(rows: Iterable[dict], multiplicador_cantidad: int = 1, multiplica
         if es_dev and qty > 0:
             qty = -qty
         precio = float(row.get("PRECO") or row.get("preco") or 0)
-        cnpj = cnpj_cliente_mtrix(
-            row.get("COD_CLIENTE") or row.get("cod_cliente"),
-            row.get("RAZAO_SOCIAL") or row.get("razao_social"),
-        )
+        # V.3.5 agrupa por COD_CLIENTE crudo (CUIT o "0"), no por el CNPJ de pantalla.
+        codigo_crudo = str(row.get("COD_CLIENTE") or row.get("cod_cliente") or "")
+        cnpj = cnpj_cliente_mtrix(codigo_crudo, row.get("RAZAO_SOCIAL") or row.get("razao_social"))
         ean = ean_completo(row.get("EAN") or row.get("ean"))
         data = str(row.get("DATA") or row.get("data") or "")
         nota = str(row.get("NOTA_FISCAL") or row.get("nota_fiscal") or "")
         vendedor = str(row.get("VENDEDOR") or row.get("vendedor") or "")
         cep = str(row.get("CEP") or row.get("cep") or "0")
-        clave = f"{nota}|{ean}|{data}|{cnpj}|{vendedor}|{tipo_doc}|{cep}"
+        clave = f"{nota}|{ean}|{data}|{codigo_crudo}|{vendedor}|{tipo_doc}|{cep}"
         if clave not in agrupados:
             agrupados[clave] = {
                 "COD_CLIENTE": cnpj,
@@ -186,7 +185,7 @@ def serialize(tipo: str, rows: list[dict], cfg: dict, generated_at: datetime) ->
                         sanitizar_campo(row.get("ENDERECO")),
                         sanitizar_campo(row.get("BAIRRO")),
                         sanitizar_campo(row.get("CEP"), vacio="0"),
-                        sanitizar_campo(row.get("CIDADE")),
+                        sanitizar_campo(row.get("CIDADE") or row.get("CIUDAD")),
                         sanitizar_campo(row.get("ESTADO")),
                         sanitizar_campo(row.get("NOME_RESPONSAVEL")),
                         sanitizar_campo(row.get("TELEFONE"), vacio="NA"),
@@ -213,7 +212,7 @@ def serialize(tipo: str, rows: list[dict], cfg: dict, generated_at: datetime) ->
                         distribuidor,
                         fornecedor,
                         razon,
-                        sanitizar_campo(row.get("CODIGO_PRODUTO"), vacio=""),
+                        sanitizar_campo(row.get("CODIGO_PRODUTO")),
                         sanitizar_campo(row.get("TIPO_EMBALAGEM") or "0"),
                         ean_completo(row.get("EAN")),
                         sanitizar_campo(row.get("TIPO_COD_BARRAS") or "1"),
@@ -264,13 +263,13 @@ def serialize(tipo: str, rows: list[dict], cfg: dict, generated_at: datetime) ->
             )
     elif tipo == "FV":
         for row in rows:
-            cnpj = cnpj_cliente_mtrix(row.get("CNPJ_CLIENTE"), row.get("RAZAO_SOCIAL"))
+            # V.3.5 escribe CNPJ_CLIENTE crudo; no aplica ObtenerCNPJClienteMTRIX.
             lineas.append(
                 _join(
                     [
                         fornecedor,
                         distribuidor,
-                        sanitizar_campo(cnpj),
+                        sanitizar_campo(row.get("CNPJ_CLIENTE")),
                         sanitizar_campo(row.get("COD_GERENTE") or "1"),
                         sanitizar_campo(row.get("NOME_GERENTE") or "GERENTE GENERAL"),
                         sanitizar_campo(row.get("COD_SUPERVISOR") or "1"),

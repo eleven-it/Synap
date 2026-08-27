@@ -42,6 +42,38 @@ def parse_proveedores(texto: str) -> list[str]:
     return [p.strip() for p in limpio.split(",") if p.strip()] or ["TODOS"]
 
 
+def normalizar_codigos_prov(
+    *,
+    codigo_prov: str | None = None,
+    codigos_prov: list[str] | None = None,
+) -> list[str]:
+    """Lista de códigos o ['TODOS']. `codigos_prov` gana si viene informada."""
+    if codigos_prov:
+        limpios = [str(c).strip() for c in codigos_prov if str(c).strip()]
+        if limpios:
+            return limpios
+    if codigo_prov and str(codigo_prov).strip():
+        return [str(codigo_prov).strip()]
+    return ["TODOS"]
+
+
+def sql_filtro_proveedor(codigos: list[str], *, alias: str = "articulo") -> tuple[str, list]:
+    """Fragmento `alias.CodigoProveedor IN (...)` o vacío si es TODOS."""
+    if not codigos or (len(codigos) == 1 and codigos[0] == "TODOS"):
+        return "", []
+    ints: list[int] = []
+    for codigo in codigos:
+        if codigo == "TODOS":
+            continue
+        numero = to_int_or_none(codigo)
+        if numero is not None:
+            ints.append(numero)
+    if not ints:
+        return "", []
+    placeholders = ", ".join(["%s"] * len(ints))
+    return f"{alias}.CodigoProveedor IN ({placeholders})", ints
+
+
 def resolver_fechas_mysql(base_empresa: str, *, personalizada: bool, fecha_inicio, fecha_final, dias: int) -> tuple[str, str]:
     if personalizada and fecha_inicio and fecha_final:
         di = fecha_inicio.isoformat() if hasattr(fecha_inicio, "isoformat") else str(fecha_inicio)

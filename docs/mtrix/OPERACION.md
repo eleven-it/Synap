@@ -20,6 +20,8 @@ Los CSV se emiten en **latin-1** (`errors=replace`), igual que la conexión VB6 
 
 Nombre: `{TIPO}-INT{ddmmyyyyhhmmssSSS}.csv` (sin versión de layout). Delimitador `;`. Header en la línea 1.
 
+Una corrida genera **como máximo un archivo por categoría** (CI, PD, ES, VD, FV). La lista de proveedores filtra PD/ES/VD con `IN (...)`; no produce un CSV por código.
+
 ## Cron del host
 
 Igual que `backup_tick`: el programador vive en la UI (`/mtrix/configuracion/`) y el host consulta cada minuto.
