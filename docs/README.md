@@ -21,6 +21,7 @@ Toda la documentación del proyecto está en **`docs/`** en la raíz del reposit
 | **ecom/** | E-commerce y Ventas (pedidos mayorista, portal): manual ([ecom/MANUAL_USUARIO_VENTAS.md](ecom/MANUAL_USUARIO_VENTAS.md), HTML en **`/ecom/manual/`**), índice [ecom/README.md](ecom/README.md). |
 | **stock/** | Stock e inventario por etapa: manual ([stock/MANUAL_USUARIO_STOCK.md](stock/MANUAL_USUARIO_STOCK.md)), inventario MPR ([stock/INVENTARIO_TABLA_MPR.md](stock/INVENTARIO_TABLA_MPR.md)), índice [stock/README.md](stock/README.md). |
 | **contabilidad/** | Auditoría contable: manual ([contabilidad/MANUAL_USUARIO_CONTABILIDAD.md](contabilidad/MANUAL_USUARIO_CONTABILIDAD.md), HTML en **`/contabilidad/manual/`**), índice [contabilidad/README.md](contabilidad/README.md). Técnico: [general/AUDITORIA_IMPUTACION_CONTABILIDAD_SYNAP.md](general/AUDITORIA_IMPUTACION_CONTABILIDAD_SYNAP.md). |
+| **mtrix/** | Exportación sell-out AdministraNET → portal MTRIX (migración Accera V.3.5): plan ([mtrix/PLAN_MIGRACION.md](mtrix/PLAN_MIGRACION.md)), inventario VB6 ([mtrix/INVENTARIO_EXPORTACION_VB6.md](mtrix/INVENTARIO_EXPORTACION_VB6.md)), operación ([mtrix/OPERACION.md](mtrix/OPERACION.md)), índice [mtrix/README.md](mtrix/README.md). |
 
 Los README de proyecto (`README_REPORTS.md`, `README_INSTALLATION.md`) permanecen en la raíz del repo como punto de entrada.
 

@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     'contabilidad_audit',  # Auditoría imputación contable (F1 solo lectura)
     'mpr',  # MPR - Manufacturing / Producción (plan ANALISIS_MPR_PROPUESTA_MVP)
     'odoo_migracion',  # Migración/sincronización AdministraNET → Odoo 19
+    'mtrix',  # Exportación sell-out MTRIX (migración Accera V.3.5)
     'ecom',  # Migración administraNET-ecom (mayorista B2B / relays PHP)
     'tiendanube_administranet',  # Integración Tienda Nube ↔ AdministraNET (MySQL vía pool Synap)
     # Módulos eliminados para instalación mínima de Reportes

@@ -25,6 +25,7 @@ A partir de este momento, **todo cambio de desarrollo (features, refactors, corr
 - **General (plan, flujo, instalación, módulos globales):** `docs/general/`
 - **Módulo Reportes:** `docs/reports/`
 - **Módulo Self-checkout / TPV / caja:** `docs/self_checkout/`
+- **Módulo Mtrix (exportación sell-out):** `docs/mtrix/`
 - **Login / sesión / shell:** `docs/login/` o `docs/general/` según alcance.
 
 Los README en la raíz (`README_REPORTS.md`, `README_INSTALLATION.md`) se mantienen como punto de entrada; el detalle vive en `docs/`.
