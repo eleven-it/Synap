@@ -1,0 +1,108 @@
+{% extends "mtrix/base_mtrix.html" %}
+
+{% block mtrix_content %}
+<header class="mb-5 overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-800 p-5">
+  <h1 class="text-xl font-bold text-white">Configuración Mtrix</h1>
+  <p class="mt-1 text-sm text-slate-300">Parámetros de exportación, SFTP y programador. Empresa: {{ config.base_empresa }}</p>
+</header>
+<form method="post" class="space-y-5" x-data="{
+  fechaPersonalizada: {{ config.fecha_personalizada|yesno:'true,false' }},
+  pvnf: {{ config.pvnf|yesno:'true,false' }},
+  sftpAuto: {{ config.sftp_enviar_automatico|yesno:'true,false' }},
+  programador: {{ config.programador_activo|yesno:'true,false' }}
+}">
+  {% csrf_token %}
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+    <h2 class="font-semibold text-slate-900 dark:text-white">Exportación</h2>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm">CNPJ fornecedor
+        <input name="cnpj_fornecedor" value="{{ config.cnpj_fornecedor }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
+      </label>
+      <label class="block text-sm">Proveedores (vacío = todos)
+        <input name="codigo_proveedor_principal" value="{{ config.codigo_proveedor_principal }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
+      </label>
+      <label class="block text-sm">Días a procesar
+        <input type="number" min="1" name="dias_a_procesar" value="{{ config.dias_a_procesar }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
+      </label>
+      <div class="mt-2">
+        <span class="block text-sm">Fecha personalizada</span>
+        <input type="hidden" name="fecha_personalizada" :value="fechaPersonalizada ? '1' : ''">
+        <button type="button" @click="fechaPersonalizada = !fechaPersonalizada"
+                class="mt-1 inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium"
+                :class="fechaPersonalizada ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'">
+          <span class="material-icons mr-1 text-sm" x-text="fechaPersonalizada ? 'check_circle' : 'cancel'"></span>
+          <span x-text="fechaPersonalizada ? 'Activo' : 'Inactivo'"></span>
+        </button>
+      </div>
+      <label class="block text-sm">Fecha inicio
+        <input type="date" name="fecha_inicio" value="{{ config.fecha_inicio|date:'Y-m-d' }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
+      </label>
+      <label class="block text-sm">Fecha final
+        <input type="date" name="fecha_final" value="{{ config.fecha_final|date:'Y-m-d' }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
+      </label>
+      <div>
+        <span class="block text-sm">Incluir todos los puntos de venta</span>
+        <input type="hidden" name="pvnf" :value="pvnf ? '1' : ''">
+        <button type="button" @click="pvnf = !pvnf"
+                class="mt-1 inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium"
+                :class="pvnf ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'">
+          <span class="material-icons mr-1 text-sm" x-text="pvnf ? 'check_circle' : 'cancel'"></span>
+          <span x-text="pvnf ? 'Activo' : 'Inactivo'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+    <h2 class="font-semibold text-slate-900 dark:text-white">SFTP</h2>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm">Host <input name="sftp_host" value="{{ config.sftp_host }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"></label>
+      <label class="block text-sm">Puerto <input type="number" name="sftp_port" value="{{ config.sftp_port }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"></label>
+      <label class="block text-sm">Usuario <input name="sftp_user" value="{{ config.sftp_user }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"></label>
+      <label class="block text-sm">Path remoto <input name="sftp_remote_path" value="{{ config.sftp_remote_path }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"></label>
+      <label class="block text-sm">Contraseña {% if sftp_masked %}<span class="text-xs text-slate-400">({{ sftp_masked }})</span>{% endif %}
+        <input type="password" name="sftp_password" placeholder="Dejar vacío para no cambiar" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
+      </label>
+      <div class="mt-2">
+        <span class="block text-sm">Enviar por SFTP en el cron</span>
+        <input type="hidden" name="sftp_enviar_automatico" :value="sftpAuto ? '1' : ''">
+        <button type="button" @click="sftpAuto = !sftpAuto"
+                class="mt-1 inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium"
+                :class="sftpAuto ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'">
+          <span class="material-icons mr-1 text-sm" x-text="sftpAuto ? 'check_circle' : 'cancel'"></span>
+          <span x-text="sftpAuto ? 'Activo' : 'Inactivo'"></span>
+        </button>
+      </div>
+    </div>
+    <button type="button" id="mtrix-sftp-test" class="mt-4 rounded-xl border border-slate-300 px-3 py-2 text-sm">Probar conexión</button>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+    <h2 class="font-semibold text-slate-900 dark:text-white">Programador</h2>
+    <div class="mt-3">
+      <input type="hidden" name="programador_activo" :value="programador ? '1' : ''">
+      <button type="button" @click="programador = !programador"
+              class="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium"
+              :class="programador ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'">
+        <span class="material-icons mr-1 text-sm" x-text="programador ? 'check_circle' : 'cancel'"></span>
+        <span x-text="programador ? 'Activo' : 'Inactivo'"></span>
+      </button>
+    </div>
+    <div class="mt-4 grid gap-2">
+      {% for row in schedule_rows %}
+      <label class="flex items-center gap-3 text-sm">
+        <input type="checkbox" name="schedule_enabled_{{ row.dow }}" value="1" {% if row.enabled %}checked{% endif %}>
+        <span class="w-24">{{ row.label }}</span>
+        <input type="time" name="schedule_time_{{ row.dow }}" value="{{ row.time }}" class="rounded-lg border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900">
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  <button type="submit" class="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white">Guardar</button>
+</form>
+<script>
+document.getElementById('mtrix-sftp-test')?.addEventListener('click', async function () {
+  const r = await fetch('{% url "mtrix:api_sftp_probar" %}', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' } });
+  const data = await r.json();
+  if (window.SynapMessages) { SynapMessages.show(data.mensaje || '', data.ok ? 'success' : 'error'); }
+});
+</script>
+{% endblock %}

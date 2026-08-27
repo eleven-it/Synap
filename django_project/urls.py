@@ -115,6 +115,7 @@ urlpatterns.extend([
     path('api/legacy-hub/', include('legacy_db.urls', namespace='legacy_hub')),
     path('mpr/', include('mpr.urls', namespace='mpr')),
     path('odoo-migracion/', include('odoo_migracion.urls', namespace='odoo_migracion')),
+    path('mtrix/', include('mtrix.urls', namespace='mtrix')),
     path('self_checkout/', include('self_checkout.urls', namespace='self_checkout')),
 ])
 

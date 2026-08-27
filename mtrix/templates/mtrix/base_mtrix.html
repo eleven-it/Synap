@@ -1,0 +1,30 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Mtrix" %}{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% include "partials/synap_post_loading_modal.html" %}
+{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-slate-50 py-6 dark:bg-slate-900 sm:py-8">
+  <div class="border-b border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-950 print:hidden">
+    <div class="mx-auto flex max-w-none flex-wrap items-center gap-1 overflow-x-auto px-4 py-1.5 sm:px-6 lg:px-8">
+      <a href="{% url 'mtrix:hub' %}" class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-sky-50 hover:text-sky-700 dark:text-slate-400">
+        <span class="material-icons text-sm" aria-hidden="true">dashboard</span> Panel
+      </a>
+      <a href="{% url 'mtrix:configuracion' %}" class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-sky-50 hover:text-sky-700 dark:text-slate-400">
+        <span class="material-icons text-sm" aria-hidden="true">tune</span> Configuración
+      </a>
+      <a href="{% url 'mtrix:job_list' %}" class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-sky-50 hover:text-sky-700 dark:text-slate-400">
+        <span class="material-icons text-sm" aria-hidden="true">history</span> Jobs
+      </a>
+    </div>
+  </div>
+  <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    {% block mtrix_content %}{% endblock %}
+  </div>
+</section>
+{% endblock %}

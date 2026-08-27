@@ -2,7 +2,7 @@
 
 # Módulos que reciben un permiso comodín "modulo.*" (acceso total al módulo).
 # Centralizado aquí para el catálogo Synap (synap_permiso) y el seed en synap_permisos_seed.
-MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout", "logistica")
+MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout", "logistica", "mtrix")
 
 # Mapeo Clavemenu (tabla permisos VB6/Principal) → key_permiso (permiso_sistema Synap).
 # Si el puesto tiene la Clavemenu en permisos con Permiso = '1', se otorga el key_permiso en Synap.
@@ -166,6 +166,12 @@ PERMISOS_POR_MODULO = {
         ("mpr.aprobar_parte", "Aprobar partes de producción y registrar desvíos (supervisor)"),
         ("mpr.parte_operario", "Carga de parte de producción desde el móvil (operario)"),
         ("mpr.tablero_ver", "Ver tablero de producción (solo lectura)"),
+    ],
+    "Mtrix": [
+        ("mtrix.ver", "Ver módulo Mtrix (exportación sell-out)"),
+        ("mtrix.configurar", "Configurar exportación, SFTP y programador Mtrix"),
+        ("mtrix.generar", "Generar archivos MTRIX"),
+        ("mtrix.enviar_sftp", "Enviar archivos MTRIX por SFTP"),
     ],
     "Migración Odoo": [
         ("odoo_migracion.ver", "Ver módulo Migración Odoo (solo usuario supervisor en menú)"),

@@ -1,0 +1,49 @@
+{% extends "mtrix/base_mtrix.html" %}
+{% load i18n %}
+
+{% block mtrix_content %}
+<header class="mb-6 overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-800 p-5 shadow-sm sm:p-6">
+  <div class="flex items-center gap-2.5">
+    <span class="material-icons text-sky-400" aria-hidden="true">cloud_upload</span>
+    <h1 class="text-xl font-bold tracking-tight text-white sm:text-2xl">Mtrix — exportación sell-out</h1>
+  </div>
+  <p class="mt-1.5 max-w-2xl text-sm text-slate-300">Valide los reportes en pantalla y luego genere los CSV o envíelos por SFTP. El archivo de exportación no cambia respecto de Accera V.3.5.</p>
+</header>
+
+<div class="mb-6 flex flex-wrap gap-3">
+  <form method="post" action="{% url 'mtrix:generar' %}" class="synap-post-loading" data-synap-loading-title="Generando archivos MTRIX" x-data="{ open: false }">
+    {% csrf_token %}
+    <button type="button" @click="open = true" class="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700" {% if job_activo %}disabled{% endif %}>
+      <span class="material-icons text-base">play_arrow</span> Generar ahora
+    </button>
+    <div x-show="open" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog">
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800">
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white">¿Generar archivos MTRIX?</h2>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Se usará la configuración actual. Puede validar los previews antes de confirmar.</p>
+        <div class="mt-5 flex justify-end gap-2">
+          <button type="button" @click="open = false" class="rounded-xl bg-slate-200 px-4 py-2 text-sm dark:bg-slate-600">Cancelar</button>
+          <button type="submit" class="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </form>
+  <a href="{% url 'mtrix:configuracion' %}" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">Configuración</a>
+</div>
+
+{% if ultimo_job %}
+<div class="mb-6 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+  <h2 class="font-semibold text-slate-900 dark:text-white">Última corrida</h2>
+  <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Estado: {{ ultimo_job.get_status_display }} · {{ ultimo_job.created_at|date:"d/m/Y H:i" }}</p>
+  <a href="{% url 'mtrix:job_detail' ultimo_job.id %}" class="mt-2 inline-block text-sm font-medium text-sky-600">Ver detalle</a>
+</div>
+{% endif %}
+
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+  {% for t in tipos %}
+  <a href="{% url 'mtrix:preview' t %}" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-sky-400 dark:border-slate-700 dark:bg-slate-800">
+    <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Validar</p>
+    <p class="mt-1 text-lg font-bold text-slate-900 dark:text-white">{{ t }}</p>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

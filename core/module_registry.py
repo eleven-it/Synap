@@ -409,6 +409,31 @@ MODULE_CONFIGS = {
         'hooks': [],
     },
 
+    'mtrix': {
+        'name': 'mtrix',
+        'display_name': 'Mtrix',
+        'description': (
+            'Exportación sell-out AdministraNET hacia el portal MTRIX '
+            '(CSV V.3.5, preview, SFTP y programador).'
+        ),
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'dashboard'],
+        'optional_dependencies': [],
+        'settings': {},
+        'url_prefix': 'mtrix',
+        'permissions': [
+            'mtrix.ver',
+            'mtrix.configurar',
+            'mtrix.generar',
+            'mtrix.enviar_sftp',
+            'mtrix.*',
+        ],
+        'hooks': [],
+    },
+
     'odoo_migracion': {
         'name': 'odoo_migracion',
         'display_name': 'Migración Odoo',

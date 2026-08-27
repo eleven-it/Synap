@@ -1,0 +1,29 @@
+{% extends "mtrix/base_mtrix.html" %}
+
+{% block mtrix_content %}
+<h1 class="mb-4 text-xl font-bold text-slate-900 dark:text-white">Jobs Mtrix</h1>
+<div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-900">
+      <tr>
+        <th class="px-3 py-2 text-left">Fecha</th>
+        <th class="px-3 py-2 text-left">Estado</th>
+        <th class="px-3 py-2 text-left">Origen</th>
+        <th class="px-3 py-2 text-left">Rango</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for job in jobs %}
+      <tr class="border-t border-slate-100 dark:border-slate-700">
+        <td class="px-3 py-2"><a class="text-sky-600" href="{% url 'mtrix:job_detail' job.id %}">{{ job.created_at|date:"d/m/Y H:i" }}</a></td>
+        <td class="px-3 py-2">{{ job.get_status_display }}</td>
+        <td class="px-3 py-2">{{ job.get_origen_display }}</td>
+        <td class="px-3 py-2">{% if job.fecha_desde %}{{ job.fecha_desde|date:"d/m/Y" }} – {{ job.fecha_hasta|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="px-3 py-6 text-slate-500">No hay corridas todavía.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
