@@ -16,7 +16,7 @@ SELECT
     IF(distrito.NombreDistrito IS NOT NULL, distrito.NombreDistrito, 'NA') AS BAIRRO,
     IF(departamento.cod_postal IS NOT NULL AND TRIM(departamento.cod_postal) <> '',
        CAST(departamento.cod_postal AS CHAR(20)), '0') AS CEP,
-    IF(departamento.NombreDepartamento IS NOT NULL, departamento.NombreDepartamento, 'NA') AS CIDADE,
+    IF(departamento.NombreDepartamento IS NOT NULL, departamento.NombreDepartamento, 'NA') AS CIUDAD,
     IF(provincia.Provincia IS NOT NULL, provincia.Provincia, 'NA') AS ESTADO,
     'NA' AS NOME_RESPONSAVEL,
     IF(cliente.telefono IS NOT NULL AND cliente.telefono <> '',
@@ -26,7 +26,7 @@ SELECT
     FORMAT(ROUND(IFNULL(SUM(CASE
         WHEN cc.TipoComprobante LIKE 'F%%' AND cc.Anulado = 'No' THEN cc.ImporteVenta
         WHEN cc.TipoComprobante LIKE 'N%%' AND cc.Anulado = 'No' THEN -cc.ImporteVenta
-        ELSE 0 END) * 100.0 / NULLIF((
+        ELSE 0 END) * 100.0 / (
             SELECT SUM(CASE
                 WHEN TipoComprobante LIKE 'F%%' AND Anulado = 'No' THEN ImporteVenta
                 WHEN TipoComprobante LIKE 'N%%' AND Anulado = 'No' THEN -ImporteVenta
@@ -35,7 +35,7 @@ SELECT
             WHERE TipoComprobante IN ('FA','FB','FC','NCA','NCB','NDA','NDB')
               AND Anulado = 'No'
               AND Fecha BETWEEN %s AND %s
-        ), 0), 0), 2), 2, 'de_DE') AS REPRESENTATIVIDADE
+        ), 0), 2), 2, 'de_DE') AS REPRESENTATIVIDADE
 FROM cliente
 LEFT JOIN distrito ON (cliente.IDDistrito = distrito.IDDistrito)
 LEFT JOIN departamento ON (cliente.IDDepartamento = departamento.IDDepartamento)
@@ -47,10 +47,12 @@ LEFT JOIN cuentacliente cc ON (
     AND cc.Anulado = 'No'
     AND cc.Fecha BETWEEN %s AND %s
 )
-WHERE cc.Codigo IS NOT NULL
+WHERE 1=1
+AND cc.Codigo IS NOT NULL
 GROUP BY cliente.Codigo, cliente.CUIT, cliente.nombre_cliente, cliente.Calle,
-         distrito.NombreDistrito, departamento.cod_postal, departamento.NombreDepartamento,
-         provincia.Provincia, cliente.telefono, tipo_cliente.NombreTipoCliente
+         distrito.NombreDistrito, distrito.cod_postal, departamento.cod_postal,
+         departamento.NombreDepartamento, provincia.Provincia, cliente.telefono,
+         tipo_cliente.NombreTipoCliente
 """
 
 

@@ -135,8 +135,7 @@ def preview(request, tipo: str):
         extractor = EXTRACTORS[tipo]
         kwargs = {}
         if tipo in {"PD", "ES", "VD"}:
-            proveedores = parse_proveedores(cfg.codigo_proveedor_principal)
-            kwargs["codigo_prov"] = proveedores[0] if proveedores else "TODOS"
+            kwargs["codigos_prov"] = parse_proveedores(cfg.codigo_proveedor_principal)
         page_num = to_int_or_none(request.GET.get("page")) or 1
         per_page = 50
         raw = extractor.fetch_rows(None, export_cfg, limit=per_page, offset=(page_num - 1) * per_page, **kwargs)

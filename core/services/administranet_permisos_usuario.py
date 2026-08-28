@@ -35,6 +35,7 @@ REPORTS_PERMISSIONS_FOR_SUPERVISOR = {
     "reports.exportar",
     "reports.builder",
     "reports.programar",
+    "reports.licenciatarios_clasificar_superart",
 }
 
 

@@ -24,7 +24,7 @@ from mtrix.services.csv_serializer import TIPOS_ORDEN, serialize
 
 logger = logging.getLogger(__name__)
 
-TIPOS_POR_PROVEEDOR = {"PD", "ES", "VD"}
+TIPOS_CON_FILTRO_PROV = {"PD", "ES", "VD"}
 
 
 def job_dir(base_empresa: str, job_id) -> Path:
@@ -117,22 +117,21 @@ def ejecutar_job(job_id) -> MtrixJob:
         generated_at = datetime.now()
         ser_cfg = export_cfg.to_serializer_cfg()
         for tipo in TIPOS_ORDEN:
-            proveedores = export_cfg.proveedores if tipo in TIPOS_POR_PROVEEDOR else ["TODOS"]
             extractor = EXTRACTORS[tipo]
-            for i, prov in enumerate(proveedores):
-                _append_log(job, f"Generando {tipo} ({prov})…")
-                kwargs = {}
-                if tipo in TIPOS_POR_PROVEEDOR:
-                    kwargs["codigo_prov"] = prov
-                rows = extractor.fetch_rows(None, export_cfg, **kwargs)
-                if not rows:
-                    _append_log(job, f"Sin datos {tipo} ({prov}); archivo no creado.")
-                    continue
-                if i:
-                    generated_at = datetime.now()
-                filename, data = serialize(tipo, rows, ser_cfg, generated_at)
-                _escribir_artefacto(job, tipo, prov, filename, data, len(rows))
-                _append_log(job, f"Archivo {filename} ({len(rows)} filas).")
+            kwargs = {}
+            etiqueta = "TODOS"
+            if tipo in TIPOS_CON_FILTRO_PROV:
+                kwargs["codigos_prov"] = export_cfg.proveedores
+                if export_cfg.proveedores and export_cfg.proveedores != ["TODOS"]:
+                    etiqueta = ",".join(export_cfg.proveedores)
+            _append_log(job, f"Generando {tipo} ({etiqueta})…")
+            rows = extractor.fetch_rows(None, export_cfg, **kwargs)
+            if not rows:
+                _append_log(job, f"Sin datos {tipo} ({etiqueta}); archivo no creado.")
+                continue
+            filename, data = serialize(tipo, rows, ser_cfg, generated_at)
+            _escribir_artefacto(job, tipo, etiqueta, filename, data, len(rows))
+            _append_log(job, f"Archivo {filename} ({len(rows)} filas).")
         job.status = MtrixJob.Estado.COMPLETED
         job.finished_at = timezone.now()
         job.progreso = "Completado"

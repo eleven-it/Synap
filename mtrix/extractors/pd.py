@@ -1,12 +1,17 @@
-"""Extractor PD — productos por proveedor."""
+"""Extractor PD — productos. Un archivo por corrida; filtro IN si hay lista."""
 
 from __future__ import annotations
 
-from mtrix.extractors.base import ExportConfig, fetch_all
+from mtrix.extractors.base import (
+    ExportConfig,
+    fetch_all,
+    normalizar_codigos_prov,
+    sql_filtro_proveedor,
+)
 from core.mysql_pool import mysql_cursor
 
 
-def _sql(codigo_prov: str) -> tuple[str, list]:
+def _sql(codigo_prov: str = "TODOS", codigos_prov: list[str] | None = None) -> tuple[str, list]:
     sql = """
 SELECT
     IF(articulo.codartprov IS NOT NULL AND articulo.codartprov <> '',
@@ -23,15 +28,24 @@ FROM articulo
 LEFT JOIN marca ON (articulo.CodigoMarca = marca.CodMarca)
 LEFT JOIN rubro ON (articulo.CodigoRubro = rubro.CodigoRubro)
 """
-    params: list = []
-    if codigo_prov and codigo_prov != "TODOS":
-        sql += " WHERE articulo.CodigoProveedor = %s"
-        params.append(int(codigo_prov))
+    filtro, params = sql_filtro_proveedor(
+        normalizar_codigos_prov(codigo_prov=codigo_prov, codigos_prov=codigos_prov)
+    )
+    if filtro:
+        sql += f" WHERE {filtro}"
     return sql, params
 
 
-def fetch_rows(conn, cfg: ExportConfig, *, codigo_prov: str = "TODOS", limit=None, offset=0) -> list[dict]:
-    sql, params = _sql(codigo_prov)
+def fetch_rows(
+    conn,
+    cfg: ExportConfig,
+    *,
+    codigo_prov: str = "TODOS",
+    codigos_prov: list[str] | None = None,
+    limit=None,
+    offset=0,
+) -> list[dict]:
+    sql, params = _sql(codigo_prov=codigo_prov, codigos_prov=codigos_prov)
     if limit is not None:
         sql += " LIMIT %s OFFSET %s"
         params.extend([int(limit), int(offset)])
@@ -39,5 +53,11 @@ def fetch_rows(conn, cfg: ExportConfig, *, codigo_prov: str = "TODOS", limit=Non
         return fetch_all(cursor, sql, params)
 
 
-def count_rows(conn, cfg: ExportConfig, *, codigo_prov: str = "TODOS") -> int:
-    return len(fetch_rows(conn, cfg, codigo_prov=codigo_prov))
+def count_rows(
+    conn,
+    cfg: ExportConfig,
+    *,
+    codigo_prov: str = "TODOS",
+    codigos_prov: list[str] | None = None,
+) -> int:
+    return len(fetch_rows(conn, cfg, codigo_prov=codigo_prov, codigos_prov=codigos_prov))

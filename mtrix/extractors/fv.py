@@ -11,7 +11,6 @@ SELECT DISTINCT
     IF(cliente.CUIT IS NOT NULL AND cliente.CUIT <> '' AND cliente.CUIT <> '0',
        REPLACE(cliente.CUIT,'-',''), '0') AS CNPJ_CLIENTE,
     cliente.Codigo AS COD_CLIENTE,
-    cliente.nombre_cliente AS RAZAO_SOCIAL,
     CAST(cuentacliente.CodViajante AS CHAR(20)) AS COD_VENDEDOR,
     IF(viajantes.Nombre IS NOT NULL AND viajantes.Nombre <> '',
        viajantes.Nombre, cuentacliente.CodViajante) AS NOME_VENDEDOR,
@@ -26,8 +25,7 @@ WHERE cuentacliente.Anulado = 'No'
   AND cuentacliente.TipoComprobante <> 'REC'
   AND cuentacliente.Fecha BETWEEN %s AND %s
   AND cuentacliente.CodViajante IS NOT NULL
-GROUP BY cliente.CUIT, cliente.Codigo, cliente.nombre_cliente,
-         cuentacliente.CodViajante, viajantes.Nombre
+GROUP BY cliente.CUIT, cliente.Codigo, cuentacliente.CodViajante, viajantes.Nombre
 """
 
 

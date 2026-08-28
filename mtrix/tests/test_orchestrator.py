@@ -96,3 +96,56 @@ class OrchestratorTests(TestCase):
             self.assertTrue(dest.exists())
             self.assertTrue(any(p.suffix == ".csv" for p in dest.iterdir()))
             self.assertEqual(datetime.fromisoformat(str(job.fecha_desde)).strftime("%Y-%m-%d") if False else str(job.fecha_desde), "2026-08-01")
+
+    @override_settings(MEDIA_ROOT="")
+    def test_un_archivo_por_tipo_aunque_haya_varios_proveedores(self):
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        with override_settings(MEDIA_ROOT=tmp.name):
+            job = crear_job(base_empresa=self.base, origen=MtrixJob.Origen.UI, triggered_by="op")
+            llamadas = []
+
+            def make_ext(tipo, rows):
+                m = MagicMock()
+
+                def fetch(_conn, _cfg, **kwargs):
+                    llamadas.append((tipo, kwargs.get("codigos_prov")))
+                    return rows
+
+                m.fetch_rows.side_effect = fetch
+                return m
+
+            row_pd = {
+                "CODIGO_PRODUTO": "A",
+                "DESCRICAO": "Art",
+                "DIVISAO_MARCA": "M",
+                "DIVISAO_RUBRO": "R",
+                "EAN": "1",
+                "DISCONTINUO": "No",
+            }
+            extractors = {
+                "CI": make_ext("CI", []),
+                "PD": make_ext("PD", [row_pd]),
+                "ES": make_ext("ES", []),
+                "VD": make_ext("VD", []),
+                "FV": make_ext("FV", []),
+            }
+            cfg = _export_cfg(self.base)
+            cfg.proveedores = ["23", "29", "31"]
+            with patch("mtrix.services.orchestrator.EXTRACTORS", extractors), patch(
+                "mtrix.services.orchestrator.config_to_export",
+                return_value=cfg,
+            ):
+                ejecutar_job(job.id)
+            job.refresh_from_db()
+            self.assertEqual(job.status, MtrixJob.Estado.COMPLETED)
+            self.assertEqual(llamadas, [
+                ("CI", None),
+                ("PD", ["23", "29", "31"]),
+                ("ES", ["23", "29", "31"]),
+                ("VD", ["23", "29", "31"]),
+                ("FV", None),
+            ])
+            tipos = list(MtrixArtifact.objects.filter(job=job).values_list("tipo", flat=True))
+            self.assertEqual(tipos, ["PD"])
+            self.assertEqual(MtrixArtifact.objects.filter(job=job, tipo="PD").count(), 1)

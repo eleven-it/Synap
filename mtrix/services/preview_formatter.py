@@ -26,6 +26,7 @@ def format_row(tipo: str, row: dict) -> dict:
     salida = dict(row)
     if tipo == "CI":
         salida["CNPJ_CLIENTE"] = cnpj_cliente_mtrix(row.get("CNPJ_CLIENTE"), row.get("RAZAO_SOCIAL"))
+        salida["CIDADE"] = row.get("CIDADE") or row.get("CIUDAD")
     elif tipo == "VD":
         salida["COD_CLIENTE"] = cnpj_cliente_mtrix(
             row.get("COD_CLIENTE") or row.get("CNPJ_CLIENTE"),
@@ -40,7 +41,7 @@ def format_row(tipo: str, row: dict) -> dict:
         if tipo == "ES":
             salida["DT_ESTOQUE"] = _fecha_pantalla(row.get("DT_ESTOQUE") or row.get("DATA"))
     elif tipo == "FV":
-        salida["CNPJ_CLIENTE"] = cnpj_cliente_mtrix(row.get("CNPJ_CLIENTE"), row.get("RAZAO_SOCIAL"))
+        # V.3.5 exporta el CUIT crudo; el preview no lo reemplaza por 99999999999.
         salida.setdefault("COD_GERENTE", "1")
         salida.setdefault("NOME_GERENTE", "GERENTE GENERAL")
         salida.setdefault("COD_SUPERVISOR", "1")

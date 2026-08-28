@@ -25,7 +25,7 @@ class MtrixConfig(models.Model):
         _("Códigos de proveedor"),
         max_length=255,
         blank=True,
-        help_text=_("Vacío = todos. Lista separada por comas, ej. 23,29,31"),
+        help_text=_("Vacío = todos. Lista separada por comas, ej. 23,29,31. Un archivo por categoría."),
     )
     cnpj_fornecedor = models.CharField(_("CNPJ fornecedor"), max_length=20, blank=True)
     pvnf = models.BooleanField(

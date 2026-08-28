@@ -234,6 +234,10 @@ PERMISOS_POR_MODULO = {
         ("reports.schedules", "Gestionar programación de reportes"),
         ("reports.ai", "Usar funcionalidades de IA para reportes"),
         ("reports.dabra_consolidado_remitos", "Informe DABRA consolidado remitos"),
+        (
+            "reports.licenciatarios_clasificar_superart",
+            "Clasificar SuperArt en informe ventas mensuales licenciatarios",
+        ),
     ],
     "Usuarios": [
         ("usuarios.ver", "Ver usuarios"),

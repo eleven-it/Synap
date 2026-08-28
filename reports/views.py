@@ -9,7 +9,7 @@ from django.shortcuts import redirect
 def _(s): return s
 from django.views.generic import TemplateView
 
-from core.utils.permissions import user_has_full_access
+from core.utils.permissions import user_has_full_access, user_has_permission
 from .domain import build_catalog_for_user
 from .models import ReportDefinition, ReportWorkspace
 from .permissions import (
@@ -361,9 +361,10 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["can_edit_licenciatarios_match"] = user_has_full_access(
                 self.request.user
             )
-            context["can_edit_licenciatarios_superart"] = context[
-                "can_edit_licenciatarios_match"
-            ]
+            context["can_edit_licenciatarios_superart"] = user_has_permission(
+                self.request.user,
+                "reports.licenciatarios_clasificar_superart",
+            )
             context["licenciatarios_matches_api_url"] = reverse(
                 "reports-api:reports-licenciatarios-client-matches"
             )

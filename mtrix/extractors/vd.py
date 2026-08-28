@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
-from mtrix.extractors.base import ExportConfig, fetch_all
+from mtrix.extractors.base import (
+    ExportConfig,
+    fetch_all,
+    normalizar_codigos_prov,
+    sql_filtro_proveedor,
+)
 from core.mysql_pool import mysql_cursor
 
 
-def _sql(cfg: ExportConfig, codigo_prov: str) -> tuple[str, list]:
+def _sql(
+    cfg: ExportConfig,
+    codigo_prov: str = "TODOS",
+    codigos_prov: list[str] | None = None,
+) -> tuple[str, list]:
     sql = """
 SELECT
     IF(cliente.CUIT IS NOT NULL AND cliente.CUIT <> '' AND cliente.CUIT <> '0',
@@ -27,23 +36,35 @@ RIGHT JOIN stock ON (stock.CodigoMovimiento = cuentacliente.CodigoMovimiento)
 LEFT JOIN articulo ON (articulo.IDArt = stock.IDArt)
 LEFT JOIN cliente ON (cliente.Codigo = cuentacliente.Codigo)
 LEFT JOIN departamento ON (cliente.IDDepartamento = departamento.IDDepartamento)
+LEFT JOIN distrito ON (cliente.IDDistrito = distrito.IDDistrito)
 LEFT JOIN punto_venta ON (punto_venta.id_punto_venta = cuentacliente.id_pv)
 WHERE cuentacliente.Anulado = 'No'
   AND cuentacliente.TipoComprobante <> 'REC'
   AND cuentacliente.Fecha BETWEEN %s AND %s
 """
     params: list = [cfg.fecha_desde, cfg.fecha_hasta]
-    if codigo_prov and codigo_prov != "TODOS":
-        sql += " AND articulo.CodigoProveedor = %s"
-        params.append(int(codigo_prov))
+    filtro, extra = sql_filtro_proveedor(
+        normalizar_codigos_prov(codigo_prov=codigo_prov, codigos_prov=codigos_prov)
+    )
+    if filtro:
+        sql += f" AND {filtro}"
+        params.extend(extra)
     if not cfg.pvnf:
         sql += " AND punto_venta.cont = 'Si'"
     sql += " ORDER BY cuentacliente.NroComprobante, stock.id_stock"
     return sql, params
 
 
-def fetch_rows(conn, cfg: ExportConfig, *, codigo_prov: str = "TODOS", limit=None, offset=0) -> list[dict]:
-    sql, params = _sql(cfg, codigo_prov)
+def fetch_rows(
+    conn,
+    cfg: ExportConfig,
+    *,
+    codigo_prov: str = "TODOS",
+    codigos_prov: list[str] | None = None,
+    limit=None,
+    offset=0,
+) -> list[dict]:
+    sql, params = _sql(cfg, codigo_prov=codigo_prov, codigos_prov=codigos_prov)
     if limit is not None:
         sql += " LIMIT %s OFFSET %s"
         params.extend([int(limit), int(offset)])
@@ -51,5 +72,11 @@ def fetch_rows(conn, cfg: ExportConfig, *, codigo_prov: str = "TODOS", limit=Non
         return fetch_all(cursor, sql, params)
 
 
-def count_rows(conn, cfg: ExportConfig, *, codigo_prov: str = "TODOS") -> int:
-    return len(fetch_rows(conn, cfg, codigo_prov=codigo_prov))
+def count_rows(
+    conn,
+    cfg: ExportConfig,
+    *,
+    codigo_prov: str = "TODOS",
+    codigos_prov: list[str] | None = None,
+) -> int:
+    return len(fetch_rows(conn, cfg, codigo_prov=codigo_prov, codigos_prov=codigos_prov))

@@ -11,7 +11,7 @@ from typing import Iterable, Tuple
 
 from core.utils.administranet_types import str_or_default, to_decimal_or_none
 
-from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
+from reports.services.articulo_venta_sql import sql_solo_tipo_art_articulo
 from reports.services.comprobante_descuento_cabecera import sql_factor_descuento_cabecera_expr
 
 TIPOS_FAC: Tuple[str, ...] = ("FA", "FB", "FC", "FE", "FM")
@@ -102,7 +102,7 @@ def sql_stock_tipo_comp_in_clause() -> str:
 
 
 def sql_base_where_clauses(date_from_param: str = "%s", date_to_param: str = "%s") -> list[str]:
-    """Cláusulas WHERE base VMM: fechas, anulados, tipos comprobante, stock y no Gasto."""
+    """Cláusulas WHERE base VMM: fechas, anulados, tipos comprobante, stock y solo Articulo."""
     return [
         f"cc.Fecha >= {date_from_param}",
         f"cc.Fecha <= {date_to_param}",
@@ -111,7 +111,7 @@ def sql_base_where_clauses(date_from_param: str = "%s", date_to_param: str = "%s
         f"cc.TipoComprobante IN ({sql_comprobantes_in_clause()})",
         "st.Anulado = 'No'",
         f"st.TipoComp IN ({sql_stock_tipo_comp_in_clause()})",
-        sql_excluir_tipo_art_gasto("art"),
+        sql_solo_tipo_art_articulo("art"),
     ]
 
 

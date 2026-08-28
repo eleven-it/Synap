@@ -541,7 +541,7 @@ class VentasMarcasMensualRulesExtractedTests(SimpleTestCase):
         self.assertIn("'FA'", joined)
         self.assertIn("'NCA'", joined)
         self.assertIn("'Venta TPV'", joined)
-        self.assertIn("art.tipo_art <> 'Gasto'", joined)
+        self.assertIn("art.tipo_art = 'Articulo'", joined)
 
     def test_signo_sql_contiene_fac_y_nc(self):
         qty_sql = sql_signo_qty_expr()
@@ -573,7 +573,7 @@ class VentasMensualesLicenciatariosQueryTests(SimpleTestCase):
         self.assertIn("st.Anulado = 'No'", sql)
         self.assertIn("art.CodigoMarca = (", sql)
         self.assertIn("m.NombreMarca = %s", sql)
-        self.assertIn("art.tipo_art <> 'Gasto'", sql)
+        self.assertIn("art.tipo_art = 'Articulo'", sql)
 
     def test_build_anet_sales_sql_importe_post_pie(self):
         """ANET amounts MUST usar el mismo factor cabecera que VMM (SubtotalDesc/SubTotal1)."""
@@ -1479,20 +1479,37 @@ class LicenciatariosSuperArtApiTests(TestCase):
         register_qa_pending("API-SA-1", {"cliente": 1})
         register_qa_pending("API-SA-2")
 
-    def _user(self, *, supervisor=False, operational=True):
+    def _user(self, *, supervisor=False, operational=True, clasificar=False):
         user = Mock()
         user.is_authenticated = True
         user.is_superuser = False
         user.is_admin = Mock(return_value=False)
         user.cod_usuario = "supervisor" if supervisor else "vendedor"
-        user.tiene_permiso = lambda p: operational and p == "reports.view_operational"
+        user.nombre_puesto = "Supervisor" if clasificar and not supervisor else "Vendedor"
+
+        def _tiene_permiso(p):
+            if operational and p == "reports.view_operational":
+                return True
+            if clasificar and p == "reports.licenciatarios_clasificar_superart":
+                return True
+            if clasificar and p == "reports.*":
+                return True
+            return False
+
+        user.tiene_permiso = _tiene_permiso
+        user.get_permisos_totales = Mock(
+            return_value=(
+                {"reports.view_operational", "reports.licenciatarios_clasificar_superart", "reports.*"}
+                if clasificar
+                else ({"reports.view_operational"} if operational else set())
+            )
+        )
         return user
 
     def _session(self):
         return {"user": {"base_empresa": "emp_test", "id_usuario": 7, "nombre": "Tester"}}
 
-    @patch("reports.ventas_mensuales_licenciatarios_api_views.user_has_full_access", return_value=False)
-    def test_get_superart_qa_sin_edicion(self, _full):
+    def test_get_superart_qa_sin_edicion(self):
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from reports.ventas_mensuales_licenciatarios_api_views import (
@@ -1523,8 +1540,7 @@ class LicenciatariosSuperArtApiTests(TestCase):
         response = LicenciatariosSuperArtQAListAPIView.as_view()(request)
         self.assertEqual(response.status_code, 403)
 
-    @patch("reports.ventas_mensuales_licenciatarios_api_views.user_has_full_access", return_value=False)
-    def test_post_superart_qa_rechaza_sin_full_access(self, _full):
+    def test_post_superart_qa_rechaza_sin_permiso_clasificar(self):
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from reports.ventas_mensuales_licenciatarios_api_views import (
@@ -1542,8 +1558,30 @@ class LicenciatariosSuperArtApiTests(TestCase):
         response = LicenciatariosSuperArtQAListAPIView.as_view()(request)
         self.assertEqual(response.status_code, 403)
 
-    @patch("reports.ventas_mensuales_licenciatarios_api_views.user_has_full_access", return_value=True)
-    def test_post_superart_qa_clasifica_y_elimina_pending(self, _full):
+    def test_post_superart_qa_puesto_supervisor_puede_clasificar(self):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_mensuales_licenciatarios_api_views import (
+            LicenciatariosSuperArtQAListAPIView,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/reports/licenciatarios/superart-qa/",
+            {"superart": "API-SA-1", "genero": "men"},
+            format="json",
+        )
+        force_authenticate(request, user=self._user(clasificar=True))
+        request.session = self._session()
+        response = LicenciatariosSuperArtQAListAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["genero"], "men")
+        self.assertFalse(
+            MonthlyReportingSuperArtQAPending.objects.filter(superart="API-SA-1").exists()
+        )
+        self.assertGreaterEqual(response.data["pending_count"], 1)
+
+    def test_post_superart_qa_clasifica_y_elimina_pending(self):
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from reports.ventas_mensuales_licenciatarios_api_views import (
