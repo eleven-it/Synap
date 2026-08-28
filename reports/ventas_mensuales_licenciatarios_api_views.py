@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.utils.administranet_types import str_or_default, to_int_or_none
-from core.utils.permissions import user_has_full_access
+from core.utils.permissions import user_has_full_access, user_has_permission
 
 from reports.models import MonthlyReportingClientMatch
 from reports.permissions import OperationalReportsPermission
@@ -30,6 +30,13 @@ from reports.services.monthly_reporting_superart_service import (
 from reports.services.ventas_mensuales_licenciatarios_query import search_anet_clients
 
 logger = logging.getLogger(__name__)
+
+PERM_CLASIFICAR_SUPERART = "reports.licenciatarios_clasificar_superart"
+
+
+def _can_clasificar_superart(user) -> bool:
+    """Supervisor (puesto/usuario) o permiso dedicado de clasificación SuperArt."""
+    return user_has_permission(user, PERM_CLASIFICAR_SUPERART)
 
 
 def _base_empresa_request(request) -> str:
@@ -190,7 +197,7 @@ class LicenciatariosSuperArtQAListAPIView(APIView):
     permission_classes = [OperationalReportsPermission]
 
     def get(self, request, *args, **kwargs):
-        can_edit = user_has_full_access(request.user)
+        can_edit = _can_clasificar_superart(request.user)
         active = get_active_catalog_version()
         pending = [serialize_qa_pending(p) for p in list_qa_pending()[:500]]
         return Response(
@@ -203,11 +210,13 @@ class LicenciatariosSuperArtQAListAPIView(APIView):
         )
 
     def post(self, request, *args, **kwargs):
-        if not user_has_full_access(request.user):
+        if not _can_clasificar_superart(request.user):
             return Response(
                 {
                     "detail": (
-                        "Solo usuarios con alcance global autorizado pueden "
+                        "Se requiere el permiso "
+                        f"«{PERM_CLASIFICAR_SUPERART}» "
+                        "(puesto Supervisor o asignación explícita) para "
                         "clasificar SuperArt desconocidos."
                     ),
                 },
@@ -252,11 +261,13 @@ class LicenciatariosSuperArtQABulkAPIView(APIView):
     permission_classes = [OperationalReportsPermission]
 
     def post(self, request, *args, **kwargs):
-        if not user_has_full_access(request.user):
+        if not _can_clasificar_superart(request.user):
             return Response(
                 {
                     "detail": (
-                        "Solo usuarios con alcance global autorizado pueden "
+                        "Se requiere el permiso "
+                        f"«{PERM_CLASIFICAR_SUPERART}» "
+                        "(puesto Supervisor o asignación explícita) para "
                         "clasificar SuperArt desconocidos."
                     ),
                 },

@@ -12,7 +12,8 @@ Se excluyen renglones cuyo `articulo.tipo_art = 'Gasto'` en:
 - **Inventario por etapa** (`/stock/inventario/` y `/mpr/inventario/`, servicio `inventario_tabla`)
 
 - Conserva renglones **sin artículo** (LEFT JOIN: `IDArt` nulo) y `tipo_art` nulo: no son Gasto.
-- No exige `tipo_art = 'Articulo'` (el valor `Servicio` sigue salvo que el informe tenga otra regla).
+- No exige `tipo_art = 'Articulo'` en el helper genérico (el valor `Servicio` sigue salvo que el informe tenga otra regla).
+- **Excepción VMM / licenciatarios ANET:** `sql_solo_tipo_art_articulo` — solo `tipo_art = 'Articulo'` (descarta `Gasto` y `Servicio`, p. ej. «Saldo inicial»).
 - **No aplica** a listados cuyo objeto sea precisamente gastos.
 
 En Best Sox local, `articulo.tipo_art` suele ser `Articulo` / `Gasto` / `Servicio` (VARCHAR). No confundir con `tipo_art_fab`.
@@ -21,8 +22,8 @@ En Best Sox local, `articulo.tipo_art` suele ser `Articulo` / `Gasto` / `Servici
 
 | Informe / servicio | Alias | Notas |
 |--------------------|-------|--------|
-| Ventas marcas mensual + export | `art` | Via `sql_base_where_clauses()` |
-| Ventas mensuales licenciatarios (tramo ANET) | `art` | Misma cláusula VMM |
+| Ventas marcas mensual + export | `art` | **Solo `tipo_art = 'Articulo'`** vía `sql_solo_tipo_art_articulo` en `sql_base_where_clauses()` (excluye Gasto y Servicio) |
+| Ventas mensuales licenciatarios (tramo ANET) | `art` | Misma cláusula VMM (solo Articulo) |
 | Ventas por marca y SuperArt | `art` | WHERE del runner |
 | Ventas netas (dimensiones stock) | `art` | rubro/subrubro/artículo/marca/zona/tipo cliente/proveedor |
 | Utilidad gerencial | `arti` | Consultas sobre `_JOINS` de stock |
