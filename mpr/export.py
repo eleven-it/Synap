@@ -35,6 +35,169 @@ def _celda_csv(val: Any) -> str:
     return str(val)
 
 
+def _escribir_seccion_csv(
+    writer: csv.writer,
+    titulo: str,
+    columnas: Sequence[Tuple[str, str]],
+    filas: Iterable[Dict[str, Any]],
+) -> None:
+    writer.writerow([])
+    writer.writerow([titulo])
+    writer.writerow([titulo_col for _, titulo_col in columnas])
+    for fila in filas or []:
+        writer.writerow([_celda_csv(fila.get(clave)) for clave, _ in columnas])
+
+
+def _cantidad_export(fila: Dict[str, Any], clave: str, modo: str) -> Any:
+    if modo == "docenas":
+        display = fila.get(f"{clave}_display")
+        if display is not None and str(display).strip():
+            return display
+    return fila.get(clave)
+
+
+def analisis_trazabilidad_a_csv(
+    analisis: Dict[str, Any],
+    *,
+    modo: str = "docenas",
+    fecha_desde_display: str = "",
+    fecha_hasta_display: str = "",
+) -> bytes:
+    """
+    CSV multi-sección del análisis trazabilidad artículo (UTF-8 BOM).
+
+    Secciones: resumen, demanda PED, stock/brecha, movimientos, eventos MPR, a producir.
+    """
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    writer = csv.writer(buf, lineterminator="\r\n")
+
+    articulo = analisis.get("articulo") or {}
+    kpis = analisis.get("kpis") or {}
+    demanda = analisis.get("demanda_ped") or {}
+    stock = analisis.get("stock") or {}
+    brechas = analisis.get("brechas") or {}
+    a_producir = analisis.get("a_producir") or {}
+    saldo_inicial = analisis.get("saldo_inicial") or {}
+    movimientos = analisis.get("movimientos") or []
+    eventos = analisis.get("eventos_mpr") or []
+
+    writer.writerow(["Análisis trazabilidad artículo"])
+    writer.writerow(["Código", articulo.get("codigo") or "-"])
+    writer.writerow(["Descripción", articulo.get("descripcion") or "-"])
+    writer.writerow(["ID artículo", articulo.get("id") or ""])
+    periodo = ""
+    if fecha_desde_display or fecha_hasta_display:
+        periodo = f"{fecha_desde_display} — {fecha_hasta_display}".strip(" —")
+    writer.writerow(["Período", periodo])
+    writer.writerow(["Saldo inicial", saldo_inicial.get("valor", 0)])
+    writer.writerow(["Saldo inicial calculado", "Sí" if saldo_inicial.get("calculado_ok") else "No"])
+
+    writer.writerow([])
+    writer.writerow(["Resumen KPI"])
+    writer.writerow(["Concepto", "Valor"])
+    writer.writerow(["Pedido (P_ped)", kpis.get("pedido", 0)])
+    writer.writerow(["Terminado", kpis.get("terminado", 0)])
+    writer.writerow(["PED Urgente", kpis.get("ped_urgente", 0)])
+    writer.writerow(["TOT Urgente", kpis.get("tot_urgente", 0)])
+    writer.writerow(["Saldo final", kpis.get("saldo_final", 0)])
+
+    demanda_filas = []
+    for ped in demanda.get("filas") or []:
+        demanda_filas.append({
+            "nro_pedido": ped.get("nro_pedido") or "-",
+            "nombre_cliente": ped.get("nombre_cliente") or "-",
+            "fecha": ped.get("fecha") or "-",
+            "cantidad_pendiente_prod": _cantidad_export(
+                ped, "cantidad_pendiente_prod", modo
+            ),
+        })
+    _escribir_seccion_csv(
+        writer,
+        "DEMANDA PED",
+        [
+            ("nro_pedido", "Nº pedido"),
+            ("nombre_cliente", "Cliente"),
+            ("fecha", "Fecha"),
+            ("cantidad_pendiente_prod", "Pendiente"),
+        ],
+        demanda_filas,
+    )
+    writer.writerow([])
+    writer.writerow(["Total P_ped", demanda.get("totales", {}).get("p_ped", 0)])
+
+    writer.writerow([])
+    writer.writerow(["STOCK Y BRECHA"])
+    writer.writerow(["Concepto", "Valor"])
+    writer.writerow(["Terminado", stock.get("terminado", 0)])
+    writer.writerow(["Terminado negativo", "Sí" if stock.get("negativo") else "No"])
+    writer.writerow(["PED Urgente", brechas.get("ped_urgente", 0)])
+    writer.writerow(["TOT Urgente", brechas.get("tot_urgente", 0)])
+    writer.writerow(["Reserva", brechas.get("reserva", 0)])
+    writer.writerow(["Texto explicativo", brechas.get("texto_explicativo") or ""])
+
+    mov_filas = []
+    for mov in movimientos:
+        mov_filas.append({
+            "fecha_display": mov.get("fecha_display") or "-",
+            "tipo_mov": mov.get("tipo_mov") or mov.get("clase_ui") or "-",
+            "nro_comprobante": mov.get("nro_comprobante") or "-",
+            "detalle": mov.get("detalle") or "",
+            "entrada": _cantidad_export(mov, "entrada", modo),
+            "salida": _cantidad_export(mov, "salida", modo),
+            "saldo_corrido": mov.get("saldo_corrido", ""),
+            "afecta_deposito": mov.get("afecta_deposito"),
+            "operario": mov.get("operario") or "-",
+        })
+    _escribir_seccion_csv(
+        writer,
+        "MOVIMIENTOS",
+        [
+            ("fecha_display", "Fecha"),
+            ("tipo_mov", "Tipo"),
+            ("nro_comprobante", "Comprobante"),
+            ("detalle", "Detalle"),
+            ("entrada", "Entrada"),
+            ("salida", "Salida"),
+            ("saldo_corrido", "Saldo corrido"),
+            ("afecta_deposito", "Afecta depósito"),
+            ("operario", "Operario"),
+        ],
+        mov_filas,
+    )
+
+    evento_filas = []
+    for ev in eventos:
+        evento_filas.append({
+            "fecha_display": ev.get("fecha_display") or "-",
+            "tipo_label": ev.get("tipo_label") or ev.get("tipo") or "-",
+            "cantidad": _cantidad_export(ev, "cantidad", modo),
+            "detalle": ev.get("detalle") or "",
+            "operario": ev.get("operario") or "-",
+        })
+    _escribir_seccion_csv(
+        writer,
+        "EVENTOS MPR",
+        [
+            ("fecha_display", "Fecha"),
+            ("tipo_label", "Tipo"),
+            ("cantidad", "Cantidad"),
+            ("detalle", "Detalle"),
+            ("operario", "Operario"),
+        ],
+        evento_filas,
+    )
+
+    writer.writerow([])
+    writer.writerow(["A PRODUCIR"])
+    writer.writerow(["Concepto", "Valor"])
+    writer.writerow(["Cantidad a producir", a_producir.get("cantidad", 0)])
+    writer.writerow(["Capacidad Semi", a_producir.get("capacidad_semi", 0)])
+    writer.writerow(["Alerta Semi cero", "Sí" if a_producir.get("alerta_semi_cero") else "No"])
+
+    return buf.getvalue().encode("utf-8")
+
+
 def _fmt_fecha_export(val: Any) -> str:
     if isinstance(val, datetime):
         val = val.date()

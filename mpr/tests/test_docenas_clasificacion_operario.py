@@ -185,6 +185,37 @@ class PresentacionOperativaTests(SimpleTestCase):
         self.assertEqual(fila["resta_urgente_display"], "24")
         self.assertEqual(fila["produccion_display"], "12")
 
+    def test_tablero_terminado_muestra_stock_negativo(self):
+        """Columna Terminado (total) muestra saldo real, sin clamp a 0."""
+        fila = enriquecer_fila_tablero_presentacion(
+            {
+                "dem_ped": 225,
+                "dem_res": 0,
+                "resta_urgente": 254,
+                "resta_urgente_ped": 254,
+                "resta_total": 254,
+                "total": -29,
+                "terminado": -29,
+                "stock_terminado": -29,
+            },
+            "unidades",
+        )
+        self.assertEqual(fila["total_display"], "-29")
+        self.assertTrue(fila["total_es_negativo"])
+        self.assertEqual(fila["terminado_display"], "-29")
+        self.assertTrue(fila["terminado_es_negativo"])
+        self.assertEqual(fila["stock_terminado_display"], "-29")
+        # Demanda sigue sin mostrar negativos.
+        self.assertEqual(fila["resta_urgente_display"], "254")
+
+        fila_doc = enriquecer_fila_tablero_presentacion(
+            {"total": -29, "resta_urgente": 254},
+            "docenas",
+        )
+        # -29 pares → -2.42 docenas → redondeo -2
+        self.assertEqual(fila_doc["total_display"], "-2")
+        self.assertTrue(fila_doc["total_es_negativo"])
+
     def test_enriquecer_fila_tablero_envios_display(self):
         fila = enriquecer_fila_tablero_presentacion(
             {"resta_urgente": 24, "envios": 12, "enviado": 5},

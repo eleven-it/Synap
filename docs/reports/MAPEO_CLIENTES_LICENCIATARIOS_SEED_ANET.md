@@ -53,3 +53,11 @@ Aplicación: `reports/data/monthly_reporting_seed_export/apply_matchean_matches.
 
 **Estado 17/08/2026 (Postgres local):** tras aplicar Matchean + Libro1 → **206 matched / 0 pending**.
 
+---
+
+## 4. Homónimos pendientes (seed + ANET sin match explícito)
+
+Si el cliente seed sigue en `pending` y llega una venta ANET con el mismo nombre comercial, el merger (`_normalize_customer_name` + `resolve_anet_match`) une ambas filas en la identidad `seed:…` para no duplicar (caso VARTAT).
+
+La normalización pasa a mayúsculas, reemplaza puntuación por espacio y colapsa blancos: «VARTAT S.A.» y «vartat s.a» son la misma clave. Un match explícito (`estado=matched` + `anet_cliente_id`) sigue ganando sobre el homónimo pendiente.
+

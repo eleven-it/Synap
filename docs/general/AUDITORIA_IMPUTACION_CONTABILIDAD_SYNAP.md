@@ -84,7 +84,7 @@ Resolución: `resolver_politica(base_empresa)` (default → override). Hash: `ca
 
 - Tabla: `cuentacliente` (no mezclar con compras).
 - Tipos: facturas venta `FA`/`FB`/`FC`/`FE`/`FM` (concepto 1) + `REC` (concepto 5).
-- Gating (regla AdministraNET): **`punto_venta.cont='Si'`** (clientes). Compras/pagos usan **`sucursales.cont='Si'`** (proveedores).
+- Gating (regla AdministraNET): **`punto_venta.cont='Si'`** para ventas/cobranzas (REC-20) **y** para compras/pagos (REC-18, alineado desde 25/08/2026). `sucursales.cont` no sustituye al PV en checks ni regeneración.
 - Referencias: H54 (venta), H55 (REC).
 - **Regeneración (REC-20):** dry-run/apply vía el mismo motor que compras (`cont_recalculo_service`); marca `REGEN auditoria (bug factura/REC sin asiento)`; conceptos 1/5; gating `punto_venta.cont`. Fuera de alcance: integridad de anulación venta/REC y NC/ND.
 - Baseline `administranet89` (25/07/2026, post-restore, solo `pv.cont='Si'`): 2 huérfanos FA/FB balanceables (cm `58305`, `88621`); no usar `sucursales.cont` como alternativa para clientes.
@@ -187,7 +187,7 @@ Regla de oro: **cero DML/DDL en MySQL legacy**. El plan se persiste en PostgreSQ
 
 `legacy_db/services/cont_recalculo_service.py` → `dry_run(base_empresa, alcance, politica, usuario)`:
 
-1. **Regeneración de asientos faltantes compra/pago** (REC-18): comprobantes FA/FC/OP con `CodigoMovimiento>0` sin filas en `cont_asiento`; concepto 3/7; reuso de `codigo_movimiento`; `nro_asiento` simulado; ajuste de redondeo en `id_pc=300` si aplica.
+1. **Regeneración de asientos faltantes compra/pago** (REC-18): comprobantes FA/FC/OP con `CodigoMovimiento>0` sin filas en `cont_asiento`; concepto 3/7; gating `punto_venta.cont='Si'` (vía `cuentaproveedor.id_pv`); reuso de `codigo_movimiento`; `nro_asiento` simulado; ajuste de redondeo en `id_pc=300` si aplica.
 2. **Regeneración de asientos faltantes venta/cobranza** (REC-20): FA/FB/FC/FE/FM/REC en `cuentacliente` sin asiento; conceptos 1/5; gating `punto_venta.cont`; marca `REGEN auditoria (bug factura/REC sin asiento)`. Mismo paso de apply que REC-18 (antes de anulaciones/saldos).
 3. **Reparación de anulaciones incompletas** (REC-19): hallazgos de `integridad_anulacion_compra_pago` — ver tabla problema→remedio más abajo; sección UI «Reparación de anulaciones» con `anulaciones_reparables` / `anulaciones_bloqueadas`.
 4. **Concepto anulación incoherente** (REC-07 / REC-08): contra-asientos con `id_concepto_asiento` ≠ `id_concepto_anul` del original; items `accion=update`, `campo=id_concepto_asiento`, `check_id=concepto_anulacion_incoherente`, `referencia=H05`.

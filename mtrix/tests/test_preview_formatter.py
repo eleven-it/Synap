@@ -53,8 +53,26 @@ class PreviewFormatterTests(SimpleTestCase):
         }
         preview = format_row("CI", row)
         self.assertEqual(preview["CNPJ_CLIENTE"], "99999999999")
+        self.assertEqual(preview["CEP"], "9400")
         _fn, data = serialize("CI", [row], CFG, datetime(2026, 8, 12, 9, 0, 0))
         self.assertIn("99999999999", data.decode("latin-1"))
+        self.assertIn(";9400;", data.decode("latin-1"))
+
+    def test_cep_vd_incompleto_es_9400(self):
+        row = {
+            "COD_CLIENTE": "20111",
+            "RAZAO_SOCIAL": "ACME",
+            "DATA": "20230121",
+            "NOTA_FISCAL": "10",
+            "EAN": "7798130180152",
+            "QTDE": 1,
+            "PRECO": 2,
+            "VENDEDOR": "1",
+            "TIPO_COMP": "FA",
+            "CEP": "0",
+        }
+        preview = format_row("VD", row)
+        self.assertEqual(preview["CEP"], "9400")
 
     def test_fv_jerarquia_plana_en_preview(self):
         preview = format_row("FV", {"CNPJ_CLIENTE": "20111", "RAZAO_SOCIAL": "ACME"})

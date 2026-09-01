@@ -276,6 +276,9 @@ Tras el resumen del modal (`masivo_confirmar`), el front envía `POST …/confir
 - Compensación ante fallo: igual que sync — anula PEDs ya creados en la corrida, draft → `borrador`, celdas intactas, `ultimo_error` por sucursal.
 - UI (`pedidos_modal.html`, `dialogKind = masivo_progreso`): barra `hechos/total`, lista pendiente/en curso/OK/error, sin botón Cancelar mientras `confirmando`. Éxito → cierra a ~1,5 s; error → vuelve a `masivo_confirmar` editable a ~2,5 s.
 - Nombres de sucursal: backend vía `listar_sucursales_cliente`; FE resuelve desde `this.sucursales` si falta `nombre` en el evento.
+- **Detalle del PED** (`comp_ped.Detalle` / observaciones por defecto):
+  `Pedido masivo Synap draft #{id} sucursal {NroCalle}`.
+  Usa el **número de sucursal** (`clientes_domicilios.NroCalle`, el mismo que columna SUC en matriz/Excel), **no** el `id_cliente_domicilio`. Si falta NroCalle, se guarda `sucursal #{id}` como último recurso.
 
 ---
 
@@ -285,7 +288,7 @@ Resumen del corte vertical que consolidó usabilidad de pedidos y supervisor ope
 
 | Oleada | Alcance | Impacto en masivo |
 |--------|---------|-------------------|
-| **A — Supervisor/vendedor operativo** | Resolver único `resolver_viajante_operativo` + alcance (`puede_ver_todos_pedidos`: puesto Administracion / Supervisor / `ecom.pedidos.ver_todos`) | `batch_checkout_masivo.py` y `pedido_masivo_matriz.py` usan el `CodViajante` operativo (no el logueado). Al cambiar el vendedor de un **borrador**, se actualiza `draft.cod_viajante` y se recortan celdas fuera del nuevo VCM (no se limpia el pedido). |
+| **A — Supervisor/vendedor operativo** | Resolver único `resolver_viajante_operativo` + alcance (`puede_ver_todos_pedidos`: puesto Administracion / Supervisor / `ecom.pedidos.ver_todos`) | `batch_checkout_masivo.py` y `pedido_masivo_matriz.py` usan el `CodViajante` operativo (no el logueado). Al cambiar el vendedor de un **borrador**, se actualiza `draft.cod_viajante` y se recortan celdas fuera del nuevo VCM (no se limpia el pedido). Quien `puede_ver_todos_pedidos` **abre y edita** drafts de cualquier `id_usuario` de la misma empresa (`obtener_draft_accesible`). |
 | **B — VCM simple + lista RO** | Clientes/artículos por ternas del viajante efectivo; badge de lista solo lectura | Selector de vendedor + badge de lista compartidos con el simple en `pedido_masivo_sucursales.html` |
 | **C — Descuentos pedido simple** | % desc. por renglón (PATCH) y desc. al pie backend | Base de descuentos reutilizada por el masivo |
 | **D — Masivo (precio, desc, preview)** | Precio real vía `price_rules_engine` por fila; % desc. fila + pie; endpoint `POST …/pedido-masivo/preview/` (límite blando ≤200 celdas≠0); JS extraído a `static/ecom/pedido_masivo_app.mjs`; modal canon `pedidos_modal.html` reemplaza `confirm()` | **Núcleo del cambio en masivo** |

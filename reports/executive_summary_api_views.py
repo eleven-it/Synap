@@ -100,6 +100,29 @@ def _parse_sucursales_filtro(qp) -> list[int] | None:
     return sorted(set(ids))
 
 
+def _parse_puntos_venta_filtro(qp) -> list[int] | None:
+    """
+    Query ``punto_venta`` (repetible o CSV). Vacío = todos los PV.
+    """
+    if not qp:
+        return None
+    raw_list = list(qp.getlist("punto_venta"))
+    if not raw_list and qp.get("punto_venta"):
+        raw_list = [qp.get("punto_venta")]
+    ids: list[int] = []
+    for raw in raw_list:
+        for part in str(raw).split(","):
+            part = part.strip()
+            if not part or part.lower() in ("todas", "all", "*"):
+                continue
+            pid = to_int_or_none(part)
+            if pid is not None and pid >= 0:
+                ids.append(int(pid))
+    if not ids:
+        return None
+    return sorted(set(ids))
+
+
 def _parse_top_orden(qp) -> str | None:
     """Query ``top_orden``: ``importe_neto`` o ``unidades`` (normaliza el servicio)."""
     if not qp:
@@ -153,6 +176,7 @@ class ExecutiveSummaryAPIView(APIView):
             request.query_params, fecha_ref
         )
         sucursales_filtro = _parse_sucursales_filtro(request.query_params)
+        puntos_venta_filtro = _parse_puntos_venta_filtro(request.query_params)
         top_orden = _parse_top_orden(request.query_params)
         may_ids, min_ids = _sucursales_por_canal(empresa.id) if empresa else ([], [])
 
@@ -167,6 +191,7 @@ class ExecutiveSummaryAPIView(APIView):
                         may_ids,
                         min_ids,
                         sucursales_filtro=sucursales_filtro,
+                        puntos_venta_filtro=puntos_venta_filtro,
                         top_productos_orden=top_orden,
                         fecha_comparacion_anio=fecha_comp_anio,
                     )

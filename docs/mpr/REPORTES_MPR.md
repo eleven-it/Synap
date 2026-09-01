@@ -103,14 +103,14 @@ Toggle en tablero, parte, clasificación y reportes. Persistencia siempre en **p
 |-------|----------|------------------|
 | **Producción** | Resumen diario, Por operario, Por operario (mensual), Por operario y máquina, Cadena pipeline, Pendiente componentes | `mpr_envio_produccion`, `mpr_parte_linea`, `mpr_transicion_lote`, `listar_tablero_por_articulo` |
 | **Demanda** | Brecha pack, Pedidos por estado, Stock, Bajo mínimo | PED en vivo, `comp_ped`, stock pack |
-| **Trazabilidad** | Línea de tiempo, Movimientos, Conciliación envíos↔producción | Ledgers `mpr_envio_produccion`, `mpr_parte_linea`, `mpr_transicion_lote` |
+| **Trazabilidad** | Línea de tiempo (wrapper → análisis), Movimientos, Conciliación envíos↔producción, **Análisis trazabilidad** (`kardex_articulo`) | Servicio unificado `construir_analisis_trazabilidad_articulo` + ledgers `mpr_*` |
 
 ### Reportes de trazabilidad máquina/línea (Fase 8 — change `mpr-trazabilidad-maquina-linea-operario`)
 
 - **Por operario y máquina** (`produccion/operario_maquina`): `reporte_mpr_operario_maquina` agrupa por operario × máquina (con la línea vigente) y suma `cantidad_declarada`, `cantidad_aprobada` y `gap`. Los partes históricos sin máquina se agrupan como "Sin máquina".
 - **Conciliación envíos↔producción** (`trazabilidad/conciliacion`): `reporte_mpr_conciliacion_envios_produccion` compara, por componente, lo **enviado** a fabricación (`mpr_envio_produccion`) contra lo **producido aprobado** (`mpr_parte_linea` de partes `estado='aprobado'`) y marca lo **no respaldado** (`producido − enviado > 0`), es decir, stock generado sin envío que lo respalde.
 
-**Default:** Producción → Resumen diario, últimos 7 días.
+**Default:** Producción → Resumen diario, mes calendario actual (día 1 → último día del mes). Fechas libres en Desde/Hasta (sin atajos Hoy/7 días/Mes).
 
 **Sin `lista_produccion_*`:** el hub de reportes no consulta tablas OPT legacy. Para **eliminar físicamente** las tablas en MySQL:
 
@@ -228,8 +228,8 @@ Snapshot **por componente** en el período. El embudo muestra las 4 etapas del p
 | **Brecha pack** | Demanda pack vs stock terminado (PT) |
 | **Pedidos por estado** | PED / `comp_ped` en vivo |
 | **Stock / Bajo mínimo** | Saldos por depósito (`suma_stock`) |
-| **Línea de tiempo** | Eventos ledgers por `id_articulo` |
-| **Movimientos** | Unión cronológica envíos, partes, transiciones |
+| **Trazabilidad** | **Análisis trazabilidad** (`kardex_articulo`) — informe canónico BOM → demanda → movimientos (saldo corrido). El toggle **Trazabilidad** abre directo este informe; subpestañas legacy (línea de tiempo, movimientos MPR, conciliación) quedaron ocultas; URLs antiguas redirigen al análisis. Ver [TRAZABILIDAD_ARTICULO.md](TRAZABILIDAD_ARTICULO.md). |
+| **Movimientos** *(legacy, no en nav)* | Unión cronológica envíos, partes, transiciones |
 
 ---
 
@@ -249,7 +249,7 @@ UTF-8 BOM en reportes principales de Producción y Demanda; en modo docenas expo
 El hub usa el **chrome denso slate-800** del Tablero de producción ([TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1), **sin migas de pan**:
 
 - Barra `sticky top-14 md:top-16 z-40` bajo el navbar, `rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md`, en **dos filas densas**.
-- Fila 1: `h1` blanco con el título del reporte + subtítulo `dd/MM/yyyy — dd/MM/yyyy · presentación`; Desde/Hasta (`h-9` oscuros) + presets Hoy / 7 días / Mes; toggle **Docenas | Pares** (`includes/toggle_docenas_pares.html` con `variant="dark"`, activo sky); **Actualizar** secundario `slate-700` y **Exportar CSV** secundario slate (solo ícono + tooltip por debajo de `2xl`); a la derecha CTA **Tablero de producción** (emerald → `mpr:tablero_produccion`), `chrome_nav_flujo.html` (`current="tablero_prod"`) y ayuda `help_outline` → manual MPR.
+- Fila 1: `h1` blanco con el título del reporte + subtítulo `dd/MM/yyyy — dd/MM/yyyy · presentación`; Desde/Hasta (`h-9` oscuros, fechas libres, icono calendario con contraste `color-scheme: dark`); toggle **Docenas | Pares** (`includes/toggle_docenas_pares.html` con `variant="dark"`, activo sky); **Actualizar** secundario `slate-700` y **Exportar CSV** secundario slate (solo ícono + tooltip por debajo de `2xl`); a la derecha CTA **Tablero de producción** (emerald → `mpr:tablero_produccion`), `chrome_nav_flujo.html` (`current="tablero_prod"`) y ayuda `help_outline` → manual MPR. Default de período: **mes calendario actual**. Sin presets Hoy/7 días/Mes.
 - Fila 2: grupos (Producción / Demanda / Trazabilidad, activo púrpura) + pills de reporte (activo slate-600) y chips KPI densos sobre fondo oscuro.
 - Zona de datos: tarjeta `rounded-lg border-slate-200` con scroll interno dentro del viewport (`h-[calc(100dvh-4.5rem)]`); fondo de página `bg-slate-50`.
 
@@ -293,7 +293,8 @@ Los reportes basados en `lista_produccion_*` / OPT **no están disponibles** en 
 | `reporte_mpr_operario_parte` | `mpr/services.py` |
 | `reporte_mpr_cadena_pipeline` | `mpr/services.py` |
 | `reporte_mpr_pendiente_componentes` | `mpr/services.py` |
-| `reporte_mpr_trazabilidad_componente` | `mpr/services.py` |
+| `reporte_mpr_trazabilidad_componente` | `mpr/services.py` (usado internamente por `_consultar_eventos_mpr_articulo`) |
+| `construir_analisis_trazabilidad_articulo` | `mpr/services_kardex_articulo.py` (informe unificado + export CSV) |
 | `reporte_mpr_movimientos` | `mpr/services.py` (ledgers `mpr_*`, respeta período) |
 | Hub vista / routing | `mpr/reportes_hub.py`, `mpr/views.py` `ReportesMPRView` |
 | Tablero / Fabricando | `listar_tablero_por_articulo`, `_fabricando_por_componentes` |
@@ -322,6 +323,8 @@ docker exec Synap_app python manage.py test \
   mpr.tests.test_reportes_resumen_diario \
   mpr.tests.test_reportes_operario_parte \
   mpr.tests.test_reportes_cadena_pipeline \
+  mpr.tests.test_kardex_articulo \
+  mpr.tests.test_analisis_trazabilidad_articulo \
   mpr.tests.test_reportes_trazabilidad \
   mpr.tests.test_reportes_mpr_view \
   mpr.tests.test_reportes_presentacion \

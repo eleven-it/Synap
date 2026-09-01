@@ -3,6 +3,7 @@
 
 import unittest
 from datetime import date
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -10,6 +11,7 @@ from django.test import RequestFactory
 from rest_framework.test import force_authenticate
 
 from reports.services.clientes_sin_ventas import (
+    _cc_periodo_scope_on_clause,
     get_clientes_sin_ventas,
     listado_vendedores_seleccion,
     parse_filtrar_por,
@@ -17,6 +19,7 @@ from reports.services.clientes_sin_ventas import (
 from reports.clientes_sin_ventas_relay_views import (
     ClientesSinVentasGerenciaRelayAPIView,
     ClientesSinVentasRelayAPIView,
+    _parse_int_list_qs,
 )
 
 
@@ -103,8 +106,47 @@ class TestGetClientesSinVentasMocked(unittest.TestCase):
         first_sql, first_params = self.mock_cursor.execute.call_args_list[0][0]
         self.assertIn("cliente.Estado = 'Activo'", first_sql)
         self.assertIn("cc_periodo.Fecha BETWEEN %s AND %s", first_sql)
+        self.assertIn("cc_periodo.Codigo IS NULL", first_sql)
         self.assertEqual(first_params[0], "2026-03-01")
         self.assertEqual(first_params[1], "2026-03-31")
+
+    @patch("reports.services.clientes_sin_ventas.get_mysql_pool")
+    def test_filtros_en_on_clause_anti_join(self, mock_pool):
+        self._wire(mock_pool, [], [])
+        get_clientes_sin_ventas(
+            base_empresa="emp_test",
+            fecha_desde=date(2026, 3, 1),
+            fecha_hasta=date(2026, 3, 31),
+            sucursales=[2],
+            puntos_venta=[10, 11],
+        )
+        main_sql, main_params = self.mock_cursor.execute.call_args_list[0][0]
+        self.assertIn("cc_periodo.CodSucursal IN (%s)", main_sql)
+        self.assertIn("cc_periodo.id_pv IN (%s, %s)", main_sql)
+        self.assertIn("cc2.CodSucursal IN (%s)", main_sql)
+        self.assertIn("cc2.id_pv IN (%s, %s)", main_sql)
+        self.assertNotIn("WHERE cc_periodo.CodSucursal", main_sql)
+        self.assertIn(2, main_params)
+        self.assertIn(10, main_params)
+        self.assertIn(11, main_params)
+        resumen_sql = self.mock_cursor.execute.call_args_list[1][0][0]
+        self.assertIn("cc_periodo.CodSucursal IN (%s)", resumen_sql)
+
+    @patch("reports.services.clientes_sin_ventas.get_mysql_pool")
+    def test_cliente_venta_otra_sucursal_sin_ventas_en_filtrada(self, mock_pool):
+        """Cliente con venta en sucursal 99 no matchea ON de sucursal 2 → anti-join lo incluye."""
+        self._wire(mock_pool, [(7, "Ana", 100, "M100", "Cliente Sur", "M100", None)], [])
+        out = get_clientes_sin_ventas(
+            base_empresa="emp_test",
+            fecha_desde=date(2026, 1, 1),
+            fecha_hasta=date(2026, 1, 31),
+            sucursales=[2],
+        )
+        self.assertEqual(len(out["datos"]), 1)
+        self.assertEqual(out["datos"][0]["Nombre_cliente"], "Cliente Sur")
+        main_sql = self.mock_cursor.execute.call_args_list[0][0][0]
+        on_clause, _ = _cc_periodo_scope_on_clause(sucursales=[2])
+        self.assertIn(on_clause.strip(), main_sql.replace("\n", " "))
 
     @patch("reports.services.clientes_sin_ventas.get_mysql_pool")
     def test_restringe_por_cod_viajantes(self, mock_pool):
@@ -286,3 +328,66 @@ class TestClientesSinVentasRelayViews(unittest.TestCase):
         resp = ClientesSinVentasGerenciaRelayAPIView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data, [{"label": "Ana", "value": "7|Ana"}])
+
+
+class TestClientesSinVentasRelayScopeFilters(unittest.TestCase):
+    def test_relay_clientes_sin_ventas_query_params_normalization(self):
+        factory = RequestFactory()
+        req = factory.get(
+            "/api/reports/clientes-sin-ventas/relay/gerencia/",
+            {"sucursales": "2,3", "puntoVenta": ["10", "11"]},
+        )
+        self.assertEqual(_parse_int_list_qs(req, "sucursales"), [2, 3])
+        self.assertEqual(_parse_int_list_qs(req, "puntoVenta", "punto_venta"), [10, 11])
+
+    @patch("reports.clientes_sin_ventas_relay_views.get_clientes_sin_ventas")
+    def test_gerencia_pasa_sucursales_pv_al_servicio(self, mock_get):
+        mock_get.return_value = {
+            "columns": [],
+            "datos": [],
+            "resumenVendedores": [],
+            "resumenGlobal": {},
+            "modoTodosVendedores": False,
+        }
+        req = _request_with_session(
+            "/api/reports/clientes-sin-ventas/relay/gerencia/",
+            {
+                "fechaDesde": "2026-01-01",
+                "fechaHasta": "2026-01-31",
+                "sucursales": "2",
+                "puntoVenta": "10",
+            },
+            {"base_empresa": "emp1"},
+        )
+        force_authenticate(req, user=MagicMock(is_authenticated=True, is_superuser=False, tiene_permiso=lambda p: p == "reports.view_managerial"))
+        resp = ClientesSinVentasGerenciaRelayAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        _, kw = mock_get.call_args
+        self.assertEqual(kw["sucursales"], [2])
+        self.assertEqual(kw["puntos_venta"], [10])
+
+
+class TestClientesSinVentasTemplateFilters(unittest.TestCase):
+    def test_template_clientes_sin_ventas_tags_sucursal_pv(self):
+        from django.template.loader import render_to_string
+
+        html_pv = render_to_string(
+            "reports/includes/filters_sucursal_punto_venta.html",
+            {"ocultar_clientes_excluidos": True},
+        )
+        self.assertIn('id="sucursales"', html_pv)
+        self.assertIn('id="punto_venta"', html_pv)
+        self.assertNotIn('id="clientes_excluidos"', html_pv)
+
+        tpl_path = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "dashboard_clientes_sin_ventas_vendedor.html"
+        )
+        tpl = tpl_path.read_text(encoding="utf-8")
+        self.assertIn("filters_sucursal_punto_venta.html", tpl)
+        self.assertIn('params.append("sucursales"', tpl)
+        self.assertIn('params.append("puntoVenta"', tpl)
+        self.assertIn("csv-alcance-sucursal-pv", tpl)
+        self.assertIn("formatSucursalPvScopeText", tpl)

@@ -15,8 +15,8 @@ Reporte de trazabilidad por artículo y depósito basado en movimientos MSTOCK (
 | Filtro | Parámetro GET | Notas |
 |--------|---------------|-------|
 | Artículo | `id_articulo` | Autocomplete vía `/mpr/reportes/api/articulos/buscar/` |
-| Depósito | `id_deposito` | Opcional; lista desde `listar_depositos_config` |
-| Período | `desde`, `hasta` | Default últimos 7 días (hub MPR) |
+| Depósito | — | **Automático:** pack → Terminado MPR; componente → Semi elaborado |
+| Período | `desde`, `hasta` | Default mes calendario actual (hub MPR) |
 
 ## Clasificación de movimientos
 

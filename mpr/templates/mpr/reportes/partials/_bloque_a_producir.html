@@ -1,0 +1,21 @@
+{# Bloque A PRODUCIR — cantidad alineada a TOT Urgente y capacidad Semi. #}
+{% with prod=meta.a_producir %}
+<div class="mb-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40">
+    <h3 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">A producir</h3>
+    <div class="grid gap-4 sm:grid-cols-2">
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-800 dark:bg-emerald-900/20">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Cantidad sugerida</p>
+            <p class="text-lg font-bold tabular-nums text-emerald-900 dark:text-emerald-100">{{ prod.cantidad|default:0 }}</p>
+        </div>
+        <div class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 dark:border-sky-800 dark:bg-sky-900/20">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">Capacidad desde Semi</p>
+            <p class="text-lg font-bold tabular-nums text-sky-900 dark:text-sky-100">{{ prod.capacidad_semi|default:0 }}</p>
+        </div>
+    </div>
+    {% if prod.alerta_semi_cero %}
+    <div class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-100" role="alert">
+        PED Urgente &gt; 0 pero no hay capacidad desde Semi (saldo limitante en cero).
+    </div>
+    {% endif %}
+</div>
+{% endwith %}

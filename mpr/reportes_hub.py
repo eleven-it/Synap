@@ -1,7 +1,8 @@
 """Hub de reportes MPR: routing, periodo y columnas CSV."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from calendar import monthrange
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.utils.administranet_types import to_date_or_none
@@ -31,16 +32,21 @@ GRUPOS_REPORTES: Dict[str, Dict[str, Any]] = {
     "trazabilidad": {
         "label": "Trazabilidad",
         "reportes": {
-            "timeline": "Línea de tiempo",
-            "movimientos": "Movimientos MPR",
-            "conciliacion": "Conciliación envíos↔producción",
-            "kardex_articulo": "Kardex artículo",
+            "kardex_articulo": "Análisis trazabilidad",
         },
     },
 }
 
 DEFAULT_GRUPO = "produccion"
 DEFAULT_REPORTE = "resumen_diario"
+DEFAULT_REPORTE_TRAZABILIDAD = "kardex_articulo"
+
+# Bookmarks antiguos del grupo trazabilidad → informe canónico.
+TRAZABILIDAD_REPORTES_LEGACY: Dict[str, str] = {
+    "timeline": DEFAULT_REPORTE_TRAZABILIDAD,
+    "movimientos": DEFAULT_REPORTE_TRAZABILIDAD,
+    "conciliacion": DEFAULT_REPORTE_TRAZABILIDAD,
+}
 
 # Redirección de bookmarks antiguos (?tipo=) — solo reportes MPR modernos (sin OPT).
 TIPO_REDIRECT_MAP: Dict[str, Tuple[str, str]] = {
@@ -187,15 +193,16 @@ def parse_periodo(
     fecha_desde_raw: Optional[str],
     fecha_hasta_raw: Optional[str],
 ) -> Dict[str, Any]:
-    """Resuelve periodo con default últimos 7 días. Fechas internas ISO date."""
+    """Resuelve periodo con default = mes calendario actual. Fechas internas ISO date."""
     hoy = date.today()
-    default_desde = hoy - timedelta(days=6)
+    default_desde = date(hoy.year, hoy.month, 1)
+    default_hasta = date(hoy.year, hoy.month, monthrange(hoy.year, hoy.month)[1])
     fd = _to_date_obj_hub(fecha_desde_raw)
     fh = _to_date_obj_hub(fecha_hasta_raw)
     if fd is None:
         fd = default_desde
     if fh is None:
-        fh = hoy
+        fh = default_hasta
     if fd > fh:
         fd, fh = fh, fd
     return {
@@ -224,6 +231,12 @@ def resolver_grupo_reporte(get_params: Dict[str, str]) -> Tuple[str, str]:
     if grupo not in GRUPOS_REPORTES:
         grupo = DEFAULT_GRUPO
     reportes = GRUPOS_REPORTES[grupo]["reportes"]
+    if grupo == "trazabilidad":
+        if reporte in TRAZABILIDAD_REPORTES_LEGACY:
+            reporte = TRAZABILIDAD_REPORTES_LEGACY[reporte]
+        if not reporte or reporte not in reportes:
+            reporte = DEFAULT_REPORTE_TRAZABILIDAD
+        return grupo, reporte
     if not reporte or reporte not in reportes:
         reporte = DEFAULT_REPORTE if grupo == DEFAULT_GRUPO else next(iter(reportes))
     return grupo, reporte

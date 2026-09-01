@@ -993,7 +993,12 @@
         const p = String(s).split("-");
         return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : s;
       };
-      periodEl.textContent = `Período: ${fmt(fa.fecha_inicio_facturacion)} al ${fmt(fa.fecha_fin_facturacion)}`;
+      const base = `Período: ${fmt(fa.fecha_inicio_facturacion)} al ${fmt(fa.fecha_fin_facturacion)}`;
+      const scope =
+        typeof window.formatSucursalPvScopeText === "function"
+          ? window.formatSucursalPvScopeText()
+          : "";
+      periodEl.textContent = scope ? `${base} · ${scope}` : base;
     }
   }
 

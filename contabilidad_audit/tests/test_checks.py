@@ -132,6 +132,9 @@ class ChecksTestCase(SimpleTestCase):
         self.assertEqual(result.diferencias[0].referencia_hallazgo, "H51")
         sql = cursor.execute.call_args[0][0]
         self.assertIn("cont_ejercicio", sql)
+        self.assertIn("punto_venta", sql)
+        self.assertIn("pv.cont", sql)
+        self.assertNotIn("sucursales", sql)
         self.assertEqual(cursor.execute.call_args[0][1], [1])
 
     def test_comprobante_sin_asiento_filtra_periodo(self):

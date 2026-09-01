@@ -1,4 +1,4 @@
-# Tablero de producción — Toggle Pack | Par
+# Tablero de producción — Toggle Terminado | A Fabricar
 
 Ruta: `/mpr/tablero-produccion/` · Vista: `mpr.views.TableroProduccionView`
 
@@ -7,32 +7,32 @@ Ruta: `/mpr/tablero-produccion/` · Vista: `mpr.views.TableroProduccionView`
 ## Objetivo
 
 El tablero de producción ofrece dos consolidaciones de la demanda en vivo (desde
-pedidos PED), seleccionables con el toggle **Pack | Par** del encabezado:
+pedidos PED), seleccionables con el toggle **Terminado | A Fabricar** del encabezado (URL: `modo=pack` / `modo=par`):
 
 | Modo | Query | Consolida por | Servicio | Explosión BOM |
 |------|-------|---------------|----------|:---:|
-| **Par** (default) | `?modo=par` | **componente BOM** (par de componente) | `listar_tablero_por_articulo` | Sí |
-| **Pack** | `?modo=pack` | **artículo pack terminado** (paridad BEST PCP Producción) | `listar_tablero_pack` | No |
+| **A Fabricar** (default; `par`) | `?modo=par` | **componente BOM** (par de componente) | `listar_tablero_por_articulo` | Sí |
+| **Terminado** (`pack`) | `?modo=pack` | **artículo pack terminado** (paridad BEST PCP Producción) | `listar_tablero_pack` | No |
 
-- **Par** = componente BOM. Es la base del **envío a producción** (columna *Enviar
+- **A Fabricar** (`par`) = componente BOM. Es la base del **envío a producción** (columna *Enviar
   docenas/pares*). Es el modo por defecto para no alterar el flujo operativo.
-- **Pack** = terminado (PCP). Pedido / reserva / resta / stock se calculan a nivel
+- **Terminado** (`pack`) = pack terminado (PCP). Pedido / reserva / resta / stock se calculan a nivel
   del pack terminado, sin explotar la BOM (equivalente a la vista BEST PCP Producción).
   Lista **toda** la demanda a fabricar: pedidos PED abiertos **y** terminados con
   quiebre solo-reserva (`stock_reserva > 0` sin PED). El chip **Solo urgentes** no
-  aplica en este modo (sí en Par).
+  aplica en este modo (sí en A Fabricar).
 
-Ayuda visible en el encabezado: *"Pack = terminado (PCP, pedido + reserva, sin explosión BOM); Par =
+Ayuda visible en el encabezado: *"Terminado = pack terminado (PCP, pedido + reserva, sin explosión BOM); A Fabricar =
 componente BOM (base del envío a producción)."*
 
 ## Comportamiento del botón "Enviar a producción"
 
-- **Modo Par:** botón *Enviar a producción* + columna *Enviar docenas/pares* activos
+- **Modo A Fabricar (`par`):** botón *Enviar a producción* + columna *Enviar docenas/pares* activos
   (flujo normal por componente). El POST a `mpr:tablero_produccion_enviar` conserva
   `modo=par` en `filtros_qs`.
-- **Modo Pack:** el botón de envío se **oculta** y las filas **no** muestran input de
+- **Modo Terminado (`pack`):** el botón de envío se **oculta** y las filas **no** muestran input de
   envío (el envío es por componente, no por pack). En su lugar se muestra un CTA
-  **"Ver en modo Par para enviar"** que enlaza a `?modo=par` preservando filtros.
+  **"Ver en A Fabricar"** que enlaza a `?modo=par` preservando filtros.
 
 ## Columnas por modo
 
@@ -96,7 +96,9 @@ Sobre `listar_demanda_pack_desde_pedidos` (sin escribir en `lista_produccion_*`)
 - `dem_res` (Reserva) = `stock_reserva` (R maestro del terminado; colchón objetivo).
 - `resta_urgente` = `resta_total` = `cantidad_a_fabricar` = `max(0, Pedido + Reserva − Terminado)`.
 - `resta_urgente_ped` (**PED Urgente**) = `cantidad_urgente_abs` = `max(0, Pedido − Terminado)`.
-- `terminado` / `total` = `stock_terminado` (depósitos que suman stock).
+- `terminado` / `total` = `stock_terminado` (depósitos que suman stock). La UI
+  muestra el **saldo real**, incluidos negativos (no se clampea a 0); estilo
+  resaltado en rojo cuando es negativo (paridad con Armado).
 - `enviado` (Fabricando) = `0` y `a_enviar` = `0`: el envío es por componente.
 - **Solo urgentes:** no filtra en Pack; se muestran filas con demanda a fabricar. En Par filtra `resta_urgente > 0` (ahora = brecha demanda total).
 
@@ -117,11 +119,11 @@ Los **KPIs del encabezado** (`calcular_kpis_tablero_produccion`) suman `resta_ur
 
 ## Persistencia de filtros
 
-El toggle **Pack|Par** (y **Docenas|Pares**) solo se muestra con el permiso
-`mpr.tablero_cambiar_vista`. Sin él, el tablero queda en **Par / Docenas** y se ignora
+El toggle **Terminado|A Fabricar** (y **Docenas|Pares**) solo se muestra con el permiso
+`mpr.tablero_cambiar_vista`. Sin él, el tablero queda en **A Fabricar / Docenas** y se ignora
 `?modo=` / `?presentacion=` en la URL.
 
-El toggle **Pack|Par** preserva `fecha_desde/hasta`, marcas y
+El toggle **Terminado|A Fabricar** preserva `fecha_desde/hasta`, marcas y
 `presentacion` (docenas/pares). El toggle **Docenas|Pares** preserva a su vez `modo`.
 En modo **Par**, el filtro *Solo urgentes* (`solo_urgente`) también se preserva entre
 vistas; en modo **Pack** el chip *Solo urgentes* se oculta porque no tiene efecto.
@@ -134,7 +136,7 @@ Además de la query string, el tablero **persiste en sesión** el último estado
 
 | Preferencia | Clave de sesión | Default |
 |-------------|-----------------|---------|
-| Pack \| Par | `tablero_produccion_modo` | `par` |
+| Terminado \| A Fabricar | `tablero_produccion_modo` | `par` |
 | Docenas \| Pares | `mpr_presentacion_cantidad` | `docenas` |
 | Solo urgentes | `tablero_produccion_solo_urgente` | `true` |
 | Sin receta (Pack) | `tablero_produccion_solo_sin_receta` | `false` |

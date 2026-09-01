@@ -55,7 +55,7 @@ Fechas UI: **dd/MM/yyyy**.
 |----------------|-----|
 | `ecom.pedidos.ver` | Ver hub |
 | `ecom.pedidos.ver_todos` | Ver todos los vendedores (sin filtro `CodViajante`) |
-| Puesto **Supervisor**, **Supervisor venta** o **Administracion** | Mismo efecto que `ver_todos` / `todos_clientes=Si`: hub y listados sin filtro de cartera; selector de vendedor operativo para cargar pedidos a nombre de cualquier viajante (comparación case-insensitive, sin acentos) |
+| Puesto **Supervisor**, **Supervisor venta** o **Administracion** | Mismo efecto que `ver_todos` / `todos_clientes=Si`: hub y listados sin filtro de cartera; selector de vendedor operativo para cargar pedidos a nombre de cualquier viajante; **abrir/editar** borradores y lotes masivos creados por cualquier usuario de la empresa (comparación case-insensitive, sin acentos) |
 | `todos_clientes=Si` (legacy) | Ver todos los vendedores |
 | `ecom.pedidos.aprobar` | Aprobar/rechazar cola comercial en hub |
 | `ecom.pedido_masivo.usar` | CTA / abrir masivo |
@@ -123,7 +123,7 @@ Tras confirmar un pedido masivo por sucursales, el hub muestra **una tarjeta pad
 |---------|---------|
 | Tarjeta padre | `tipo=lote_masivo` en la columna Kanban/Lista según rollup y `estado_aprobacion_lote` |
 | Columna | Regla `_columna_lote_desde_contexto` (prioridad: lote pendiente aprobación → todos anulados → en preparación → cerrados → por autorizar rollup → aprobado rollup → Pendiente) |
-| CTA | **Ver pedido** → matriz masiva solo lectura `/pedido-masivo-sucursales/?draft=<id>&readonly=1` (mismo patrón que consultar un PED; la pantalla resumen de lote queda disponible por URL directa si hace falta) |
+| CTA | **Ver pedido** → matriz masiva solo lectura `/pedido-masivo-sucursales/?draft=<id>&readonly=1` (mismo patrón que consultar un PED; la pantalla resumen de lote queda disponible por URL directa si hace falta). Quien tiene `ecom.pedidos.ver_todos` / puesto Supervisor-Administracion / `todos_clientes=Si` puede **abrir y editar** el draft aunque lo haya creado otro `id_usuario` (mismo `base_empresa`). |
 | PED hijos | **No** se muestran en hub (Kanban ni Lista); acceso solo vía tarjeta del lote |
 | PED sueltos | Sin cambio: siguen en columnas según estado individual |
 | Payload API | `cargas_masivas[]` deprecado (siempre `[]`); lotes integrados en `items[]` y `columnas[]` |

@@ -14,5 +14,6 @@ urlpatterns = [
     path("jobs/<uuid:job_id>/enviar-sftp/", views.job_enviar_sftp, name="job_enviar_sftp"),
     path("generar/", views.generar, name="generar"),
     path("api/jobs/<uuid:job_id>/", views.api_job, name="api_job"),
+    path("api/proveedores/buscar/", views.api_proveedores_buscar, name="api_proveedores_buscar"),
     path("api/sftp/probar/", views.api_sftp_probar, name="api_sftp_probar"),
 ]

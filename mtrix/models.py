@@ -20,14 +20,29 @@ class MtrixConfig(models.Model):
     fecha_personalizada = models.BooleanField(_("Fecha personalizada"), default=False)
     fecha_inicio = models.DateField(_("Fecha inicio"), null=True, blank=True)
     fecha_final = models.DateField(_("Fecha final"), null=True, blank=True)
-    dias_a_procesar = models.PositiveIntegerField(_("Días a procesar"), default=5)
+    dias_a_procesar = models.PositiveIntegerField(
+        _("Días a procesar"),
+        default=5,
+        help_text=_("Solo la primera corrida automática, mientras no haya marca de agua de VD."),
+    )
     codigo_proveedor_principal = models.CharField(
         _("Códigos de proveedor"),
         max_length=255,
         blank=True,
         help_text=_("Vacío = todos. Lista separada por comas, ej. 23,29,31. Un archivo por categoría."),
     )
-    cnpj_fornecedor = models.CharField(_("CNPJ fornecedor"), max_length=20, blank=True)
+    cnpj_fornecedor = models.CharField(
+        _("CNPJ fornecedor"),
+        max_length=20,
+        blank=True,
+        help_text=_("Obsoleto: se deriva del CUIT de datosempresa."),
+    )
+    last_vd_enviado_hasta = models.DateField(
+        _("Último VD enviado hasta"),
+        null=True,
+        blank=True,
+        help_text=_("Marca de agua: avanza solo si el SFTP de la corrida fue OK."),
+    )
     pvnf = models.BooleanField(
         _("Incluir todos los puntos de venta"),
         default=False,

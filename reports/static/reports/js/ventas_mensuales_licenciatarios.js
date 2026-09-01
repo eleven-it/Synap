@@ -58,7 +58,12 @@
     const fi = fa.fecha_inicio_facturacion || document.getElementById("fecha_inicio_facturacion")?.value;
     const ff = fa.fecha_fin_facturacion || document.getElementById("fecha_fin_facturacion")?.value;
     const pack = fa.pack_id || document.getElementById("vml_pack_id")?.value || "—";
-    el.textContent = `Pack ${pack} · ${fmtIsoToDisplay(fi)} al ${fmtIsoToDisplay(ff)}`;
+    const base = `Pack ${pack} · ${fmtIsoToDisplay(fi)} al ${fmtIsoToDisplay(ff)}`;
+    const scope =
+      typeof window.formatSucursalPvScopeText === "function"
+        ? window.formatSucursalPvScopeText()
+        : "";
+    el.textContent = scope ? `${base} · ${scope}` : base;
   }
 
   function renderQaPanel(extra) {

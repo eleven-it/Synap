@@ -15,6 +15,8 @@
 | 5 | FV / jerarquía | Se mantiene la exportación plana (`GERENTE GENERAL` / `SUPERVISOR`). En pantalla se puede formatear. |
 | 6 | CI | Solo clientes con ventas en el período, como ahora. |
 | — | Contrato CSV | **No se cambia** el armado de archivos. Solo se agregan preview, SFTP, on-demand y programador. |
+| — | CNPJ fornecedor | CUIT de `datosempresa` (mismo que distribuidor). No es campo de formulario. |
+| — | Reenvío VD | Marca de agua + solape 1 día tras SFTP OK. CI/PD/ES/FV siempre snapshot. |
 
 Quirks de V.3.5 (p. ej. `REPRESENTATIVIDADE` con `FORMAT` `de_DE`) se **replican en el CSV**. El preview puede mostrar el valor de forma legible.
 

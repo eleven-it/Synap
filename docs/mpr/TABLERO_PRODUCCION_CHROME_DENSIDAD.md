@@ -34,12 +34,12 @@ Ver §6.
 | Ayuda | Ícono `help_outline` → ancla del manual de cada pantalla |
 | CTA cargar filtros | **Cargar grilla** / **Actualizar** = secundario `slate-700` |
 | CTA primario acción | Tablero **Enviar** púrpura; Parte **Guardar** púrpura; CC **Guardar** teal |
-| Estado | Pack\|Par, Docenas\|Pares, búsqueda: en la misma barra (**Pack\|Par solo Tablero**) |
-| Toggles | **Pack\|Par** activo púrpura; **Docenas\|Pares** activo sky (`variant=dark`) |
+| Estado | Terminado\|A Fabricar, Docenas\|Pares, búsqueda: en la misma barra (**Terminado\|A Fabricar solo Tablero**) |
+| Toggles | **Terminado\|A Fabricar** activo púrpura; **Docenas\|Pares** activo sky (`variant=dark`) |
 | Marcas (Parte/CC) | **Ocultas** en chrome (`hidden`, DOM conservado): el tags-filter `min-h-9` rompía la alineación |
 | Búsqueda Parte | En chrome: filtro **predictivo cliente** sobre la grilla cargada (mismo criterio que el viejo «Filtrar en la grilla»). **No** forma parte del GET de «Cargar grilla» |
 | Alineación atajos | En Parte/CC el `header` usa **`items-end`** (formulario con labels encima de inputs) para que los íconos compartan línea base con los campos y «Cargar grilla»; el `h1` lleva `self-center`. Tablero (sin labels visibles) sigue con `items-center`. |
-| Altura controles | **`h-9`** (36px) canónica = búsqueda «Código o descripción…» / Tablero. Inputs, selects, atajos `h-9 w-9`, CTAs y toggles Pack\|Par / Docenas\|Pares comparten esa altura (`text-sm` en campos). |
+| Altura controles | **`h-9`** (36px) canónica = búsqueda «Código o descripción…» / Tablero. Inputs, selects, atajos `h-9 w-9`, CTAs y toggles Terminado\|A Fabricar / Docenas\|Pares comparten esa altura (`text-sm` en campos). |
 | Layout viewport | **Canon MPR (todas las pantallas `base_mpr`, 02/08/2026):** **`-mt-4 md:-mt-8`** cancela el padding superior de `base_app`. Altura **`h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-9rem)]`** + `max-h` igual + **`overflow-hidden`** (holgura navbar + status; evita scroll de `body` que escondía el chrome bajo el navbar). Contenedor `mpr-contenedor-pagina` con `flex h-full min-h-0 flex-col`. Chrome **`flex-shrink-0` sin sticky** (el `sticky z-[60]` tapaba el navbar fijo). Zona de datos / cuerpo **`flex-1 min-h-0 overflow-auto|overflow-y-auto`**; en tableros densos (Parte, CC, Tablero prod., Armado, Roster, Pedidos, Reportes, KPI) la grilla scrollea dentro y footers/totalizadores quedan fuera del scroll. Mobile `mobile/parte_operario.html` queda fuera de este canon. |
 | Búsqueda / roster CC | En chrome oscuro (misma fila que filtros): búsqueda cliente «Código o descripción…» + **Solo pendiente** / **Ver roster** (tooltip; sin franja blanca secundaria arriba de la grilla). Chip compacto **Borrador** si hay borrador. Scope Alpine `clasificacionProduccion()` en el `section` (como `partePagina` en Parte). |
 
@@ -55,7 +55,7 @@ Misma barra densa en:
 6. `planificacion_turnos.html` (Planificación de turnos / roster — **config operativa**; sin migas; navegación de semana **Anterior · «Semana del dd/MM/yyyy» · Siguiente** en la barra; CTA **Asignación masiva** púrpura (si hay turnos activos y operarios); **Gestionar turnos** secundario `slate-700` → `turnos_list`; `chrome_nav_flujo` con `current=roster`; ayuda `help_outline` → `#planificacion-turnos`)
 7. `pedidos_fabrica_list.html` (Pedidos con estado de producción — **pantalla de consulta** de demanda alineada al Tablero; sin migas; filtro **Estado** en el chrome (label `text-[10px] text-slate-400` + select `h-9` oscuro + **Filtrar** secundario `slate-700`, GET `?estado=`); chip con cantidad de pedidos listados; CTA primario **Tablero de producción** emerald → `mpr:tablero_produccion`; `chrome_nav_flujo` con `current=tablero_prod`; ayuda `help_outline` → `#tablero-produccion`. **Sin** columna Trazabilidad/Historial ni enlaces a `opts_por_pedido` / `ventana_pack` / `opt_list` (OPT deprecado como flujo y como auditoría desde esta pantalla). Fechas `dd/MM/yyyy`; empty state de una línea)
 
-8. `reportes.html` + partials `reportes/_shell_header.html`, `reportes/_filtros.html`, `reportes/_nav_grupos.html`, `reportes/_kpi_strip.html` (hub de **Reportes MPR** — analítica; sin migas; barra en **dos filas**: fila 1 = `h1` del reporte + subtítulo período `dd/MM/yyyy` / presentación, Desde/Hasta `h-9` oscuros + presets Hoy/7 días/Mes, toggle **Docenas|Pares** `variant=dark`, **Actualizar** secundario `slate-700` y **Exportar CSV** secundario slate (solo ícono `download` + tooltip por debajo de `2xl`), CTA **Tablero de producción** emerald → `mpr:tablero_produccion`, `chrome_nav_flujo` con `current=tablero_prod`, ayuda `help_outline` → raíz del manual (no hay ancla de reportes); fila 2 = grupos Producción/Demanda/Trazabilidad (activo púrpura) + pills de reporte (activo slate-600) + chips KPI densos con alpha sobre slate-800. **Tablero KPI** (`mpr:tablero`) solo como ícono ámbar del `chrome_nav_flujo`, nunca como CTA primario. Detalle funcional: [REPORTES_MPR.md](REPORTES_MPR.md))
+8. `reportes.html` + partials `reportes/_shell_header.html`, `reportes/_filtros.html`, `reportes/_nav_grupos.html`, `reportes/_kpi_strip.html` (hub de **Reportes MPR** — analítica; sin migas; barra en **dos filas**: fila 1 = `h1` del reporte + subtítulo período `dd/MM/yyyy` / presentación, Desde/Hasta `h-9` oscuros (fechas libres, default mes calendario actual; sin presets Hoy/7 días/Mes; icono calendario con contraste), toggle **Docenas|Pares** `variant=dark`, **Actualizar** secundario `slate-700` y **Exportar CSV** secundario slate (solo ícono `download` + tooltip por debajo de `2xl`), CTA **Tablero de producción** emerald → `mpr:tablero_produccion`, `chrome_nav_flujo` con `current=tablero_prod`, ayuda `help_outline` → raíz del manual (no hay ancla de reportes); fila 2 = grupos Producción/Demanda/Trazabilidad (activo púrpura) + pills de reporte (activo slate-600) + chips KPI densos con alpha sobre slate-800. Chrome **sin sticky** (`flex-shrink-0`) para no tapar filtros del partial. **Tablero KPI** (`mpr:tablero`) solo como ícono ámbar del `chrome_nav_flujo`, nunca como CTA primario. Detalle funcional: [REPORTES_MPR.md](REPORTES_MPR.md))
 
 Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual; en Asignar artículo, Armado y Planificación de turnos muestra los cuatro atajos del flujo planta).
 
@@ -68,19 +68,19 @@ Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual; en 
 | Control de calidad | teal | `verified` |
 | Tablero KPI (`/mpr/`) | ámbar | `analytics` |
 
-Sin Pack\|Par ni KPI urgente fuera del Tablero. Fecha / línea / máquina / turno siguen visibles y operativos en Parte y CC.
+Sin Terminado\|A Fabricar ni KPI urgente fuera del Tablero. Fecha / línea / máquina / turno siguen visibles y operativos en Parte y CC.
 
 ## 4. Arquitectura de información (una barra)
 
 ```
-[ Tablero de producción ] [ Buscar artículo… ]  [Pack|Par] [Docenas|Pares] [Solo urgentes]
+[ Tablero de producción ] [ Buscar artículo… ]  [Terminado|A Fabricar] [Docenas|Pares] [Solo urgentes]
                                                     [Actualizar] [Parte][CC][⋯][?] [Enviar]
 ```
 
 - Título `h1` blanco `text-lg/xl font-bold` (mismo peso que «Pedidos»).
 - Contenedor: `rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md`.
 - Filtros **Desde / Hasta / Marcas / Filtrar** permanecen en el DOM con clase `hidden`.
-- Totales **TOT Urgente** / **PED Urgente** bajo el título de columna (recortan con la búsqueda). Entrada default **Par / Docenas**. Búsqueda persistente hasta que el usuario la limpia. **Pack|Par** y **Docenas|Pares** solo si el puesto tiene `mpr.tablero_cambiar_vista`.
+- Totales **TOT Urgente** / **PED Urgente** bajo el título de columna (recortan con la búsqueda). Entrada default **A Fabricar / Docenas**. Búsqueda persistente hasta que el usuario la limpia. **Terminado|A Fabricar** y **Docenas|Pares** solo si el puesto tiene `mpr.tablero_cambiar_vista`.
 - Orden de filas (Par): máquina asignada → número de máquina 1…N → marca → descripción.
 - Modal Fabricando: artículo como título; tabla por fila
   (`Fila | Mañana/Tarde/Noche + operarios` + una fila de datos por máquina).
@@ -138,7 +138,7 @@ Las URLs pueden existir en código por compatibilidad; **no** son el hub ni el l
 2. Primera fila de datos de la tabla visible sin scroll en viewport 900–1080 px de alto (con navbar Synap).
 3. Atajos Parte/CC/Actualizar usables solo con ícono + tooltip; menú Más con labels.
 4. Ningún enlace del chrome apunta a ventana_pack / opt_list como flujo primario.
-5. Pack\|Par, filtros, envío y búsqueda siguen funcionando igual (solo reubicación).
+5. Terminado\|A Fabricar, filtros, envío y búsqueda siguen funcionando igual (solo reubicación).
 6. Al scrollear la grilla en **Tablero**, **Parte** y **Control de calidad**, el chrome slate-800 permanece visible arriba (layout flex `flex-shrink-0`, **sin** `sticky` en el chrome); solo scrollean los datos. En Tablero, el `thead` de dos filas permanece pegado al tope del área de scroll (`top-0` / `top-8`).
 
 ## 8. Implementación

@@ -110,7 +110,7 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 |--------|-------------|
 | **Tablero de producción** | Demanda consolidada por **componente** (explosión BOM desde packs PED). Columnas PCP: pedido, reserva, **TOT Urgente**, **PED Urgente**, **Fabricando**, stock pipeline (sin Terminado en componentes), Enviar. Entrada default **Par / Docenas**. Ruta: `/mpr/tablero-produccion/`. |
 | **TOT Urgente** | Columna del tablero: `max(0, Pedido + Reserva − stock de 1.ª)`. Base de Enviar y de «Solo urgentes». El total bajo el título se recorta con la búsqueda. |
-| **Cambiar vista (tablero)** | Permiso `mpr.tablero_cambiar_vista`: muestra Pack\|Par y Docenas\|Pares. Sin él el tablero queda en Par / Docenas. |
+| **Cambiar vista (tablero)** | Permiso `mpr.tablero_cambiar_vista`: muestra Terminado\|A Fabricar y Docenas\|Pares. Sin él el tablero queda en A Fabricar / Docenas. |
 | **Fabricando** | Cupo virtual: `max(0, envíos tablero − acreditado)`. Acreditado = `max(Semi+2da+Scrap, CC) + max(0, partes − CC)`. **Producción no acredita.** Un parte nuevo siempre baja Fabricando. |
 
 | **Enviar a producción** | Registro en `mpr_envio_produccion` (ledger). No mueve stock hasta el parte. |

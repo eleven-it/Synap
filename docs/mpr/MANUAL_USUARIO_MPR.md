@@ -40,24 +40,24 @@ Es la pantalla principal del día: muestra la demanda (según pedidos y reserva)
 
 ### Cómo usarlo
 
-1. Filtre por fechas de pedido, marcas o **Solo urgentes** (modo **Par**) si necesita enfocarse.
-2. Al abrir el tablero queda **Par** y **Docenas**. Los conmutadores **Pack|Par** y **Docenas|Pares** solo aparecen si su puesto tiene el permiso **Cambiar vista Pack/Par y Docenas/Pares del tablero** (`mpr.tablero_cambiar_vista`). Sin ese permiso la grilla queda fija en Par / Docenas (tampoco se puede forzar Pack o Pares por la URL). Para enviar a producción use modo **Par**.
-3. Si hace falta, pulse **Actualizar** para refrescar la demanda desde los pedidos. El texto de **Buscar artículo** se conserva al cambiar Pack/Par, Docenas/Pares, Solo urgentes y al actualizar, hasta que lo borre.
-4. En modo **Par**, complete **Enviar docenas** o **Enviar pares** en las filas que correspondan y pulse **Enviar a producción**. Confirme el envío.
+1. Filtre por fechas de pedido, marcas o **Solo urgentes** (modo **A Fabricar**) si necesita enfocarse.
+2. Al abrir el tablero queda **A Fabricar** y **Docenas**. Los conmutadores **Terminado|A Fabricar** y **Docenas|Pares** solo aparecen si su puesto tiene el permiso **Cambiar vista Terminado/A Fabricar y Docenas/Pares del tablero** (`mpr.tablero_cambiar_vista`). Sin ese permiso la grilla queda fija en A Fabricar / Docenas (tampoco se puede forzar Terminado o Pares por la URL). Para enviar a producción use modo **A Fabricar**.
+3. Si hace falta, pulse **Actualizar** para refrescar la demanda desde los pedidos. El texto de **Buscar artículo** se conserva al cambiar Terminado/A Fabricar, Docenas/Pares, Solo urgentes y al actualizar, hasta que lo borre.
+4. En modo **A Fabricar**, complete **Enviar docenas** o **Enviar pares** en las filas que correspondan y pulse **Enviar a producción**. Confirme el envío.
 5. Si envió de más (porque después bajó el pedido o la reserva), use **Anular envíos** en el tablero: los envíos **no se reducen solos**. Detalle en §3.6.
-6. En modo **Pack** no hay envío: use el botón **Ver en modo Par para enviar**.
+6. En modo **Terminado** no hay envío: use el botón **Ver en A Fabricar**.
 7. Desde el encabezado puede ir a Parte de producción, Control de calidad o Armado.
 
-### Pack vs Par (qué fila está mirando)
+### Terminado vs A Fabricar (qué fila está mirando)
 
 | Modo | Cada fila es… | ¿Se envía a fábrica? |
 |------|----------------|----------------------|
-| **Pack** | Artículo **terminado** (lo que vende / arma) | No. Solo consulta demanda. |
-| **Par** | **Componente** (medias / pares que se tejen) | Sí. Acá se completa **Enviar pares/docenas**. |
+| **Terminado** | Artículo **terminado** (lo que vende / arma) | No. Solo consulta demanda. |
+| **A Fabricar** | **Componente** (medias / pares que se tejen) | Sí. Acá se completa **Enviar pares/docenas**. |
 
-La **reserva de stock** (colchón de seguridad) se carga en el artículo **pack terminado** en AdministraNET, **no** en el componente que ve en la grilla Par. Ver §3.4 más abajo.
+La **reserva de stock** (colchón de seguridad) se carga en el artículo **pack terminado** en AdministraNET, **no** en el componente que ve en la grilla A Fabricar. Ver §3.4 más abajo.
 
-### 3.1 Columnas del modo Par (cómo leerlas)
+### 3.1 Columnas del modo A Fabricar (cómo leerlas)
 
 Las cantidades se muestran en **docenas** o **pares**, según el conmutador de la barra.
 
@@ -161,7 +161,7 @@ Si el pack aparece en ámbar **Sin receta**, primero complete la lista de materi
 
 ### Modo Pack y packs sin receta
 
-En **Pack** cada fila es un **artículo terminado**. Ve **Pedido** (saldo comercial pendiente de remitir/facturar, no la cantidad original del PED), Reserva, **TOT Urgente** (pedido + reserva menos stock terminado) y **PED Urgente** (solo pedido menos stock terminado). PED Urgente es solo consulta; el envío a planta se hace en modo **Par**. El filtro **Solo urgentes** no aplica en Pack: se listan los packs con demanda a fabricar, incluidos los que solo tienen quiebre de reserva. Puede activar el chip **Sin receta** para ver solo packs sin lista de materiales.
+En **Terminado** cada fila es un **artículo terminado**. Ve **Pedido** (saldo comercial pendiente de remitir/facturar, no la cantidad original del PED), Reserva, **TOT Urgente** (pedido + reserva menos stock terminado) y **PED Urgente** (solo pedido menos stock terminado). PED Urgente es solo consulta; el envío a planta se hace en modo **A Fabricar**. El filtro **Solo urgentes** no aplica en Terminado: se listan los packs con demanda a fabricar, incluidos los que solo tienen quiebre de reserva. Puede activar el chip **Sin receta** para ver solo packs sin lista de materiales.
 
 En **Par**, **TOT Urgente** es la base del envío. **PED Urgente** va al lado para comparar el faltante solo de pedido.
 
@@ -169,7 +169,7 @@ Si el pack **no tiene receta** en AdministraNET:
 
 - La fila se destaca en **ámbar** con el aviso **Sin receta**.
 - Puede abrir el ícono de documento junto al aviso para ver los **pedidos** asociados (número, estado, fecha de entrega, cliente y cantidad).
-- Ese aviso es **recomendado**: no bloquea el tablero. En modo **Par** ese pack **no genera** componentes para enviar; hay que cargar o corregir la receta antes de producirlo por el flujo normal.
+- Ese aviso es **recomendado**: no bloquea el tablero. En modo **A Fabricar** ese pack **no genera** componentes para enviar; hay que cargar o corregir la receta antes de producirlo por el flujo normal.
 
 ### Avisos frecuentes
 
@@ -512,7 +512,7 @@ Sin turno del día, el operario no podrá cargar su parte.
 |---------|----------|--------|
 | Arranque de planta | Configuración (líneas → máquinas → depósitos → operarios → vínculos → turnos → planificación) | Dejar lista la fábrica |
 | Ajustar colchón | Artículo **pack** en AdministraNET (reserva de stock) | Sube Reserva/Urgente en tablero tras Actualizar |
-| Mañana / turno | Tablero de producción (modo **Par**) | Enviar solo si **Urgente** es mayor que 0 |
+| Mañana / turno | Tablero de producción (modo **A Fabricar**) | Enviar solo si **Urgente** es mayor que 0 |
 | Durante el turno | Parte / Carga de producción | Borrador sin stock; aprobar hasta el cupo **Fabricando** |
 | Supervisor | Partes pendientes | Aprobar partes de operarios |
 | Después del parte | Control de calidad | Borrador sin stock; confirmar mueve a Semi/2da/Scrap |

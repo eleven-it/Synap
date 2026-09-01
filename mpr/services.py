@@ -13478,6 +13478,16 @@ def _listar_demanda_abierta_fifo_legacy(
         return []
 
 
+def listar_demanda_ped_por_articulo(
+    base_empresa: str,
+    id_articulo: int,
+    *,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """Demanda PED comercial viva por artículo (wrapper FIFO imputación-aware)."""
+    return _listar_demanda_ped_vivo_fifo(base_empresa, id_articulo, limit=limit)
+
+
 def _listar_demanda_abierta_fifo(
     base_empresa: str, id_articulo: int, limit: int = 50
 ) -> List[Dict[str, Any]]:
@@ -14013,14 +14023,16 @@ def _periodo_reporte_mpr(
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
 ) -> Tuple[date, date]:
-    """Normaliza rango de fechas; default últimos 7 días."""
+    """Normaliza rango de fechas; default = mes calendario actual."""
+    from calendar import monthrange
+
     hoy = date.today()
     fd = _to_date_obj(fecha_desde) if fecha_desde else None
     fh = _to_date_obj(fecha_hasta) if fecha_hasta else None
     if fd is None:
-        fd = hoy - timedelta(days=6)
+        fd = date(hoy.year, hoy.month, 1)
     if fh is None:
-        fh = hoy
+        fh = date(hoy.year, hoy.month, monthrange(hoy.year, hoy.month)[1])
     if fd > fh:
         fd, fh = fh, fd
     return fd, fh
@@ -14828,8 +14840,15 @@ def reporte_mpr_trazabilidad_componente(
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    """Timeline de eventos MPR para un componente."""
-    vacio = {"eventos": [], "id_articulo": None, "descripcion": ""}
+    """
+    Timeline de eventos para un artículo (componente o pack).
+
+    Fuentes:
+    - Ledgers MPR: envío a producción, parte, clasificación.
+    - MSTOCK: OPP / OPA / ARMADO (misma base que Kardex artículo), para que
+      packs terminados (armado) no queden vacíos si no pasaron por envío/parte.
+    """
+    vacio = {"eventos": [], "id_articulo": None, "codigo": "", "descripcion": ""}
     aid = to_int_or_none(id_articulo)
     if not (base_empresa or "").strip() or aid is None:
         return vacio
@@ -14903,12 +14922,68 @@ def reporte_mpr_trazabilidad_componente(
                 })
     except Exception as exc:
         logger.warning("reporte_mpr_trazabilidad_componente %s art=%s: %s", base_empresa, aid, exc, exc_info=True)
-        return vacio
+
+    # OPP/OPA MSTOCK (packs armados y partes legacy) — no duplica ledgers mpr_*.
+    try:
+        from mpr.services_kardex_articulo import (
+            _consultar_movimientos_kardex_articulo,
+            _normalizar_fila_kardex,
+        )
+
+        for row in _consultar_movimientos_kardex_articulo(
+            base_empresa,
+            aid,
+            fecha_desde=fdesde,
+            fecha_hasta=fhasta,
+            limit=500,
+        ):
+            fila = _normalizar_fila_kardex(row)
+            if not fila:
+                continue
+            entrada = int(fila.get("entrada") or 0)
+            salida = int(fila.get("salida") or 0)
+            cantidad = entrada or salida
+            if cantidad <= 0:
+                continue
+            tipo_mov = str_or_default(fila.get("tipo_mov"), "").strip().upper()
+            if tipo_mov in ("OPA", "ARMADO"):
+                tipo = "opa"
+                tipo_label = "Armado (OPA)"
+            else:
+                tipo = "opp"
+                tipo_label = "Parte producción (OPP)"
+            nro = str_or_default(fila.get("nro_comprobante"), "-")
+            detalle_mov = str_or_default(fila.get("detalle"), "").strip()
+            detalle = nro if not detalle_mov else f"{nro} — {detalle_mov}"
+            ts = row.get("fecha")
+            eventos.append({
+                "tipo": tipo,
+                "tipo_label": tipo_label,
+                "fecha_sort": ts,
+                "fecha_display": _fmt_fecha_hora_traz(ts),
+                "cantidad": cantidad,
+                "detalle": detalle,
+                "operario": fila.get("operario") or "-",
+                "sentido": "entrada" if entrada > 0 else "salida",
+            })
+    except Exception as exc:
+        logger.warning(
+            "reporte_mpr_trazabilidad_componente MSTOCK %s art=%s: %s",
+            base_empresa,
+            aid,
+            exc,
+            exc_info=True,
+        )
 
     eventos.sort(key=lambda e: str(e.get("fecha_sort") or ""))
     desc_map = _fetch_descripciones_articulo(base_empresa, [aid])
-    _, descripcion = desc_map.get(aid, ("-", "-"))
-    return {"eventos": eventos, "id_articulo": aid, "descripcion": descripcion}
+    codigo, descripcion = desc_map.get(aid, ("-", "-"))
+    return {
+        "eventos": eventos,
+        "id_articulo": aid,
+        "codigo": codigo,
+        "descripcion": descripcion,
+    }
 
 
 def _fmt_fecha_hora_traz(val: Any) -> str:
@@ -20988,5 +21063,6 @@ from mpr.services_kardex_articulo import (  # noqa: E402
     _calcular_saldo_corrido_movimientos,
     _clasificar_movimiento_kardex,
     _consultar_movimientos_kardex_articulo,
+    construir_analisis_trazabilidad_articulo,
     construir_kardex_articulo,
 )

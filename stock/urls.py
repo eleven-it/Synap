@@ -50,6 +50,11 @@ urlpatterns = [
     path("api/ingreso/saldo/", api_views.api_ingreso_saldo, name="api_ingreso_saldo"),
     path("api/ingreso/renglones/", api_views.api_ingreso_renglones, name="api_ingreso_renglones"),
     path("api/ingreso/renglones/add/", api_views.api_ingreso_renglon_add, name="api_ingreso_renglon_add"),
+    path(
+        "api/ingreso/renglones/sincronizar-depositos/",
+        api_views.api_ingreso_renglones_sincronizar_depositos,
+        name="api_ingreso_renglones_sincronizar_depositos",
+    ),
     path("api/ingreso/renglones/<int:orden>/remove/", api_views.api_ingreso_renglon_remove, name="api_ingreso_renglon_remove"),
     path("api/ingreso/renglones/<int:orden>/", api_views.api_ingreso_renglon_update, name="api_ingreso_renglon_update"),
     path("api/ingreso/pedidos-pendientes/", api_views.api_ingreso_pedidos_pendientes, name="api_ingreso_pedidos_pendientes"),

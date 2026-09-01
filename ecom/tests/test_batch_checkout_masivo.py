@@ -15,6 +15,7 @@ from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
 from ecom.pedido_masivo_views import PedidoMasivoConfirmarAPIView
 from ecom.services.batch_checkout_masivo import (
     PREVIEW_CELDAS_LIMITE_BLANDO,
+    _detalle_default_pedido_masivo,
     calcular_totales_lote_masivo,
     confirmar_lote_masivo,
     confirmar_lote_masivo_stream,
@@ -668,3 +669,21 @@ class TestPreviewLoteMasivo(TestCase):
         self.assertTrue(r["ok"])
         self.assertEqual(len(r["sucursales"]), 1)
         self.assertEqual(r["total_lote"]["total"], 605.0)
+
+
+class TestDetalleDefaultPedidoMasivo(TestCase):
+    """Detalle PED usa NroCalle (nº sucursal UI), no id_cliente_domicilio."""
+
+    def test_usa_nro_calle_no_id_domicilio(self):
+        draft = MagicMock()
+        draft.pk = 65
+        # id domicilio 14 ≠ NroCalle 78 (caso real que confundía al usuario)
+        txt = _detalle_default_pedido_masivo(draft, 14, {14: "78", 76: "14"})
+        self.assertEqual(txt, "Pedido masivo Synap draft #65 sucursal 78")
+        self.assertNotIn("sucursal 14", txt)
+
+    def test_fallback_si_falta_nro(self):
+        draft = MagicMock()
+        draft.pk = 1
+        txt = _detalle_default_pedido_masivo(draft, 99, {})
+        self.assertEqual(txt, "Pedido masivo Synap draft #1 sucursal #99")

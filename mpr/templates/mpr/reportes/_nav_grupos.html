@@ -7,16 +7,16 @@
         <a href="?grupo=demanda&reporte=brecha_pack&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}"
            role="tab" aria-selected="{% if grupo == 'demanda' %}true{% else %}false{% endif %}"
            class="inline-flex h-8 shrink-0 items-center rounded-md px-3 text-xs font-semibold transition-colors {% if grupo == 'demanda' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}">Demanda</a>
-        <a href="?grupo=trazabilidad&reporte=timeline&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}"
+        <a href="?grupo=trazabilidad&reporte=kardex_articulo&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}"
            role="tab" aria-selected="{% if grupo == 'trazabilidad' %}true{% else %}false{% endif %}"
            class="inline-flex h-8 shrink-0 items-center rounded-md px-3 text-xs font-semibold transition-colors {% if grupo == 'trazabilidad' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-300 hover:bg-slate-700 hover:text-white{% endif %}">Trazabilidad</a>
     </div>
 
-    {% if reportes_nav %}
+    {% if reportes_nav and reportes_nav|length > 1 %}
     <span class="hidden h-6 w-px shrink-0 bg-slate-600 sm:block" aria-hidden="true"></span>
     <div class="flex min-w-0 flex-1 gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Reporte del grupo">
         {% for rkey, rlabel in reportes_nav.items %}
-        <a href="?grupo={{ grupo }}&reporte={{ rkey }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}{% if rkey == 'timeline' and meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}"
+        <a href="?grupo={{ grupo }}&reporte={{ rkey }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}"
            role="tab" aria-selected="{% if reporte == rkey %}true{% else %}false{% endif %}"
            class="inline-flex h-8 shrink-0 items-center rounded-md px-2.5 text-xs font-semibold whitespace-nowrap transition-colors {% if reporte == rkey %}bg-slate-600 text-white shadow-sm{% else %}text-slate-400 hover:bg-slate-700/70 hover:text-slate-100{% endif %}">{{ rlabel }}</a>
         {% endfor %}

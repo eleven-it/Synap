@@ -262,7 +262,7 @@ HAVING ABS(SUM(ca.debe_asiento) - SUM(ca.haber_asiento)) > 0.005
     OR SUM(CASE WHEN ca.saldo_asiento IS NULL THEN 1 ELSE 0 END) > 0;
 ```
 
-Filtrar por sucursales con `sucursales.cont='Si'` cuando la política de auditoría lo exija (excluir comprobantes de sucursales no contables).
+Filtrar por puntos de venta con `punto_venta.cont='Si'` en checks y regeneración de compras/pagos (REC-18), alineado a ventas (REC-20). `sucursales.cont` describe la sucursal de sesión en VB6 pero no reemplaza el gating por PV cuando el comprobante tiene `id_pv` (ej. OP `0200-…` en PV de respaldo con `cont='No'`).
 
 ### 6.6 Resultados empíricos de la detección (`administranet89`, entorno de testing)
 
@@ -305,7 +305,7 @@ Herramienta (solo lectura / dry-run): `legacy_db/scripts/cont_reconstruccion_com
 
 Conceptos verificados en `administranet89` (`cont_concepto_asiento`): **1** Venta, **2** Anulación-Venta, **5** Cobranza, **6** Anulación-Cobranza (además NC/ND cliente 9–12).
 
-Enlace a diario: `cuentacliente.CodigoMovimiento` → `cont_asiento.codigo_movimiento` (igual patrón que compras). Tipos de factura de venta en esta base: principalmente `FA`/`FB`; cobranzas `REC`. Gating de contabilidad: **clientes → `punto_venta.cont='Si'`**; **proveedores → `sucursales.cont='Si'`** (no intercambiar).
+Enlace a diario: `cuentacliente.CodigoMovimiento` → `cont_asiento.codigo_movimiento` (igual patrón que compras). Tipos de factura de venta en esta base: principalmente `FA`/`FB`; cobranzas `REC`. Gating de contabilidad en Synap (checks + regeneración REC-18/REC-20): **`punto_venta.cont='Si'`** vía `cuentacliente.id_pv` / `cuentaproveedor.id_pv`. En VB6 el flag de sesión `Principal.conta_suc` proviene de `sucursales.cont` (H52); no confundir con el gating por PV en auditoría Synap.
 
 Check Synap: `comprobante_venta_cobranza_sin_asiento` (AUD-LECT-24, H54/H55). Regeneración automática en el motor (`reconstruir_factura_venta` / `reconstruir_rec`, REC-20): dry-run/apply con reuso de `CodigoMovimiento`, conceptos 1/5 y marca `REGEN auditoria (bug factura/REC sin asiento)`. **Fuera de alcance aún:** integridad de anulación venta/REC (análogo REC-19).
 

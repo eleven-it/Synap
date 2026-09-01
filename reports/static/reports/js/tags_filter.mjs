@@ -478,6 +478,46 @@ export function initializeTagsFilter(
   loadOptions();
 }
 
+/**
+ * Etiquetas visibles del <select multiple> (chips). Vacío = emptyLabel.
+ * @param {string} selectId
+ * @param {string} [emptyLabel]
+ * @returns {string}
+ */
+export function selectedOptionLabels(selectId, emptyLabel) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return emptyLabel || "";
+  const labels = Array.from(sel.selectedOptions || [])
+    .map((o) => (o.textContent || "").trim())
+    .filter(Boolean);
+  if (!labels.length) return emptyLabel || "";
+  return labels.join(", ");
+}
+
+/**
+ * Texto de alcance sucursal / PV para informes y paneles.
+ * Vacío en el select = «Todas» / «Todos». Sin esos controles = cadena vacía.
+ * @param {{ sucursalesId?: string, puntoVentaId?: string }} [options]
+ * @returns {string}
+ */
+export function formatSucursalPvScopeText(options = {}) {
+  const sucId = options.sucursalesId || "sucursales";
+  const pvId = options.puntoVentaId || "punto_venta";
+  const sucEl = document.getElementById(sucId);
+  const pvEl = document.getElementById(pvId);
+  if (!sucEl && !pvEl) return "";
+  const parts = [];
+  if (sucEl) {
+    parts.push(`Sucursales: ${selectedOptionLabels(sucId, "Todas")}`);
+  }
+  if (pvEl) {
+    parts.push(`Puntos de venta: ${selectedOptionLabels(pvId, "Todos")}`);
+  }
+  return parts.join(" · ");
+}
+
 if (typeof window !== "undefined") {
   window.initializeTagsFilter = initializeTagsFilter;
+  window.selectedOptionLabels = selectedOptionLabels;
+  window.formatSucursalPvScopeText = formatSucursalPvScopeText;
 }

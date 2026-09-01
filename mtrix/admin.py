@@ -5,7 +5,7 @@ from mtrix.models import MtrixArtifact, MtrixConfig, MtrixJob
 
 @admin.register(MtrixConfig)
 class MtrixConfigAdmin(admin.ModelAdmin):
-    list_display = ("base_empresa", "cnpj_fornecedor", "programador_activo", "updated_at")
+    list_display = ("base_empresa", "last_vd_enviado_hasta", "programador_activo", "updated_at")
 
 
 @admin.register(MtrixJob)

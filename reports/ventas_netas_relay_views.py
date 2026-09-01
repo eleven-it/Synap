@@ -21,6 +21,7 @@ from reports.services.ventas_netas import (
     listado_seleccion_ventas_netas,
     parse_filtrar_por,
 )
+from core.utils.administranet_types import to_int_or_none
 
 
 def _session_user(request: Request) -> Dict[str, Any]:
@@ -59,6 +60,26 @@ def _vendedor_a_cargo_from_session(request: Request) -> Optional[Sequence[int]]:
                 continue
         return out or None
     return None
+
+
+def _parse_int_list_qs(request: Request, *keys: str) -> List[int]:
+    """Normaliza query params repetibles o CSV a lista de enteros únicos."""
+    qp = request.query_params
+    out: List[int] = []
+    seen: set[int] = set()
+    for key in keys:
+        raw_values = qp.getlist(key)
+        if not raw_values:
+            single = qp.get(key)
+            if single is not None and str(single).strip():
+                raw_values = [single]
+        for raw in raw_values:
+            for part in str(raw).split(","):
+                parsed = to_int_or_none(part.strip())
+                if parsed is not None and parsed not in seen:
+                    seen.add(parsed)
+                    out.append(parsed)
+    return out
 
 
 def _merge_relay_response(result: Dict[str, Any], extra_meta: Dict[str, Any]) -> Dict[str, Any]:
@@ -171,6 +192,8 @@ class VentasNetasRelayAPIView(APIView):
                     op_rango=op_rango,
                     incluir_utilidades=False,
                     punto_venta_id=None,
+                    sucursales=_parse_int_list_qs(request, "sucursales") or None,
+                    punto_venta=_parse_int_list_qs(request, "puntoVenta", "punto_venta") or None,
                     vendedor_a_cargo=vendedor_filtro_cargo,
                 )
         except Exception:
@@ -227,16 +250,23 @@ class VentasNetasGerenciaRelayAPIView(APIView):
         )
         op_rango = request.query_params.get("opRango") or request.query_params.get("op_rango")
 
-        pv_raw = request.query_params.get("puntoVenta") or request.query_params.get("punto_venta")
+        sucursales = _parse_int_list_qs(request, "sucursales") or None
+        puntos_venta = _parse_int_list_qs(request, "puntoVenta", "punto_venta")
+
         punto_venta_id: Optional[int] = None
-        if pv_raw is not None and str(pv_raw).strip() != "":
-            try:
-                punto_venta_id = int(pv_raw)
-            except (TypeError, ValueError):
-                return Response(
-                    {"detail": "puntoVenta debe ser entero."},
-                    status=400,
-                )
+        punto_venta: Optional[List[int]] = None
+        if len(puntos_venta) == 1:
+            raw_pv = (
+                request.query_params.get("puntoVenta")
+                or request.query_params.get("punto_venta")
+                or ""
+            ).strip()
+            if raw_pv and "," not in raw_pv:
+                punto_venta_id = puntos_venta[0]
+            else:
+                punto_venta = puntos_venta
+        elif len(puntos_venta) > 1:
+            punto_venta = puntos_venta
 
         incluir_utilidades = que_informe in ("ut", "uti")
 
@@ -271,6 +301,8 @@ class VentasNetasGerenciaRelayAPIView(APIView):
                     op_rango=op_rango,
                     incluir_utilidades=incluir_utilidades,
                     punto_venta_id=punto_venta_id,
+                    sucursales=sucursales,
+                    punto_venta=punto_venta,
                     vendedor_a_cargo=cargo,
                     **kwargs_gerencia,
                 )

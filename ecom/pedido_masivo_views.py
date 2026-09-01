@@ -35,6 +35,7 @@ from ecom.services.pedido_masivo_matriz import (
     recalcular_precios_fila_desde_lista,
     listar_clientes_con_ternas,
     listar_sucursales_cliente,
+    obtener_draft_accesible,
     obtener_o_crear_draft,
     serializar_matriz,
 )
@@ -416,9 +417,7 @@ class PedidoMasivoConfirmarAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id o usuario.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id, base_empresa=base, id_usuario=id_u
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
 
@@ -530,9 +529,7 @@ class PedidoMasivoAbrirAPIView(APIView):
             )
 
         if draft_id is not None and idc is None:
-            d0 = EcomPedidoMasivoDraft.objects.filter(
-                pk=draft_id, base_empresa=base, id_usuario=id_u
-            ).first()
+            d0, _ = _draft_usuario(request, draft_id)
             if not d0:
                 return _err("Borrador no encontrado.", "no_encontrado", 404)
             idc = d0.id_cliente
@@ -580,6 +577,7 @@ class PedidoMasivoAbrirAPIView(APIView):
             modo=modo,
             id_domicilio_fijo=id_domicilio,
             solo_lectura=solo_lectura,
+            sess_user=sess,
         )
         if not draft:
             return _err(err or "No se pudo abrir el borrador.")
@@ -677,9 +675,7 @@ class PedidoMasivoMatrizAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id, base_empresa=base, id_usuario=id_u
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
         return Response({"ok": True, "matriz": _serializar_matriz_ui(draft, base)})
@@ -700,11 +696,7 @@ class PedidoMasivoCeldaAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id,
-            base_empresa=base,
-            id_usuario=id_u,
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
         ok, msg, payload = guardar_celda(
@@ -740,11 +732,7 @@ class PedidoMasivoEliminarFilaAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id,
-            base_empresa=base,
-            id_usuario=id_u,
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
         ok, msg = eliminar_fila_articulo(
@@ -808,9 +796,7 @@ class PedidoMasivoPreviewAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id o usuario.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id, base_empresa=base, id_usuario=id_u
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
 
@@ -862,9 +848,7 @@ class PedidoMasivoDescuentoFilaAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id, base_empresa=base, id_usuario=id_u
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
         flags = _flags_cabecera_masivo(request)
@@ -905,9 +889,7 @@ class PedidoMasivoPrecioFilaAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id, base_empresa=base, id_usuario=id_u
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
         flags = _flags_cabecera_masivo(request)
@@ -948,9 +930,7 @@ class PedidoMasivoRecalcularPreciosAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id, base_empresa=base, id_usuario=id_u
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
         flags = _flags_cabecera_masivo(request)
@@ -990,9 +970,7 @@ class PedidoMasivoDescuentoPieAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id.")
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id, base_empresa=base, id_usuario=id_u
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
         flags = _flags_cabecera_masivo(request)
@@ -1018,15 +996,19 @@ class PedidoMasivoDescuentoPieAPIView(APIView):
 
 
 def _draft_usuario(request, draft_id: Any) -> Any:
+    """Draft accesible: dueño o ``puede_ver_todos_pedidos``."""
     base = _session_base_empresa(request)
     sess = _sess_user(request)
     id_u = to_int_or_none(sess.get("id_usuario"))
     did = to_int_or_none(draft_id)
     if not base or did is None or id_u is None:
         return None, base
-    draft = EcomPedidoMasivoDraft.objects.filter(
-        pk=did, base_empresa=base, id_usuario=id_u
-    ).first()
+    draft = obtener_draft_accesible(
+        draft_id=did,
+        base_empresa=base,
+        id_usuario=id_u,
+        sess_user=sess,
+    )
     return draft, base
 
 
@@ -1120,12 +1102,12 @@ class PedidoMasivoAnularAPIView(APIView):
         id_u = to_int_or_none(sess.get("id_usuario"))
         if draft_id is None or id_u is None:
             return _err("Falta draft_id o usuario.")
-        ok, msg = anular_borrador_masivo_usuario(draft_id, id_u, base)
+        ok, msg = anular_borrador_masivo_usuario(
+            draft_id, id_u, base, sess_user=sess
+        )
         if not ok:
             return _err(msg)
-        draft = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id, base_empresa=base, id_usuario=id_u
-        ).first()
+        draft, _ = _draft_usuario(request, draft_id)
         body: Dict[str, Any] = {"ok": True, "message": msg}
         if draft:
             body["matriz"] = _serializar_matriz_ui(draft, base)

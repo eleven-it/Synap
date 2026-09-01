@@ -393,6 +393,9 @@
                         {% include "reports/includes/filters_ventas_mensuales_licenciatarios.html" %}
                         {% include "reports/includes/modal_licenciatarios_match.html" %}
                         {% include "reports/includes/modal_licenciatarios_superart_qa.html" %}
+                        {% with ocultar_clientes_excluidos=True %}
+                        {% include "reports/includes/filters_sucursal_punto_venta.html" %}
+                        {% endwith %}
                         {% else %}
                         {% include "reports/includes/filters_period.html" %}
                         {% endif %}
@@ -5309,7 +5312,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 {% else %}
 <script src="{% static 'reports/js/reports_responsive.js' %}?v=20260602b" defer></script>
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260817d"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260901b"></script>
 {% if report.slug == 'comprobantes-rutas' %}
 <script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260430b" defer></script>
 {% endif %}
@@ -5326,14 +5329,14 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/ventas_marca_superart.js' %}?v=20260807a"></script>
 {% endif %}
 {% if report.slug == 'ventas-bom-docenas' %}
-<script src="{% static 'reports/js/ventas_bom_docenas.js' %}?v=20260814a"></script>
+<script src="{% static 'reports/js/ventas_bom_docenas.js' %}?v=20260901a"></script>
 {% endif %}
 {% if report.slug == 'ventas-mensuales-licenciatarios' %}
-<script src="{% static 'reports/js/ventas_mensuales_licenciatarios.js' %}?v=20260817c"></script>
+<script src="{% static 'reports/js/ventas_mensuales_licenciatarios.js' %}?v=20260901a"></script>
 {% endif %}
 {% if report.slug == 'ventas-marcas-mensual' %}
 <script src="{% static 'reports/js/reports_filters_sheet.js' %}?v=20260802c" defer></script>
-<script src="{% static 'reports/js/ventas_marcas_mensual.js' %}?v=20260805e"></script>
+<script src="{% static 'reports/js/ventas_marcas_mensual.js' %}?v=20260901a"></script>
 {% endif %}
 {% if report.slug == 'cash_flow_detailed_movements' or report.slug == 'cash_flow_waterfall' %}
 <script src="{% static 'reports/js/cash_flow_detailed_movements.js' %}?v=20260602b" defer></script>

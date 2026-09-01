@@ -42,6 +42,7 @@ from reports.services.ventas_mensuales_licenciatarios_importer import (
 )
 from reports.services.ventas_mensuales_licenciatarios_export import (
     QA_SHEET,
+    SHEET_FILTROS,
     SHEET_MINIMUM,
     SHEET_MONTHLY,
     SHEET_OOH,
@@ -78,6 +79,7 @@ from reports.services.ventas_mensuales_licenciatarios_query import (
 from reports.services.ventas_mensuales_licenciatarios_merger import (
     CUTOVER_DATE,
     MergedClientMonth,
+    _normalize_customer_name,
     anet_range_for_month,
     compare_dz_pk_parity,
     compute_ytd,
@@ -239,9 +241,12 @@ class LicenciatariosExportServiceArtifactsTests(SimpleTestCase):
         svc = ExportService(Mock())
         captured = {}
 
-        def _fake_export_wb(path, *, pack, merge_result, year, month_from, month_to):
+        def _fake_export_wb(
+            path, *, pack, merge_result, year, month_from, month_to, filter_lines=None
+        ):
             captured["merge"] = merge_result
             captured["year"] = year
+            captured["filter_lines"] = filter_lines
             Path(path).write_bytes(b"PK")
 
         with patch.object(ReportDefinition.objects, "get", return_value=report), patch(
@@ -275,6 +280,10 @@ class LicenciatariosExportServiceArtifactsTests(SimpleTestCase):
                 result.filename,
                 "Monthly Reporting Best Sox_LEVIS BW 26.xlsx",
             )
+            self.assertTrue(captured.get("filter_lines"))
+            captured_labels = dict(captured["filter_lines"])
+            self.assertEqual(captured_labels.get("Sucursales"), "Todas")
+            self.assertEqual(captured_labels.get("Puntos de venta"), "Todos")
 
     def test_export_sin_artifacts_falla_claro(self):
         from reports.services.export_service import ExportService
@@ -575,6 +584,17 @@ class VentasMensualesLicenciatariosQueryTests(SimpleTestCase):
         self.assertIn("m.NombreMarca = %s", sql)
         self.assertIn("art.tipo_art = 'Articulo'", sql)
 
+    def test_build_anet_sql_with_sucursales_pv_filters(self):
+        sql = build_anet_sales_sql(sucursales=[2, 5], puntos_venta=[10])
+        self.assertIn("cc.CodSucursal IN (%s,%s)", sql)
+        self.assertIn("cc.id_pv IN (%s)", sql)
+        self.assertNotIn("cc.CodSucursal IN ()", sql)
+
+    def test_build_anet_sql_sin_filtros_no_agrega_in(self):
+        sql = build_anet_sales_sql(sucursales=[], puntos_venta=[])
+        self.assertNotIn("cc.CodSucursal IN", sql)
+        self.assertNotIn("cc.id_pv IN", sql)
+
     def test_build_anet_sales_sql_importe_post_pie(self):
         """ANET amounts MUST usar el mismo factor cabecera que VMM (SubtotalDesc/SubTotal1)."""
         sql = build_anet_sales_sql()
@@ -600,8 +620,19 @@ class VentasMensualesLicenciatariosQueryTests(SimpleTestCase):
         self.assertEqual(row.month, date(2026, 8, 1))
 
 
-class VentasMensualesLicenciatariosMergerCutoverTests(SimpleTestCase):
-    """Phase 3.3 — cutover 21/22 y paridad signos."""
+class VentasMensualesLicenciatariosMergerCutoverTests(TestCase):
+    """Phase 3.3 — cutover 21/22 y paridad signos.
+
+    TestCase (no SimpleTestCase): `filter_merge_result_by_clientes_excluidos`
+    consulta `MonthlyReportingClientMatch` para expandir identidades seed.
+    """
+
+    def test_normalize_customer_name_iguala_sa_con_y_sin_punto(self):
+        self.assertEqual(
+            _normalize_customer_name("VARTAT S.A."),
+            _normalize_customer_name("vartat s.a"),
+        )
+        self.assertEqual(_normalize_customer_name("VARTAT S.A."), "VARTAT S A")
 
     def test_anet_range_julio_solo_22_31(self):
         rango = anet_range_for_month(2026, 7)
@@ -1090,6 +1121,138 @@ class VentasMensualesLicenciatariosMergerIntegrationTests(TestCase):
         self.assertEqual(ytd_seed["units"], Decimal("1") + Decimal("2") + Decimal("7"))
 
 
+class VentasMensualesLicenciatariosOleada2FilterTests(TestCase):
+    """Oleada 2.A — filtros sucursal/PV solo tramo ANET."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.pack = MonthlyReportingPack.objects.get(pack_id="levis_bw")
+        self.match = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:oleada2",
+            seed_customer_name="Cliente Oleada2",
+            estado=MonthlyReportingClientMatch.Estado.PENDING,
+        )
+        self.batch = MonthlyReportingImportBatch.objects.create(
+            pack=self.pack,
+            file_name="o2.xlsx",
+            file_format="xlsx",
+            file_sha256="sha-o2",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        MonthlyReportingSeedRow.objects.create(
+            pack=self.pack,
+            match=self.match,
+            month=date(2026, 3, 1),
+            units=Decimal("6"),
+            amount=Decimal("60"),
+            batch=self.batch,
+        )
+        self.report = ReportDefinition.objects.create(
+            slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG,
+            name="Ventas Mensuales Licenciatarios",
+            category="operational",
+            is_active=True,
+        )
+
+    def test_merge_pack_year_filters_only_anet_tramo(self):
+        captured = {}
+
+        def _fetch(**kwargs):
+            captured.update(kwargs)
+            return []
+
+        merge_pack_year(
+            pack=self.pack,
+            year=2026,
+            month_from=1,
+            month_to=7,
+            base_empresa="demo",
+            fetch_anet_fn=_fetch,
+            sucursales=[2],
+            puntos_venta=[10, 11],
+        )
+        self.assertEqual(captured.get("sucursales"), [2])
+        self.assertEqual(captured.get("puntos_venta"), [10, 11])
+        result = merge_pack_year(
+            pack=self.pack,
+            year=2026,
+            month_from=1,
+            month_to=3,
+            base_empresa="demo",
+            fetch_anet_fn=lambda **kwargs: [],
+        )
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].source, "seed")
+
+    def test_runner_licenciatarios_meta_filtros_solo_anet(self):
+        def _fetch(**kwargs):
+            return []
+
+        payload = {
+            "filters": {
+                "pack_id": "levis_bw",
+                "fecha_inicio_facturacion": "2026-01-01",
+                "fecha_fin_facturacion": "2026-03-31",
+                "sucursales": ["2"],
+                "punto_venta": [10],
+            },
+            "base_empresa": "demo",
+        }
+        result = run_ventas_mensuales_licenciatarios(
+            self.report,
+            payload,
+            Mock(),
+            fetch_anet_fn=_fetch,
+        )
+        self.assertTrue(result.meta.get("filtros_aplicados_solo_tramo_anet"))
+        self.assertEqual(result.meta["filters_applied"]["sucursales"], [2])
+        self.assertEqual(result.meta["filters_applied"]["punto_venta"], [10])
+
+    def test_template_licenciatarios_incluye_filtros_sucursal_pv_sin_duplicar_clientes_excluidos(self):
+        from django.template.loader import render_to_string
+
+        html_pv = render_to_string(
+            "reports/includes/filters_sucursal_punto_venta.html",
+            {"ocultar_clientes_excluidos": True},
+        )
+        self.assertIn('id="sucursales"', html_pv)
+        self.assertIn('id="punto_venta"', html_pv)
+        self.assertNotIn('id="clientes_excluidos"', html_pv)
+
+        detail_path = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "dashboard_detail.html"
+        )
+        detail = detail_path.read_text(encoding="utf-8")
+        self.assertIn("ocultar_clientes_excluidos=True", detail)
+        self.assertIn("filters_sucursal_punto_venta.html", detail)
+
+    def test_dashboard_js_licenciatarios_envia_filtros_pv(self):
+        js_path = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "reports"
+            / "js"
+            / "dashboard.js"
+        )
+        content = js_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "isVentasMensualesLicenciatariosSlug(reportSlug)",
+            content,
+        )
+        self.assertIn(
+            "SLUGS_VENTAS_PV.has(reportSlug) || isVentasMensualesLicenciatariosSlug(reportSlug)",
+            content,
+        )
+        lic_start = content.index('currentReportSlug === "ventas-mensuales-licenciatarios"')
+        lic_end = content.index("} else {", lic_start)
+        lic_block = content[lic_start:lic_end]
+        self.assertIn("filters.sucursales", lic_block)
+        self.assertIn("filters.punto_venta", lic_block)
+
+
 class VentasMensualesLicenciatariosRunnerHybridTests(TestCase):
     """Phase 5.1 — runner híbrido seed+ANET y SuperArt QA sin bloquear."""
 
@@ -1286,6 +1449,29 @@ class VentasMensualesLicenciatariosExportTests(TestCase):
             self.assertIn(SHEET_SALES, wb.sheetnames)
             self.assertIn(SHEET_MONTHLY, wb.sheetnames)
             self.assertIn(QA_SHEET, wb.sheetnames)
+            wb.close()
+
+    def test_export_incluye_hoja_filtros_con_alcance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "export_filtros.xlsx"
+            export_licenciatarios_workbook(
+                out,
+                pack=self.pack,
+                merge_result=self.merge_result,
+                year=2026,
+                month_from=1,
+                month_to=3,
+                filter_lines=[
+                    ("Sucursales", "Sucursal Centro"),
+                    ("Puntos de venta", "PV 1"),
+                ],
+            )
+            wb = openpyxl.load_workbook(out)
+            self.assertEqual(wb.sheetnames[0], SHEET_FILTROS)
+            ws = wb[SHEET_FILTROS]
+            rows = {ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value for r in range(2, 5)}
+            self.assertEqual(rows.get("Sucursales"), "Sucursal Centro")
+            self.assertEqual(rows.get("Puntos de venta"), "PV 1")
             wb.close()
 
     def test_export_puma_conserva_minimum_agreed(self):

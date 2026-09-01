@@ -133,9 +133,9 @@ Definir el **territorio comercial**: qué vendedor atiende a cada cliente, sucur
 
 ### Pasos básicos
 
-1. Busque y seleccione vendedor, cliente, sucursal y marca.
-2. Cree la relación; el sistema avisa si ya existe otro vendedor para la misma combinación.
-3. Para dar de baja una relación, utilice **Anular** en el listado de ternas activas.
+1. Busque y seleccione vendedor, cliente, una o más sucursales y una o más marcas (mismo patrón de chips/checkboxes).
+2. Cree la relación; el sistema avisa si ya existe otro vendedor para la misma combinación. **PUM, PUS y PUW** se marcan juntas: al elegir una se incluyen las tres.
+3. Para dar de baja: **Anular** en una fila, o tildar varias (también en el encabezado de vendedor/cliente/sucursal) y **Anular seleccionadas**.
 
 ---
 

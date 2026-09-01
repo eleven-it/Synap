@@ -182,4 +182,17 @@ Formularios y procedimientos que referencian esta tabla (lectura/escritura). Bas
 
 *No se encontraron referencias en el módulo reports.*
 
+## 5. Uso en Synap (módulo stock — ingreso movimiento)
+
+Los renglones temporales (`visualiza='No'`, `CodigoMovimiento=1`) guardan `CodDeposito` al agregarse.
+
+Al cambiar **depósito origen** o **destino** en la cabecera de `/stock/ingreso-movimiento/`, Synap sincroniza todos los temporales del usuario vía:
+
+- Servicio: `sincronizar_depositos_renglones_temporales`
+- API: `POST /stock/api/ingreso/renglones/sincronizar-depositos/`
+
+Actualiza `CodDeposito` / `cod_deposito_destino` y limpia lote (`id_lote`, `cod_lote`, `vto_lote`) porque el lote es por depósito.
+
+Además, al confirmar un movimiento que no es transferencia, `alta_movimiento` usa siempre `deposito_origen` de cabecera (no el `CodDeposito` stale del renglón).
+
 [← Índice de tablas](../DB_INDICE_TABLAS.md)

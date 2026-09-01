@@ -23,6 +23,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.utils.administranet_types import to_int_or_none
 from reports.permissions import ManagerialReportsPermission, OperationalReportsPermission
 from reports.services.clientes_sin_ventas import (
     get_clientes_sin_ventas,
@@ -80,6 +81,26 @@ def _incluir_domicilio(request: Request) -> bool:
     return _parse_bool_qs(str(_session_user(request).get("usa_domicilio_cliente_informes") or ""))
 
 
+def _parse_int_list_qs(request: Request, *keys: str) -> List[int]:
+    """Normaliza query params repetibles o CSV a lista de enteros únicos."""
+    qp = getattr(request, "query_params", None) or request.GET
+    out: List[int] = []
+    seen: set[int] = set()
+    for key in keys:
+        raw_values = qp.getlist(key)
+        if not raw_values:
+            single = qp.get(key)
+            if single is not None and str(single).strip():
+                raw_values = [single]
+        for raw in raw_values:
+            for part in str(raw).split(","):
+                parsed = to_int_or_none(part.strip())
+                if parsed is not None and parsed not in seen:
+                    seen.add(parsed)
+                    out.append(parsed)
+    return out
+
+
 class _ClientesSinVentasBaseAPIView(APIView):
     """Lógica compartida operativo/gerencial."""
 
@@ -129,11 +150,15 @@ class _ClientesSinVentasBaseAPIView(APIView):
             )
 
         try:
+            sucursales = _parse_int_list_qs(request, "sucursales")
+            puntos_venta = _parse_int_list_qs(request, "puntoVenta", "punto_venta")
             result = get_clientes_sin_ventas(
                 base,
                 fecha_desde=fd,
                 fecha_hasta=fh,
                 cod_viajantes=cod_viajantes,
+                sucursales=sucursales or None,
+                puntos_venta=puntos_venta or None,
                 usa_id_manual=_usa_id_manual(request),
                 incluir_domicilio=_incluir_domicilio(request),
             )

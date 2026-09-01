@@ -21,10 +21,16 @@ class DashboardFilters:
     fecha_referencia: date
     fecha_inicio: date
     fecha_fin: date
-    cod_sucursal: int | None
+    sucursales_filtro: tuple[int, ...] = ()
+    puntos_venta: tuple[int, ...] = ()
     limit: int = 100
     offset: int = 0
     busqueda: str | None = None
+
+    @property
+    def cod_sucursal(self) -> int | None:
+        """Compat ``executive-dashboard-v1``: escalar solo si hay exactamente una sucursal."""
+        return self.sucursales_filtro[0] if len(self.sucursales_filtro) == 1 else None
 
     @property
     def fecha_inicio_str(self) -> str:
@@ -36,9 +42,32 @@ class DashboardFilters:
 
     @property
     def sucursales(self) -> list[int] | None:
-        if self.cod_sucursal is None:
+        if not self.sucursales_filtro:
             return None
-        return [self.cod_sucursal]
+        return list(self.sucursales_filtro)
+
+
+def _parse_int_list_qp(qp, *keys: str) -> tuple[int, ...]:
+    """Lista de enteros desde query params repetibles o CSV."""
+    if not qp:
+        return ()
+    raw_list: list = []
+    for key in keys:
+        if hasattr(qp, "getlist"):
+            raw_list.extend(qp.getlist(key))
+        val = qp.get(key) if hasattr(qp, "get") else None
+        if val not in (None, ""):
+            raw_list.append(val)
+    ids: list[int] = []
+    for raw in raw_list:
+        for part in str(raw).split(","):
+            part = part.strip()
+            if not part or part.lower() in ("todas", "all", "*"):
+                continue
+            sid = to_int_or_none(part)
+            if sid is not None and sid >= 0:
+                ids.append(int(sid))
+    return tuple(sorted(set(ids)))
 
 
 def _parse_fecha(raw: str | None) -> date | None:
@@ -76,13 +105,15 @@ def resolve_filters_from_query_params(
     if fecha_inicio > fecha_fin:
         raise InvalidDashboardFilters("fecha_inicio no puede ser posterior a fecha_fin.")
 
-    cod_sucursal = None
-    if qp:
+    sucursales_filtro = _parse_int_list_qp(qp, "sucursales")
+    if not sucursales_filtro and qp:
         raw_suc = qp.get("sucursal")
         if raw_suc not in (None, "", "todas", "all", "*"):
             sid = to_int_or_none(raw_suc)
             if sid is not None and sid >= 0:
-                cod_sucursal = int(sid)
+                sucursales_filtro = (int(sid),)
+
+    puntos_venta = _parse_int_list_qp(qp, "puntos_venta", "punto_venta")
 
     limit = to_int_or_none(qp.get("limit") if qp else None) or 100
     offset = to_int_or_none(qp.get("offset") if qp else None) or 0
@@ -102,7 +133,8 @@ def resolve_filters_from_query_params(
         fecha_referencia=fecha_fin,
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
-        cod_sucursal=cod_sucursal,
+        sucursales_filtro=sucursales_filtro,
+        puntos_venta=puntos_venta,
         limit=limit,
         offset=offset,
         busqueda=busqueda,
@@ -118,7 +150,10 @@ def build_meta(filters: DashboardFilters, **extra: Any) -> dict[str, Any]:
             "inicio": filters.fecha_inicio.isoformat(),
             "fin": filters.fecha_fin.isoformat(),
         },
-        "cod_sucursal_filtro": filters.cod_sucursal,
+        "cod_sucursal_filtro": list(filters.sucursales_filtro)
+        if filters.sucursales_filtro
+        else None,
+        "punto_venta_filtros": list(filters.puntos_venta) if filters.puntos_venta else None,
         "notas_semanticas": [],
     }
     meta.update(extra)

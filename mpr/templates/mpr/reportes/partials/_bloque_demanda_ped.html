@@ -1,0 +1,71 @@
+{# Tabla de demanda PED (sin card externa: la sección 2 del análisis la envuelve). #}
+{% with demanda=meta.demanda_ped %}
+    {% if not demanda.filas %}
+    <p class="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-400">
+        Sin pedidos PED abiertos con pendiente para este artículo en el período.
+    </p>
+    {% else %}
+    {% with tot=demanda.totales %}
+    <div class="mb-4 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Stock en depósito</p>
+            <p class="mt-1 text-2xl font-semibold tabular-nums {% if tot.stock|default:0 < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">
+                {{ tot.stock|default:meta.stock.terminado|default:0 }}
+            </p>
+            {% if meta.deposito %}
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ meta.deposito.nombre }}</p>
+            {% endif %}
+        </div>
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">Cubierto con stock</p>
+            <p class="mt-1 text-2xl font-semibold tabular-nums text-emerald-900 dark:text-emerald-100">{{ tot.cubierto_stock|default:0 }}</p>
+            <p class="mt-1 text-xs text-emerald-800/80 dark:text-emerald-200/80">
+                {% if tot.p_ped|default:0 <= tot.cubierto_stock|default:0 %}
+                El pendiente total se cubre con el stock actual.
+                {% else %}
+                Parte del pendiente se cubre con stock disponible.
+                {% endif %}
+            </p>
+        </div>
+        <div class="rounded-lg border px-4 py-3 {% if tot.ped_urgente|default:0 > 0 %}border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40{% else %}border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60{% endif %}">
+            <p class="text-[10px] font-semibold uppercase tracking-wide {% if tot.ped_urgente|default:0 > 0 %}text-rose-800 dark:text-rose-200{% else %}text-slate-500 dark:text-slate-400{% endif %}">PED Urgente</p>
+            <p class="mt-1 text-2xl font-semibold tabular-nums {% if tot.ped_urgente|default:0 > 0 %}text-rose-900 dark:text-rose-100{% else %}text-slate-900 dark:text-white{% endif %}">
+                {{ tot.ped_urgente|default:0 }}
+            </p>
+            <p class="mt-1 text-xs {% if tot.ped_urgente|default:0 > 0 %}text-rose-800/80 dark:text-rose-200/80{% else %}text-slate-500 dark:text-slate-400{% endif %}">
+                {% if tot.ped_urgente|default:0 > 0 %}
+                Hay que fabricar esta diferencia de forma urgente.
+                {% else %}
+                No hace falta fabricar de urgente: el stock alcanza el pendiente.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    {% if meta.brechas.texto_explicativo %}
+    <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">{{ meta.brechas.texto_explicativo }}</p>
+    {% endif %}
+    {% endwith %}
+    <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+            <thead class="bg-slate-50 dark:bg-slate-800/80">
+                <tr>
+                    <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Nº pedido</th>
+                    <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Cliente</th>
+                    <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Fecha</th>
+                    <th class="px-4 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Pendiente</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
+                {% for ped in demanda.filas %}
+                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                    <td class="px-4 py-2.5 font-mono text-xs text-slate-900 dark:text-white">{{ ped.nro_pedido|default:"-" }}</td>
+                    <td class="px-4 py-2.5 text-slate-700 dark:text-slate-300">{{ ped.nombre_cliente|default:"-" }}</td>
+                    <td class="px-4 py-2.5 tabular-nums text-slate-600 dark:text-slate-400">{{ ped.fecha|default:"-" }}</td>
+                    <td class="px-4 py-2.5 text-right tabular-nums font-medium text-slate-900 dark:text-white">{{ ped.cantidad_pendiente_prod|default:0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+{% endwith %}

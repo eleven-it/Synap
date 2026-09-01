@@ -6,6 +6,8 @@
   const summaryUrl = cfg.summaryUrl || "";
   const sucursalCanalUrl = cfg.sucursalCanalUrl || cfg.pvCanalUrl || "";
   let sucursalesTagsReady = false;
+  let puntosVentaTagsReady = false;
+  const FILTERS_API_URL = "/api/reports/filters/";
 
   function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -1027,6 +1029,65 @@
       .filter((v) => v && v !== "");
   }
 
+  function selectedPuntoVentaIds() {
+    const sel = el("exec_punto_venta");
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions)
+      .map((o) => o.value)
+      .filter((v) => v && v !== "");
+  }
+
+  function fillPuntoVentaTagsOptions(list, preserveSelected) {
+    const sel = el("exec_punto_venta");
+    if (!sel) return;
+    const prev = preserveSelected
+      ? new Set(Array.from(sel.selectedOptions).map((o) => o.value))
+      : new Set();
+    sel.innerHTML = "";
+    (list || []).forEach((item) => {
+      const pid = item.id != null ? item.id : item.value;
+      if (pid === "" || pid == null) return;
+      const o = document.createElement("option");
+      o.value = String(pid);
+      o.textContent = item.nombre || item.label || `PV ${pid}`;
+      if (prev.has(o.value)) o.selected = true;
+      sel.appendChild(o);
+    });
+    ensurePuntoVentaTagsInit();
+  }
+
+  function ensurePuntoVentaTagsInit(retry = 0) {
+    if (puntosVentaTagsReady) return;
+    if (typeof window.initializeTagsFilter === "function") {
+      window.initializeTagsFilter("exec_punto_venta", "puntos_venta");
+      puntosVentaTagsReady = true;
+      return;
+    }
+    if (retry < 40) {
+      setTimeout(() => ensurePuntoVentaTagsInit(retry + 1), 50);
+    }
+  }
+
+  async function loadPuntoVentaFilterOptions() {
+    const hint = el("exec-pv-hint");
+    if (hint) hint.textContent = "Cargando puntos de venta…";
+    try {
+      const res = await fetch(`${FILTERS_API_URL}?type=puntos_venta`, {
+        credentials: "same-origin",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        fillPuntoVentaTagsOptions(data.puntos_venta || [], true);
+        if (hint) hint.textContent = "Vacío = todos los puntos de venta";
+        return;
+      }
+    } catch (e) {
+      /* opcional */
+    }
+    fillPuntoVentaTagsOptions([], false);
+    if (hint) hint.textContent = "No se pudieron cargar los puntos de venta";
+  }
+
   function renderSectionCharts(sectionKey, seccion, fechaRef, meta) {
     const hora = (seccion.serie_horaria || []).map((d) => ({
       hora: `${d.hora} h`,
@@ -1097,6 +1158,7 @@
       qs.set("fecha_fin", fin.value);
     }
     selectedSucursalesIds().forEach((id) => qs.append("sucursales", id));
+    selectedPuntoVentaIds().forEach((id) => qs.append("punto_venta", id));
     if (topO && topO.value) qs.set("top_orden", topO.value);
     const fcAnio = el("exec-fecha-comparacion-anio");
     if (fcAnio && fcAnio.value) qs.set("fecha_comparacion", fcAnio.value);
@@ -1115,6 +1177,13 @@
       }
       renderSecciones(data);
       renderAllCharts(data);
+      const scopeEl = el("exec-scope-sucursal-pv");
+      if (scopeEl && typeof window.formatSucursalPvScopeText === "function") {
+        scopeEl.textContent = window.formatSucursalPvScopeText({
+          sucursalesId: "exec_sucursales",
+          puntoVentaId: "exec_punto_venta",
+        });
+      }
       const fc = el("exec-fecha-comparacion-anio");
       if (fc && data.meta?.fecha_comparacion_anio_anterior_aplicada) {
         fc.value = data.meta.fecha_comparacion_anio_anterior_aplicada;
@@ -1255,6 +1324,7 @@
     el("exec-refresh-btn")?.addEventListener("click", loadSummary);
     el("exec-top-orden")?.addEventListener("change", loadSummary);
     el("exec_sucursales")?.addEventListener("change", loadSummary);
+    el("exec_punto_venta")?.addEventListener("change", loadSummary);
     el("exec-secciones")?.addEventListener("change", (ev) => {
       if (ev.target && ev.target.id === "exec-fecha-comparacion-anio") loadSummary();
     });
@@ -1279,6 +1349,7 @@
       if (li && target) moveItem(li, target);
     });
     await loadSucursalesFilterOptions();
+    await loadPuntoVentaFilterOptions();
     loadSummary();
   }
 

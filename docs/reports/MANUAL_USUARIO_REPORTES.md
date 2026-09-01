@@ -8,6 +8,14 @@ Guía práctica de los informes del módulo **Reports** orientados a marcas y li
 
 **Fechas en pantalla:** siempre en formato **dd/MM/yyyy**.
 
+### Filtros sucursal y punto de venta (familia BO de ventas)
+
+En los informes de ventas con layout BO — **Objetivos vs BO**, **Ventas por vendedor**, **Ventas por artículo**, **Ventas por marca y SuperArt**, **Ventas BOM en docenas** y **Ventas marcas mensual** — el panel de filtros muestra selectores múltiples de **Sucursal** y **Punto de venta** (etiquetas). **Vacío = todos** los puntos de venta o sucursales.
+
+El resumen del informe (encima de la tabla o KPIs) y el Excel indican **qué sucursales y qué puntos de venta** entran en el listado: nombres de las etiquetas elegidas, o **Todas** / **Todos** si no filtró.
+
+**No** aparece el filtro Punto de venta en **BO vs stock vs facturación** (`bo-stock-facturacion`).
+
 ---
 
 ## 1. Acceso al módulo
@@ -87,6 +95,7 @@ Puede comparar dos marcas (A y B) en el mismo período: KPIs y matriz con valore
 ### Exportación Excel
 
 - Hojas **Matriz** (pivot plano) y **Detalle** (renglón a renglón).
+- En la primera hoja, bloque **Filtros aplicados** con sucursales y puntos de venta (nombres, o Todas/Todos).
 - Columnas de nombre de vendedor y cliente (sin códigos).
 - Si hay proyección, aparecen columnas de packs/docenas y monto proyectados.
 - Nombre típico: `Ventas_marcas_mensual_{desde}_{hasta}.xlsx`.
@@ -115,10 +124,11 @@ Preparar el **Monthly Reporting** que Best Sox envía a licenciatarios (Levi’s
 
 1. Abra el informe desde Reports.
 2. Pulse **Mostrar filtros**, elija **pack** y rango (mismo año calendario).
-3. Opcional: en **Clientes a excluir**, busque y seleccione clientes AdministraNET; no aparecerán en la matriz, totales ni Excel exportado (tampoco filas seed vinculadas a esos códigos).
-4. Pulse **Actualizar**. Verá la **matriz cliente × mes** (sin KPIs de cabecera) y una fila **Totales** al pie que suma cada columna; si busca un cliente, los totales reflejan las filas visibles.
-5. Si el pack es **Puma** y hay SuperArt sin género en catálogo, el panel **Preview QA** listará los códigos y podrá pulsar **Clasificar SuperArt** (filtros o panel QA). En el modal Synap elija **Men** o **Women** por código; al guardar el contador baja y el código entra al catálogo activo.
-6. En el banner, pulse **Exportar Excel** (icono de descarga, junto a Actualizar). El archivo usa la plantilla del pack (`input Licensee sales`, `monthly`, hoja QA).
+3. Opcional: filtre por **Sucursal** y/o **Punto de venta** (tags; vacío = todos). Estos filtros aplican **solo al tramo AdministraNET** (desde el 22/07/2026); el histórico importado del Excel (seed) no se recorta por sucursal/PV.
+4. Opcional: en **Clientes a excluir**, busque y seleccione clientes AdministraNET; no aparecerán en la matriz, totales ni Excel exportado (tampoco filas seed vinculadas a esos códigos).
+5. Pulse **Actualizar**. Verá la **matriz cliente × mes** (sin KPIs de cabecera) y una fila **Totales** al pie que suma cada columna; si busca un cliente, los totales reflejan las filas visibles.
+6. Si el pack es **Puma** y hay SuperArt sin género en catálogo, el panel **Preview QA** listará los códigos y podrá pulsar **Clasificar SuperArt** (filtros o panel QA). En el modal Synap elija **Men** o **Women** por código; al guardar el contador baja y el código entra al catálogo activo.
+7. En el banner, pulse **Exportar Excel** (icono de descarga, junto a Actualizar). El archivo usa la plantilla del pack (`input Licensee sales`, `monthly`, hoja QA) y una hoja **Filtros** al inicio con sucursales, puntos de venta y el resto de filtros aplicados.
 
 ### Packs previstos
 
@@ -188,7 +198,22 @@ Ver ventas del período agrupadas por **Marca → SuperArt → Artículo**, con 
 
 ---
 
-## 6. Ventas BOM en docenas
+## 6. Clientes sin ventas por vendedor
+
+**URL:** `/reports/dashboard/clientes-sin-ventas-vendedor/`
+
+### Cómo usarlo
+
+1. Elija **fecha desde** y **fecha hasta**.
+2. Opcional: filtre por **Sucursal** y/o **Punto de venta** (tags; vacío = todos). Solo cuenta ventas en esas sucursales/PV para decidir si el cliente «tuvo ventas» en el período.
+3. Opcional: restrinja **Vendedor** (gerencial) o use el alcance operativo de su sesión.
+4. Pulse **Generar informe**.
+
+Un cliente que facturó solo en otra sucursal puede aparecer como «sin ventas» al filtrar una sucursal concreta.
+
+---
+
+## 7. Ventas BOM en docenas
 
 **Nombre en catálogo:** Ventas BOM en docenas.  
 **URL:** `/reports/dashboard/ventas-bom-docenas/`  
@@ -207,7 +232,7 @@ Ver cuántos **artículos BOM (componentes)** salieron por venta facturada: cada
 
 ---
 
-## 7. Referencias técnicas
+## 8. Referencias técnicas
 
 | Tema | Documento |
 |------|-----------|
@@ -221,4 +246,4 @@ Ver cuántos **artículos BOM (componentes)** salieron por venta facturada: cada
 
 ---
 
-*Manual de usuario – Informes (Reports). Synap. Actualizado 14/08/2026.*
+*Manual de usuario – Informes (Reports). Synap. Actualizado 31/08/2026.*

@@ -8,6 +8,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from ecom.services.vendedor_cliente_marca import (
     ConflictoMarcaCliente,
     anular_terna,
+    anular_ternas_lote,
     crear_terna,
     crear_ternas_lote,
     listar_ternas,
@@ -113,6 +114,26 @@ class TestCrearTernasLote(SimpleTestCase):
         self.assertEqual(res["n_conflictos"], 0)
 
 
+class TestCrearTernasLoteMarcas(SimpleTestCase):
+    @patch("ecom.services.vendedor_cliente_marca.crear_terna")
+    def test_cartesiano_dos_marcas_dos_sucursales(self, mock_crear):
+        mock_crear.side_effect = [
+            (True, "Relación creada.", {"id": 1, "CodMarca": 2, "id_cliente_domicilio": 3}),
+            (True, "Relación creada.", {"id": 2, "CodMarca": 2, "id_cliente_domicilio": 4}),
+            (True, "Relación creada.", {"id": 3, "CodMarca": 7, "id_cliente_domicilio": 3}),
+            (True, "Relación creada.", {"id": 4, "CodMarca": 7, "id_cliente_domicilio": 4}),
+        ]
+        res = crear_ternas_lote(
+            "emp1", 9, 10, 2, [3, 4], cod_marcas=[2, 7]
+        )
+        self.assertEqual(res["n_creadas"], 4)
+        self.assertEqual(mock_crear.call_count, 4)
+        marcas_llamadas = [c.args[3] for c in mock_crear.call_args_list]
+        sucs_llamadas = [c.args[4] for c in mock_crear.call_args_list]
+        self.assertEqual(marcas_llamadas, [2, 2, 7, 7])
+        self.assertEqual(sucs_llamadas, [3, 4, 3, 4])
+
+
 class TestAnularTerna(SimpleTestCase):
     @patch("ecom.services.vendedor_cliente_marca.get_mysql_pool")
     def test_anular_ok(self, mock_pool):
@@ -125,6 +146,27 @@ class TestAnularTerna(SimpleTestCase):
         ok, msg = anular_terna("emp1", 3, usuario_mod="u")
         self.assertTrue(ok)
         self.assertIn("anulada", msg.lower())
+
+
+class TestAnularTernasLote(SimpleTestCase):
+    @patch("ecom.services.vendedor_cliente_marca.get_mysql_pool")
+    def test_lote_anula_activas(self, mock_pool):
+        conn = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [(7,), (8,)]
+        cursor.rowcount = 2
+        conn.cursor.return_value = cursor
+        mock_pool.return_value.get_connection.return_value.__enter__ = MagicMock(
+            return_value=conn
+        )
+        mock_pool.return_value.get_connection.return_value.__exit__ = MagicMock(
+            return_value=False
+        )
+        res = anular_ternas_lote("emp1", [7, 8, 9], usuario_mod="u")
+        self.assertEqual(res["n_solicitadas"], 3)
+        self.assertEqual(res["n_anuladas"], 2)
+        self.assertEqual(res["n_omitidas"], 1)
+        self.assertEqual(res["ids_anuladas"], [7, 8])
 
 
 class TestListarTernas(SimpleTestCase):
@@ -245,6 +287,37 @@ class TestApiCrear409(TestCase):
         self.assertTrue(resp.data["lote"])
         self.assertEqual(resp.data["resumen"]["n_conflictos"], 2)
 
+    @patch("ecom.vendedor_cliente_marca_views.crear_ternas_lote")
+    @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
+    def test_post_lote_marcas_y_sucursales_201(self, _base, mock_lote):
+        mock_lote.return_value = {
+            "creadas": [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}],
+            "ya_existian": [],
+            "conflictos": [],
+            "errores": [],
+            "n_creadas": 4,
+            "n_ya_existian": 0,
+            "n_conflictos": 0,
+            "n_errores": 0,
+        }
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/vendedor-cliente-marca/crear/",
+            {
+                "CodViajante": 9,
+                "id_cliente": 10,
+                "CodMarcas": [2, 7],
+                "ids_cliente_domicilio": [3, 4],
+            },
+            format="json",
+        )
+        req.session = {"user": {"base_empresa": "emp1"}}
+        force_authenticate(req, user=_User())
+        resp = VendedorClienteMarcaCrearAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(resp.data["ok"])
+        self.assertEqual(mock_lote.call_args.kwargs["cod_marcas"], [2, 7])
+
     @patch("ecom.vendedor_cliente_marca_views.anular_terna", return_value=(True, "Relación anulada."))
     @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
     def test_anular_ok(self, _base, _anular):
@@ -259,3 +332,26 @@ class TestApiCrear409(TestCase):
         resp = VendedorClienteMarcaAnularAPIView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data["ok"])
+
+    @patch("ecom.vendedor_cliente_marca_views.anular_ternas_lote")
+    @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
+    def test_anular_lote_ok(self, _base, mock_lote):
+        mock_lote.return_value = {
+            "n_solicitadas": 3,
+            "n_anuladas": 3,
+            "n_omitidas": 0,
+            "ids_anuladas": [7, 8, 9],
+        }
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/vendedor-cliente-marca/anular/",
+            {"ids": [7, 8, 9]},
+            format="json",
+        )
+        req.session = {"user": {"base_empresa": "emp1"}}
+        force_authenticate(req, user=_User())
+        resp = VendedorClienteMarcaAnularAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["ok"])
+        self.assertTrue(resp.data["lote"])
+        self.assertIn("3", resp.data["message"])

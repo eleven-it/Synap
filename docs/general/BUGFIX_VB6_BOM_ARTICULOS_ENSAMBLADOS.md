@@ -55,7 +55,7 @@ La primera aplicación se **reversó por completo** (bloque a bloque, verificado
 
 - Validación de nombre duplicado en `crear_conjunto_bom` (`/mpr/bom/`).
 - Salvaguarda en `delete_product` para artículos referenciados en `en_abm_formula` o vinculados a `en_abm`.
-- Duplicado preexistente en `articulo` (IDArt 1346 vs 1352, «2400 TM Atomik Media Stripe Negro 2P») pendiente de resolución de negocio.
+- Duplicado preexistente en `articulo` (IDArt 1346 vs 1352, «2400 TM Atomik Media Stripe Negro 2P») **resuelto 25/08/2026**: receta BOM `id_en_abm=228` unificada en IDArt **1346** (artículo con stock/movimientos); IDArt **1352** eliminado. Comando: `python manage.py unificar_articulo_duplicado_bom --base-empresa <base> --id-destino 1346 --id-origen 1352 --id-en-abm 228`.
 
 ## Seguimiento 23/07/2026 — artículo 938382-16 (`administranet`)
 

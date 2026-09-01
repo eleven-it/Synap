@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -26,6 +26,7 @@ SHEET_MONTHLY = "monthly"
 SHEET_OOH = "input Licensee ooh"
 SHEET_MINIMUM = "minimum agreed"
 QA_SHEET = "QA"
+SHEET_FILTROS = "Filtros"
 
 QA_HEADERS = ("SuperArt / tipo", "Detalle", "Cliente", "Estado match")
 SALES_HEADERS_LEVIS = ("Customer", "City / Province", "Store Type", "Product group")
@@ -376,6 +377,25 @@ def _write_qa_sheet(
         ws.column_dimensions[letter].width = min(max_len + 2.5, MAX_COL_WIDTH)
 
 
+def _write_filtros_sheet(wb, filter_lines: List[Tuple[str, str]]) -> None:
+    """Hoja inicial con sucursales/PV y resto de filtros aplicados."""
+    if not filter_lines:
+        return
+    if SHEET_FILTROS in wb.sheetnames:
+        wb.remove(wb[SHEET_FILTROS])
+    ws = wb.create_sheet(SHEET_FILTROS, 0)
+    title = ws.cell(row=1, column=1, value="Filtros aplicados")
+    _style_header_cell(title)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=2)
+    row = 2
+    for etiqueta, valor in filter_lines:
+        ws.cell(row=row, column=1, value=etiqueta).font = DATA_FONT
+        ws.cell(row=row, column=2, value=valor).font = DATA_FONT
+        row += 1
+    ws.column_dimensions["A"].width = 28
+    ws.column_dimensions["B"].width = 80
+
+
 def export_licenciatarios_workbook(
     file_path: Path,
     *,
@@ -384,6 +404,7 @@ def export_licenciatarios_workbook(
     year: int,
     month_from: int,
     month_to: int,
+    filter_lines: Optional[List[Tuple[str, str]]] = None,
 ) -> None:
     """
     Clona plantilla anual, reescribe ventas/mensual, conserva hojas auxiliares y agrega QA.
@@ -409,6 +430,7 @@ def export_licenciatarios_workbook(
         _ensure_monthly_links_row2(wb[SHEET_MONTHLY])
 
     _write_qa_sheet(wb, merge_result=merge_result)
+    _write_filtros_sheet(wb, filter_lines or [])
 
     for sheet_name in preserved:
         if sheet_name not in wb.sheetnames:

@@ -1,0 +1,62 @@
+name: mpr-trazabilidad-analisis-completo
+created: "2026-09-01"
+status: verify-complete
+mode: hybrid
+plan: docs/mpr/PLAN_TRAZABILIDAD_ANALISIS_COMPLETO.md
+next: archive
+post_verify_fix: dedupe_mpr_opa_omit_mstock_from_ledger_query
+artifacts:
+  exploration: complete
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: pr3-complete
+  verify: complete
+apply_progress:
+  work_unit: 3
+  pr: PR3
+  tasks_completed: "1.1-1.14,2.1-2.9,3.1-3.10,4.1-4.2"
+  tests:
+    command: "docker exec Synap_app python manage.py test mpr.tests.test_kardex_articulo mpr.tests.test_analisis_trazabilidad_articulo mpr.tests.test_reportes_trazabilidad --keepdb"
+    result: "49/49 OK"
+  manual_ca_pack_610:
+    id_articulo: 1398
+    periodo: "2026-07-01 — 2026-09-01"
+    opa_count: 4
+    opa_quantities: [30, 42, 68, 120]
+    bom_components: 3
+    rem_fa_inv: "0/0/0 en ventana (sin movimientos REM/FA/INV en BD para ese período)"
+    p_ped: 450
+    terminado: 235
+    ped_urgente: 215
+verify:
+  verdict: PASS_WITH_WARNINGS
+  report: openspec/changes/mpr-trazabilidad-analisis-completo/verify-report.md
+  ca_results:
+    CA-1: pass
+    CA-2: pass
+    CA-3: pass
+    CA-4: pass
+    CA-5: pass
+    CA-6: pass
+    CA-7: pass
+    CA-8: pass
+  tests_run: 49
+  tests_passed: 49
+decisions_locked:
+  deposito_terminado: auto_tablero_pack_selector_opcional
+  saldo_inicial_v1: real_al_desde_con_advertencia
+  timeline: thin_wrapper_deeplink_kardex
+  demanda_ped: listar_demanda_ped_vivo_fifo
+  export_csv_v1: true
+  export_excel: stretch
+  incluir_cerrados: out_of_v1
+  inventario_fa: clasificar_motivo_tipocomp_fa_sin_saldo
+delivery:
+  chained_prs: 3
+  pr1: collector_tests
+  pr2: ui_bloques
+  pr3: export_timeline_docs
+  budget_lines: "800-1200"
+  review_risk: high

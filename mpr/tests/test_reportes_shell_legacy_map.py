@@ -10,9 +10,17 @@ from mpr.views import ReportesMPRView
 
 
 class TestReportesHubHelpers(SimpleTestCase):
-    def test_parse_periodo_default_7_dias(self):
+    def test_parse_periodo_default_mes_actual(self):
+        from calendar import monthrange
+        from datetime import date
+
         p = parse_periodo(None, None)
-        self.assertEqual((p["fecha_hasta"] - p["fecha_desde"]).days, 6)
+        hoy = date.today()
+        self.assertEqual(p["fecha_desde"], date(hoy.year, hoy.month, 1))
+        self.assertEqual(
+            p["fecha_hasta"],
+            date(hoy.year, hoy.month, monthrange(hoy.year, hoy.month)[1]),
+        )
 
     def test_resolver_default_produccion_resumen(self):
         g, r = resolver_grupo_reporte({})
@@ -28,6 +36,24 @@ class TestReportesHubHelpers(SimpleTestCase):
         g, r = resolver_grupo_reporte({"tipo": "produccion_operario"})
         self.assertEqual(g, "produccion")
         self.assertEqual(r, "operario")
+
+    def test_grupo_trazabilidad_default_kardex(self):
+        g, r = resolver_grupo_reporte({"grupo": "trazabilidad"})
+        self.assertEqual(g, "trazabilidad")
+        self.assertEqual(r, "kardex_articulo")
+
+    def test_grupo_trazabilidad_legacy_timeline_redirige_kardex(self):
+        g, r = resolver_grupo_reporte({"grupo": "trazabilidad", "reporte": "timeline"})
+        self.assertEqual(g, "trazabilidad")
+        self.assertEqual(r, "kardex_articulo")
+
+    def test_grupo_trazabilidad_legacy_movimientos_redirige_kardex(self):
+        g, r = resolver_grupo_reporte({"grupo": "trazabilidad", "reporte": "movimientos"})
+        self.assertEqual(r, "kardex_articulo")
+
+    def test_grupo_trazabilidad_legacy_conciliacion_redirige_kardex(self):
+        g, r = resolver_grupo_reporte({"grupo": "trazabilidad", "reporte": "conciliacion"})
+        self.assertEqual(r, "kardex_articulo")
 
     def test_filas_a_csv_bom(self):
         data = filas_a_csv([{"a": 1}], [("a", "Col A")])

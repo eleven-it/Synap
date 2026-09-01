@@ -1,5 +1,8 @@
-{# Filtros del chrome denso: período + presentación + acciones. Fragmento de la fila 1 (slate-800). #}
-<form method="get" x-ref="filtrosForm" class="flex shrink-0 flex-wrap items-end gap-2">
+{# Filtros del chrome denso: período libre + presentación + acciones. Fragmento de la fila 1 (slate-800). #}
+<form method="get" x-ref="filtrosForm"
+      class="mpr-post-loading flex shrink-0 flex-wrap items-end gap-2"
+      data-mpr-loading-title="Reconstruyendo análisis"
+      data-mpr-loading-subtitle="Calculando saldo inicial histórico y movimientos del período… No cierres esta ventana.">
     <input type="hidden" name="grupo" value="{{ grupo }}">
     <input type="hidden" name="reporte" value="{{ reporte }}">
     <input type="hidden" name="presentacion" x-model="presentacion">
@@ -8,25 +11,13 @@
 
     <div class="flex flex-col gap-0.5">
         <label for="desde" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Desde</label>
-        <input type="date" id="desde" name="desde" x-model="desde" @change="presetActivo = null"
-               class="h-9 w-[8.5rem] rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
+        <input type="date" id="desde" name="desde" x-model="desde"
+               class="mpr-reportes-fecha h-9 w-[9.25rem] rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
     </div>
     <div class="flex flex-col gap-0.5">
         <label for="hasta" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Hasta</label>
-        <input type="date" id="hasta" name="hasta" x-model="hasta" @change="presetActivo = null"
-               class="h-9 w-[8.5rem] rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
-    </div>
-
-    <div class="inline-flex h-9 overflow-hidden rounded-lg border border-slate-600 bg-slate-900/70 p-0.5" role="group" aria-label="Atajos de período">
-        <button type="button" @click="preset(0)"
-                :class="clasePreset(0)"
-                class="h-full rounded-md px-2 text-xs font-semibold transition-colors">Hoy</button>
-        <button type="button" @click="preset(7)"
-                :class="clasePreset(7)"
-                class="h-full rounded-md px-2 text-xs font-semibold transition-colors">7 días</button>
-        <button type="button" @click="preset(30)"
-                :class="clasePreset(30)"
-                class="h-full rounded-md px-2 text-xs font-semibold transition-colors">Mes</button>
+        <input type="date" id="hasta" name="hasta" x-model="hasta"
+               class="mpr-reportes-fecha h-9 w-[9.25rem] rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
     </div>
 
     {% include "includes/toggle_docenas_pares.html" with interaction="alpine" variant="dark" modo_presentacion=modo_presentacion only %}
@@ -54,3 +45,14 @@
     </a>
     {% endif %}
 </form>
+<style>
+/* Icono nativo del date picker legible sobre fondo slate oscuro */
+input.mpr-reportes-fecha {
+    color-scheme: dark;
+}
+input.mpr-reportes-fecha::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 1;
+    filter: invert(1) brightness(1.15);
+}
+</style>

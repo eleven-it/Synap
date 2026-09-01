@@ -148,6 +148,16 @@ def filtro_periodo_comprobante_por_fecha_sql(
     )
 
 
+def join_punto_venta_contable_por_id_pv(alias: str = "cp", pv_alias: str = "pv") -> str:
+    """JOIN ``punto_venta`` para gating de contabilidad en compras/pagos (REC-18, alineado REC-20)."""
+    return f"JOIN punto_venta {pv_alias} ON {pv_alias}.id_punto_venta = {alias}.id_pv"
+
+
+def filtro_punto_venta_contable_sql(pv_alias: str = "pv") -> str:
+    """Solo comprobantes de puntos de venta con contabilidad activa."""
+    return f" AND COALESCE({pv_alias}.cont, 'No') = 'Si' "
+
+
 def filtro_periodo_dentro_exists_por_fecha_sql(
     filtros: dict | None,
     alias: str,

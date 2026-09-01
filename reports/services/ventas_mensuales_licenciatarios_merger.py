@@ -2,6 +2,7 @@
 """Merger seed PostgreSQL + AdministraNET read-only para licenciatarios."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -29,9 +30,17 @@ CUTOVER_DATE = date(2026, 7, 22)
 CUTOVER_YEAR = CUTOVER_DATE.year
 
 
+_NAME_NON_ALNUM = re.compile(r"[^A-Z0-9]+")
+
+
 def _normalize_customer_name(value: str) -> str:
-    """Clave estable para vincular ANET ↔ seed cuando el match aún no tiene anet_id."""
-    return " ".join(str(value or "").upper().split())
+    """Clave estable para vincular ANET ↔ seed cuando el match aún no tiene anet_id.
+
+    Ignora puntuación (p. ej. «S.A.» vs «S.A») y colapsa espacios para homónimos
+    tipo VARTAT: seed pendiente + venta ANET con el mismo nombre comercial.
+    """
+    cleaned = _NAME_NON_ALNUM.sub(" ", str(value or "").upper())
+    return " ".join(cleaned.split())
 
 
 def _build_match_indexes() -> tuple[
@@ -350,6 +359,8 @@ def merge_pack_year(
     fetch_anet_fn: Callable[..., List[AnetSalesRow]] = fetch_anet_sales,
     classify_genero=None,
     register_unknown_superart=None,
+    sucursales: Optional[Sequence[int]] = None,
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> MergeResult:
     """
     Fusiona seed + ANET respetando cutover 22/07/2026.
@@ -386,6 +397,8 @@ def merge_pack_year(
             pack=pack,
             date_from=d_from,
             date_to=d_to,
+            sucursales=sucursales,
+            puntos_venta=puntos_venta,
             classify_genero=classify_genero,
             register_unknown_superart=_qa_hook if classify_genero else register_unknown_superart,
         )

@@ -55,11 +55,32 @@ Al ejecutar el proveedor en **Archivo → Migración esquema MySQL**:
 | Método | Path | Descripción |
 |--------|------|-------------|
 | GET | `/ecom/api/mayoristapp/vendedor-cliente-marca/ternas/` | Lista (filtros `CodViajante`, `id_cliente`, `id_cliente_domicilio`, `solo_activas`; límite predeterminado `5000`, máximo `20000`) |
-| POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/crear/` | Alta con `id_cliente_domicilio` (una sucursal) o `ids_cliente_domicilio` (array, lote); **409** `code=conflicto_marca` + `dueno` (simple) o `resumen` (lote); **201** si alguna creada; **200** si solo ya existían |
-| POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/anular/` | Soft-delete `{id}` |
+| POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/crear/` | Alta con `id_cliente_domicilio` / `ids_cliente_domicilio` y `CodMarca` / `CodMarcas` (cartesiano sucursales × marcas); **409** `code=conflicto_marca` + `dueno` (simple) o `resumen` (lote); **201** si alguna creada; **200** si solo ya existían |
+| POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/anular/` | Soft-delete `{id}` o lote `{ids: [...]}` |
 | GET | `.../vendedores/`, `.../clientes/`, `.../sucursales/?id_cliente=`, `.../marcas/` | Búsqueda predictiva `?q=` |
 
-UI: `/ecom/mayoristapp/config/vendedor-cliente-marca/` — formulario con 4 combobox: Vendedor, Cliente, **Sucursal** (multi-select: una o más sucursales del cliente; chips + checkboxes en listado; botones Todas/Ninguna), Marca (single). Un clic en **Asignar** crea N relaciones (mismo vendedor, cliente y marca × cada sucursal seleccionada).
+UI: `/ecom/mayoristapp/config/vendedor-cliente-marca/` — formulario con 4 combobox: Vendedor, Cliente, **Sucursal** (multi-select: una o más sucursales del cliente; chips + checkboxes en listado; botones Todas/Ninguna), **Marca** (multi-select, mismo patrón). Un clic en **Asignar** crea el cartesiano (mismo vendedor y cliente × cada sucursal × cada marca).
+
+**Paquete PUM / PUS / PUW:** esas tres marcas se asignan siempre juntas. En el alta, marcar o desmarcar una selecciona o quita las tres. En datos existentes, si un vendedor tiene al menos una de las tres en una sucursal, deben estar las tres en esa misma cuaterna.
+
+**Anulación:** **Anular** en la hoja (una relación) o selección múltiple (checkbox en hoja, en encabezado de vendedor/cliente/sucursal, o «todas»). Barra **Anular seleccionadas** + modal Synap. API: `{id}` o `{ids: [...]}`.
+
+## Completitud paquete PUM / PUS / PUW (01/09/2026)
+
+**Entorno:** Server2 `181.174.198.194:30804`, base `administranet`.  
+**Códigos:** PUM=`13`, PUS=`14`, PUW=`15`.
+
+Criterio: por cada `(CodViajante, id_cliente, id_cliente_domicilio)` con al menos una de las tres activa, completar las que falten al mismo vendedor. Unique intacto; no se pisó a otro dueño.
+
+| Métrica | Valor |
+|---------|-------|
+| Grupos incompletos antes | 170 |
+| Filas insertadas | 316 |
+| Conflictos (otro vendedor) | 0 |
+| Grupos incompletos después | 0 |
+| Filas activas del trío después | 1200 |
+
+`usuario_mod = synap-vcm-paquete-pu`.
 
 **Listado de relaciones:** árbol colapsable de 4 niveles `Vendedor → Cliente → Sucursal → Marca` (cada nivel con chevron y badge «N relaciones»; **inicia siempre contraído**; estado en `gruposColapsados` con claves string `v:<cod>`, `v:<cod>:c:<idc>`, `v:<cod>:c:<idc>:s:<idd>`), armado client-side con `arbolCuaternas()`/`filasArbol()` y orden natural (`cmpNatural`) en cada nivel; columnas de la hoja `Marca | Alta | (acciones)` con tabulación alineada al texto de Sucursal. Botones **Expandir todo** / **Contraer todo** (mismo patrón que informes VO). Se muestra solo el dato legible, **sin códigos entre paréntesis ni índices** (`nombre_viajante`, `nombre_cliente`, `nombre_marca`); en sucursal, si no hay domicilio (id 0/vacío) o la etiqueta es solo un índice, se muestra «Sin sucursal». Los 4 combobox y el filtro de vendedor usan búsqueda predictiva con orden natural, recarga al borrar el texto y flecha abajo para traer todo el catálogo (`onInput`/`flechaAbajo`).
 

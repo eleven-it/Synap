@@ -19,7 +19,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 from core.decorators import administranet_login_required, tiene_permiso
 from core.utils.administranet_types import str_or_default, to_date_or_none, to_int_or_none
 from mtrix.extractors import EXTRACTORS
-from mtrix.extractors.base import parse_proveedores
+from mtrix.extractors.base import obtener_cuit_empresa, parse_proveedores
 from mtrix.models import MtrixJob
 from mtrix.services.crypto import encrypt_secret
 from mtrix.services.orchestrator import (
@@ -30,6 +30,10 @@ from mtrix.services.orchestrator import (
 from mtrix.services.preview_formatter import format_row
 from mtrix.services.schedule import DOW_LABELS, normalize_schedule
 from mtrix.services.sftp import enviar_job, test_connection
+from mtrix.services.proveedores import (
+    buscar_proveedores_mtrix,
+    proveedores_seleccionados_config,
+)
 from mtrix.view_helpers import base_empresa_sesion, get_or_create_config, sftp_masked
 
 logger = logging.getLogger(__name__)
@@ -179,7 +183,6 @@ def configuracion(request):
         cfg.fecha_final = to_date_or_none(request.POST.get("fecha_final"))
         cfg.dias_a_procesar = to_int_or_none(request.POST.get("dias_a_procesar")) or 5
         cfg.codigo_proveedor_principal = str_or_default(request.POST.get("codigo_proveedor_principal"), "")
-        cfg.cnpj_fornecedor = str_or_default(request.POST.get("cnpj_fornecedor"), "").replace("-", "")
         cfg.pvnf = request.POST.get("pvnf") == "1"
         cfg.multiplicador_cantidad = to_int_or_none(request.POST.get("multiplicador_cantidad")) or 1
         cfg.multiplicador_precio = to_int_or_none(request.POST.get("multiplicador_precio")) or 1
@@ -213,10 +216,34 @@ def configuracion(request):
                 "enabled": dow in by_dow,
             }
         )
+    cuit_empresa = ""
+    try:
+        cuit_empresa, _limpio = obtener_cuit_empresa(base)
+    except Exception:
+        logger.exception("No se pudo leer CUIT de datosempresa para %s", base)
+    proveedores_sel = []
+    try:
+        proveedores_sel = proveedores_seleccionados_config(base, cfg.codigo_proveedor_principal)
+    except Exception:
+        logger.exception("No se pudieron resolver proveedores Mtrix para %s", base)
+    if not proveedores_sel:
+        parsed = parse_proveedores(cfg.codigo_proveedor_principal)
+        if parsed != ["TODOS"]:
+            proveedores_sel = [
+                {"codigo": to_int_or_none(c), "nombre": "", "cuit": ""}
+                for c in parsed
+                if to_int_or_none(c) is not None
+            ]
     return render(
         request,
         "mtrix/configuracion.html",
-        {"config": cfg, "schedule_rows": schedule_rows, "sftp_masked": sftp_masked(cfg)},
+        {
+            "config": cfg,
+            "schedule_rows": schedule_rows,
+            "sftp_masked": sftp_masked(cfg),
+            "cuit_empresa": cuit_empresa,
+            "proveedores_seleccionados": proveedores_sel,
+        },
     )
 
 
@@ -315,6 +342,22 @@ def api_job(request, job_id):
             "error": job.error_summary,
         }
     )
+
+
+@administranet_login_required
+@tiene_permiso("mtrix.configurar")
+@require_GET
+def api_proveedores_buscar(request):
+    base = _require_base(request)
+    if not base:
+        return JsonResponse({"ok": False, "proveedores": [], "mensaje": "Sin empresa en sesión."}, status=400)
+    q = str_or_default(request.GET.get("q"), "")
+    try:
+        filas = buscar_proveedores_mtrix(base, q, limite=15)
+    except Exception:
+        logger.exception("Búsqueda de proveedores Mtrix falló para %s", base)
+        return JsonResponse({"ok": False, "proveedores": [], "mensaje": "No se pudo buscar proveedores."}, status=500)
+    return JsonResponse({"ok": True, "proveedores": filas})
 
 
 @administranet_login_required

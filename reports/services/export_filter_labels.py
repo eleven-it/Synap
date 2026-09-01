@@ -76,6 +76,23 @@ _LISTA_PRECIO_LABELS = (
     "Lista 5",
 )
 
+# Informes de ventas que siempre declaran el alcance sucursal / PV en Excel.
+_SLUGS_SCOPE_SUCURSAL_PV = frozenset(
+    {
+        "ventas-objetivos-vs-bo",
+        "ventas-por-vendedor",
+        "ventas-por-articulo",
+        "ventas-marca-superart",
+        "ventas-bom-docenas",
+        "ventas-marcas-mensual",
+        "ventas-mensuales-licenciatarios",
+        "ventas-netas",
+        "ventas_netas",
+        "total-consolidado-operativo",
+        "clientes-sin-ventas-vendedor",
+    }
+)
+
 _SKIP_KEYS = frozenset(
     {
         "base_empresa",
@@ -307,6 +324,9 @@ def build_export_filter_lines(
     for key, label, kind in _FILTER_SPECS:
         if key in _SKIP_KEYS or key in extra_labels:
             continue
+        # Alcance sucursal/PV: lo declara _append_sucursal_pv_scope (nombres o Todas/Todos).
+        if key in ("sucursales", "punto_venta"):
+            continue
         raw = merged.get(key)
         if raw is None or raw == "" or raw == []:
             continue
@@ -381,4 +401,60 @@ def build_export_filter_lines(
         elabel = str(ek).replace("_", " ").strip().capitalize()
         _append(elabel, str(ev).strip())
 
+    _append_sucursal_pv_scope(report_slug, merged, lookup, _append)
+
     return lines
+
+
+def _unique_int_ids(*raws: Any) -> List[int]:
+    seen: set = set()
+    out: List[int] = []
+    for raw in raws:
+        if raw is None or raw == "":
+            continue
+        for i in _parse_int_list(raw if isinstance(raw, list) else [raw]):
+            if i not in seen:
+                seen.add(i)
+                out.append(i)
+    return out
+
+
+def _format_scope_list(
+    ids: List[int],
+    kind: str,
+    lookup: Optional[_MysqlLabelLookup],
+    empty_label: str,
+) -> str:
+    if not ids:
+        return empty_label
+    if lookup:
+        labels = lookup.labels_for(kind, ids)
+        if labels:
+            return ", ".join(labels)
+    return ", ".join(str(i) for i in ids)
+
+
+def _append_sucursal_pv_scope(
+    report_slug: str,
+    merged: Dict[str, Any],
+    lookup: Optional[_MysqlLabelLookup],
+    append_fn,
+) -> None:
+    """En informes de ventas, Excel siempre lista sucursales y PV (nombres o «Todas/Todos»)."""
+    suc_ids = _unique_int_ids(merged.get("sucursales"))
+    pv_ids = _unique_int_ids(
+        merged.get("punto_venta"),
+        merged.get("puntos_venta"),
+        merged.get("punto_venta_id"),
+    )
+    force = report_slug in _SLUGS_SCOPE_SUCURSAL_PV
+    if force or suc_ids:
+        append_fn(
+            "Sucursales",
+            _format_scope_list(suc_ids, "sucursales", lookup, "Todas"),
+        )
+    if force or pv_ids:
+        append_fn(
+            "Puntos de venta",
+            _format_scope_list(pv_ids, "puntos_venta", lookup, "Todos"),
+        )

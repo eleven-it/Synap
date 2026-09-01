@@ -71,7 +71,8 @@ Se verificó el esquema real vía `information_schema` en la base piloto. Los no
 - `cuentaproveedor.CodigoMovimiento` ↔ `cont_asiento.codigo_movimiento`
 - Tipos: FA/FC (concepto 3), OP (concepto 7)
 - `CodigoMovimiento=0`: marcador anulación (excluir de “sin asiento”)
-- `sucursales.cont='Si'`: sucursal contable
+- `punto_venta.cont='Si'`: PV contable (gating REC-18 compras/pagos y REC-20 ventas/cobranzas)
+- `sucursales.cont='Si'`: sucursal contable (flag VB6 `Principal.conta_suc`; no sustituye gating por PV en Synap)
 
 ## Desviaciones respecto al design inicial
 

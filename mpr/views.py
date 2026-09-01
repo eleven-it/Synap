@@ -4432,17 +4432,44 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         return super().get(request, *args, **kwargs)
 
     def _respuesta_csv(self, context: Dict[str, Any]) -> HttpResponse:
-        from mpr.export import filas_a_csv
+        from mpr.export import analisis_trazabilidad_a_csv, filas_a_csv
         from mpr.reportes_hub import columnas_csv_para_modo
 
         grupo = context.get("grupo") or "produccion"
         reporte = context.get("reporte") or "resumen_diario"
         modo = context.get("modo_presentacion") or "docenas"
+        titulo = context.get("titulo_reporte") or "reporte_mpr"
+
+        if grupo == "trazabilidad" and reporte == "kardex_articulo":
+            analisis = context.get("_analisis_trazabilidad")
+            if not analisis:
+                meta = context.get("meta") or {}
+                analisis = {
+                    "articulo": meta.get("articulo"),
+                    "demanda_ped": meta.get("demanda_ped") or {"filas": [], "totales": {"p_ped": 0}},
+                    "stock": meta.get("stock") or {"terminado": 0, "negativo": False},
+                    "brechas": meta.get("brechas") or {},
+                    "a_producir": meta.get("a_producir") or {},
+                    "saldo_inicial": meta.get("saldo_inicial") or {},
+                    "movimientos": context.get("filas") or [],
+                    "eventos_mpr": meta.get("eventos_mpr") or [],
+                    "kpis": context.get("kpis") or {},
+                }
+            payload = analisis_trazabilidad_a_csv(
+                analisis,
+                modo=modo,
+                fecha_desde_display=context.get("fecha_desde_display") or "",
+                fecha_hasta_display=context.get("fecha_hasta_display") or "",
+            )
+            nombre = "analisis_trazabilidad.csv"
+            resp = HttpResponse(payload, content_type="text/csv; charset=utf-8")
+            resp["Content-Disposition"] = f'attachment; filename="{nombre}"'
+            return resp
+
         columnas = columnas_csv_para_modo(grupo, reporte, modo)
         if not columnas:
             return HttpResponse("Exportación no disponible para este reporte.", status=400)
         filas = context.get("filas") or context.get("dias") or []
-        titulo = context.get("titulo_reporte") or "reporte_mpr"
         nombre = f"{titulo.replace(' ', '_').lower()}.csv"
         payload = filas_a_csv(filas, columnas)
         resp = HttpResponse(payload, content_type="text/csv; charset=utf-8")
@@ -4631,14 +4658,35 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         elif grupo == "demanda" and reporte == "bajo_minimo":
             filas = reporte_mpr_bajo_minimo(base_empresa)
         elif grupo == "trazabilidad" and reporte == "timeline":
-            id_art = self.request.GET.get("id_articulo")
-            data = reporte_mpr_trazabilidad_componente(base_empresa, id_art, fd_iso, fh_iso)
-            eventos = data.get("eventos") or []
+            from core.utils.administranet_types import to_int_or_none
+            from mpr.services_kardex_articulo import construir_analisis_trazabilidad_articulo
+
+            id_art = to_int_or_none(self.request.GET.get("id_articulo"))
             meta = {
-                "id_articulo": data.get("id_articulo"),
-                "descripcion_articulo": data.get("descripcion"),
+                "id_articulo": id_art,
+                "id_deposito": None,
+                "codigo_articulo": "",
+                "descripcion_articulo": "",
+                "eventos_mpr": [],
             }
-            kpis = {"eventos": len(eventos)}
+            eventos = []
+            kpis = {"eventos": 0}
+            if id_art is not None:
+                data = construir_analisis_trazabilidad_articulo(
+                    base_empresa,
+                    id_art,
+                    fecha_desde=fd_iso,
+                    fecha_hasta=fh_iso,
+                )
+                articulo = data.get("articulo") or {}
+                meta["articulo"] = articulo
+                meta["codigo_articulo"] = articulo.get("codigo") or ""
+                meta["descripcion_articulo"] = articulo.get("descripcion") or ""
+                meta["eventos_mpr"] = data.get("eventos_mpr") or []
+                eventos = meta["eventos_mpr"]
+                kpis = data.get("kpis") or {"eventos": len(eventos)}
+                kpis.setdefault("eventos", len(eventos))
+                context["_analisis_trazabilidad"] = data
         elif grupo == "trazabilidad" and reporte == "movimientos":
             filas = reporte_mpr_movimientos(base_empresa, fd_iso, fh_iso)
             kpis = {"eventos": len(filas)}
@@ -4649,33 +4697,49 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
             filas = data.get("filas") or []
         elif grupo == "trazabilidad" and reporte == "kardex_articulo":
             from core.utils.administranet_types import to_int_or_none
-            from mpr.services import construir_kardex_articulo
+            from mpr.services_kardex_articulo import construir_analisis_trazabilidad_articulo
 
             id_art = to_int_or_none(self.request.GET.get("id_articulo"))
-            id_dep = to_int_or_none(self.request.GET.get("id_deposito"))
-            try:
-                context["depositos"] = listar_depositos_config(base_empresa)
-            except MprSchemaError as e:
-                _log_mpr_schema_error(e)
-                context["depositos"] = []
 
             meta = {
                 "id_articulo": id_art,
-                "id_deposito": id_dep,
+                "id_deposito": None,
                 "advertencias": [],
+                "demanda_ped": {"filas": [], "totales": {"p_ped": 0}},
+                "stock": {"terminado": 0, "semi_componentes": [], "negativo": False},
+                "brechas": {
+                    "ped_urgente": 0,
+                    "tot_urgente": 0,
+                    "reserva": 0,
+                    "texto_explicativo": "",
+                },
+                "a_producir": {
+                    "cantidad": 0,
+                    "capacidad_semi": 0,
+                    "alerta_semi_cero": False,
+                },
+                "saldo_inicial": {"valor": 0, "calculado_ok": False},
+                "eventos_mpr": [],
             }
             if id_art is not None:
-                data = construir_kardex_articulo(
+                data = construir_analisis_trazabilidad_articulo(
                     base_empresa,
                     id_art,
-                    id_deposito=id_dep,
                     fecha_desde=fd_iso,
                     fecha_hasta=fh_iso,
                 )
                 meta["articulo"] = data.get("articulo")
                 meta["bom"] = data.get("bom")
                 meta["deposito"] = data.get("deposito")
+                if meta["deposito"]:
+                    meta["id_deposito"] = meta["deposito"].get("id")
                 meta["advertencias"] = data.get("advertencias") or []
+                meta["demanda_ped"] = data.get("demanda_ped") or meta["demanda_ped"]
+                meta["stock"] = data.get("stock") or meta["stock"]
+                meta["brechas"] = data.get("brechas") or meta["brechas"]
+                meta["a_producir"] = data.get("a_producir") or meta["a_producir"]
+                meta["saldo_inicial"] = data.get("saldo_inicial") or meta["saldo_inicial"]
+                meta["eventos_mpr"] = data.get("eventos_mpr") or []
                 if data.get("articulo"):
                     kpis = data.get("kpis") or {}
                     filas = data.get("movimientos") or []
@@ -4685,12 +4749,23 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                     opa_rows = [
                         m for m in filas if int(m.get("salida") or 0) > 0
                     ]
-                    context["renglones_por_movimiento"] = _build_renglones_modal_map(
+                    context["renglones_por_movimiento"] = renglones_map = _build_renglones_modal_map(
                         base_empresa, opp_rows, opa_rows
                     )
+                    for mov in filas:
+                        if mov.get("clase_ui") != "opa":
+                            continue
+                        cm = mov.get("codigo_movimiento")
+                        if cm is None:
+                            continue
+                        grupo = renglones_map.get(str(cm)) or {}
+                        articulos = grupo.get("articulos") or []
+                        if articulos:
+                            mov["subfilas_opa"] = articulos
                 else:
                     filas = []
                     kpis = {}
+                context["_analisis_trazabilidad"] = data
 
         from mpr.reportes_presentacion import (
             aplicar_presentacion_reporte,

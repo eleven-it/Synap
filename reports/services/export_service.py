@@ -1313,6 +1313,16 @@ class ExportService:
             )
 
         pack = MonthlyReportingPack.objects.get(pack_id=pack_id, active=True)
+        payload = payload if isinstance(payload, dict) else {}
+        base_empresa = payload.get("base_empresa") or (payload.get("filters") or {}).get(
+            "base_empresa"
+        )
+        filter_lines = build_export_filter_lines(
+            report.slug,
+            payload,
+            (query_result.meta or {}).get("filters_applied"),
+            base_empresa,
+        )
         export_licenciatarios_workbook(
             file_path,
             pack=pack,
@@ -1320,6 +1330,7 @@ class ExportService:
             year=int(year),
             month_from=int(month_from or 1),
             month_to=int(month_to or 12),
+            filter_lines=filter_lines,
         )
         logger.info("Excel ventas-mensuales-licenciatarios (plantilla + QA): %s", file_path)
 

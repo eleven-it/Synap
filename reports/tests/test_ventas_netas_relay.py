@@ -536,3 +536,103 @@ class TestVentasNetasRelayViews(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("gdata", resp.data)
         self.assertEqual(resp.data["gdata"][0], ["label", "value"])
+
+    @patch("reports.ventas_netas_relay_views.get_ventas_netas")
+    def test_relay_acepta_listas_sucursales_pv(self, mock_gvn):
+        mock_gvn.return_value = {
+            "data": [],
+            "cabeceras": [],
+            "titulos": [],
+            "meta": {},
+        }
+        req = _request_with_session(
+            "/api/reports/ventas-netas/relay/gerencia/",
+            {
+                "fechaDesde": "2026-01-01",
+                "fechaHasta": "2026-01-31",
+                "sucursales": "2,3",
+                "punto_venta": ["10", "11"],
+            },
+            {"base_empresa": "emp1"},
+        )
+        force_authenticate(req, user=self._user_perm("reports.view_managerial"))
+        resp = VentasNetasGerenciaRelayAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        _, call_kw = mock_gvn.call_args
+        self.assertEqual(call_kw["sucursales"], [2, 3])
+        self.assertEqual(call_kw["punto_venta"], [10, 11])
+
+
+class TestVentasNetasFiltrosSucursalPv(unittest.TestCase):
+    """Filtros explícitos sucursales / punto_venta en get_ventas_netas (Oleada 3)."""
+
+    def setUp(self):
+        self.mock_cm = MagicMock()
+        self.mock_conn = MagicMock()
+        self.mock_cursor = MagicMock()
+        self.mock_cm.__enter__.return_value = self.mock_conn
+        self.mock_cm.__exit__.return_value = False
+        self.mock_conn.cursor.return_value = self.mock_cursor
+
+    @patch("reports.services.ventas_netas.get_mysql_pool")
+    def test_get_ventas_netas_sql_sucursales_punto_venta(self, mock_pool):
+        mock_pool.return_value.get_connection.return_value = self.mock_cm
+        self.mock_cursor.description = [("periodo",), ("periodo_etiqueta",), ("ventas_netas",)]
+        self.mock_cursor.fetchall.return_value = []
+
+        get_ventas_netas(
+            base_empresa="emp_test",
+            fecha_desde=date(2026, 1, 1),
+            fecha_hasta=date(2026, 1, 31),
+            vendedor_id=None,
+            sucursales=[2],
+            punto_venta=[10, 11],
+        )
+        sql, params = self.mock_cursor.execute.call_args[0]
+        self.assertIn("cc.CodSucursal IN (%s)", sql)
+        self.assertIn("cc.id_pv IN (%s,%s)", sql)
+        self.assertNotIn("cc.id_pv = %s", sql)
+        self.assertIn(2, params)
+        self.assertIn(10, params)
+        self.assertIn(11, params)
+
+    @patch("reports.services.ventas_netas.get_mysql_pool")
+    def test_relay_compat_escalar_punto_venta_id_to_list(self, mock_pool):
+        mock_pool.return_value.get_connection.return_value = self.mock_cm
+        self.mock_cursor.description = [("periodo",), ("periodo_etiqueta",), ("ventas_netas",)]
+        self.mock_cursor.fetchall.return_value = []
+
+        get_ventas_netas(
+            base_empresa="emp_test",
+            fecha_desde=date(2026, 1, 1),
+            fecha_hasta=date(2026, 1, 31),
+            vendedor_id=None,
+            punto_venta_id=2,
+            punto_venta=[10, 11],
+        )
+        sql, params = self.mock_cursor.execute.call_args[0]
+        self.assertEqual(sql.count("cc.id_pv"), 1)
+        self.assertIn("cc.id_pv IN (%s,%s,%s)", sql)
+        self.assertNotIn("cc.id_pv = %s", sql)
+        self.assertIn(2, params)
+        self.assertIn(10, params)
+        self.assertIn(11, params)
+
+    @patch("reports.services.ventas_netas.get_mysql_pool")
+    def test_punto_venta_id_duplicado_en_lista_sin_repetir_id(self, mock_pool):
+        mock_pool.return_value.get_connection.return_value = self.mock_cm
+        self.mock_cursor.description = [("periodo",), ("periodo_etiqueta",), ("ventas_netas",)]
+        self.mock_cursor.fetchall.return_value = []
+
+        get_ventas_netas(
+            base_empresa="emp_test",
+            fecha_desde=date(2026, 1, 1),
+            fecha_hasta=date(2026, 1, 31),
+            vendedor_id=None,
+            punto_venta_id=10,
+            punto_venta=[10, 11],
+        )
+        sql, params = self.mock_cursor.execute.call_args[0]
+        self.assertIn("cc.id_pv IN (%s,%s)", sql)
+        self.assertEqual(params.count(10), 1)
+        self.assertIn(11, params)

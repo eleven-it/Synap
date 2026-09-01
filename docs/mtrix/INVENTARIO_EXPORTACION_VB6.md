@@ -15,7 +15,7 @@ No hay formularios VB6: el origen es un exe desatendido (`Unattended=-1`, `Start
 | `FechaInicio`, `FechaFinal` | DatosPrincipales | Rango si personalizada | `MtrixConfig` |
 | `DiasAProcesar` | DatosPrincipales | Default 5 si no personalizada | `MtrixConfig` |
 | `CodigoProveedorPrincipal` | MTRIX | Vacío=todos; lista CSV | `MtrixConfig` |
-| `CNPJFornecedor` | MTRIX | Sin prefijo `AR` | `MtrixConfig` |
+| `CNPJFornecedor` | MTRIX | Sin prefijo `AR` (en Accera era un ID de portal) | En Synap: CUIT de `datosempresa` (no se carga a mano). Prefijo `AR` al serializar |
 | `pvnf` | MTRIX | No=solo `punto_venta.cont='Si'` (solo VD) | `MtrixConfig` |
 | `log` | MTRIX | Si/No | Log de job Synap (siempre auditable) |
 | `MultiplicadorCantidad` | MTRIX | Default 1 | `MtrixConfig` |
@@ -32,7 +32,7 @@ Orden de `Sub Main`: CI → PD → ES → VD → FV.
 | PD | `GenerarPD_MTRIX` + `_Proveedor` | `articulo`, `marca`, `rubro`, `datosempresa` | Sí (1/N/todos) | No (`DT_ARQUIVO` = fecha fin) | No |
 | ES | `GenerarES_MTRIX` + `_Proveedor` | `stock_deposito`, `articulo` | Sí | No (`DT_ESTOQUE` = fecha fin) | No |
 | VD | `GenerarVD_MTRIX` + `_Proveedor` | `cuentacliente`, `stock`, `articulo`, `cliente`, `departamento`, `punto_venta` | Sí | Sí | **Sí** |
-| FV | `GenerarFV_MTRIX` | `cuentacliente`, `cliente`, `viajantes` | No | Sí (pares únicos cliente–vendedor) | No |
+| FV | `GenerarFV_MTRIX` | `cuentacliente`, `cliente`, `viajantes` | No | Sí (Synap: un registro por CUIT; VB6: por CUIT + `cliente.Codigo`) | No |
 
 Nombre de archivo: `{TIPO}-INT{ddmmyyyyhhmmssSSS}.csv` (sin versión). Delimitador `;`. Header en la primera línea. Encoding de producción VB6: latin1 en la conexión; Synap debe emitir el mismo contenido de campos.
 
@@ -53,10 +53,12 @@ FV: CNPJ FORNECEDOR;CNPJ AGENTE DISTRIBUICAO;IDENTIFICACAO CLIENTE;CODIGO DO GER
 - Consumidor final / CUIT `0` → `99999999999` en **CI y VD**. FV escribe el CUIT crudo (`0` si no hay CUIT); no aplica `ObtenerCNPJClienteMTRIX`.
 - CI: `CNPJ_CLIENTE` duplicado (cols 3 y 12). `NOME_RESPONSAVEL=NA`, `ROTA=RUTA`.
 - CI: solo clientes con ventas en el período; `REPRESENTATIVIDADE` como en el SQL VB6 (`FORMAT` `de_DE`, 2 decimales).
+- CEP (CI y VD): si no hay código postal, viene `0`, solo ceros, `NA` o tiene menos de 4 dígitos, Synap informa **`9400`** (CEP más frecuente en la base: SMART CLEAN / Río Gallegos). Diversey no acepta CEP `0`; VB6 ponía `0`.
 - PD: código = `codartprov` (`SanitizarCampoCSV` vacío → `NA`); `DIVISAO` = marca si no es Null/vacío (incluye `-Ninguno-`) → rubro → `OTROS PRODUCTOS`; `STATUS` I/A según `discontinuo`; razón social fornecedor = `datosempresa.Nombre`.
 - ES: `SUM(saldo)` donde `saldo >= 0`.
+- EAN: no se emite `0` ni vacío. Si no hay `NroCodBarraF`, se usa `codartprov` o `IDArt`. Artículos sin EAN válido y **sin ventas** en el período se omiten de PD y ES (requisito Diversey).
 - VD: excluye `Anulado='Si'` y `REC`. FA/FB cantidad positiva tipo `N`. NC/ND cantidad negativa tipo `N`. Agrupa por factura+EAN+fecha+**COD_CLIENTE crudo**+vendedor+tipo+CEP (no por el `99999999999` de pantalla) y suma cantidad y precio (`PrecioVentaxU`). El CSV emite el CNPJ ya normalizado.
-- FV: gerente `1`/`GERENTE GENERAL`, supervisor `1`/`SUPERVISOR`. Sin tablas nuevas de jerarquía.
+- FV: gerente `1`/`GERENTE GENERAL`, supervisor `1`/`SUPERVISOR`. Sin tablas nuevas de jerarquía. **Synap colapsa a un registro por CUIT** (`IDENTIFICACAO CLIENTE`); si hay varios vendedores elige el de menor `COD_VENDEDOR` (empate por nombre). VB6 agrupaba también por `cliente.Codigo`.
 - Sin archivo si el recordset está vacío.
 - **Un CSV por categoría por corrida** (máximo CI, PD, ES, VD, FV). VB6 recorre `CodigoProveedorPrincipal` y escribe un archivo por código; Synap **no replica ese loop**: si hay lista (`23,29,31`) filtra `CodigoProveedor IN (...)` en **una** consulta y emite un solo archivo. Vacío = todos los proveedores, un archivo.
 
@@ -77,7 +79,7 @@ El VB6 no tiene pantalla. Equivalencias de validación:
 | Necesidad | Pantalla Synap | Canon |
 |-----------|----------------|-------|
 | Ver datos antes de exportar | Preview por tipo (CI/PD/ES/VD/FV) | Tabla densa MPR/`opt_list` + filtros reportes |
-| Ajustar parámetros | Configuración | Formulario MPR, toggles Activo/Inactivo |
+| Ajustar parámetros | Configuración | Formulario MPR, toggles Activo/Inactivo, buscador predictivo de proveedores (kardex/MPR) |
 | Disparar ahora | Hub + CTA Generar | Hero MPR + modal confirmación |
 | Enviar al portal | Config SFTP + acción Enviar | Modal operativa; reutilizar patrón paramiko de backup |
 | Programar | Programador en config | Calendario/hora como `/core/backups/configuracion/` |

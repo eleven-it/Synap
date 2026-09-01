@@ -14,7 +14,7 @@ from reports.services.monthly_reporting_superart_service import (
     make_classify_fn,
     register_qa_pending,
 )
-from reports.services.query_runner import QueryResult
+from reports.services.query_runner import QueryResult, QueryRunnerService
 from reports.services.ventas_mensuales_licenciatarios_merger import (
     MergeResult,
     filter_merge_result_by_clientes_excluidos,
@@ -191,6 +191,7 @@ def run_ventas_mensuales_licenciatarios(
         register_qa_pending(key, sample)
 
     fetch_fn = fetch_anet_fn or fetch_anet_sales
+    sucursales, puntos_venta = QueryRunnerService(user)._parse_sucursales_pv(filters)
     merge_result = merge_pack_year(
         pack=pack,
         year=year,
@@ -200,6 +201,8 @@ def run_ventas_mensuales_licenciatarios(
         fetch_anet_fn=fetch_fn,
         classify_genero=classify_fn,
         register_unknown_superart=_register_unknown,
+        sucursales=sucursales or None,
+        puntos_venta=puntos_venta or None,
     )
     clientes_excluidos = _parse_clientes_excluidos_filters(filters)
     if clientes_excluidos:
@@ -231,7 +234,12 @@ def run_ventas_mensuales_licenciatarios(
         "fecha_fin_facturacion": str_or_default(ff, "")[:10],
         "base_empresa": base_empresa,
         "clientes_excluidos": clientes_excluidos,
+        "sucursales": sucursales,
+        "punto_venta": puntos_venta,
     }
+    if sucursales or puntos_venta:
+        meta["filtros_aplicados_solo_tramo_anet"] = True
+        meta["extra"]["filtros_aplicados_solo_tramo_anet"] = True
     meta["extra"].update(
         {
             "pack_id": pack_id,

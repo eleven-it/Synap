@@ -9,8 +9,10 @@ from contabilidad_audit.services.checks._sql import (
     clasificar_delta,
     filtro_anulados_sql,
     filtro_periodo_comprobante_por_fecha_sql,
+    filtro_punto_venta_contable_sql,
     id_ejercicio_filtro,
     join_cont_ejercicio_por_fecha,
+    join_punto_venta_contable_por_id_pv,
 )
 from contabilidad_audit.services.resultados import (
     CorridaContexto,
@@ -33,6 +35,8 @@ def comprobante_compra_pago_sin_asiento(base_empresa, filtros, politica, context
 
     Filtra por ejercicio (fecha del comprobante dentro de ``cont_ejercicio``),
     alineado con el dry-run de regeneración.
+
+    Gating: solo punto de venta con ``cont='Si'`` (misma regla que REC-20 / ventas).
     """
     del base_empresa, politica
     check_id = "comprobante_compra_pago_sin_asiento"
@@ -45,12 +49,12 @@ def comprobante_compra_pago_sin_asiento(base_empresa, filtros, politica, context
         extra_periodo, params_periodo = filtro_periodo_comprobante_por_fecha_sql(filtros, "cp")
         sql = f"""
             SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante,
-                   cp.CodSucursal, cp.ImporteCompra, cp.Fecha
+                   cp.CodSucursal, cp.id_pv, cp.ImporteCompra, cp.Fecha
             FROM cuentaproveedor cp
-            JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
+            {join_punto_venta_contable_por_id_pv("cp")}
             {join_ej}
-            WHERE s.cont = 'Si'
-              AND COALESCE(cp.Anulado, 'No') <> 'Si'
+            WHERE COALESCE(cp.Anulado, 'No') <> 'Si'
+              {filtro_punto_venta_contable_sql()}
               AND cp.TipoComprobante IN ('FA', 'FC', 'OP')
               AND COALESCE(cp.CodigoMovimiento, 0) <> 0
               AND NOT EXISTS (
@@ -116,12 +120,12 @@ def asiento_compra_pago_desbalanceado_saldo_null(base_empresa, filtros, politica
                    SUM(COALESCE(a.haber_asiento, 0)) AS sum_haber,
                    SUM(CASE WHEN a.saldo_asiento IS NULL THEN 1 ELSE 0 END) AS renglones_saldo_null
             FROM cuentaproveedor cp
-            JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
+            {join_punto_venta_contable_por_id_pv("cp")}
             {join_ej}
             JOIN cont_asiento a ON a.codigo_movimiento = cp.CodigoMovimiento
              AND a.id_ejercicio = ej.id_ejercicio
-            WHERE s.cont = 'Si'
-              AND COALESCE(cp.Anulado, 'No') <> 'Si'
+            WHERE COALESCE(cp.Anulado, 'No') <> 'Si'
+              {filtro_punto_venta_contable_sql()}
               AND cp.TipoComprobante IN ('FA', 'FC', 'OP')
               AND COALESCE(cp.CodigoMovimiento, 0) <> 0
               AND COALESCE(a.codigo_movimiento, 0) <> 0
@@ -196,10 +200,10 @@ def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: 
             f"""
             SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante, cp.TipoOP
             FROM cuentaproveedor cp
-            JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
+            {join_punto_venta_contable_por_id_pv("cp")}
             {join_ej}
-            WHERE s.cont = 'Si'
-              AND COALESCE(cp.Anulado, 'No') = 'Si'
+            WHERE COALESCE(cp.Anulado, 'No') = 'Si'
+              {filtro_punto_venta_contable_sql()}
               AND cp.TipoComprobante IN ('FA', 'FC', 'OP')
               AND COALESCE(cp.CodigoMovimiento, 0) <> 0
             {extra_periodo}

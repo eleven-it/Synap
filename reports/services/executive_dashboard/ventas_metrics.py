@@ -159,6 +159,10 @@ def _where_pedidos_pendientes(filters: DashboardFilters) -> tuple[str, list]:
         ph = ",".join(["%s"] * len(filters.sucursales))
         where_conditions.append(f"cp.CodSucursal IN ({ph})")
         params.extend(filters.sucursales)
+    if filters.puntos_venta:
+        ph_pv = ",".join(["%s"] * len(filters.puntos_venta))
+        where_conditions.append(f"cp.id_pv IN ({ph_pv})")
+        params.extend(filters.puntos_venta)
     return " AND ".join(where_conditions), params
 
 
@@ -175,6 +179,10 @@ def _where_remitos_no_facturados(filters: DashboardFilters) -> tuple[str, list]:
         ph = ",".join(["%s"] * len(filters.sucursales))
         where_conditions.append(f"cp.CodSucursal IN ({ph})")
         params.extend(filters.sucursales)
+    if filters.puntos_venta:
+        ph_pv = ",".join(["%s"] * len(filters.puntos_venta))
+        where_conditions.append(f"cp.id_pv IN ({ph_pv})")
+        params.extend(filters.puntos_venta)
     return " AND ".join(where_conditions), params
 
 
@@ -270,11 +278,12 @@ def list_remitos_no_facturados(cursor, filters: DashboardFilters) -> dict[str, A
 
 def fetch_ventas_resumen(cursor, filters: DashboardFilters) -> dict[str, Any]:
     suc = filters.sucursales
+    pv = list(filters.puntos_venta) if filters.puntos_venta else None
     fi, ff = filters.fecha_inicio_str, filters.fecha_fin_str
-    ventas_netas = get_ventas_netas_total(cursor, fi, ff, sucursales=suc)
-    remitos = get_remitos_no_facturados_total(cursor, fi, ff, sucursales=suc)
+    ventas_netas = get_ventas_netas_total(cursor, fi, ff, sucursales=suc, puntos_venta=pv)
+    remitos = get_remitos_no_facturados_total(cursor, fi, ff, sucursales=suc, puntos_venta=pv)
     pedidos = get_pedidos_pendientes_total(
-        cursor, fi, ff, sucursales=suc, filtrar_por_fecha=True
+        cursor, fi, ff, sucursales=suc, puntos_venta=pv, filtrar_por_fecha=True
     )
     total_operativo = ventas_netas + remitos + pedidos
     notas = [

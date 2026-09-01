@@ -133,7 +133,7 @@
 
       <div class="ims-field-row">
         <label class="ims-label-inline" for="dep_origen">Depósito origen</label>
-        <select id="dep_origen" x-model="cabecera.deposito_origen" @change="if(cabecera.deposito_destino && String(cabecera.deposito_destino) === String(cabecera.deposito_origen)) cabecera.deposito_destino = ''; if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+        <select id="dep_origen" x-model="cabecera.deposito_origen" @change="onCambioDepositoOrigen()" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
           <option value="">Seleccione depósito</option>
           <template x-for="d in depositos" :key="d.CodDeposito">
             <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
@@ -143,7 +143,7 @@
 
       <div class="ims-field-row" x-show="mostrarDepDestino" x-cloak>
         <label class="ims-label-inline" for="dep_destino">Depósito destino</label>
-        <select id="dep_destino" x-model="cabecera.deposito_destino" @change="if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+        <select id="dep_destino" x-model="cabecera.deposito_destino" @change="onCambioDepositoDestino()" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
           <option value="">Ninguno</option>
           <template x-for="d in depositosDestino" :key="d.CodDeposito">
             <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
@@ -1041,6 +1041,44 @@ document.addEventListener('alpine:init', function() {
         const nombreOrigen = no ? (no.NombreDeposito || no.CodDeposito) : String(origen);
         const nombreDestino = nd ? (nd.NombreDeposito || nd.CodDeposito) : String(destino);
         this.cabecera.detalle = 'Transferencia de ' + nombreOrigen + ' a ' + nombreDestino;
+      },
+      async sincronizarDepositosRenglones() {
+        if (!this.cabecera.deposito_origen) return;
+        if (!this.renglones || !this.renglones.length) return;
+        this.mensajeError = '';
+        const body = {
+          CodDeposito: this.cabecera.deposito_origen,
+          cod_deposito_destino: this.mostrarDepDestino ? (this.cabecera.deposito_destino || null) : null
+        };
+        try {
+          const r = await fetch('{% url "stock:api_ingreso_renglones_sincronizar_depositos" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify(body)
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            this.mensajeError = d.error || 'Error al actualizar depósitos de los renglones.';
+            return;
+          }
+          this.renglones = this.normalizarRenglones(d.renglones || []);
+        } catch (e) {
+          this.mensajeError = 'Error al actualizar depósitos de los renglones.';
+        }
+      },
+      async onCambioDepositoOrigen() {
+        if (this.cabecera.deposito_destino && String(this.cabecera.deposito_destino) === String(this.cabecera.deposito_origen)) {
+          this.cabecera.deposito_destino = '';
+        }
+        if (parseInt(this.cabecera.motivo_movimiento, 10) === 6) this.actualizarDetalleTransferencia();
+        await this.sincronizarDepositosRenglones();
+        if (this.nuevoRenglon && this.nuevoRenglon.IDArt && this.nuevoRenglon.ES === 'S') {
+          this.actualizarSaldo();
+        }
+      },
+      async onCambioDepositoDestino() {
+        if (parseInt(this.cabecera.motivo_movimiento, 10) === 6) this.actualizarDetalleTransferencia();
+        await this.sincronizarDepositosRenglones();
       },
       handleAtajoTeclado(e) {
         // Atajos Fxx deshabilitados por el momento.
