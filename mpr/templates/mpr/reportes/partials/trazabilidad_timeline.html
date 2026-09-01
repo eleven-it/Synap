@@ -1,38 +1,138 @@
-<form method="get" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+<form method="get" id="timeline-filtros-form" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40"
+      x-data="timelineArticuloFiltros({
+          buscarUrl: '{% url 'mpr:reportes_articulo_buscar_api' %}',
+          idArticuloInicial: '{{ meta.id_articulo|default:'' }}',
+          codigoInicial: '{{ meta.codigo_articulo|default:''|escapejs }}',
+          descripcionInicial: '{{ meta.descripcion_articulo|default:''|escapejs }}'
+      })">
     <input type="hidden" name="grupo" value="trazabilidad">
     <input type="hidden" name="reporte" value="timeline">
     <input type="hidden" name="desde" value="{{ fecha_desde_iso }}">
     <input type="hidden" name="hasta" value="{{ fecha_hasta_iso }}">
     <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
-    <div>
-        <label for="id_articulo" class="mb-1 block text-xs font-semibold text-gray-600">ID componente</label>
-        <input type="number" name="id_articulo" id="id_articulo" value="{{ meta.id_articulo|default:'' }}" min="1"
-               class="min-h-10 w-40 rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white"
-               placeholder="Ej. 1275">
+    <input type="hidden" name="id_articulo" x-model="idArticulo">
+
+    <div class="relative min-w-[14rem] flex-1" @click.outside="mostrarSugerencias = false">
+        <label for="timeline-buscar-articulo" class="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">Componente</label>
+        <input type="search"
+               id="timeline-buscar-articulo"
+               x-model="busqueda"
+               @input.debounce.300ms="buscarArticulos()"
+               @focus="mostrarSugerencias = sugerencias.length > 0"
+               @keydown.escape="mostrarSugerencias = false"
+               @keydown.arrow-down.prevent="focoSugerencia(1)"
+               @keydown.arrow-up.prevent="focoSugerencia(-1)"
+               @keydown.enter.prevent="aplicarSugerenciaActiva()"
+               autocomplete="off"
+               placeholder="Código o descripción…"
+               class="min-h-10 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+               role="combobox"
+               aria-autocomplete="list"
+               aria-controls="timeline-sugerencias-articulo"
+               :aria-expanded="mostrarSugerencias && sugerencias.length > 0 ? 'true' : 'false'">
+        <ul id="timeline-sugerencias-articulo"
+            x-show="mostrarSugerencias && sugerencias.length"
+            x-cloak
+            class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800"
+            role="listbox">
+            <template x-for="(item, idx) in sugerencias" :key="item.id_articulo">
+                <li role="option" :aria-selected="idx === sugerenciaActiva ? 'true' : 'false'">
+                    <button type="button"
+                            class="flex w-full flex-col px-3 py-2 text-left text-sm"
+                            :class="idx === sugerenciaActiva ? 'bg-purple-50 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100' : 'hover:bg-purple-50 dark:hover:bg-purple-900/30'"
+                            @mousedown.prevent="seleccionarArticulo(item)"
+                            @mouseenter="sugerenciaActiva = idx">
+                        <span class="font-medium text-gray-900 dark:text-white" x-text="item.codigo_articulo"></span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400" x-text="item.descripcion_articulo"></span>
+                    </button>
+                </li>
+            </template>
+        </ul>
     </div>
-    <button type="submit" class="min-h-10 rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-700">Buscar trazabilidad</button>
+
+    <button type="submit"
+            class="min-h-10 rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            :disabled="!idArticulo"
+            :class="!idArticulo ? 'cursor-not-allowed opacity-60' : ''">
+        Buscar trazabilidad
+    </button>
 </form>
 
 {% if meta.id_articulo %}
-<p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-    Componente <strong>{{ meta.id_articulo }}</strong>
-    {% if meta.descripcion_articulo %}— {{ meta.descripcion_articulo }}{% endif %}
-</p>
+<div class="mb-6 rounded-xl border border-purple-200 bg-purple-50 p-4 dark:border-purple-500/30 dark:bg-purple-950/30">
+    <div class="flex flex-wrap items-start gap-3">
+        <span class="material-icons text-purple-600 dark:text-purple-300" aria-hidden="true">timeline</span>
+        <div class="min-w-0 flex-1 space-y-2">
+            <p class="text-sm font-semibold text-purple-900 dark:text-purple-100">
+                Análisis completo en Análisis trazabilidad
+            </p>
+            <p class="text-sm text-purple-800/90 dark:text-purple-200/90">
+                Componente
+                {% if meta.codigo_articulo %}<strong>{{ meta.codigo_articulo }}</strong>{% else %}<strong>{{ meta.id_articulo }}</strong>{% endif %}
+                {% if meta.descripcion_articulo %}— {{ meta.descripcion_articulo }}{% endif %}.
+                La demanda PED, stock, brechas, movimientos con saldo corrido y la línea de tiempo MPR viven en el informe unificado
+                <strong>Análisis trazabilidad</strong> (misma fuente de datos, sin consultas duplicadas).
+            </p>
+            <a href="{% url 'mpr:reportes' %}?grupo=trazabilidad&amp;reporte=kardex_articulo&amp;id_articulo={{ meta.id_articulo }}&amp;desde={{ fecha_desde_iso }}&amp;hasta={{ fecha_hasta_iso }}&amp;presentacion={{ modo_presentacion|default:'docenas' }}{% if meta.id_deposito %}&amp;id_deposito={{ meta.id_deposito }}{% endif %}#timeline"
+               class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
+                <span class="material-icons text-base" aria-hidden="true">open_in_new</span>
+                Ver análisis completo
+            </a>
+        </div>
+    </div>
+</div>
 {% else %}
-<p class="mb-4 text-sm text-gray-500">Seleccioná un componente para ver la línea de tiempo.</p>
+<p class="mb-4 text-sm text-gray-500 dark:text-gray-400">Seleccioná un componente (código o descripción) para ver la trazabilidad.</p>
 {% endif %}
 
-{% if meta.id_articulo and not eventos %}
-{% include "mpr/reportes/partials/empty_state.html" with empty_titulo="Sin eventos MPR para este componente en el período" empty_cta_url="mpr:tablero_produccion" empty_cta_label="Ver tablero" %}
-{% elif eventos %}
-<ol class="relative ml-3 border-l-2 border-slate-200 dark:border-slate-600">
-    {% for ev in eventos %}
-    <li class="mb-6 ml-6">
-        <span class="absolute -left-[9px] flex h-4 w-4 items-center justify-center rounded-full {% if ev.tipo == 'envio' %}bg-slate-500{% elif ev.tipo == 'parte' %}bg-emerald-500{% else %}bg-purple-500{% endif %} ring-4 ring-white dark:ring-gray-800"></span>
-        <time class="text-xs font-semibold text-gray-500">{{ ev.fecha_display }}</time>
-        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ ev.tipo_label }} — {{ ev.cantidad_display|default:ev.cantidad }}</h4>
-        <p class="text-xs text-gray-600 dark:text-gray-400">{{ ev.detalle }}{% if ev.operario != "-" %} · {{ ev.operario }}{% endif %}</p>
-    </li>
-    {% endfor %}
-</ol>
-{% endif %}
+<script>
+function timelineArticuloFiltros(config) {
+    return {
+        buscarUrl: config.buscarUrl || '',
+        idArticulo: config.idArticuloInicial || '',
+        busqueda: config.codigoInicial
+            ? (config.codigoInicial + (config.descripcionInicial ? ' — ' + config.descripcionInicial : ''))
+            : '',
+        sugerencias: [],
+        mostrarSugerencias: false,
+        sugerenciaActiva: 0,
+        async buscarArticulos() {
+            const q = (this.busqueda || '').trim();
+            if (q.length < 2) {
+                this.sugerencias = [];
+                this.mostrarSugerencias = false;
+                this.sugerenciaActiva = 0;
+                return;
+            }
+            try {
+                const resp = await fetch(this.buscarUrl + '?q=' + encodeURIComponent(q) + '&limit=12');
+                const data = await resp.json();
+                this.sugerencias = data.articulos || [];
+                this.sugerenciaActiva = 0;
+                this.mostrarSugerencias = this.sugerencias.length > 0;
+            } catch (e) {
+                this.sugerencias = [];
+                this.mostrarSugerencias = false;
+                this.sugerenciaActiva = 0;
+            }
+        },
+        focoSugerencia(delta) {
+            const n = this.sugerencias.length;
+            if (!n) return;
+            this.mostrarSugerencias = true;
+            this.sugerenciaActiva = (this.sugerenciaActiva + delta + n) % n;
+        },
+        aplicarSugerenciaActiva() {
+            if (!this.mostrarSugerencias || !this.sugerencias.length) return;
+            const item = this.sugerencias[this.sugerenciaActiva];
+            if (item) this.seleccionarArticulo(item);
+        },
+        seleccionarArticulo(item) {
+            this.idArticulo = String(item.id_articulo || '');
+            this.busqueda = (item.codigo_articulo || '') + (item.descripcion_articulo ? ' — ' + item.descripcion_articulo : '');
+            this.mostrarSugerencias = false;
+            this.sugerenciaActiva = 0;
+        },
+    };
+}
+</script>

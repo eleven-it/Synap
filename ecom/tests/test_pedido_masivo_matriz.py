@@ -197,6 +197,89 @@ class TestObtenerDraft(TestCase):
         self.assertEqual(opened.estado, EcomPedidoMasivoDraft.ESTADO_CONFIRMADO)
 
 
+class TestDraftAccesibleVerTodos(TestCase):
+    """Quien puede ver todos los vendedores abre/edita drafts ajenos."""
+
+    def test_ajeno_sin_ver_todos_no_encuentra(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=7,
+            id_cliente=20,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+        opened, err = obtener_o_crear_draft(
+            base_empresa="emp_m",
+            id_usuario=99,
+            id_cliente=20,
+            cod_viajante=3,
+            draft_id=d.pk,
+            sess_user={"id_usuario": 99, "todos_clientes": "No"},
+        )
+        self.assertIsNone(opened)
+        self.assertIn("no encontrado", (err or "").lower())
+
+    def test_ajeno_con_ver_todos_abre_y_edita_borrador(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=7,
+            id_cliente=20,
+            cod_viajante=30,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+        opened, err = obtener_o_crear_draft(
+            base_empresa="emp_m",
+            id_usuario=99,
+            id_cliente=20,
+            cod_viajante=6,
+            draft_id=d.pk,
+            sess_user={
+                "id_usuario": 99,
+                "todos_clientes": "No",
+                "synap_permisos": ["ecom.pedidos.ver_todos"],
+            },
+        )
+        self.assertIsNotNone(opened, err)
+        self.assertEqual(opened.pk, d.pk)
+        self.assertEqual(opened.id_usuario, 7)
+
+    def test_ajeno_con_puesto_supervisor_abre_confirmado_readonly(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=7,
+            id_cliente=20,
+            estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+            codigos_movimiento=[501],
+        )
+        opened, err = obtener_o_crear_draft(
+            base_empresa="emp_m",
+            id_usuario=99,
+            id_cliente=20,
+            cod_viajante=3,
+            draft_id=d.pk,
+            solo_lectura=True,
+            sess_user={"id_usuario": 99, "nombre_puesto": "Supervisor"},
+        )
+        self.assertIsNotNone(opened, err)
+        self.assertEqual(opened.pk, d.pk)
+
+    def test_anular_ajeno_con_ver_todos(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=7,
+            id_cliente=20,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+        ok, msg = anular_borrador_masivo_usuario(
+            d.pk,
+            99,
+            "emp_m",
+            sess_user={"id_usuario": 99, "todos_clientes": "Si"},
+        )
+        self.assertTrue(ok, msg)
+        d.refresh_from_db()
+        self.assertEqual(d.estado, EcomPedidoMasivoDraft.ESTADO_ANULADO)
+
+
 class TestSincronizarViajanteBorrador(TestCase):
     @patch(
         "ecom.services.pedido_masivo_matriz.listar_sucursales_cliente",

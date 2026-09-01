@@ -1,6 +1,10 @@
 """Contrato JSON mínimo — dashboard gerencial (sin MySQL)."""
 from datetime import date
 from dataclasses import replace
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -36,14 +40,15 @@ from reports.services.executive_dashboard.ventas_metrics import (
 )
 
 
-def _filters() -> DashboardFilters:
-    return DashboardFilters(
-        base_empresa="administranet_test",
-        fecha_referencia=date(2026, 5, 11),
-        fecha_inicio=date(2026, 5, 1),
-        fecha_fin=date(2026, 5, 11),
-        cod_sucursal=None,
-    )
+def _filters(**kwargs) -> DashboardFilters:
+    defaults = {
+        "base_empresa": "administranet_test",
+        "fecha_referencia": date(2026, 5, 11),
+        "fecha_inicio": date(2026, 5, 1),
+        "fecha_fin": date(2026, 5, 11),
+    }
+    defaults.update(kwargs)
+    return DashboardFilters(**defaults)
 
 
 def _cursor_zeros():
@@ -617,3 +622,132 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertEqual(len(out["filas"]), 1)
         sql_count = cursor.execute.call_args_list[0][0][0]
         self.assertIn("Transferencia de Fondos", sql_count)
+
+
+class CommandCenterMultiSelectTests(SimpleTestCase):
+    """Oleada 4.B: multi-select sucursales/PV en Command Center."""
+
+    def test_dashboard_filters_sucursales_puntos_venta_tuplas(self):
+        f = DashboardFilters(
+            base_empresa="be1",
+            fecha_referencia=date(2026, 5, 11),
+            fecha_inicio=date(2026, 5, 1),
+            fecha_fin=date(2026, 5, 11),
+            sucursales_filtro=(2, 5),
+            puntos_venta=(10, 11),
+        )
+        self.assertEqual(f.sucursales_filtro, (2, 5))
+        self.assertEqual(f.puntos_venta, (10, 11))
+        self.assertIsNone(f.cod_sucursal)
+        f_one = replace(f, sucursales_filtro=(2,))
+        self.assertEqual(f_one.cod_sucursal, 2)
+
+    def test_resolve_filters_multi_sucursales_pv_compat_sucursal(self):
+        class Q:
+            def getlist(self, key):
+                data = {
+                    "sucursales": ["2", "5"],
+                    "punto_venta": ["10"],
+                }
+                return data.get(key, [])
+
+            def get(self, key, default=None):
+                return {"fecha_inicio": "2026-05-01", "fecha_fin": "2026-05-11"}.get(
+                    key, default
+                )
+
+        f = resolve_filters_from_query_params(Q(), base_empresa="be1")
+        self.assertEqual(f.sucursales_filtro, (2, 5))
+        self.assertEqual(f.puntos_venta, (10,))
+
+        class QLegacy:
+            def getlist(self, key):
+                return []
+
+            def get(self, key, default=None):
+                return {
+                    "fecha_inicio": "2026-05-01",
+                    "fecha_fin": "2026-05-11",
+                    "sucursal": "3",
+                }.get(key, default)
+
+        f_legacy = resolve_filters_from_query_params(QLegacy(), base_empresa="be1")
+        self.assertEqual(f_legacy.sucursales_filtro, (3,))
+
+    def test_integration_cc_compat_sucursal_sucursales(self):
+        """CC acepta ?sucursal= (legacy) y ?sucursales= (multi) con normalización int."""
+        class QLegacy:
+            def getlist(self, key):
+                return []
+
+            def get(self, key, default=None):
+                return {
+                    "fecha_inicio": "2026-05-01",
+                    "fecha_fin": "2026-05-11",
+                    "sucursal": "7",
+                }.get(key, default)
+
+        class QMulti:
+            def getlist(self, key):
+                return {"sucursales": ["7", "8"]}.get(key, [])
+
+            def get(self, key, default=None):
+                return {"fecha_inicio": "2026-05-01", "fecha_fin": "2026-05-11"}.get(
+                    key, default
+                )
+
+        f_legacy = resolve_filters_from_query_params(QLegacy(), base_empresa="be1")
+        f_multi = resolve_filters_from_query_params(QMulti(), base_empresa="be1")
+        self.assertEqual(f_legacy.sucursales_filtro, (7,))
+        self.assertEqual(f_multi.sucursales_filtro, (7, 8))
+        self.assertIn(7, f_multi.sucursales_filtro)
+
+    def test_ventas_metrics_punto_venta_propagation(self):
+        cursor = MagicMock()
+        cursor.execute = MagicMock(return_value=None)
+        cursor.fetchone = MagicMock(return_value=(100.0,))
+        filtros = _filters(sucursales_filtro=(2,), puntos_venta=(10, 11))
+        fetch_ventas_resumen(cursor, filtros)
+        sql_calls = [c[0][0] for c in cursor.execute.call_args_list]
+        params_flat = [p for c in cursor.execute.call_args_list for p in c[0][1]]
+        joined = "\n".join(sql_calls)
+        self.assertIn("cc.id_pv IN (%s,%s)", joined)
+        self.assertIn("cc.CodSucursal IN (%s)", joined)
+        self.assertIn("cp.id_pv IN (%s,%s)", joined)
+        self.assertIn(10, params_flat)
+        self.assertIn(11, params_flat)
+
+    def test_template_command_center_multi_select_sucursales_pv(self):
+        tpl_path = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "command_center.html"
+        )
+        html = tpl_path.read_text(encoding="utf-8")
+        self.assertIn('id="sucursales"', html)
+        self.assertIn('id="punto_venta"', html)
+        self.assertNotIn('id="cc-sucursal"', html)
+        js_path = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "reports"
+            / "js"
+            / "command_center.js"
+        )
+        js = js_path.read_text(encoding="utf-8")
+        self.assertIn("formatSucursalPvScopeText", js)
+
+    def test_command_center_js_read_filters_multi_sucursales_pv(self):
+        js_path = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "reports"
+            / "js"
+            / "command_center.js"
+        )
+        content = js_path.read_text(encoding="utf-8")
+        self.assertIn("selectedFilterIds", content)
+        self.assertIn('append("sucursales"', content)
+        self.assertIn('append("punto_venta"', content)
+        self.assertIn("?type=puntos_venta", content)

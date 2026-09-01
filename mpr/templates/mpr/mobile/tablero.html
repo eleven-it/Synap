@@ -109,7 +109,7 @@
                 x-show="!queryPack || $el.dataset.searchText.includes(queryPack.toLowerCase().trim())"
                 role="row">
                 <p class="line-clamp-2 min-w-0 text-sm text-gray-900 dark:text-white">{{ item.descripcion }}</p>
-                <span class="pt-0.5 text-right text-xs tabular-nums text-gray-600 dark:text-gray-300">{{ item.stock_terminado_display }}</span>
+                <span class="pt-0.5 text-right text-xs tabular-nums {% if item.stock_terminado_es_negativo %}font-semibold text-rose-600 dark:text-rose-400{% else %}text-gray-600 dark:text-gray-300{% endif %}">{{ item.stock_terminado_display }}</span>
                 <span class="pt-0.5 text-right text-xs font-semibold tabular-nums text-rose-700 dark:text-rose-300">{{ item.resta_urgente_display }}</span>
                 <span class="pt-0.5 text-right text-xs font-semibold tabular-nums text-orange-700 dark:text-orange-300">{{ item.resta_urgente_ped_display }}</span>
             </li>

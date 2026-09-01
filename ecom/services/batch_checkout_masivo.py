@@ -8,7 +8,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
+from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 from ecom.models import EcomCart, EcomPedidoMasivoDraft
 from ecom.services.comprobantes_anulacion import anular_pedido_relay
 from ecom.services.mayorista_cart_service import agregar_item, recalcular_totales
@@ -342,6 +342,42 @@ def _mapa_nombres_sucursales(
     return out
 
 
+def _mapa_nro_sucursales(draft: EcomPedidoMasivoDraft) -> Dict[int, str]:
+    """id_cliente_domicilio → NroCalle (número de sucursal visible en matriz/Excel)."""
+    out: Dict[int, str] = {}
+    for su in listar_sucursales_cliente(
+        draft.base_empresa, draft.id_cliente, cod_viajante=draft.cod_viajante
+    ):
+        sid = to_int_or_none(su.get("id_cliente_domicilio"))
+        if sid is None:
+            continue
+        nro = str_or_default(su.get("nro"), "").strip()
+        if nro and nro != "-":
+            out[sid] = nro
+    return out
+
+
+def _detalle_default_pedido_masivo(
+    draft: EcomPedidoMasivoDraft,
+    id_cliente_domicilio: int,
+    nros_sucursal: Optional[Dict[int, str]] = None,
+) -> str:
+    """
+    Texto por defecto de ``comp_ped.Detalle``.
+
+    Usa el **NroCalle** (nº de sucursal de la UI/Excel), no el id de domicilio,
+    para no confundir al usuario (p. ej. id 14 ≠ SUC 14).
+    """
+    id_dom = to_int_or_none(id_cliente_domicilio)
+    nro = ""
+    if id_dom is not None and nros_sucursal:
+        nro = str_or_default(nros_sucursal.get(id_dom), "").strip()
+    if not nro or nro == "-":
+        # Último recurso: no inventar un NroCalle; dejar el id etiquetado.
+        nro = f"#{id_dom}" if id_dom is not None else "?"
+    return f"Pedido masivo Synap draft #{draft.pk} sucursal {nro}"
+
+
 def _evento_fin(
     *,
     ok: bool,
@@ -497,6 +533,8 @@ def confirmar_lote_masivo_stream(
         return
 
     nombres = _mapa_nombres_sucursales(draft, nombres_sucursales=nombres_sucursales)
+    nros_sucursal = _mapa_nro_sucursales(draft)
+    detalle_default_obs = (observaciones or "").strip()
     doms_ordenados = sorted(por_dom.items())
     total = len(doms_ordenados)
 
@@ -568,6 +606,9 @@ def confirmar_lote_masivo_stream(
             cart.descuento_pie_pct = pie
             recalcular_totales(cart)
 
+            obs_sucursal = detalle_default_obs or _detalle_default_pedido_masivo(
+                draft, id_dom, nros_sucursal
+            )
             ok, err, result = confirmar(
                 cart,
                 _checkout_input_desde_cabecera(
@@ -575,8 +616,7 @@ def confirmar_lote_masivo_stream(
                     id_punto_venta=pv,
                     id_cliente_domicilio=id_dom,
                     forma_entrega=forma_entrega or "",
-                    observaciones=observaciones
-                    or f"Pedido masivo Synap draft #{draft.pk} sucursal {id_dom}",
+                    observaciones=obs_sucursal,
                     agente_percep=agente_percep,
                     es_supervisor=es_supervisor,
                     dias_entrega=dias_entrega,
@@ -588,8 +628,7 @@ def confirmar_lote_masivo_stream(
                     id_punto_venta=pv,
                     id_cliente_domicilio=id_dom,
                     forma_entrega=forma_entrega or "",
-                    observaciones=observaciones
-                    or f"Pedido masivo Synap draft #{draft.pk} sucursal {id_dom}",
+                    observaciones=obs_sucursal,
                     agente_percep=agente_percep,
                     lista_id=lista_ef,
                     es_supervisor=es_supervisor,

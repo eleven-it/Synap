@@ -16,7 +16,7 @@
         <header class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Vendedor · Cliente · Sucursal · Marca</h1>
-            <p class="mt-1 text-xs text-slate-300 sm:text-sm">Territorio comercial (relación): una marca por cliente y sucursal solo puede pertenecer a un vendedor.</p>
+            <p class="mt-1 text-xs text-slate-300 sm:text-sm">Territorio comercial (relación): una marca por cliente y sucursal solo puede pertenecer a un vendedor. PUM, PUS y PUW se asignan siempre juntas.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="vendedor-cliente-marca" class_extra="text-slate-300 hover:text-sky-300 dark:hover:text-sky-300" only %}
@@ -151,7 +151,7 @@
           </p>
         </div>
 
-        {# Marca #}
+        {# Marca (multi-select) #}
         <div class="relative" @click.outside="cerrarPanel('mar')">
           <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-mar">Marca</label>
           <input id="vcm-mar" type="text" autocomplete="off" role="combobox"
@@ -163,18 +163,43 @@
                  @keydown.arrow-up.prevent="moverSel('mar', -1)"
                  @keydown.enter.prevent="elegirResaltado('mar')"
                  @keydown.escape="cerrarPanel('mar')"
-                 placeholder="Buscar marca…"
+                 placeholder="Marcá una o más marcas…"
                  class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+          <div x-show="selMars.length" x-cloak class="mt-1.5 flex flex-wrap gap-1.5">
+            <template x-for="m in selMars" :key="'chip-m-'+m.CodMarca">
+              <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-950/50 dark:text-purple-200">
+                <span x-text="m.nombre"></span>
+                <button type="button" @click="quitarMar(m)" class="rounded-full p-0.5 hover:bg-purple-200 dark:hover:bg-purple-900" aria-label="Quitar marca">
+                  <span class="material-icons text-[14px]" aria-hidden="true">close</span>
+                </button>
+              </span>
+            </template>
+          </div>
           <ul x-show="panel==='mar' && marcas.length" x-cloak
               class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
               role="listbox">
             <template x-for="(m, i) in marcas" :key="m.CodMarca">
               <li role="option"
-                  @mousedown.prevent="elegirMar(m)"
+                  @mousedown.prevent="toggleMar(m)"
                   :class="i === idxMar ? 'bg-purple-50 dark:bg-purple-950/40' : ''"
-                  class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
-                  x-text="m.nombre"></li>
+                  class="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                <span class="material-icons text-base"
+                      :class="marSeleccionada(m) ? 'text-purple-600 dark:text-purple-400' : 'text-slate-300 dark:text-slate-600'"
+                      x-text="marSeleccionada(m) ? 'check_box' : 'check_box_outline_blank'"
+                      aria-hidden="true"></span>
+                <span x-text="m.nombre"></span>
+              </li>
             </template>
+            <li class="sticky bottom-0 flex gap-2 border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800">
+              <button type="button" @mousedown.prevent="seleccionarTodasMar()"
+                      class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                Todas
+              </button>
+              <button type="button" @mousedown.prevent="limpiarMars()"
+                      class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                Ninguna
+              </button>
+            </li>
           </ul>
           <p x-show="panel==='mar' && !cargandoMar && !marcas.length" x-cloak
              class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
@@ -214,6 +239,19 @@
       <button type="button" @click="cargar()" class="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
         Actualizar
       </button>
+      <div x-show="nSeleccionadas() > 0" x-cloak class="flex flex-wrap items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 dark:border-rose-900/60 dark:bg-rose-950/40">
+        <span class="text-xs font-medium text-rose-800 dark:text-rose-200"
+              x-text="nSeleccionadas() + (nSeleccionadas() === 1 ? ' relación seleccionada' : ' relaciones seleccionadas')"></span>
+        <button type="button" @click="pedirAnularSeleccion()"
+                class="inline-flex min-h-8 items-center gap-0.5 rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-red-500">
+          <span class="material-icons text-[15px]" aria-hidden="true">delete_outline</span>
+          Anular seleccionadas
+        </button>
+        <button type="button" @click="limpiarSeleccion()"
+                class="text-[11px] font-medium text-rose-700 underline hover:text-rose-900 dark:text-rose-300">
+          Limpiar
+        </button>
+      </div>
       <div class="ml-auto flex flex-wrap items-center gap-1.5" role="group" aria-label="Expandir o contraer árbol">
         <button type="button" @click="expandirTodos()"
                 class="inline-flex min-h-8 items-center gap-0.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
@@ -232,6 +270,14 @@
       <table class="min-w-full text-left text-sm">
         <thead class="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600 dark:bg-slate-900 dark:text-slate-400">
           <tr>
+            <th class="w-10 px-2 py-2">
+              <input type="checkbox"
+                     class="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                     :checked="todasSeleccionadas()"
+                     :indeterminate="seleccionParcial()"
+                     @click.stop="toggleSelTodas()"
+                     :aria-label="todasSeleccionadas() ? 'Quitar selección' : 'Seleccionar todas'"/>
+            </th>
             <th class="px-3 py-2 font-semibold">Marca</th>
             <th class="px-3 py-2 font-semibold">Alta</th>
             <th class="px-3 py-2 font-semibold"></th>
@@ -240,7 +286,7 @@
         {# Árbol Vendedor → Cliente → Sucursal → Marca aplanado en filas; encabezados colapsables por nivel #}
         <tbody>
           <template x-if="!ternas.length && !cargando">
-            <tr><td colspan="3" class="px-3 py-8 text-center text-slate-500">Sin relaciones activas. Creá la primera arriba.</td></tr>
+            <tr><td colspan="4" class="px-3 py-8 text-center text-slate-500">Sin relaciones activas. Creá la primera arriba.</td></tr>
           </template>
           <template x-for="f in filasArbol()" :key="f.key">
             <tr :class="[
@@ -253,6 +299,16 @@
                 :aria-expanded="f.tipo !== 'mar' ? (f.abierto ? 'true' : 'false') : null"
                 @click="f.tipo !== 'mar' && toggleGrupo(f.key)">
               {# Filas encabezado (vendedor / cliente / sucursal) #}
+              <template x-if="f.tipo !== 'mar'">
+                <td class="px-2 py-2" @click.stop>
+                  <input type="checkbox"
+                         class="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                         :checked="grupoEstado(f.idsHojas) === 'all'"
+                         :indeterminate="grupoEstado(f.idsHojas) === 'partial'"
+                         @click.stop="toggleSelGrupo(f.idsHojas, $event)"
+                         :aria-label="'Seleccionar relaciones de ' + f.nombre"/>
+                </td>
+              </template>
               <template x-if="f.tipo !== 'mar'">
                 <td colspan="3" class="px-3 py-2">
                   <div class="flex items-center gap-2"
@@ -269,7 +325,16 @@
                   </div>
                 </td>
               </template>
-              {# Fila hoja: Marca | Alta | acciones — mismo escalón visual que el texto de Sucursal (+ chevron fantasma) #}
+              {# Fila hoja: sel | Marca | Alta | acciones #}
+              <template x-if="f.tipo === 'mar'">
+                <td class="px-2 py-2" @click.stop>
+                  <input type="checkbox"
+                         class="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                         :checked="estaSeleccionada(f.terna.id)"
+                         @click.stop="toggleSelTerna(f.terna, $event)"
+                         :aria-label="'Seleccionar ' + (f.terna.nombre_marca || 'marca')"/>
+                </td>
+              </template>
               <template x-if="f.tipo === 'mar'">
                 <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
                   <div class="flex items-center gap-2 pl-12">
@@ -299,7 +364,7 @@
        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
        role="dialog"
        aria-modal="true"
-       :aria-labelledby="confirmKind === 'anular' ? 'vcm-modal-anular-title' : 'vcm-modal-asignar-title'"
+       :aria-labelledby="confirmKind === 'anular' || confirmKind === 'anular_lote' ? 'vcm-modal-anular-title' : 'vcm-modal-asignar-title'"
        @keydown.escape.window="cerrarConfirm()"
        @click.self="cerrarConfirm()"
        x-transition.opacity>
@@ -312,8 +377,9 @@
             <h3 id="vcm-modal-asignar-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Asignar relación(es)</h3>
           </div>
           <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
-            Se crearán relaciones vendedor · cliente · sucursal · marca para
-            <strong x-text="selSucs.length + (selSucs.length === 1 ? ' sucursal' : ' sucursales')"></strong>.
+            Se crearán
+            <strong x-text="(selSucs.length * selMars.length) + ((selSucs.length * selMars.length) === 1 ? ' relación' : ' relaciones')"></strong>
+            (vendedor · cliente · sucursal · marca).
             Una marca por cliente y sucursal solo puede pertenecer a un vendedor.
           </p>
           <ul class="mb-5 space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-800 dark:bg-slate-900/60 dark:text-slate-100">
@@ -327,7 +393,14 @@
                 </template>
               </ul>
             </li>
-            <li><span class="text-slate-500 dark:text-slate-400">Marca:</span> <strong x-text="selMar && selMar.nombre"></strong></li>
+            <li>
+              <span class="text-slate-500 dark:text-slate-400">Marca<span x-show="selMars.length > 1" x-cloak>s</span>:</span>
+              <ul class="mt-0.5 list-inside list-disc pl-1">
+                <template x-for="m in selMars" :key="'modal-m-'+m.CodMarca">
+                  <li><strong x-text="m.nombre"></strong></li>
+                </template>
+              </ul>
+            </li>
           </ul>
           <div class="flex justify-end gap-2">
             <button type="button" @click="cerrarConfirm()" :disabled="guardando"
@@ -376,6 +449,44 @@
           </div>
         </div>
       </template>
+      <template x-if="confirmKind === 'anular_lote'">
+        <div>
+          <div class="mb-1 flex items-center gap-2">
+            <span class="material-icons text-red-500" aria-hidden="true">delete_outline</span>
+            <h3 id="vcm-modal-anular-lote-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Anular relaciones</h3>
+          </div>
+          <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+            ¿Confirmás anular
+            <strong x-text="nSeleccionadas() + (nSeleccionadas() === 1 ? ' relación' : ' relaciones')"></strong>?
+            Dejarán de estar activas; podés crearlas de nuevo después si hace falta.
+          </p>
+          <ul class="mb-5 max-h-40 space-y-1 overflow-auto rounded-lg bg-rose-50 px-3 py-2 text-xs text-slate-800 dark:bg-rose-950/40 dark:text-slate-100">
+            <template x-for="t in ternasSeleccionadas().slice(0, 12)" :key="'anular-'+t.id">
+              <li>
+                <strong x-text="t.nombre_marca"></strong>
+                <span class="text-slate-500 dark:text-slate-400"> · </span>
+                <span x-text="t.nombre_cliente"></span>
+                <span class="text-slate-500 dark:text-slate-400"> · </span>
+                <span x-text="t.etiqueta_sucursal || t.nombre_sucursal || 'Sin sucursal'"></span>
+              </li>
+            </template>
+            <li x-show="nSeleccionadas() > 12" x-cloak class="text-slate-500 dark:text-slate-400"
+                x-text="'… y ' + (nSeleccionadas() - 12) + ' más'"></li>
+          </ul>
+          <div class="flex justify-end gap-2">
+            <button type="button" @click="cerrarConfirm()" :disabled="guardando"
+                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+              Cancelar
+            </button>
+            <button type="button" @click="ejecutarConfirm()" :disabled="guardando"
+                    class="inline-flex items-center gap-1 rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:bg-red-700 dark:hover:bg-red-600">
+              <span class="material-icons text-sm" aria-hidden="true">check</span>
+              <span x-show="!guardando">Confirmar anulación</span>
+              <span x-show="guardando" x-cloak>Procesando…</span>
+            </button>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </section>
@@ -395,7 +506,9 @@ window.vcmApp = function vcmApp() {
     selVend: null,
     selCli: null,
     selSucs: [],
-    selMar: null,
+    selMars: [],
+    selRelaciones: {},
+    _paquetePu: [],
     filtroViajante: '',
     gruposColapsados: {},
     qVend: '', qCli: '', qSuc: '', qMar: '', qFiltro: '',
@@ -429,8 +542,8 @@ window.vcmApp = function vcmApp() {
       }
     },
     pedirAsignar() {
-      if (!this.selVend || !this.selCli || !this.selSucs.length || !this.selMar) {
-        this.mostrarAviso('Completá vendedor, cliente, al menos una sucursal y marca con la búsqueda predictiva.', 'error');
+      if (!this.selVend || !this.selCli || !this.selSucs.length || !this.selMars.length) {
+        this.mostrarAviso('Completá vendedor, cliente, al menos una sucursal y al menos una marca.', 'error');
         return;
       }
       this.confirmKind = 'asignar';
@@ -442,17 +555,34 @@ window.vcmApp = function vcmApp() {
       this.confirmTerna = t;
       this.confirmOpen = true;
     },
+    pedirAnularSeleccion() {
+      const n = this.nSeleccionadas();
+      if (n < 1) {
+        this.mostrarAviso('Seleccioná al menos una relación para anular.', 'error');
+        return;
+      }
+      if (n === 1) {
+        this.pedirAnular(this.ternasSeleccionadas()[0]);
+        return;
+      }
+      this.confirmKind = 'anular_lote';
+      this.confirmTerna = null;
+      this.confirmOpen = true;
+    },
     async ejecutarConfirm() {
       if (this.confirmKind === 'asignar') {
         await this.crear();
       } else if (this.confirmKind === 'anular' && this.confirmTerna) {
         await this.anular(this.confirmTerna);
+      } else if (this.confirmKind === 'anular_lote') {
+        await this.anularLote();
       }
     },
     abrirPanel(p) { this.panel = p; },
     cerrarPanel(p) {
       if (this.panel === p) {
         if (p === 'suc') this.actualizarResumenSuc();
+        if (p === 'mar') this.actualizarResumenMar();
         this.panel = null;
       }
     },
@@ -465,6 +595,17 @@ window.vcmApp = function vcmApp() {
       } else {
         const first = this.selSucs[0].etiqueta || this.selSucs[0].nombre || '';
         this.qSuc = first + ' +' + (n - 1);
+      }
+    },
+    actualizarResumenMar() {
+      const n = this.selMars.length;
+      if (n === 0) {
+        this.qMar = '';
+      } else if (n === 1) {
+        this.qMar = this.selMars[0].nombre || '';
+      } else {
+        const first = this.selMars[0].nombre || '';
+        this.qMar = first + ' +' + (n - 1);
       }
     },
     sucSeleccionada(s) {
@@ -489,6 +630,159 @@ window.vcmApp = function vcmApp() {
     },
     limpiarSucs() {
       this.selSucs = [];
+    },
+    nombreMarcaNorm(m) {
+      return String((m && m.nombre) || '').trim().toUpperCase();
+    },
+    esPaquetePu(m) {
+      return ['PUM', 'PUS', 'PUW'].indexOf(this.nombreMarcaNorm(m)) >= 0;
+    },
+    async asegurarCatalogoPaquetePu() {
+      if (this._paquetePu.length === 3) return;
+      const found = [];
+      const seen = {};
+      const merge = (items) => {
+        for (const it of items || []) {
+          const code = this.nombreMarcaNorm(it);
+          if (['PUM', 'PUS', 'PUW'].indexOf(code) < 0) continue;
+          const k = String(it.CodMarca);
+          if (seen[k]) continue;
+          seen[k] = true;
+          found.push(it);
+        }
+      };
+      merge(this.marcas);
+      merge(this.selMars);
+      if (found.length < 3 && this.urls.marcas) {
+        for (const code of ['PUM', 'PUS', 'PUW']) {
+          if (found.some((x) => this.nombreMarcaNorm(x) === code)) continue;
+          const data = await this.getJson(this.urls.marcas + '?q=' + encodeURIComponent(code) + '&limit=20');
+          const hit = (data.items || []).find((x) => this.nombreMarcaNorm(x) === code);
+          if (hit) merge([hit]);
+        }
+      }
+      this._paquetePu = found;
+    },
+    marSeleccionada(m) {
+      const id = Number(m.CodMarca);
+      return this.selMars.some((x) => Number(x.CodMarca) === id);
+    },
+    async toggleMar(m) {
+      if (this.esPaquetePu(m)) {
+        await this.asegurarCatalogoPaquetePu();
+        const selecting = !this.marSeleccionada(m);
+        const pack = this._paquetePu.length ? this._paquetePu : [m];
+        if (selecting) {
+          for (const x of pack) {
+            if (!this.marSeleccionada(x)) this.selMars.push(x);
+          }
+        } else {
+          const ids = new Set(pack.map((x) => Number(x.CodMarca)));
+          this.selMars = this.selMars.filter((x) => !ids.has(Number(x.CodMarca)));
+        }
+        this.actualizarResumenMar();
+        return;
+      }
+      if (this.marSeleccionada(m)) {
+        this.quitarMar(m);
+      } else {
+        this.selMars.push(m);
+      }
+    },
+    async quitarMar(m) {
+      if (this.esPaquetePu(m)) {
+        await this.asegurarCatalogoPaquetePu();
+        const pack = this._paquetePu.length ? this._paquetePu : [m];
+        const ids = new Set(pack.map((x) => Number(x.CodMarca)));
+        this.selMars = this.selMars.filter((x) => !ids.has(Number(x.CodMarca)));
+        this.actualizarResumenMar();
+        return;
+      }
+      const id = Number(m.CodMarca);
+      this.selMars = this.selMars.filter((x) => Number(x.CodMarca) !== id);
+      this.actualizarResumenMar();
+    },
+    seleccionarTodasMar() {
+      for (const m of this.marcas) {
+        if (!this.marSeleccionada(m)) this.selMars.push(m);
+      }
+      const hayPu = this.selMars.some((x) => this.esPaquetePu(x));
+      if (hayPu) {
+        this.asegurarCatalogoPaquetePu().then(() => {
+          for (const x of this._paquetePu) {
+            if (!this.marSeleccionada(x)) this.selMars.push(x);
+          }
+          this.actualizarResumenMar();
+        });
+      }
+    },
+    limpiarMars() {
+      this.selMars = [];
+    },
+    nSeleccionadas() {
+      return Object.keys(this.selRelaciones).length;
+    },
+    ternasSeleccionadas() {
+      return Object.keys(this.selRelaciones).map((k) => this.selRelaciones[k]);
+    },
+    estaSeleccionada(id) {
+      return Boolean(this.selRelaciones[String(id)]);
+    },
+    mapaTernas() {
+      const m = {};
+      for (const t of this.ternas) m[String(t.id)] = t;
+      return m;
+    },
+    todasSeleccionadas() {
+      return this.ternas.length > 0 && this.nSeleccionadas() === this.ternas.length;
+    },
+    seleccionParcial() {
+      const n = this.nSeleccionadas();
+      return n > 0 && n < this.ternas.length;
+    },
+    toggleSelTerna(t, ev) {
+      if (ev) ev.stopPropagation();
+      const k = String(t.id);
+      const next = Object.assign({}, this.selRelaciones);
+      if (next[k]) delete next[k];
+      else next[k] = t;
+      this.selRelaciones = next;
+    },
+    grupoEstado(ids) {
+      const list = ids || [];
+      if (!list.length) return 'none';
+      let n = 0;
+      for (const id of list) {
+        if (this.estaSeleccionada(id)) n += 1;
+      }
+      if (n === 0) return 'none';
+      if (n === list.length) return 'all';
+      return 'partial';
+    },
+    toggleSelGrupo(ids, ev) {
+      if (ev) ev.stopPropagation();
+      const list = ids || [];
+      const all = this.grupoEstado(list) === 'all';
+      const next = Object.assign({}, this.selRelaciones);
+      const lookup = this.mapaTernas();
+      for (const id of list) {
+        const k = String(id);
+        if (all) delete next[k];
+        else if (lookup[k]) next[k] = lookup[k];
+      }
+      this.selRelaciones = next;
+    },
+    toggleSelTodas() {
+      if (this.todasSeleccionadas()) {
+        this.selRelaciones = {};
+        return;
+      }
+      const next = {};
+      for (const t of this.ternas) next[String(t.id)] = t;
+      this.selRelaciones = next;
+    },
+    limpiarSeleccion() {
+      this.selRelaciones = {};
     },
     /** Comparador de orden natural en español (números embebidos ordenados numéricamente). */
     cmpNatural(a, b) {
@@ -559,10 +853,13 @@ window.vcmApp = function vcmApp() {
         v.clientes = [...v.clientesMap.values()].map((c) => {
           c.sucursales = [...c.sucursalesMap.values()].map((s) => {
             s.marcas.sort((a, b) => this.cmpNatural(a.nombre_marca, b.nombre_marca));
+            s.idsHojas = s.marcas.map((t) => t.id);
             return s;
           }).sort((a, b) => this.cmpNatural(a.etiqueta, b.etiqueta));
+          c.idsHojas = c.sucursales.flatMap((s) => s.idsHojas);
           return c;
         }).sort((a, b) => this.cmpNatural(a.nombre, b.nombre));
+        v.idsHojas = v.clientes.flatMap((c) => c.idsHojas);
         return v;
       }).sort((a, b) => this.cmpNatural(a.nombre, b.nombre));
       return vendedores;
@@ -571,13 +868,13 @@ window.vcmApp = function vcmApp() {
     filasArbol() {
       const filas = [];
       for (const v of this.arbolCuaternas()) {
-        filas.push({ tipo: 'vend', key: v.key, nombre: v.nombre, count: v.count, abierto: this.estaAbierto(v.key) });
+        filas.push({ tipo: 'vend', key: v.key, nombre: v.nombre, count: v.count, abierto: this.estaAbierto(v.key), idsHojas: v.idsHojas || [] });
         if (!this.estaAbierto(v.key)) continue;
         for (const c of v.clientes) {
-          filas.push({ tipo: 'cli', key: c.key, nombre: c.nombre, count: c.count, abierto: this.estaAbierto(c.key) });
+          filas.push({ tipo: 'cli', key: c.key, nombre: c.nombre, count: c.count, abierto: this.estaAbierto(c.key), idsHojas: c.idsHojas || [] });
           if (!this.estaAbierto(c.key)) continue;
           for (const s of c.sucursales) {
-            filas.push({ tipo: 'suc', key: s.key, nombre: s.etiqueta, count: s.count, abierto: this.estaAbierto(s.key) });
+            filas.push({ tipo: 'suc', key: s.key, nombre: s.etiqueta, count: s.count, abierto: this.estaAbierto(s.key), idsHojas: s.idsHojas || [] });
             if (!this.estaAbierto(s.key)) continue;
             for (const t of s.marcas) {
               filas.push({ tipo: 'mar', key: 'm:' + t.id, terna: t });
@@ -639,7 +936,6 @@ window.vcmApp = function vcmApp() {
         if (!this.selCli) return;
         this.buscarSucursales();
       } else if (tipo === 'mar') {
-        if (this.selMar && this.qMar !== (this.selMar.nombre || '')) this.selMar = null;
         this.buscarMarcas();
       } else if (tipo === 'filtro') {
         this.buscarVendedoresFiltro();
@@ -667,7 +963,7 @@ window.vcmApp = function vcmApp() {
         this.qSuc = ''; this.idxSuc = 0;
         this.buscarSucursales(200);
       } else if (tipo === 'mar') {
-        this.qMar = ''; this.selMar = null; this.idxMar = 0;
+        this.qMar = ''; this.idxMar = 0;
         this.buscarMarcas(200);
       } else if (tipo === 'filtro') {
         this.qFiltro = '';
@@ -717,6 +1013,7 @@ window.vcmApp = function vcmApp() {
       this.cargando = false;
       if (!data.ok) { this.mostrarAviso(data.error || 'No se pudieron cargar las ternas.', 'error'); return; }
       this.ternas = data.ternas || [];
+      this.selRelaciones = {};
       this.contraerTodos();
     },
     async buscarVendedores(limit = 100) {
@@ -819,11 +1116,6 @@ window.vcmApp = function vcmApp() {
       this.sucursales = [];
       this.cerrarPanel('cli');
     },
-    elegirMar(m) {
-      this.selMar = m;
-      this.qMar = m.nombre || '';
-      this.cerrarPanel('mar');
-    },
     moverSel(tipo, delta) {
       if (tipo === 'vend' && this.vendedores.length) {
         this.idxVend = (this.idxVend + delta + this.vendedores.length) % this.vendedores.length;
@@ -839,25 +1131,21 @@ window.vcmApp = function vcmApp() {
       if (tipo === 'vend' && this.vendedores[this.idxVend]) this.elegirVend(this.vendedores[this.idxVend]);
       else if (tipo === 'cli' && this.clientes[this.idxCli]) this.elegirCli(this.clientes[this.idxCli]);
       else if (tipo === 'suc' && this.sucursales[this.idxSuc]) this.toggleSuc(this.sucursales[this.idxSuc]);
-      else if (tipo === 'mar' && this.marcas[this.idxMar]) this.elegirMar(this.marcas[this.idxMar]);
+      else if (tipo === 'mar' && this.marcas[this.idxMar]) this.toggleMar(this.marcas[this.idxMar]);
     },
     async crear() {
-      if (!this.selVend || !this.selCli || !this.selSucs.length || !this.selMar) {
+      if (!this.selVend || !this.selCli || !this.selSucs.length || !this.selMars.length) {
         this.cerrarConfirm();
-        this.mostrarAviso('Completá vendedor, cliente, al menos una sucursal y marca con la búsqueda predictiva.', 'error');
+        this.mostrarAviso('Completá vendedor, cliente, al menos una sucursal y al menos una marca.', 'error');
         return;
       }
       this.guardando = true;
       const body = {
         CodViajante: Number(this.selVend.CodViajante),
         id_cliente: Number(this.selCli.id_cliente),
-        CodMarca: Number(this.selMar.CodMarca),
+        CodMarcas: this.selMars.map((m) => Number(m.CodMarca)),
+        ids_cliente_domicilio: this.selSucs.map((s) => Number(s.id_cliente_domicilio)),
       };
-      if (this.selSucs.length === 1) {
-        body.id_cliente_domicilio = Number(this.selSucs[0].id_cliente_domicilio);
-      } else {
-        body.ids_cliente_domicilio = this.selSucs.map((s) => Number(s.id_cliente_domicilio));
-      }
       const { status, data } = await this.postJson(this.urls.crear, body);
       this.guardando = false;
       this.confirmOpen = false;
@@ -872,7 +1160,7 @@ window.vcmApp = function vcmApp() {
       }
       this.selSucs = [];
       this.qSuc = '';
-      this.selMar = null;
+      this.selMars = [];
       this.qMar = '';
       this.marcas = [];
       await this.cargar();
@@ -890,6 +1178,22 @@ window.vcmApp = function vcmApp() {
       if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo anular.', 'error'); return; }
       await this.cargar();
       this.mostrarAviso(data.message || 'Relación anulada.', 'success');
+    },
+    async anularLote() {
+      const ids = this.ternasSeleccionadas().map((t) => Number(t.id));
+      if (!ids.length) {
+        this.cerrarConfirm();
+        this.mostrarAviso('Seleccioná al menos una relación para anular.', 'error');
+        return;
+      }
+      this.guardando = true;
+      const { data } = await this.postJson(this.urls.anular, { ids: ids });
+      this.guardando = false;
+      this.confirmOpen = false;
+      this.confirmKind = null;
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo anular.', 'error'); return; }
+      await this.cargar();
+      this.mostrarAviso(data.message || 'Relaciones anuladas.', 'success');
     },
   };
 }

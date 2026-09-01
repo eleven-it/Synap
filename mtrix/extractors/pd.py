@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from mtrix.extractors.base import (
     ExportConfig,
+    conservar_si_ean_o_venta,
     fetch_all,
+    ids_articulos_con_venta,
     normalizar_codigos_prov,
     sql_filtro_proveedor,
 )
@@ -19,6 +21,7 @@ SELECT
     articulo.NombreArticulo AS DESCRICAO,
     marca.NombreMarca AS DIVISAO_MARCA,
     rubro.NombreRubro AS DIVISAO_RUBRO,
+    articulo.IDArt AS ID_ART,
     IF(articulo.NroCodBarraF IS NOT NULL AND articulo.NroCodBarraF <> '',
        CAST(articulo.NroCodBarraF AS CHAR(255)), '0') AS EAN,
     '0' AS TIPO_EMBALAGEM,
@@ -50,7 +53,9 @@ def fetch_rows(
         sql += " LIMIT %s OFFSET %s"
         params.extend([int(limit), int(offset)])
     with mysql_cursor(cfg.base_empresa, dict_cursor=True) as cursor:
-        return fetch_all(cursor, sql, params)
+        rows = fetch_all(cursor, sql, params)
+    vendidos = ids_articulos_con_venta(cfg, codigo_prov=codigo_prov, codigos_prov=codigos_prov)
+    return [r for r in rows if conservar_si_ean_o_venta(r, vendidos)]
 
 
 def count_rows(

@@ -8,8 +8,8 @@
          x-data="mprReportesHub()">
     <div class="mpr-contenedor-pagina mx-auto flex h-full w-full min-h-0 min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
-        {# Chrome denso slate-800 — sticky bajo navbar (canon Tablero de producción) #}
-        <div class="sticky top-14 z-40 mb-3 flex-shrink-0 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16">
+        {# Chrome denso slate-800 — flex-shrink-0 (sin sticky: evita tapar filtros del partial) #}
+        <div class="mb-3 flex-shrink-0">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
                 {% include "mpr/reportes/_shell_header.html" %}
                 <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-700/70 pt-2">
@@ -27,7 +27,7 @@
 
         {# Datos: ocupa el resto del viewport con scroll interno #}
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div id="mpr-reportes-scroll" class="min-h-0 flex-1 overflow-auto overscroll-contain p-3 sm:p-4">
+            <div id="mpr-reportes-scroll" class="min-h-0 flex-1 overflow-auto overscroll-contain p-4 sm:p-5">
                 {% if partial_template %}
                     {% include partial_template %}
                 {% else %}
@@ -48,34 +48,15 @@
 {% endif %}
 <script>
 function mprReportesHub() {
-    function fechaLocalISO(d) {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return y + '-' + m + '-' + day;
-    }
-    function calcularPresetActivo(desde, hasta) {
-        const hoy = fechaLocalISO(new Date());
-        if (desde === hoy && hasta === hoy) return 0;
-        const d7 = new Date();
-        d7.setDate(d7.getDate() - 6);
-        if (desde === fechaLocalISO(d7) && hasta === hoy) return 7;
-        const dMes = new Date();
-        dMes.setDate(1);
-        if (desde === fechaLocalISO(dMes) && hasta === hoy) return 30;
-        return null;
-    }
     return {
         desde: '{{ fecha_desde_iso }}',
         hasta: '{{ fecha_hasta_iso }}',
         presentacion: '{{ modo_presentacion|default:"docenas" }}',
-        presetActivo: null,
         busquedaTabla: '',
         sugerenciasAbiertas: false,
         sugerenciaActiva: 0,
         filasBusqueda: [],
         init() {
-            this.presetActivo = calcularPresetActivo(this.desde, this.hasta);
             const el = document.getElementById('mpr-reportes-filas-busqueda');
             if (el) {
                 try {
@@ -98,14 +79,19 @@ function mprReportesHub() {
                 })
                 .slice(0, 8);
         },
-        clasePreset(dias) {
-            return this.presetActivo === dias
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-slate-300 hover:bg-slate-700 hover:text-white';
-        },
         enviarFiltros() {
             const form = this.$refs.filtrosForm;
             if (!form) return;
+            if (typeof window.mprShowPostLoadingProgress === 'function') {
+                window.mprShowPostLoadingProgress({
+                    title: form.getAttribute('data-mpr-loading-title') || 'Reconstruyendo análisis',
+                    subtitle: form.getAttribute('data-mpr-loading-subtitle')
+                        || 'Calculando saldo inicial histórico y movimientos del período… No cierres esta ventana.',
+                    indeterminate: true,
+                });
+            } else if (typeof window.mprShowPostLoading === 'function') {
+                window.mprShowPostLoading(form, null);
+            }
             const params = new URLSearchParams();
             const grupo = form.querySelector('[name="grupo"]');
             const reporte = form.querySelector('[name="reporte"]');
@@ -124,24 +110,6 @@ function mprReportesHub() {
         },
         cambiarPresentacion(modo) {
             this.presentacion = modo;
-            this.enviarFiltros();
-        },
-        preset(dias) {
-            const h = new Date();
-            const d = new Date(h);
-            if (dias === 0) {
-                /* hoy */
-            } else if (dias === 7) {
-                d.setDate(h.getDate() - 6);
-            } else if (dias === 30) {
-                d.setDate(1);
-            } else if (dias === -1) {
-                d.setMonth(d.getMonth() - 1, 1);
-                h.setMonth(h.getMonth(), 0);
-            }
-            this.desde = fechaLocalISO(d);
-            this.hasta = fechaLocalISO(h);
-            this.presetActivo = dias;
             this.enviarFiltros();
         },
         contadorFilasVisibles() {

@@ -29,6 +29,10 @@ from django.utils import timezone
 
 from contabilidad_audit.models import AprobacionREI, PlanCorreccion
 from contabilidad_audit.services.politicas import calcular_config_hash, resolver_politica
+from contabilidad_audit.services.checks._sql import (
+    filtro_punto_venta_contable_sql,
+    join_punto_venta_contable_por_id_pv,
+)
 from contabilidad_audit.services.rei_calculo import (
     CONCEPTO_REI,
     DESC_ASIENTO_REI,
@@ -1455,13 +1459,13 @@ def _plan_reparacion_anulaciones(
     ejercicios_alcance = _ejercicios_en_alcance(alcance, politica, repo)
     cur = repo.cur()
     cur.execute(
-        """
+        f"""
         SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante, cp.Fecha,
                cp.CodSucursal, cp.Codigo, cp.ImporteCompra, cp.ImportePago, cp.TipoOP
         FROM cuentaproveedor cp
-        JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
-        WHERE s.cont = 'Si'
-          AND COALESCE(cp.Anulado, 'No') = 'Si'
+        {join_punto_venta_contable_por_id_pv("cp")}
+        WHERE COALESCE(cp.Anulado, 'No') = 'Si'
+          {filtro_punto_venta_contable_sql()}
           AND cp.TipoComprobante IN ('FA', 'FC', 'OP')
           AND COALESCE(cp.CodigoMovimiento, 0) <> 0
         """
@@ -1817,9 +1821,10 @@ def _plan_regeneracion_asientos(
     """Genera items INSERT para cont_asiento (solo lectura en legacy)."""
     cur = repo.cur()
     cur.execute(
-        """SELECT cp.* FROM cuentaproveedor cp
-           JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
-           WHERE s.cont='Si' AND COALESCE(cp.Anulado,'No')<>'Si'
+        f"""SELECT cp.* FROM cuentaproveedor cp
+           {join_punto_venta_contable_por_id_pv("cp")}
+           WHERE COALESCE(cp.Anulado,'No')<>'Si'
+             {filtro_punto_venta_contable_sql()}
              AND cp.TipoComprobante IN ('FA','FC','OP')
              AND COALESCE(cp.CodigoMovimiento, 0) <> 0
              AND NOT EXISTS (

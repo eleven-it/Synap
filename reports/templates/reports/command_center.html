@@ -125,12 +125,38 @@
               </div>
             </fieldset>
 
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3 lg:shrink-0">
-              <div class="cc-filter-field flex min-w-0 flex-1 flex-col gap-1 sm:min-w-[11rem] sm:max-w-[14rem]">
-                <label for="cc-sucursal" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sucursal</label>
-                <select id="cc-sucursal" class="min-h-10 w-full rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35">
-                  <option value="">Todas</option>
+            <div class="flex min-w-0 flex-1 flex-col gap-3 lg:max-w-xl">
+              <div class="cc-filter-field flex flex-col gap-1">
+                <label for="sucursales_search" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sucursales</label>
+                <select name="sucursales" id="sucursales" multiple class="hidden" data-tags-field="sucursales">
+                  <option value="">Cargando…</option>
                 </select>
+                <div id="sucursales_tags_container"
+                     class="tags-filter-container relative flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 shadow-inner transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35">
+                  <div class="tags-chips flex min-w-0 flex-1 flex-wrap gap-1.5"></div>
+                  <input type="text" id="sucursales_search"
+                         class="tags-input min-w-[8rem] flex-1 border-none bg-transparent py-0 text-sm text-white outline-none placeholder:text-slate-500"
+                         placeholder="Buscar sucursal…" autocomplete="off" />
+                  <div id="sucursales_dropdown"
+                       class="tags-dropdown absolute left-0 right-0 top-full z-[200] mt-1 hidden max-h-60 overflow-y-auto rounded-md border border-slate-600 bg-slate-900 shadow-lg"></div>
+                </div>
+                <p class="text-[10px] font-normal italic text-slate-500">Vacío = todas las sucursales</p>
+              </div>
+              <div class="cc-filter-field flex flex-col gap-1">
+                <label for="punto_venta_search" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Puntos de venta</label>
+                <select name="punto_venta" id="punto_venta" multiple class="hidden" data-tags-field="punto_venta">
+                  <option value="">Cargando…</option>
+                </select>
+                <div id="punto_venta_tags_container"
+                     class="tags-filter-container relative flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 shadow-inner transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35">
+                  <div class="tags-chips flex min-w-0 flex-1 flex-wrap gap-1.5"></div>
+                  <input type="text" id="punto_venta_search"
+                         class="tags-input min-w-[8rem] flex-1 border-none bg-transparent py-0 text-sm text-white outline-none placeholder:text-slate-500"
+                         placeholder="Buscar punto de venta…" autocomplete="off" />
+                  <div id="punto_venta_dropdown"
+                       class="tags-dropdown absolute left-0 right-0 top-full z-[200] mt-1 hidden max-h-60 overflow-y-auto rounded-md border border-slate-600 bg-slate-900 shadow-lg"></div>
+                </div>
+                <p class="text-[10px] font-normal italic text-slate-500">Vacío = todos los puntos de venta</p>
               </div>
               <button type="button" id="cc-refresh" class="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-sky-950/40 transition hover:from-sky-400 hover:to-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[9.5rem]">
                 <span class="material-icons text-lg" aria-hidden="true">refresh</span>
@@ -254,5 +280,9 @@
     canEditAreas: {{ can_edit_cc_areas|yesno:"true,false" }},
   };
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20260807a" defer></script>
+<script type="module">
+  import { initializeTagsFilter } from "{% static 'reports/js/tags_filter.mjs' %}?v=20260901b";
+  window.initializeTagsFilter = initializeTagsFilter;
+</script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20260901a" defer></script>
 {% endblock %}

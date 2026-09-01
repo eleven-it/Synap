@@ -1,6 +1,43 @@
 // Comentario: Controlador básico para dashboards interactivos con gráficos D3.
 
-import { initializeTagsFilter } from "./tags_filter.mjs";
+import { initializeTagsFilter } from "./tags_filter.mjs?v=20260901b";
+
+function selectedOptionLabels(selectId, emptyLabel) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return emptyLabel || "";
+  const labels = Array.from(sel.selectedOptions || [])
+    .map((o) => (o.textContent || "").trim())
+    .filter(Boolean);
+  if (!labels.length) return emptyLabel || "";
+  return labels.join(", ");
+}
+
+function formatSucursalPvScopeText(options = {}) {
+  const sucId = options.sucursalesId || "sucursales";
+  const pvId = options.puntoVentaId || "punto_venta";
+  const sucEl = document.getElementById(sucId);
+  const pvEl = document.getElementById(pvId);
+  if (!sucEl && !pvEl) return "";
+  const parts = [];
+  if (sucEl) {
+    parts.push(`Sucursales: ${selectedOptionLabels(sucId, "Todas")}`);
+  }
+  if (pvEl) {
+    parts.push(`Puntos de venta: ${selectedOptionLabels(pvId, "Todos")}`);
+  }
+  return parts.join(" · ");
+}
+
+function withSucursalPvScope(baseText) {
+  const scope = formatSucursalPvScopeText();
+  if (!scope) return baseText || "";
+  if (!baseText) return scope;
+  return `${baseText} · ${scope}`;
+}
+
+if (typeof window !== "undefined") {
+  window.formatSucursalPvScopeText = formatSucursalPvScopeText;
+}
 
 // ============================================
 // SISTEMA COMÚN: Detección de Tipo de Reporte
@@ -107,6 +144,16 @@ function isJerarquiaVentasQuerySlug(slug) {
 function isVentasMarcasMensualSlug(slug) {
   return slug === "ventas-marcas-mensual";
 }
+
+/** Slugs de ventas BO con filtro Punto de venta visible (paridad Python SLUGS_VENTAS_CON_PUNTO_VENTA). */
+const SLUGS_VENTAS_PV = new Set([
+  "ventas-objetivos-vs-bo",
+  "ventas-por-vendedor",
+  "ventas-por-articulo",
+  "ventas-marca-superart",
+  "ventas-bom-docenas",
+  "ventas-marcas-mensual",
+]);
 
 /** Informe Monthly Reporting licenciatarios (pack + rango calendario). */
 function isVentasMensualesLicenciatariosSlug(slug) {
@@ -4253,10 +4300,10 @@ const renderSummary = (meta, totals) => {
 
   // Actualizar el período en el título (otros reportes)
   const summaryPeriodElement = document.getElementById("summary-period");
-  if (summaryPeriodElement) summaryPeriodElement.textContent = periodText;
+  if (summaryPeriodElement) summaryPeriodElement.textContent = withSucursalPvScope(periodText);
   if (isVentasNetasSlug(reportSlug)) {
     const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
-    if (vnPeriodEl) vnPeriodEl.textContent = periodText;
+    if (vnPeriodEl) vnPeriodEl.textContent = withSucursalPvScope(periodText);
   }
 
   summaryGrid.innerHTML = "";
@@ -6672,7 +6719,7 @@ if (dashboardRoot) {
       return;
     }
     
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "cash_flow_detailed_movements" && reportSlug !== "uninvoiced_remitos" && !isInformeBoDualPeriodo(reportSlug) && reportSlug !== "total-consolidado-operativo" && reportSlug !== "stock-existencias" && !isInventarioDepositoSlug(reportSlug)) {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "cash_flow_detailed_movements" && reportSlug !== "uninvoiced_remitos" && !isInformeBoDualPeriodo(reportSlug) && reportSlug !== "total-consolidado-operativo" && reportSlug !== "stock-existencias" && !isInventarioDepositoSlug(reportSlug) && !isVentasMensualesLicenciatariosSlug(reportSlug)) {
       return;
     }
     
@@ -6682,7 +6729,7 @@ if (dashboardRoot) {
 
       // BO / Objetivos vs BO: sin PV en formulario salvo ventas-marcas-mensual (ADR familia BO + A3).
       const isBoReport = isInformeBoDualPeriodo(reportSlug);
-      const loadPuntoVentaOptions = !isBoReport || isVentasMarcasMensualSlug(reportSlug);
+      const loadPuntoVentaOptions = !isBoReport || isVentasMarcasMensualSlug(reportSlug) || SLUGS_VENTAS_PV.has(reportSlug) || isVentasMensualesLicenciatariosSlug(reportSlug);
       if (loadPuntoVentaOptions) {
         const pvResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=puntos_venta`, {
           headers: {
@@ -7614,16 +7661,18 @@ if (dashboardRoot) {
             return `Periodo ${formatDate(fechaInicioInput.value)} al ${formatDate(fechaFinInput.value)}`;
           })()
         : "";
-      if (summaryPeriodElement) summaryPeriodElement.textContent = periodTextFromInputs;
+      if (summaryPeriodElement) summaryPeriodElement.textContent = withSucursalPvScope(periodTextFromInputs);
       const boPeriodEl = document.getElementById("bo-summary-period");
       const voPeriodEl = document.getElementById("vo-summary-period");
       const slugDual = dashboardRoot?.dataset?.reportSlug;
       if (isInformeBoDualPeriodo(slugDual)) {
-        if (boPeriodEl) boPeriodEl.textContent = periodTextFromInputs;
-        if (voPeriodEl) voPeriodEl.textContent = periodTextFromInputs;
+        if (boPeriodEl) boPeriodEl.textContent = withSucursalPvScope(periodTextFromInputs);
+        if (voPeriodEl) voPeriodEl.textContent = withSucursalPvScope(periodTextFromInputs);
       }
       const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
-      if (vnPeriodEl && isVentasNetasSlug(dashboardRoot?.dataset?.reportSlug)) vnPeriodEl.textContent = periodTextFromInputs;
+      if (vnPeriodEl && isVentasNetasSlug(dashboardRoot?.dataset?.reportSlug)) {
+        vnPeriodEl.textContent = withSucursalPvScope(periodTextFromInputs);
+      }
       
       // Guardar filtros cuando cambia
       saveFilters();
@@ -7715,16 +7764,18 @@ if (dashboardRoot) {
       };
       const text = `Periodo ${formatDate(fechaInicioInput.value)} al ${formatDate(fechaFinInput.value)}`;
       const summaryPeriodElement = document.getElementById("summary-period");
-      if (summaryPeriodElement) summaryPeriodElement.textContent = text;
+      if (summaryPeriodElement) summaryPeriodElement.textContent = withSucursalPvScope(text);
       const boPeriodEl = document.getElementById("bo-summary-period");
       const voPeriodElSync = document.getElementById("vo-summary-period");
       const slugDual2 = dashboardRoot?.dataset?.reportSlug;
       if (isInformeBoDualPeriodo(slugDual2)) {
-        if (boPeriodEl) boPeriodEl.textContent = text;
-        if (voPeriodElSync) voPeriodElSync.textContent = text;
+        if (boPeriodEl) boPeriodEl.textContent = withSucursalPvScope(text);
+        if (voPeriodElSync) voPeriodElSync.textContent = withSucursalPvScope(text);
       }
       const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
-      if (vnPeriodEl && isVentasNetasSlug(dashboardRoot?.dataset?.reportSlug)) vnPeriodEl.textContent = text;
+      if (vnPeriodEl && isVentasNetasSlug(dashboardRoot?.dataset?.reportSlug)) {
+        vnPeriodEl.textContent = withSucursalPvScope(text);
+      }
     };
     fechaInicioInput.addEventListener("change", () => {
       if (periodoTipoSelect.value === "personalizado") {
@@ -10070,6 +10121,24 @@ if (dashboardRoot) {
           filters.clientes_excluidos = selectedClientes;
         }
       }
+      const sucursalesSelect = document.getElementById("sucursales");
+      if (sucursalesSelect) {
+        const selectedSucursales = Array.from(sucursalesSelect.selectedOptions)
+          .map((opt) => opt.value)
+          .filter((v) => v);
+        if (selectedSucursales.length > 0) {
+          filters.sucursales = selectedSucursales;
+        }
+      }
+      const puntoVentaSelect = document.getElementById("punto_venta");
+      if (puntoVentaSelect) {
+        const selectedPVs = Array.from(puntoVentaSelect.selectedOptions)
+          .map((opt) => opt.value)
+          .filter((v) => v);
+        if (selectedPVs.length > 0) {
+          filters.punto_venta = selectedPVs;
+        }
+      }
     } else {
       // Filtros genéricos para otros reportes
       const dateFrom = document.querySelector('[name="date_from"]')?.value;
@@ -10491,7 +10560,10 @@ if (dashboardRoot) {
               } else if (filtersApplied.lista_precio !== undefined && filtersApplied.lista_precio !== null) {
                 parts.push("Lista de precio: " + String(filtersApplied.lista_precio));
               }
-              if (filtersApplied.sucursales && filtersApplied.sucursales.length) parts.push(filtersApplied.sucursales.length + " sucursal(es)");
+              const sucursalPvScope = formatSucursalPvScopeText();
+              if (sucursalPvScope) {
+                parts.push(sucursalPvScope);
+              }
               if (filtersApplied.depositos_incluidos && filtersApplied.depositos_incluidos.length) parts.push(filtersApplied.depositos_incluidos.length + " depósito(s) incluidos");
               if (filtersApplied.clientes_excluidos && filtersApplied.clientes_excluidos.length) parts.push(filtersApplied.clientes_excluidos.length + " cliente(s) excluidos");
               if (filtersApplied.vendedores_excluidos && filtersApplied.vendedores_excluidos.length) {

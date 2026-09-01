@@ -19,7 +19,12 @@
       return parts[2] + "/" + parts[1] + "/" + parts[0];
     }
     if (!fi && !ff) return "";
-    return "Período " + fmt(fi) + " — " + fmt(ff);
+    var base = "Período " + fmt(fi) + " — " + fmt(ff);
+    var scope =
+      typeof window.formatSucursalPvScopeText === "function"
+        ? window.formatSucursalPvScopeText()
+        : "";
+    return scope ? base + " · " + scope : base;
   }
 
   function syncPeriodLabel() {

@@ -147,6 +147,23 @@
               </div>
               <p id="exec-sucursales-hint" class="text-[10px] font-normal italic text-slate-500">Cargando sucursales…</p>
             </div>
+            <div class="exec-filter-field exec-pv-field flex flex-col gap-1 pb-1">
+              <label for="exec_punto_venta_search" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Puntos de venta</label>
+              <select name="punto_venta" id="exec_punto_venta" multiple class="hidden" data-tags-field="punto_venta">
+                <option value="">Cargando…</option>
+              </select>
+              <div id="exec_punto_venta_tags_container"
+                   class="tags-filter-container flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 shadow-inner transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/40">
+                <div class="tags-chips flex min-w-0 flex-1 flex-wrap gap-1.5"></div>
+                <input type="text" id="exec_punto_venta_search"
+                       class="tags-input min-w-[8rem] flex-1 border-none bg-transparent py-0 text-sm text-white outline-none placeholder:text-slate-500"
+                       placeholder="Buscar punto de venta…" autocomplete="off" />
+                <div id="exec_punto_venta_dropdown"
+                     class="tags-dropdown absolute left-0 right-0 top-full z-[200] mt-1 hidden max-h-60 w-full overflow-y-auto rounded-md border shadow-lg"
+                     role="listbox" aria-label="Puntos de venta disponibles"></div>
+              </div>
+              <p id="exec-pv-hint" class="text-[10px] font-normal italic text-slate-500">Vacío = todos los puntos de venta</p>
+            </div>
             <div class="flex justify-start pt-1">
               <button type="button" id="exec-refresh-btn"
                       class="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-sky-950/40 transition hover:from-sky-400 hover:to-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 sm:w-auto sm:min-w-[9.5rem]">
@@ -161,6 +178,8 @@
         <div class="h-full w-full bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 opacity-90"></div>
       </div>
     </header>
+
+    <p id="exec-scope-sucursal-pv" class="mb-4 px-1 text-xs font-medium text-slate-500 dark:text-slate-400" aria-live="polite"></p>
 
     <div id="exec-loading" class="mb-4 hidden rounded-xl border border-sky-200/50 bg-sky-50/80 px-4 py-3 dark:border-sky-900/40 dark:bg-sky-950/40">
       <div class="flex items-center gap-3">
@@ -239,6 +258,6 @@
         sucursalCanalUrl: "{{ sucursal_canal_api_url|escapejs }}",
     };
 </script>
-<script type="module" src="{% static 'reports/js/executive_summary_tags.mjs' %}"></script>
-<script src="{% static 'reports/js/executive_summary.js' %}?v=20260603d" defer></script>
+<script type="module" src="{% static 'reports/js/executive_summary_tags.mjs' %}?v=20260901b"></script>
+<script src="{% static 'reports/js/executive_summary.js' %}?v=20260901a" defer></script>
 {% endblock %}

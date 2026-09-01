@@ -112,19 +112,18 @@
         <span class="text-sm font-bold tabular-nums text-white">{{ kpis.eventos|default:0 }}</span>
     </span>
     {% elif grupo == "trazabilidad" and reporte == "kardex_articulo" %}
-    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-900/30 px-2.5">
-        <span class="text-[10px] font-semibold uppercase tracking-wide text-sky-300">Saldo final</span>
-        <span class="text-sm font-bold tabular-nums text-sky-100">{{ kpis.saldo_final|default:0 }}</span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Pedido</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.pedido|default:0 }}</span>
     </span>
-    {% if kpis.max_packs %}
-    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-900/30 px-2.5">
-        <span class="text-[10px] font-semibold uppercase tracking-wide text-purple-300">Max packs</span>
-        <span class="text-sm font-bold tabular-nums text-purple-100">{{ kpis.max_packs|default:0 }}</span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border {% if kpis.terminado|default:0 < 0 %}border-rose-500/40 bg-rose-900/30{% else %}border-sky-500/40 bg-sky-900/30{% endif %} px-2.5"
+          title="Stock en {{ kpis.deposito_nombre|default:'depósito canónico' }}">
+        <span class="text-[10px] font-semibold uppercase tracking-wide {% if kpis.terminado|default:0 < 0 %}text-rose-300{% else %}text-sky-300{% endif %}">Stock</span>
+        <span class="text-sm font-bold tabular-nums {% if kpis.terminado|default:0 < 0 %}text-rose-100{% else %}text-sky-100{% endif %}">{{ kpis.terminado|default:0 }}</span>
     </span>
-    {% endif %}
     <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
         <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Movimientos</span>
-        <span class="text-sm font-bold tabular-nums text-white">{{ filas|length|default:0 }}</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ filas|length }}</span>
     </span>
     {% endif %}
 </div>

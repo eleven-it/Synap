@@ -14,8 +14,10 @@ SELECT
     cliente.nombre_cliente AS RAZAO_SOCIAL,
     IF(cliente.Calle IS NOT NULL, cliente.Calle, 'NA') AS ENDERECO,
     IF(distrito.NombreDistrito IS NOT NULL, distrito.NombreDistrito, 'NA') AS BAIRRO,
-    IF(departamento.cod_postal IS NOT NULL AND TRIM(departamento.cod_postal) <> '',
-       CAST(departamento.cod_postal AS CHAR(20)), '0') AS CEP,
+    IF(departamento.cod_postal IS NOT NULL AND TRIM(departamento.cod_postal) <> ''
+       AND TRIM(departamento.cod_postal) <> '0'
+       AND CHAR_LENGTH(TRIM(departamento.cod_postal)) >= 4,
+       CAST(departamento.cod_postal AS CHAR(20)), '9400') AS CEP,
     IF(departamento.NombreDepartamento IS NOT NULL, departamento.NombreDepartamento, 'NA') AS CIUDAD,
     IF(provincia.Provincia IS NOT NULL, provincia.Provincia, 'NA') AS ESTADO,
     'NA' AS NOME_RESPONSAVEL,

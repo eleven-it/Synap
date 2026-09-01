@@ -34,6 +34,10 @@
     <div class="flex flex-col gap-4">
       {% include "reports/includes/filters_period.html" %}
 
+      {% with ocultar_clientes_excluidos=True %}
+      {% include "reports/includes/filters_sucursal_punto_venta.html" %}
+      {% endwith %}
+
       <div class="flex flex-wrap items-end gap-4">
         <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0 min-w-[240px]">
           Vendedor
@@ -81,6 +85,7 @@
       <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3">Activos vs. sin compras por vendedor</div>
       <div id="csv-resumen-list" class="flex flex-col gap-3"></div>
     </div>
+    <p id="csv-alcance-sucursal-pv" class="text-xs text-slate-500 dark:text-slate-400" aria-live="polite"></p>
   </div>
 
   <!-- Tabla -->
@@ -111,7 +116,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script type="module">
+import { initializeTagsFilter } from "{% static 'reports/js/tags_filter.mjs' %}?v=20260901b";
+
 (function () {
   "use strict";
   var root = document.getElementById("csv-root");
@@ -131,6 +138,39 @@
   var elTotal = document.getElementById("csv-total");
 
   var estado = { columns: [], datos: [] };
+
+  function poblarSelect(selectEl, items, valueKey, labelKey) {
+    if (!selectEl || !Array.isArray(items)) return;
+    selectEl.innerHTML = "";
+    items.forEach(function (item) {
+      var opt = document.createElement("option");
+      opt.value = String(item[valueKey] != null ? item[valueKey] : item.value);
+      opt.textContent = String(item[labelKey] != null ? item[labelKey] : item.label);
+      selectEl.appendChild(opt);
+    });
+  }
+
+  function initFiltrosSucursalPv() {
+    var filtersBase = "/api/reports/filters/";
+    Promise.all([
+      fetch(filtersBase + "?type=sucursales", { credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" } }),
+      fetch(filtersBase + "?type=puntos_venta", { credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" } }),
+    ])
+      .then(function (responses) { return Promise.all(responses.map(function (r) { return r.ok ? r.json() : {}; })); })
+      .then(function (payloads) {
+        poblarSelect(document.getElementById("sucursales"), payloads[0].sucursales || [], "value", "label");
+        poblarSelect(document.getElementById("punto_venta"), payloads[1].puntos_venta || [], "value", "label");
+        initializeTagsFilter("sucursales", "sucursales");
+        initializeTagsFilter("punto_venta", "puntos_venta");
+      })
+      .catch(function () { /* filtros opcionales */ });
+  }
+
+  function selectedIds(selectId) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions).map(function (o) { return o.value; }).filter(Boolean);
+  }
 
   function getFechas() {
     var fi = document.getElementById("fecha_inicio");
@@ -188,6 +228,8 @@
     });
     var fp = buildFiltrarPor();
     if (fp) params.set("filtrarPor", fp);
+    selectedIds("sucursales").forEach(function (id) { params.append("sucursales", id); });
+    selectedIds("punto_venta").forEach(function (id) { params.append("puntoVenta", id); });
 
     fetch(API_URL + "?" + params.toString(), {
       credentials: "same-origin",
@@ -205,6 +247,11 @@
         renderResumen(payload.resumenGlobal, payload.resumenVendedores, payload.modoTodosVendedores);
         renderTabla();
         elPlaceholder.classList.add("hidden");
+        var alcanceEl = document.getElementById("csv-alcance-sucursal-pv");
+        if (alcanceEl) {
+          var scopeFn = window.formatSucursalPvScopeText;
+          alcanceEl.textContent = typeof scopeFn === "function" ? scopeFn() : "";
+        }
         if (!estado.datos.length) { mostrarMsg("Sin resultados: no hay clientes sin ventas en el período.", "info"); }
       })
       .catch(function (err) { mostrarMsg(err.message || "Error al generar el informe.", "error"); })
@@ -291,6 +338,7 @@
   elGenerar.addEventListener("click", generar);
   elBuscar.addEventListener("input", aplicarFiltro);
   cargarVendedores();
+  initFiltrosSucursalPv();
 })();
 </script>
 {% endblock %}

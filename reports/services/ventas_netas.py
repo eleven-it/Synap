@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
 from reports.services.connection_pool import get_mysql_pool
+from core.utils.administranet_types import to_int_or_none
 from ecom.services.filtros_estadisticas_relay import listado_filtros_estadisticas
 
 logger = logging.getLogger(__name__)
@@ -243,6 +244,46 @@ def _append_filtros_cuentacliente(
         params.extend(clean)
 
 
+def _normalize_int_ids(values: Optional[Sequence[Any]]) -> List[int]:
+    """Lista de enteros únicos; ignora None e inválidos."""
+    if not values:
+        return []
+    out: List[int] = []
+    seen: set[int] = set()
+    for v in values:
+        parsed = to_int_or_none(v)
+        if parsed is not None and parsed not in seen:
+            seen.add(parsed)
+            out.append(parsed)
+    return out
+
+
+def _append_sucursales_punto_venta(
+    where: List[str],
+    params: List[Any],
+    *,
+    sucursales: Optional[Sequence[Any]] = None,
+    punto_venta: Optional[Sequence[Any]] = None,
+    punto_venta_id: Optional[int] = None,
+) -> None:
+    """Filtros explícitos sucursal/PV (no van en whitelist filtrarPor)."""
+    suc_ids = _normalize_int_ids(sucursales)
+    if suc_ids:
+        ph = ",".join(["%s"] * len(suc_ids))
+        where.append(f"cc.CodSucursal IN ({ph})")
+        params.extend(suc_ids)
+
+    pv_ids = set(_normalize_int_ids(punto_venta))
+    scalar_pv = to_int_or_none(punto_venta_id)
+    if scalar_pv is not None:
+        pv_ids.add(scalar_pv)
+    if pv_ids:
+        pv_list = sorted(pv_ids)
+        ph = ",".join(["%s"] * len(pv_list))
+        where.append(f"cc.id_pv IN ({ph})")
+        params.extend(pv_list)
+
+
 def get_ventas_netas(
     *,
     base_empresa: str,
@@ -258,6 +299,8 @@ def get_ventas_netas(
     op_rango: Optional[str] = None,
     incluir_utilidades: bool = False,
     punto_venta_id: Optional[int] = None,
+    sucursales: Optional[Sequence[Any]] = None,
+    punto_venta: Optional[Sequence[Any]] = None,
     vendedor_a_cargo: Optional[Sequence[int]] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
@@ -344,9 +387,13 @@ def get_ventas_netas(
         )
         return empty
 
-    if punto_venta_id is not None:
-        where.append("cc.id_pv = %s")
-        params.append(int(punto_venta_id))
+    _append_sucursales_punto_venta(
+        where,
+        params,
+        sucursales=sucursales,
+        punto_venta=punto_venta,
+        punto_venta_id=punto_venta_id,
+    )
 
     where_clause = " AND ".join(where)
     sum_sql = _sum_monto_sql()

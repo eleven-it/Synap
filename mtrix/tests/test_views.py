@@ -1,5 +1,6 @@
 """Vistas Mtrix: permisos, triggered_by y contrato de preview."""
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,7 +10,7 @@ from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
 from mtrix.models import MtrixJob
-from mtrix.views import generar, hub
+from mtrix.views import api_proveedores_buscar, generar, hub
 
 
 class _UserConPermiso:
@@ -85,6 +86,20 @@ class MtrixViewsTests(TestCase):
         self.assertTrue(reverse("mtrix:preview", args=["ci"]).endswith("/preview/ci/"))
         self.assertEqual(reverse("mtrix:configuracion"), "/mtrix/configuracion/")
         self.assertEqual(reverse("mtrix:job_list"), "/mtrix/jobs/")
+        self.assertEqual(reverse("mtrix:api_proveedores_buscar"), "/mtrix/api/proveedores/buscar/")
+
+    @patch("mtrix.views.buscar_proveedores_mtrix")
+    def test_api_proveedores_buscar(self, mock_buscar):
+        mock_buscar.return_value = [
+            {"codigo": 5, "nombre": "DIVERSEY DE ARGENTINA SA", "cuit": "30-1"},
+        ]
+        request = self._session(self.factory.get("/mtrix/api/proveedores/buscar/", {"q": "diver"}))
+        request.user = _UserConPermiso()
+        response = api_proveedores_buscar(request)
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(payload["proveedores"][0]["codigo"], 5)
+        mock_buscar.assert_called_once_with("emp_ui", "diver", limite=15)
 
     def test_templates_sin_dialogos_nativos(self):
         root = Path(__file__).resolve().parents[1] / "templates"
@@ -93,3 +108,6 @@ class MtrixViewsTests(TestCase):
             self.assertNotIn("alert(", texto)
             self.assertNotIn("confirm(", texto)
             self.assertNotIn("prompt(", texto)
+        config = (root / "mtrix" / "configuracion.html").read_text(encoding="utf-8")
+        self.assertIn("mtrixProveedoresBuscador", config)
+        self.assertIn("mtrix-sugerencias-proveedor", config)

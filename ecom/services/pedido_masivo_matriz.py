@@ -26,9 +26,43 @@ from ecom.services.multiplo_empaque import (
     mensaje_multiplo_invalido,
     multiplo_empaque_venta,
 )
+from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 from ecom.services.vendedor_operativo import resolver_viajante_operativo
 
 logger = logging.getLogger(__name__)
+
+
+def obtener_draft_accesible(
+    *,
+    draft_id: int,
+    base_empresa: str,
+    id_usuario: int,
+    sess_user: Optional[Dict[str, Any]] = None,
+    ver_todos: Optional[bool] = None,
+) -> Optional[EcomPedidoMasivoDraft]:
+    """
+    Recupera un draft por pk + empresa.
+
+    - Dueño (``id_usuario``): siempre.
+    - Quien ``puede_ver_todos_pedidos`` (puesto Supervisor/Administracion,
+      ``todos_clientes=Si`` o ``ecom.pedidos.ver_todos``): cualquier draft
+      de la misma ``base_empresa`` (abrir y editar).
+    """
+    did = to_int_or_none(draft_id)
+    id_u = to_int_or_none(id_usuario)
+    base = (base_empresa or "").strip()
+    if did is None or id_u is None or not base:
+        return None
+    propio = EcomPedidoMasivoDraft.objects.filter(
+        pk=did, base_empresa=base, id_usuario=id_u
+    ).first()
+    if propio is not None:
+        return propio
+    if ver_todos is None:
+        ver_todos = bool(sess_user) and puede_ver_todos_pedidos(sess_user)
+    if not ver_todos:
+        return None
+    return EcomPedidoMasivoDraft.objects.filter(pk=did, base_empresa=base).first()
 
 
 def _dec(v: Any, default: str = "0") -> Decimal:
@@ -1002,9 +1036,11 @@ def obtener_o_crear_draft(
     cod_mov_origen: Optional[int] = None,
     solo_lectura: bool = False,
     consulta: bool = False,
+    sess_user: Optional[Dict[str, Any]] = None,
+    ver_todos: Optional[bool] = None,
 ) -> Tuple[Optional[EcomPedidoMasivoDraft], str]:
     """
-    Si ``draft_id``: valida ownership y cliente.
+    Si ``draft_id``: valida acceso (dueño o ``puede_ver_todos_pedidos``) y cliente.
     Si no: reutiliza borrador activo del mismo usuario+cliente+modo o crea uno nuevo.
     Con ``solo_lectura=True`` permite abrir drafts ``confirmado`` (matriz del resumen).
     """
@@ -1023,11 +1059,13 @@ def obtener_o_crear_draft(
     cod_origen = to_int_or_none(cod_mov_origen)
 
     if draft_id is not None:
-        d = EcomPedidoMasivoDraft.objects.filter(
-            pk=draft_id,
+        d = obtener_draft_accesible(
+            draft_id=draft_id,
             base_empresa=base_empresa,
             id_usuario=id_u,
-        ).first()
+            sess_user=sess_user,
+            ver_todos=ver_todos,
+        )
         if not d:
             return None, "Borrador no encontrado."
         if d.estado == EcomPedidoMasivoDraft.ESTADO_ARCHIVADO:
@@ -1482,17 +1520,22 @@ def anular_borrador_masivo_usuario(
     draft_id: int,
     id_usuario: int,
     base_empresa: str,
+    *,
+    sess_user: Optional[Dict[str, Any]] = None,
+    ver_todos: Optional[bool] = None,
 ) -> Tuple[bool, str]:
     """Anula un borrador masivo en edición (soft-delete recuperable vía hub)."""
     id_u = to_int_or_none(id_usuario)
     did = to_int_or_none(draft_id)
     if id_u is None or did is None or not base_empresa:
         return False, "Parámetros inválidos."
-    draft = EcomPedidoMasivoDraft.objects.filter(
-        pk=did,
+    draft = obtener_draft_accesible(
+        draft_id=did,
         base_empresa=base_empresa,
         id_usuario=id_u,
-    ).first()
+        sess_user=sess_user,
+        ver_todos=ver_todos,
+    )
     if not draft:
         return False, "Borrador no encontrado."
     if draft.estado not in (

@@ -326,6 +326,37 @@ def api_ingreso_renglon_update(request, orden):
 
 
 @tiene_permiso("stock.crear_movimiento")
+@require_http_methods(["POST"])
+def api_ingreso_renglones_sincronizar_depositos(request):
+    """POST: alinea CodDeposito de todos los renglones temporales con la cabecera.
+
+    Body: CodDeposito (origen), cod_deposito_destino (opc, transferencia).
+    Limpia lotes de los renglones (el lote es por depósito).
+    """
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido."}, status=400)
+    cod_dep = data.get("CodDeposito")
+    if cod_dep is None or cod_dep == "":
+        return JsonResponse({"error": "Depósito origen obligatorio."}, status=400)
+    resultado, afectadas = svc.sincronizar_depositos_renglones_temporales(
+        ctx["base_empresa"],
+        ctx["id_usuario"],
+        cod_dep,
+        data.get("cod_deposito_destino"),
+        limpiar_lotes=True,
+    )
+    if resultado:
+        return JsonResponse({"error": resultado.get("error", "Error al sincronizar depósitos.")}, status=400)
+    renglones = svc.listar_renglones_temporales(ctx["base_empresa"], ctx["id_usuario"])
+    return JsonResponse({"ok": True, "actualizados": afectadas, "renglones": renglones})
+
+
+@tiene_permiso("stock.crear_movimiento")
 @require_http_methods(["GET"])
 def api_ingreso_proyectos(request):
     """GET: lista proyectos (Ninguno + En curso) para el modal Lista_Proyecto."""

@@ -393,7 +393,9 @@
 
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
   /** Persistencia local de filtros (mismo navegador / perfil). */
-  const FILTERS_STORAGE_KEY = "synap_cc_filters_v1";
+  const FILTERS_STORAGE_KEY = "synap_cc_filters_v2";
+  const FILTERS_API_URL = "/api/reports/filters/";
+  let filterTagsReady = false;
   /** Presentación unidades / unidades+docenas en tarjeta Inventario. */
   const INV_PRESENTACION_KEY = "synap_cc_inv_presentacion_v1";
 
@@ -416,29 +418,63 @@
     return m;
   }
 
+  function selectedFilterIds(selectId) {
+    const sel = el(selectId);
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions)
+      .map((o) => o.value)
+      .filter((v) => v && v !== "");
+  }
+
   function readFilters() {
     const t = todayIso();
     const fi = el("cc-fecha-inicio")?.value || t;
     const ff = el("cc-fecha-fin")?.value || t;
-    const suc = el("cc-sucursal")?.value || "";
-    return { fecha_inicio: fi, fecha_fin: ff, sucursal: suc };
+    return {
+      fecha_inicio: fi,
+      fecha_fin: ff,
+      sucursales: selectedFilterIds("sucursales"),
+      puntos_venta: selectedFilterIds("punto_venta"),
+    };
   }
 
   function loadPersistedFilters() {
     try {
       const raw = window.localStorage.getItem(FILTERS_STORAGE_KEY);
-      if (!raw) return null;
+      if (!raw) {
+        const legacyRaw = window.localStorage.getItem("synap_cc_filters_v1");
+        if (legacyRaw) {
+          const legacy = JSON.parse(legacyRaw);
+          if (legacy && legacy.sucursal) {
+            return {
+              fecha_inicio: legacy.fecha_inicio || "",
+              fecha_fin: legacy.fecha_fin || "",
+              sucursales: [String(legacy.sucursal)],
+              puntos_venta: [],
+            };
+          }
+        }
+        return null;
+      }
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") return null;
       const fi = String(parsed.fecha_inicio || "").trim();
       const ff = String(parsed.fecha_fin || "").trim();
-      const suc = String(parsed.sucursal || "").trim();
       if (fi && !ISO_DATE.test(fi)) return null;
       if (ff && !ISO_DATE.test(ff)) return null;
+      const sucursales = Array.isArray(parsed.sucursales)
+        ? parsed.sucursales.map(String).filter(Boolean)
+        : parsed.sucursal
+          ? [String(parsed.sucursal)]
+          : [];
+      const puntos_venta = Array.isArray(parsed.puntos_venta)
+        ? parsed.puntos_venta.map(String).filter(Boolean)
+        : [];
       return {
         fecha_inicio: fi || "",
         fecha_fin: ff || "",
-        sucursal: suc,
+        sucursales,
+        puntos_venta,
       };
     } catch (e) {
       return null;
@@ -453,7 +489,8 @@
         JSON.stringify({
           fecha_inicio: f.fecha_inicio || "",
           fecha_fin: f.fecha_fin || "",
-          sucursal: f.sucursal || "",
+          sucursales: f.sucursales || [],
+          puntos_venta: f.puntos_venta || [],
         }),
       );
     } catch (e) {
@@ -468,13 +505,34 @@
       const url = new URL(window.location.href);
       url.searchParams.set("fecha_inicio", f.fecha_inicio);
       url.searchParams.set("fecha_fin", f.fecha_fin);
-      if (f.sucursal) url.searchParams.set("sucursal", f.sucursal);
-      else url.searchParams.delete("sucursal");
+      url.searchParams.delete("sucursal");
+      url.searchParams.delete("sucursales");
+      url.searchParams.delete("punto_venta");
+      url.searchParams.delete("puntos_venta");
+      (f.sucursales || []).forEach((id) => url.searchParams.append("sucursales", id));
+      (f.puntos_venta || []).forEach((id) => url.searchParams.append("punto_venta", id));
       url.searchParams.delete("fecha");
       window.history.replaceState({}, "", url.pathname + url.search + url.hash);
     } catch (e) {
       /* ignore */
     }
+  }
+
+  function appendFilterParams(q, filters) {
+    const f = filters || readFilters();
+    (f.sucursales || []).forEach((id) => q.append("sucursales", id));
+    (f.puntos_venta || []).forEach((id) => q.append("punto_venta", id));
+  }
+
+  function buildQuery(extra) {
+    const f = readFilters();
+    const q = new URLSearchParams({
+      fecha_inicio: f.fecha_inicio,
+      fecha_fin: f.fecha_fin,
+      ...(extra || {}),
+    });
+    appendFilterParams(q, f);
+    return q.toString();
   }
 
   function rememberFilters() {
@@ -486,17 +544,6 @@
 
   function isSingleDayPeriod(f) {
     return f && f.fecha_inicio === f.fecha_fin;
-  }
-
-  function buildQuery(extra) {
-    const f = readFilters();
-    const q = new URLSearchParams({
-      fecha_inicio: f.fecha_inicio,
-      fecha_fin: f.fecha_fin,
-      ...(extra || {}),
-    });
-    if (f.sucursal) q.set("sucursal", f.sucursal);
-    return q.toString();
   }
 
   /** Enlaces a informes externos con el período y sucursal actuales. */
@@ -531,10 +578,32 @@
     const ffEl = el("cc-fecha-fin");
     if (fiEl) fiEl.value = fi;
     if (ffEl) ffEl.value = ff;
-    const suc = (params.get("sucursal") || "").trim();
-    const sucEl = el("cc-sucursal");
-    if (suc && sucEl) sucEl.dataset.pendingValue = suc;
+    const pending = {
+      sucursales: params.getAll("sucursales"),
+      puntos_venta: params.getAll("punto_venta"),
+    };
+    const legacySuc = (params.get("sucursal") || "").trim();
+    if (!pending.sucursales.length && legacySuc) {
+      pending.sucursales = [legacySuc];
+    }
+    window.__ccPendingFilterIds = pending;
     return true;
+  }
+
+  function applyPendingFilterSelections() {
+    const pending = window.__ccPendingFilterIds;
+    if (!pending) return;
+    [["sucursales", pending.sucursales], ["punto_venta", pending.puntos_venta]].forEach(
+      ([selectId, ids]) => {
+        const sel = el(selectId);
+        if (!sel || !Array.isArray(ids) || !ids.length) return;
+        Array.from(sel.options).forEach((opt) => {
+          opt.selected = ids.includes(String(opt.value));
+        });
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+    );
+    delete window.__ccPendingFilterIds;
   }
 
   function applyPeriodFromStorage() {
@@ -551,9 +620,11 @@
       ffEl.value = saved.fecha_fin;
       applied = true;
     }
-    if (saved.sucursal) {
-      const sucEl = el("cc-sucursal");
-      if (sucEl) sucEl.dataset.pendingValue = saved.sucursal;
+    if (saved.sucursales?.length || saved.puntos_venta?.length) {
+      window.__ccPendingFilterIds = {
+        sucursales: saved.sucursales || [],
+        puntos_venta: saved.puntos_venta || [],
+      };
     }
     return applied;
   }
@@ -659,29 +730,40 @@
     box.classList.toggle("hidden", !msg);
   }
 
-  function fillSucursales(list, selected) {
-    const sel = el("cc-sucursal");
-    if (!sel) return;
-    const pending = (sel.dataset.pendingValue || "").trim();
-    const cur =
-      selected != null && selected !== ""
-        ? String(selected)
-        : pending || sel.value;
-    sel.innerHTML = '<option value="">Todas</option>';
-    (list || []).forEach((s) => {
+  function poblarSelectTags(selectId, items, valueKey, labelKey) {
+    const sel = el(selectId);
+    if (!sel || !Array.isArray(items)) return;
+    const prev = new Set(selectedFilterIds(selectId));
+    sel.innerHTML = "";
+    items.forEach((item) => {
       const opt = document.createElement("option");
-      opt.value = String(s.id_sucursal);
-      opt.textContent = s.nombre_sucursal || `Sucursal ${s.id_sucursal}`;
+      const val = item[valueKey] != null ? item[valueKey] : item.value;
+      opt.value = String(val);
+      opt.textContent = String(item[labelKey] != null ? item[labelKey] : item.label || val);
+      if (prev.has(opt.value)) opt.selected = true;
       sel.appendChild(opt);
     });
-    if (cur) {
-      sel.value = cur;
-      if (sel.value !== cur) {
-        // Sucursal guardada no está en el catálogo actual: mantener "Todas"
-        sel.value = "";
+  }
+
+  async function initFilterTags() {
+    try {
+      const [sucRes, pvRes] = await Promise.all([
+        fetch(`${FILTERS_API_URL}?type=sucursales`, { credentials: "same-origin" }),
+        fetch(`${FILTERS_API_URL}?type=puntos_venta`, { credentials: "same-origin" }),
+      ]);
+      const sucPayload = sucRes.ok ? await sucRes.json() : {};
+      const pvPayload = pvRes.ok ? await pvRes.json() : {};
+      poblarSelectTags("sucursales", sucPayload.sucursales || [], "value", "label");
+      poblarSelectTags("punto_venta", pvPayload.puntos_venta || [], "value", "label");
+      if (typeof window.initializeTagsFilter === "function") {
+        window.initializeTagsFilter("sucursales", "sucursales");
+        window.initializeTagsFilter("punto_venta", "puntos_venta");
+        filterTagsReady = true;
       }
+      applyPendingFilterSelections();
+    } catch (e) {
+      /* filtros opcionales */
     }
-    if (sel.dataset.pendingValue) delete sel.dataset.pendingValue;
   }
 
   function kpiCard(label, value, theme) {
@@ -723,7 +805,12 @@
     const base = sameDay
       ? `Período: ${isoToDisplay(f.fecha_inicio)}`
       : `Período: ${isoToDisplay(f.fecha_inicio)} — ${isoToDisplay(f.fecha_fin)}`;
-    lbl.textContent = loading ? `${base} · Cargando áreas…` : base;
+    const scope =
+      typeof window.formatSucursalPvScopeText === "function"
+        ? window.formatSucursalPvScopeText()
+        : "";
+    const full = scope ? `${base} · ${scope}` : base;
+    lbl.textContent = loading ? `${full} · Cargando áreas…` : full;
   }
 
   function renderGlobalKpis(areas, ventasDia) {
@@ -1178,7 +1265,7 @@
       fecha_inicio: f.fecha_inicio,
       fecha_fin: f.fecha_fin,
     });
-    if (f.sucursal) q.set("sucursal", f.sucursal);
+    appendFilterParams(q, f);
     return q.toString();
   }
 
@@ -1191,7 +1278,6 @@
       const data = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
       if (loadToken !== dashboardLoadToken) return;
       ventasDiaCache = data;
-      fillSucursales(data.sucursales_disponibles, readFilters().sucursal);
       renderGlobalKpis(areasCache, ventasDiaCache);
     } catch (e) {
       console.warn("Resumen ventas del día:", e);
@@ -1253,7 +1339,6 @@
     try {
       const q = buildQuery();
       const data = await fetchJson(`${cfg.dashboardUrl}?${q}`);
-      fillSucursales(data.sucursales_disponibles, readFilters().sucursal);
       updatePeriodoLabel(false);
       areasCache = data.areas || {};
       let ventasDia = null;
@@ -1451,27 +1536,19 @@
     const saved = loadPersistedFilters();
     if (!fromUrl && saved) {
       applyPeriodFromStorage();
-    } else if (saved?.sucursal) {
-      // URL trae período pero no sucursal: completar desde localStorage
-      const sucEl = el("cc-sucursal");
-      if (sucEl && !sucEl.dataset.pendingValue) {
-        sucEl.dataset.pendingValue = saved.sucursal;
+    } else if (saved && (saved.sucursales?.length || saved.puntos_venta?.length)) {
+      if (!window.__ccPendingFilterIds) {
+        window.__ccPendingFilterIds = {
+          sucursales: saved.sucursales || [],
+          puntos_venta: saved.puntos_venta || [],
+        };
       }
     }
     const t = todayIso();
     const fi = el("cc-fecha-inicio");
     const ff = el("cc-fecha-fin");
-    const suc = el("cc-sucursal");
     if (fi && !fi.value) fi.value = t;
     if (ff && !ff.value) ff.value = t;
-    // Restaurar sucursal si ya hay opciones (p. ej. SSR); si no, queda en pendingValue
-    if (suc && suc.dataset.pendingValue) {
-      const pending = suc.dataset.pendingValue;
-      if ([...suc.options].some((o) => o.value === pending)) {
-        suc.value = pending;
-        delete suc.dataset.pendingValue;
-      }
-    }
     const onFilterChange = () => {
       rememberFilters();
       syncReportLinks();
@@ -1479,7 +1556,8 @@
     };
     fi?.addEventListener("change", onFilterChange);
     ff?.addEventListener("change", onFilterChange);
-    suc?.addEventListener("change", onFilterChange);
+    el("sucursales")?.addEventListener("change", onFilterChange);
+    el("punto_venta")?.addEventListener("change", onFilterChange);
     rememberFilters();
     syncReportLinks();
   }
@@ -1628,9 +1706,10 @@
     bindAreasConfig();
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     initDates();
     bind();
+    await initFilterTags();
     loadDashboard();
   });
 })();

@@ -49,6 +49,9 @@ REDONDEO_PC = 300
 UMBRAL_REDONDEO = Decimal("1.00")
 # Marca de trazabilidad en cada renglón regenerado (permite localizar/revertir).
 MARCA_REGEN = "REGEN auditoria (bug factura/OP sin asiento)"
+# Gating REC-18 alineado a REC-20: solo PV con cont='Si' (no sucursales.cont).
+_JOIN_PV_CONT = "JOIN punto_venta pv ON pv.id_punto_venta = cp.id_pv"
+_FILTRO_PV_CONT = " AND COALESCE(pv.cont,'No')='Si' "
 
 
 def d(v):
@@ -407,9 +410,9 @@ def validate(mode):
     repo = Repo(conn)
     cur = repo.cur()
     cur.execute(
-        """SELECT cp.* FROM cuentaproveedor cp
-           JOIN sucursales s ON s.id_sucursal=cp.CodSucursal
-           WHERE s.cont='Si' AND COALESCE(cp.Anulado,'No')<>'Si'
+        f"""SELECT cp.* FROM cuentaproveedor cp
+           {_JOIN_PV_CONT}
+           WHERE COALESCE(cp.Anulado,'No')<>'Si'{_FILTRO_PV_CONT}
              AND cp.TipoComprobante IN %s AND cp.CodigoMovimiento<>0
              AND EXISTS (SELECT 1 FROM cont_asiento ca WHERE ca.codigo_movimiento=cp.CodigoMovimiento)""",
         (TIPOS_FACTURA,),
@@ -456,9 +459,9 @@ def validate_op():
     repo = Repo(conn)
     cur = repo.cur()
     cur.execute(
-        """SELECT cp.* FROM cuentaproveedor cp
-           JOIN sucursales s ON s.id_sucursal=cp.CodSucursal
-           WHERE s.cont='Si' AND COALESCE(cp.Anulado,'No')<>'Si'
+        f"""SELECT cp.* FROM cuentaproveedor cp
+           {_JOIN_PV_CONT}
+           WHERE COALESCE(cp.Anulado,'No')<>'Si'{_FILTRO_PV_CONT}
              AND cp.TipoComprobante='OP' AND cp.CodigoMovimiento<>0
              AND EXISTS (SELECT 1 FROM cont_asiento ca WHERE ca.codigo_movimiento=cp.CodigoMovimiento)"""
     )
@@ -514,9 +517,9 @@ def dryrun_missing():
     repo = Repo(conn)
     cur = repo.cur()
     cur.execute(
-        """SELECT cp.* FROM cuentaproveedor cp
-           JOIN sucursales s ON s.id_sucursal=cp.CodSucursal
-           WHERE s.cont='Si' AND COALESCE(cp.Anulado,'No')<>'Si'
+        f"""SELECT cp.* FROM cuentaproveedor cp
+           {_JOIN_PV_CONT}
+           WHERE COALESCE(cp.Anulado,'No')<>'Si'{_FILTRO_PV_CONT}
              AND cp.TipoComprobante IN ('FA','FC','OP') AND cp.CodigoMovimiento<>0
              AND NOT EXISTS (
                  SELECT 1 FROM cont_asiento ca
@@ -678,9 +681,9 @@ def apply_missing():
     repo = Repo(conn)
     cur = repo.cur()
     cur.execute(
-        """SELECT cp.* FROM cuentaproveedor cp
-           JOIN sucursales s ON s.id_sucursal=cp.CodSucursal
-           WHERE s.cont='Si' AND COALESCE(cp.Anulado,'No')<>'Si'
+        f"""SELECT cp.* FROM cuentaproveedor cp
+           {_JOIN_PV_CONT}
+           WHERE COALESCE(cp.Anulado,'No')<>'Si'{_FILTRO_PV_CONT}
              AND cp.TipoComprobante IN ('FA','FC','OP') AND cp.CodigoMovimiento<>0
              AND NOT EXISTS (
                  SELECT 1 FROM cont_asiento ca

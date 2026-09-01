@@ -33,22 +33,26 @@ def job_dir(base_empresa: str, job_id) -> Path:
     return root
 
 
-def config_to_export(cfg: MtrixConfig) -> ExportConfig:
+def config_to_export(cfg: MtrixConfig, *, origen: str = MtrixJob.Origen.UI) -> ExportConfig:
+    usar_personalizada = origen != MtrixJob.Origen.CRON and bool(cfg.fecha_personalizada)
     desde, hasta = resolver_fechas_mysql(
         cfg.base_empresa,
-        personalizada=cfg.fecha_personalizada,
+        personalizada=usar_personalizada,
         fecha_inicio=cfg.fecha_inicio,
         fecha_final=cfg.fecha_final,
         dias=cfg.dias_a_procesar,
+        last_vd_enviado_hasta=cfg.last_vd_enviado_hasta,
+        usar_personalizada=usar_personalizada,
     )
     fecha_archivo = hasta.replace("-", "")
+    cuit = obtener_cnpj_distribuidor(cfg.base_empresa)
     return ExportConfig(
         base_empresa=cfg.base_empresa,
         fecha_desde=desde,
         fecha_hasta=hasta,
         proveedores=parse_proveedores(cfg.codigo_proveedor_principal),
-        cnpj_fornecedor=cfg.cnpj_fornecedor,
-        cnpj_distribuidor=obtener_cnpj_distribuidor(cfg.base_empresa),
+        cnpj_fornecedor=cuit,
+        cnpj_distribuidor=cuit,
         razon_social_fornecedor=obtener_razon_empresa(cfg.base_empresa),
         pvnf=bool(cfg.pvnf),
         multiplicador_cantidad=cfg.multiplicador_cantidad or 1,
@@ -110,7 +114,7 @@ def ejecutar_job(job_id) -> MtrixJob:
     job.started_at = timezone.now()
     job.save(update_fields=["status", "started_at"])
     try:
-        export_cfg = config_to_export(cfg_row)
+        export_cfg = config_to_export(cfg_row, origen=job.origen)
         job.fecha_desde = export_cfg.fecha_desde
         job.fecha_hasta = export_cfg.fecha_hasta
         job.save(update_fields=["fecha_desde", "fecha_hasta"])

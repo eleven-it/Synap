@@ -8,6 +8,8 @@ from pathlib import Path
 
 from django.conf import settings
 
+from datetime import date
+
 from mtrix.models import MtrixArtifact, MtrixConfig, MtrixJob
 from mtrix.services.crypto import decrypt_secret
 
@@ -84,6 +86,30 @@ def test_connection(cfg: MtrixConfig) -> SftpResult:
                 pass
 
 
+def avanzar_marca_agua_vd(cfg: MtrixConfig, job: MtrixJob) -> bool:
+    """Avanza last_vd_enviado_hasta si el envío de la ventana fue OK. No retrocede."""
+    if not job.fecha_hasta:
+        return False
+    arts = list(job.artifacts.all())
+    if any(a.sftp_status == MtrixArtifact.SftpStatus.FAILED for a in arts):
+        return False
+    if arts and all(a.sftp_status == MtrixArtifact.SftpStatus.SKIPPED for a in arts):
+        return False
+    vds = [a for a in arts if a.tipo == MtrixArtifact.Tipo.VD]
+    if vds and any(a.sftp_status != MtrixArtifact.SftpStatus.SUCCESS for a in vds):
+        return False
+    nuevo = job.fecha_hasta
+    if hasattr(nuevo, "isoformat"):
+        pass
+    else:
+        nuevo = date.fromisoformat(str(nuevo)[:10])
+    if cfg.last_vd_enviado_hasta and nuevo < cfg.last_vd_enviado_hasta:
+        return False
+    cfg.last_vd_enviado_hasta = nuevo
+    cfg.save(update_fields=["last_vd_enviado_hasta"])
+    return True
+
+
 def enviar_job(job: MtrixJob, cfg: MtrixConfig) -> SftpResult:
     host = (cfg.sftp_host or "").strip()
     user = (cfg.sftp_user or "").strip()
@@ -120,6 +146,9 @@ def enviar_job(job: MtrixJob, cfg: MtrixConfig) -> SftpResult:
             art.sftp_status = MtrixArtifact.SftpStatus.SUCCESS
             art.sftp_message = dest
             art.save(update_fields=["sftp_status", "sftp_message"])
+        if job.artifacts.filter(sftp_status=MtrixArtifact.SftpStatus.FAILED).exists():
+            return SftpResult(False, "Envío SFTP incompleto: hay archivos con error.")
+        avanzar_marca_agua_vd(cfg, job)
         return SftpResult(True, "Archivos enviados por SFTP.")
     except Exception as exc:
         logger.exception("Upload SFTP Mtrix falló: %s", exc)

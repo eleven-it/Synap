@@ -9,7 +9,9 @@ from django.test import TestCase, override_settings
 from mtrix.models import MtrixArtifact, MtrixConfig, MtrixJob
 from mtrix.services import sftp as sftp_mod
 from mtrix.services.crypto import encrypt_secret
-from mtrix.services.sftp import enviar_job
+from datetime import date
+
+from mtrix.services.sftp import avanzar_marca_agua_vd, enviar_job
 
 
 class SftpTests(TestCase):
@@ -91,3 +93,73 @@ class SftpTests(TestCase):
             self.assertTrue(result.success)
             mock_sftp.put.assert_called()
             self.assertTrue(local.exists())
+
+    def test_sftp_ok_avanza_marca_y_no_retrocede(self):
+        cfg = MtrixConfig.objects.create(base_empresa="emp_marca")
+        job = MtrixJob.objects.create(
+            base_empresa="emp_marca",
+            status=MtrixJob.Estado.COMPLETED,
+            fecha_hasta=date(2026, 8, 27),
+        )
+        MtrixArtifact.objects.create(
+            job=job,
+            tipo="VD",
+            filename="VD.csv",
+            relative_path="x",
+            sftp_status=MtrixArtifact.SftpStatus.SUCCESS,
+        )
+        self.assertTrue(avanzar_marca_agua_vd(cfg, job))
+        cfg.refresh_from_db()
+        self.assertEqual(cfg.last_vd_enviado_hasta, date(2026, 8, 27))
+
+        job_viejo = MtrixJob.objects.create(
+            base_empresa="emp_marca",
+            status=MtrixJob.Estado.COMPLETED,
+            fecha_hasta=date(2026, 6, 1),
+        )
+        MtrixArtifact.objects.create(
+            job=job_viejo,
+            tipo="VD",
+            filename="VD2.csv",
+            relative_path="y",
+            sftp_status=MtrixArtifact.SftpStatus.SUCCESS,
+        )
+        self.assertFalse(avanzar_marca_agua_vd(cfg, job_viejo))
+        cfg.refresh_from_db()
+        self.assertEqual(cfg.last_vd_enviado_hasta, date(2026, 8, 27))
+
+    def test_sftp_fallido_no_avanza_marca(self):
+        cfg = MtrixConfig.objects.create(base_empresa="emp_marca2")
+        job = MtrixJob.objects.create(
+            base_empresa="emp_marca2",
+            status=MtrixJob.Estado.COMPLETED,
+            fecha_hasta=date(2026, 8, 27),
+        )
+        MtrixArtifact.objects.create(
+            job=job,
+            tipo="VD",
+            filename="VD.csv",
+            relative_path="x",
+            sftp_status=MtrixArtifact.SftpStatus.FAILED,
+        )
+        self.assertFalse(avanzar_marca_agua_vd(cfg, job))
+        cfg.refresh_from_db()
+        self.assertIsNone(cfg.last_vd_enviado_hasta)
+
+    def test_sftp_sin_config_no_avanza_marca(self):
+        cfg = MtrixConfig.objects.create(base_empresa="emp_marca3")
+        job = MtrixJob.objects.create(
+            base_empresa="emp_marca3",
+            status=MtrixJob.Estado.COMPLETED,
+            fecha_hasta=date(2026, 8, 27),
+        )
+        MtrixArtifact.objects.create(
+            job=job,
+            tipo="VD",
+            filename="VD.csv",
+            relative_path="x",
+        )
+        result = enviar_job(job, cfg)
+        self.assertTrue(result.success)
+        cfg.refresh_from_db()
+        self.assertIsNone(cfg.last_vd_enviado_hasta)

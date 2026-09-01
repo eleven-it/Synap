@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from mtrix.services.csv_serializer import cnpj_cliente_mtrix, ean_completo
+from mtrix.services.csv_serializer import cep_mtrix, cnpj_cliente_mtrix, ean_mtrix
 
 
 def _fecha_pantalla(valor: Any) -> str:
@@ -27,15 +27,27 @@ def format_row(tipo: str, row: dict) -> dict:
     if tipo == "CI":
         salida["CNPJ_CLIENTE"] = cnpj_cliente_mtrix(row.get("CNPJ_CLIENTE"), row.get("RAZAO_SOCIAL"))
         salida["CIDADE"] = row.get("CIDADE") or row.get("CIUDAD")
+        salida["CEP"] = cep_mtrix(row.get("CEP"))
     elif tipo == "VD":
         salida["COD_CLIENTE"] = cnpj_cliente_mtrix(
             row.get("COD_CLIENTE") or row.get("CNPJ_CLIENTE"),
             row.get("RAZAO_SOCIAL"),
         )
         salida["DATA"] = _fecha_pantalla(row.get("DATA"))
-        salida["EAN"] = ean_completo(row.get("EAN"))
+        salida["CEP"] = cep_mtrix(row.get("CEP"))
+        salida["EAN"] = ean_mtrix(
+            row.get("EAN"),
+            row.get("CODIGO_INTERNO"),
+            row.get("CODIGO_PRODUTO"),
+            row.get("ID_ART") or row.get("id_articulo"),
+        ) or "NA"
     elif tipo in {"PD", "ES"}:
-        salida["EAN"] = ean_completo(row.get("EAN"))
+        salida["EAN"] = ean_mtrix(
+            row.get("EAN"),
+            row.get("CODIGO_INTERNO"),
+            row.get("CODIGO_PRODUTO"),
+            row.get("ID_ART") or row.get("id_articulo"),
+        ) or "NA"
         if tipo == "PD":
             salida["DT_ARQUIVO"] = _fecha_pantalla(row.get("DT_ARQUIVO") or row.get("DATA"))
         if tipo == "ES":

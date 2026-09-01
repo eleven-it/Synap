@@ -8,8 +8,11 @@ from django.test import SimpleTestCase
 from mtrix.services import crypto as crypto_mod
 from mtrix.services.csv_serializer import (
     HEADERS,
+    agregar_fv,
     agregar_vd,
+    cep_mtrix,
     cnpj_cliente_mtrix,
+    ean_mtrix,
     formatear_representatividade,
     nombre_archivo,
     serialize,
@@ -266,6 +269,117 @@ class CsvSerializerTests(SimpleTestCase):
         texto = data.decode("latin-1")
         self.assertIn(";0;", texto)
         self.assertNotIn("99999999999", texto)
+
+    def test_fv_deduplica_mismo_cuit_distinto_cliente_y_vendedor(self):
+        filas = [
+            {
+                "CNPJ_CLIENTE": "20111111112",
+                "COD_CLIENTE": "100",
+                "COD_VENDEDOR": "10",
+                "NOME_VENDEDOR": "ZETA",
+            },
+            {
+                "CNPJ_CLIENTE": "20111111112",
+                "COD_CLIENTE": "200",
+                "COD_VENDEDOR": "3",
+                "NOME_VENDEDOR": "ANA",
+            },
+            {
+                "CNPJ_CLIENTE": "20111111112",
+                "COD_CLIENTE": "300",
+                "COD_VENDEDOR": "5",
+                "NOME_VENDEDOR": "BOB",
+            },
+        ]
+        agrupados = agregar_fv(filas)
+        self.assertEqual(len(agrupados), 1)
+        self.assertEqual(agrupados[0]["COD_VENDEDOR"], "3")
+        self.assertEqual(agrupados[0]["NOME_VENDEDOR"], "ANA")
+        _fn, data = serialize("FV", filas, CFG, datetime(2026, 8, 12, 11, 0, 0))
+        lineas = [ln for ln in data.decode("latin-1").strip().split("\r\n") if ln]
+        self.assertEqual(len(lineas), 2)
+        self.assertIn(";3;ANA", lineas[1])
+
+    def test_fv_dos_cuits_distintos_dos_lineas(self):
+        filas = [
+            {"CNPJ_CLIENTE": "20111111112", "COD_VENDEDOR": "1", "NOME_VENDEDOR": "A"},
+            {"CNPJ_CLIENTE": "20999999999", "COD_VENDEDOR": "2", "NOME_VENDEDOR": "B"},
+        ]
+        agrupados = agregar_fv(filas)
+        self.assertEqual(len(agrupados), 2)
+        self.assertEqual([r["CNPJ_CLIENTE"] for r in agrupados], ["20111111112", "20999999999"])
+        _fn, data = serialize("FV", filas, CFG, datetime(2026, 8, 12, 11, 0, 0))
+        lineas = [ln for ln in data.decode("latin-1").strip().split("\r\n") if ln]
+        self.assertEqual(len(lineas), 3)
+
+    def test_fv_orden_estable_por_primera_aparicion_cuit(self):
+        filas = [
+            {"CNPJ_CLIENTE": "30111111111", "COD_VENDEDOR": "1", "NOME_VENDEDOR": "A"},
+            {"CNPJ_CLIENTE": "20111111112", "COD_VENDEDOR": "2", "NOME_VENDEDOR": "B"},
+            {"CNPJ_CLIENTE": "30111111111", "COD_VENDEDOR": "9", "NOME_VENDEDOR": "C"},
+        ]
+        agrupados = agregar_fv(filas)
+        self.assertEqual([r["CNPJ_CLIENTE"] for r in agrupados], ["30111111111", "20111111112"])
+
+    def test_fv_empate_vendedor_por_nombre(self):
+        filas = [
+            {"CNPJ_CLIENTE": "20111111112", "COD_VENDEDOR": "5", "NOME_VENDEDOR": "ZULIA"},
+            {"CNPJ_CLIENTE": "20111111112", "COD_VENDEDOR": "5", "NOME_VENDEDOR": "ANA"},
+        ]
+        agrupados = agregar_fv(filas)
+        self.assertEqual(len(agrupados), 1)
+        self.assertEqual(agrupados[0]["NOME_VENDEDOR"], "ANA")
+
+    def test_cep_incompleto_es_9400(self):
+        self.assertEqual(cep_mtrix("0"), "9400")
+        self.assertEqual(cep_mtrix(""), "9400")
+        self.assertEqual(cep_mtrix("NA"), "9400")
+        self.assertEqual(cep_mtrix("123"), "9400")
+        self.assertEqual(cep_mtrix("0000"), "9400")
+        self.assertEqual(cep_mtrix("9405"), "9405")
+        _fn, data = serialize(
+            "CI",
+            [
+                {
+                    "CNPJ_CLIENTE": "20111",
+                    "RAZAO_SOCIAL": "ACME",
+                    "ENDERECO": "NA",
+                    "BAIRRO": "NA",
+                    "CEP": "0",
+                    "CIDADE": "NA",
+                    "ESTADO": "NA",
+                    "NOME_RESPONSAVEL": "NA",
+                    "TELEFONE": "",
+                    "ROTA": "RUTA",
+                    "TIPO_LOJ": "Tienda",
+                    "REPRESENTATIVIDADE": "0,00",
+                }
+            ],
+            CFG,
+            datetime(2026, 8, 12, 11, 0, 0),
+        )
+        self.assertIn(";9400;NA;NA;", data.decode("latin-1"))
+
+    def test_ean_cero_usa_codigo_interno(self):
+        self.assertEqual(ean_mtrix("0", "168114"), "168114")
+        self.assertIsNone(ean_mtrix("0", "", None))
+        _fn, data = serialize(
+            "ES",
+            [{"EAN": "0", "CODIGO_INTERNO": "168114", "QTDE_TOTAL": 6}],
+            CFG,
+            datetime(2026, 8, 12, 11, 0, 0),
+        )
+        self.assertIn(";168114;6", data.decode("latin-1"))
+        self.assertNotIn(";0;6", data.decode("latin-1"))
+
+    def test_ean_cero_sin_identificador_se_omite(self):
+        _fn, data = serialize(
+            "ES",
+            [{"EAN": "0", "QTDE_TOTAL": 20}],
+            CFG,
+            datetime(2026, 8, 12, 11, 0, 0),
+        )
+        self.assertEqual(len(data.decode("latin-1").strip().split("\r\n")), 1)
 
     def test_pd_codigo_vacio_es_na(self):
         _fn, data = serialize(

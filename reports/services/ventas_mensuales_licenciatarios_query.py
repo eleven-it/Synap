@@ -8,7 +8,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Iterable, List, Optional, Sequence
 
-from core.utils.administranet_types import str_or_default, to_decimal_or_none
+from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 from reports.models import MonthlyReportingPack
 from reports.services.connection_pool import get_mysql_pool
 from reports.services.ventas_marcas_mensual_rules import (
@@ -34,12 +34,35 @@ class AnetSalesRow:
     superart: str = ""
 
 
-def build_anet_sales_sql(*, include_superart: bool = False) -> str:
+def _normalize_scope_id_list(values: Optional[Sequence]) -> List[int]:
+    """Normaliza listas de ids AdministraNET (sucursal / punto de venta)."""
+    out: List[int] = []
+    for raw in values or []:
+        parsed = to_int_or_none(raw)
+        if parsed is not None:
+            out.append(parsed)
+    return out
+
+
+def build_anet_sales_sql(
+    *,
+    include_superart: bool = False,
+    sucursales: Optional[Sequence[int]] = None,
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> str:
     """Arma SQL agregado pack×cliente×mes reutilizando reglas VMM."""
     signo_qty = sql_signo_qty_expr()
     signo_imp = sql_signo_imp_post_pie_expr()
     factor_sql = sql_factor_docenas_expr()
-    where_parts = sql_base_where_clauses()
+    where_parts = list(sql_base_where_clauses())
+    suc_ids = _normalize_scope_id_list(sucursales)
+    pv_ids = _normalize_scope_id_list(puntos_venta)
+    if suc_ids:
+        ph = ",".join(["%s"] * len(suc_ids))
+        where_parts.append(f"cc.CodSucursal IN ({ph})")
+    if pv_ids:
+        ph = ",".join(["%s"] * len(pv_ids))
+        where_parts.append(f"cc.id_pv IN ({ph})")
     superart_select = ", COALESCE(art.id_manual, '') AS superart" if include_superart else ""
     superart_group = ", art.id_manual" if include_superart else ""
     # articulo usa CodigoMarca (FK a marca.CodMarca). pack.marca_anet es NombreMarca
@@ -124,6 +147,8 @@ def fetch_anet_sales(
     date_from: date,
     date_to: date,
     cliente_ids: Optional[Sequence[int]] = None,
+    sucursales: Optional[Sequence[int]] = None,
+    puntos_venta: Optional[Sequence[int]] = None,
     classify_genero=None,
     register_unknown_superart=None,
 ) -> List[AnetSalesRow]:
@@ -133,10 +158,18 @@ def fetch_anet_sales(
     AdministraNET: SOLO SELECT.
     """
     include_superart = pack.template_family == MonthlyReportingPack.TemplateFamily.PUMA
-    sql = build_anet_sales_sql(include_superart=include_superart)
+    suc_ids = _normalize_scope_id_list(sucursales)
+    pv_ids = _normalize_scope_id_list(puntos_venta)
+    sql = build_anet_sales_sql(
+        include_superart=include_superart,
+        sucursales=suc_ids,
+        puntos_venta=pv_ids,
+    )
     params: List[Any] = [
         date_from.isoformat(),
         date_to.isoformat(),
+        *suc_ids,
+        *pv_ids,
         str_or_default(pack.marca_anet, "").strip(),
     ]
     if cliente_ids:

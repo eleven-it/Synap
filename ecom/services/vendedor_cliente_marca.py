@@ -316,17 +316,22 @@ def crear_terna(
         return False, _mensaje_tabla_ausente(e), None
 
 
-def _normalizar_ids_domicilio(ids_cliente_domicilio: List[Any]) -> List[int]:
-    """Ids únicos positivos, preservando el orden de primera aparición."""
+def _normalizar_enteros_positivos(valores: List[Any]) -> List[int]:
+    """Enteros únicos positivos, preservando el orden de primera aparición."""
     vistos: set[int] = set()
     resultado: List[int] = []
-    for raw in ids_cliente_domicilio or []:
+    for raw in valores or []:
         n = to_int_or_none(raw)
         if n is None or n <= 0 or n in vistos:
             continue
         vistos.add(n)
         resultado.append(n)
     return resultado
+
+
+def _normalizar_ids_domicilio(ids_cliente_domicilio: List[Any]) -> List[int]:
+    """Ids de sucursal únicos positivos, preservando el orden de primera aparición."""
+    return _normalizar_enteros_positivos(ids_cliente_domicilio)
 
 
 def crear_ternas_lote(
@@ -337,12 +342,17 @@ def crear_ternas_lote(
     ids_cliente_domicilio: List[Any],
     *,
     usuario_mod: str = "-",
+    cod_marcas: Optional[List[Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Crea relaciones en lote (mismo vendedor, cliente y marca × cada sucursal).
+    Crea relaciones en lote (mismo vendedor y cliente × cada sucursal × cada marca).
     No aborta ante el primer conflicto; devuelve resumen por categoría.
+    ``cod_marcas`` tiene prioridad sobre ``cod_marca`` (compat. una sola marca).
     """
     ids_norm = _normalizar_ids_domicilio(ids_cliente_domicilio)
+    marcas_norm = _normalizar_enteros_positivos(
+        cod_marcas if cod_marcas is not None else [cod_marca]
+    )
     vacio: Dict[str, Any] = {
         "creadas": [],
         "ya_existian": [],
@@ -353,7 +363,7 @@ def crear_ternas_lote(
         "n_conflictos": 0,
         "n_errores": 0,
     }
-    if not ids_norm:
+    if not ids_norm or not marcas_norm:
         return vacio
 
     creadas: List[Dict[str, Any]] = []
@@ -361,33 +371,41 @@ def crear_ternas_lote(
     conflictos: List[Dict[str, Any]] = []
     errores: List[Dict[str, Any]] = []
 
-    for idd in ids_norm:
-        try:
-            ok, msg, terna = crear_terna(
-                base_empresa,
-                cod_viajante,
-                id_cliente,
-                cod_marca,
-                idd,
-                usuario_mod=usuario_mod,
-            )
-            if ok:
-                msg_lower = (msg or "").lower()
-                if "ya existía" in msg_lower or "ya existia" in msg_lower:
-                    if terna:
-                        ya_existian.append(terna)
-                elif terna:
-                    creadas.append(terna)
-            else:
-                errores.append({"id_cliente_domicilio": idd, "error": msg})
-        except ConflictoMarcaCliente as exc:
-            conflictos.append(
-                {
-                    "id_cliente_domicilio": idd,
-                    "error": exc.message,
-                    "dueno": exc.dueno,
-                }
-            )
+    for cm in marcas_norm:
+        for idd in ids_norm:
+            try:
+                ok, msg, terna = crear_terna(
+                    base_empresa,
+                    cod_viajante,
+                    id_cliente,
+                    cm,
+                    idd,
+                    usuario_mod=usuario_mod,
+                )
+                if ok:
+                    msg_lower = (msg or "").lower()
+                    if "ya existía" in msg_lower or "ya existia" in msg_lower:
+                        if terna:
+                            ya_existian.append(terna)
+                    elif terna:
+                        creadas.append(terna)
+                else:
+                    errores.append(
+                        {
+                            "id_cliente_domicilio": idd,
+                            "CodMarca": cm,
+                            "error": msg,
+                        }
+                    )
+            except ConflictoMarcaCliente as exc:
+                conflictos.append(
+                    {
+                        "id_cliente_domicilio": idd,
+                        "CodMarca": cm,
+                        "error": exc.message,
+                        "dueno": exc.dueno,
+                    }
+                )
 
     return {
         "creadas": creadas,
@@ -439,6 +457,76 @@ def anular_terna(
     except Exception as e:
         logger.exception("anular_terna: %s", e)
         return False, _mensaje_tabla_ausente(e)
+
+
+def anular_ternas_lote(
+    base_empresa: str,
+    ids_terna: List[Any],
+    *,
+    usuario_mod: str = "-",
+) -> Dict[str, Any]:
+    """Soft-delete en lote: ``anulado = Si`` para cada id activo. No aborta a medias."""
+    ids_norm = _normalizar_enteros_positivos(ids_terna)
+    vacio: Dict[str, Any] = {
+        "n_solicitadas": 0,
+        "n_anuladas": 0,
+        "n_omitidas": 0,
+        "ids_anuladas": [],
+    }
+    if not ids_norm:
+        return vacio
+    um = (usuario_mod or "-")[:60]
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                placeholders = ",".join(["%s"] * len(ids_norm))
+                cursor.execute(
+                    f"""
+                    SELECT id
+                    FROM ecom_vendedor_cliente_marca
+                    WHERE id IN ({placeholders})
+                      AND COALESCE(anulado, 'No') = 'No'
+                    """,
+                    ids_norm,
+                )
+                ids_activas = [int(r[0]) for r in cursor.fetchall()]
+                if ids_activas:
+                    ph_upd = ",".join(["%s"] * len(ids_activas))
+                    cursor.execute(
+                        f"""
+                        UPDATE ecom_vendedor_cliente_marca
+                        SET anulado = 'Si', usuario_mod = %s
+                        WHERE id IN ({ph_upd})
+                          AND COALESCE(anulado, 'No') = 'No'
+                        """,
+                        [um, *ids_activas],
+                    )
+                conn.commit()
+                return {
+                    "n_solicitadas": len(ids_norm),
+                    "n_anuladas": len(ids_activas),
+                    "n_omitidas": len(ids_norm) - len(ids_activas),
+                    "ids_anuladas": ids_activas,
+                }
+            except Exception as e:
+                conn.rollback()
+                logger.exception("anular_ternas_lote: %s", e)
+                return {
+                    **vacio,
+                    "n_solicitadas": len(ids_norm),
+                    "error": _mensaje_tabla_ausente(e),
+                }
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.exception("anular_ternas_lote: %s", e)
+        return {
+            **vacio,
+            "n_solicitadas": len(ids_norm),
+            "error": _mensaje_tabla_ausente(e),
+        }
 
 
 def buscar_sucursales_cliente(

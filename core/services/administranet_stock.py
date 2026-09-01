@@ -1755,6 +1755,61 @@ def actualizar_renglon_temporal(
         return {"error": str(e)}
 
 
+def sincronizar_depositos_renglones_temporales(
+    base_empresa: str,
+    id_usuario: int,
+    cod_deposito: Optional[int],
+    cod_deposito_destino: Optional[int] = None,
+    *,
+    limpiar_lotes: bool = True,
+) -> Tuple[Optional[Dict[str, str]], int]:
+    """
+    Alinea CodDeposito / cod_deposito_destino de todos los renglones temporales
+    del usuario con la cabecera del movimiento.
+
+    Al cambiar de depósito se limpian lotes del renglón (el lote es por depósito).
+    Devuelve (error_dict_o_None, filas_afectadas).
+    """
+    dep = to_int_or_none(cod_deposito)
+    if dep is None:
+        return {"error": "Depósito origen obligatorio."}, 0
+    dep_dest = to_int_or_none(cod_deposito_destino)
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=False) as cursor:
+            if limpiar_lotes:
+                cursor.execute(
+                    """
+                    UPDATE cuerpostock_mstock
+                    SET CodDeposito = %s,
+                        cod_deposito_destino = %s,
+                        id_lote = NULL,
+                        cod_lote = NULL,
+                        vto_lote = NULL
+                    WHERE CodUsuario = %s
+                      AND COALESCE(visualiza, 'No') = 'No'
+                      AND COALESCE(CodigoMovimiento, 1) = 1
+                    """,
+                    [dep, dep_dest, id_usuario],
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE cuerpostock_mstock
+                    SET CodDeposito = %s,
+                        cod_deposito_destino = %s
+                    WHERE CodUsuario = %s
+                      AND COALESCE(visualiza, 'No') = 'No'
+                      AND COALESCE(CodigoMovimiento, 1) = 1
+                    """,
+                    [dep, dep_dest, id_usuario],
+                )
+            afectadas = int(cursor.rowcount or 0)
+        return None, afectadas
+    except Exception as e:
+        logger.exception("Error al sincronizar depósitos de renglones temporales")
+        return {"error": str(e)}, 0
+
+
 def limpiar_temporales_usuario(base_empresa: str, id_usuario: int) -> None:
     """Elimina todos los renglones temporales del usuario (y series temp si existen)."""
     try:
@@ -2422,7 +2477,10 @@ def alta_movimiento(
                                 return False, None, None, f"Renglón {idx + 1}: lote no encontrado.", None
                         continue
 
-                    # No transferencia: una fila por renglón (leer saldo actual para INSERT y validación)
+                    # No transferencia: una fila por renglón.
+                    # La cabecera manda: el depósito del movimiento es deposito_origen
+                    # (evita desfase si se cambió la cabecera tras cargar renglones).
+                    cod_dep = deposito_origen if deposito_origen is not None else cod_dep
                     cursor.execute(
                         "SELECT id_stock_deposito, saldo FROM stock_deposito WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
                         [id_art, cod_dep],
@@ -2432,7 +2490,10 @@ def alta_movimiento(
                     if es == "S" or salida > 0:
                         if saldo_actual < salida:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente (disponible: {saldo_actual}).", None
+                            return False, None, None, (
+                                f"Renglón {idx + 1}: saldo insuficiente "
+                                f"(disponible: {saldo_actual} en depósito {cod_dep})."
+                            ), None
                     saldo_despues = saldo_actual + (entrada - salida)
 
                     cantidad_stock = cantidad or (entrada if entrada > 0 else salida)

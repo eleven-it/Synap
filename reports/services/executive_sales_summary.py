@@ -91,18 +91,34 @@ def resolve_executive_scope(
     return may_scope, min_scope, consolidado_scope
 
 
-def _cc_scope_sql(scope_sucursales: Sequence[int]) -> Tuple[str, List[Any]]:
-    """Limita comprobantes a ``cuentacliente.CodSucursal`` dentro del alcance."""
+def _cc_scope_sql(
+    scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> Tuple[str, List[Any]]:
+    """Limita comprobantes a ``cuentacliente.CodSucursal`` (y opcionalmente ``id_pv``)."""
     if not scope_sucursales:
         return " AND 1=0 ", []
     ids = [int(x) for x in scope_sucursales]
     ph = ",".join(["%s"] * len(ids))
-    return f" AND cc.CodSucursal IN ({ph}) ", ids
+    sql = f" AND cc.CodSucursal IN ({ph}) "
+    params: List[Any] = list(ids)
+    if puntos_venta:
+        pv_ids = [int(x) for x in puntos_venta]
+        if pv_ids:
+            pv_ph = ",".join(["%s"] * len(pv_ids))
+            sql += f" AND cc.id_pv IN ({pv_ph}) "
+            params.extend(pv_ids)
+    return sql, params
 
 
-def _ventas_netas_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> float:
+def _ventas_netas_dia(
+    cursor,
+    dia: date,
+    scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> float:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     sql = f"""
         SELECT SUM({_net_line_sql('cc')}) AS v
         FROM cuentacliente cc
@@ -114,10 +130,15 @@ def _ventas_netas_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> flo
     return float(row[0] or 0) if row else 0.0
 
 
-def _tickets_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> int:
+def _tickets_dia(
+    cursor,
+    dia: date,
+    scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> int:
     ph = ",".join(["%s"] * len(_TIPOS_FA_FM))
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     sql = f"""
         SELECT COUNT(*) AS c
         FROM cuentacliente cc
@@ -130,9 +151,14 @@ def _tickets_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> int:
     return int(row[0] or 0) if row else 0
 
 
-def _unidades_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> float:
+def _unidades_dia(
+    cursor,
+    dia: date,
+    scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> float:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     sql = f"""
         SELECT SUM(
@@ -159,9 +185,14 @@ def _unidades_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> float:
     return float(row[0] or 0) if row else 0.0
 
 
-def _serie_horaria(cursor, dia: date, scope_sucursales: Sequence[int]) -> List[Dict[str, Any]]:
+def _serie_horaria(
+    cursor,
+    dia: date,
+    scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> List[Dict[str, Any]]:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     sql = f"""
         SELECT HOUR(cc.FechaControl) AS hora, SUM({_net_line_sql('cc')}) AS ventas_netas
         FROM cuentacliente cc
@@ -178,10 +209,15 @@ def _serie_horaria(cursor, dia: date, scope_sucursales: Sequence[int]) -> List[D
     return out
 
 
-def _serie_7_dias(cursor, fecha_fin: date, scope_sucursales: Sequence[int]) -> List[Dict[str, Any]]:
+def _serie_7_dias(
+    cursor,
+    fecha_fin: date,
+    scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> List[Dict[str, Any]]:
     fecha_ini = fecha_fin - timedelta(days=6)
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     sql = f"""
         SELECT cc.Fecha AS dia, SUM({_net_line_sql('cc')}) AS ventas_netas
         FROM cuentacliente cc
@@ -207,6 +243,7 @@ def _top_productos_ventas_dia(
     scope_sucursales: Sequence[int],
     orden_rank: str = "importe_neto",
     limit: int = _TOP_PRODUCTOS_LIMIT,
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Top artículos del día (renglón ``stock`` + ``cuentacliente``).
@@ -214,7 +251,7 @@ def _top_productos_ventas_dia(
     Paridad de filtros con ``_unidades_dia``.
     """
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     qty_expr = """
         SUM(CASE
@@ -295,12 +332,13 @@ def _margen_bruto_totales_dia(
     cursor,
     dia: date,
     scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> Dict[str, Any]:
     """
     Totales de rentabilidad por renglón ``stock`` (misma ventana que unidades del día).
     """
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
     costo = signed_costo_neto_linea_sql()
@@ -340,9 +378,10 @@ def _margen_por_rubro_dia(
     cursor,
     dia: date,
     scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
     costo = signed_costo_neto_linea_sql()
@@ -411,9 +450,10 @@ def _margen_por_subrubro_dia(
     cursor,
     dia: date,
     scope_sucursales: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales, puntos_venta)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
     costo = signed_costo_neto_linea_sql()
@@ -505,11 +545,12 @@ def _split_canal(
     may_scope: Sequence[int],
     min_scope: Sequence[int],
     consolidado_scope: Sequence[int],
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> Dict[str, float]:
     """Ventas del día por canal (solo sucursales clasificadas en alcance)."""
-    m_may = _ventas_netas_dia(cursor, dia, may_scope)
-    m_min = _ventas_netas_dia(cursor, dia, min_scope)
-    consolidado = _ventas_netas_dia(cursor, dia, consolidado_scope)
+    m_may = _ventas_netas_dia(cursor, dia, may_scope, puntos_venta)
+    m_min = _ventas_netas_dia(cursor, dia, min_scope, puntos_venta)
+    consolidado = _ventas_netas_dia(cursor, dia, consolidado_scope, puntos_venta)
     return {
         "mayorista": round(m_may, 2),
         "minorista": round(m_min, 2),
@@ -555,6 +596,7 @@ def _kpis_para_scope(
     dia: date,
     scope_sucursales: Sequence[int],
     fecha_comparacion_anio: date,
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> Dict[str, Any]:
     if not scope_sucursales:
         return _kpis_vacios(fecha_comparacion_anio)
@@ -562,14 +604,14 @@ def _kpis_para_scope(
     ayer = dia - timedelta(days=1)
     semana_pasada = dia - timedelta(days=7)
 
-    v_hoy = _ventas_netas_dia(cursor, dia, scope_sucursales)
-    v_ayer = _ventas_netas_dia(cursor, ayer, scope_sucursales)
-    v_sem = _ventas_netas_dia(cursor, semana_pasada, scope_sucursales)
-    v_anio = _ventas_netas_dia(cursor, fecha_comparacion_anio, scope_sucursales)
+    v_hoy = _ventas_netas_dia(cursor, dia, scope_sucursales, puntos_venta)
+    v_ayer = _ventas_netas_dia(cursor, ayer, scope_sucursales, puntos_venta)
+    v_sem = _ventas_netas_dia(cursor, semana_pasada, scope_sucursales, puntos_venta)
+    v_anio = _ventas_netas_dia(cursor, fecha_comparacion_anio, scope_sucursales, puntos_venta)
 
-    tickets = _tickets_dia(cursor, dia, scope_sucursales)
+    tickets = _tickets_dia(cursor, dia, scope_sucursales, puntos_venta)
     ticket_prom = (v_hoy / tickets) if tickets else None
-    unidades = _unidades_dia(cursor, dia, scope_sucursales)
+    unidades = _unidades_dia(cursor, dia, scope_sucursales, puntos_venta)
 
     return {
         "ventas_netas_dia": round(v_hoy, 2),
@@ -596,8 +638,11 @@ def _build_seccion(
     *,
     fecha_comparacion_anio: date,
     top_productos_orden: str,
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> Dict[str, Any]:
-    kpis = _kpis_para_scope(cursor, dia, scope_sucursales, fecha_comparacion_anio)
+    kpis = _kpis_para_scope(
+        cursor, dia, scope_sucursales, fecha_comparacion_anio, puntos_venta
+    )
     if not scope_sucursales:
         fecha_ini = dia - timedelta(days=6)
         serie_7_vacia = []
@@ -620,19 +665,22 @@ def _build_seccion(
             "top_productos": [],
         }
 
-    margen_bruto = _margen_bruto_totales_dia(cursor, dia, scope_sucursales)
+    margen_bruto = _margen_bruto_totales_dia(cursor, dia, scope_sucursales, puntos_venta)
     return {
         "kpis": kpis,
-        "serie_horaria": _serie_horaria(cursor, dia, scope_sucursales),
-        "serie_7_dias": _serie_7_dias(cursor, dia, scope_sucursales),
+        "serie_horaria": _serie_horaria(cursor, dia, scope_sucursales, puntos_venta),
+        "serie_7_dias": _serie_7_dias(cursor, dia, scope_sucursales, puntos_venta),
         "margen_bruto": margen_bruto,
-        "margen_por_rubro": _margen_por_rubro_dia(cursor, dia, scope_sucursales),
-        "margen_por_subrubro": _margen_por_subrubro_dia(cursor, dia, scope_sucursales),
+        "margen_por_rubro": _margen_por_rubro_dia(cursor, dia, scope_sucursales, puntos_venta),
+        "margen_por_subrubro": _margen_por_subrubro_dia(
+            cursor, dia, scope_sucursales, puntos_venta
+        ),
         "top_productos": _top_productos_ventas_dia(
             cursor,
             dia,
             scope_sucursales=scope_sucursales,
             orden_rank=top_productos_orden,
+            puntos_venta=puntos_venta,
         ),
     }
 
@@ -723,6 +771,7 @@ def run_executive_summary(
     minorista_sucursales: Sequence[int],
     *,
     sucursales_filtro: Optional[Sequence[int]] = None,
+    puntos_venta_filtro: Optional[Sequence[int]] = None,
     top_productos_orden: Optional[str] = None,
     fecha_comparacion_anio: Optional[date] = None,
 ) -> Dict[str, Any]:
@@ -732,6 +781,9 @@ def run_executive_summary(
     promociones desfasadas (ej. Cyber Monday) en las tres secciones.
     """
     orden_tp = _normalizar_top_productos_orden(top_productos_orden)
+    pv_filtro: Optional[List[int]] = None
+    if puntos_venta_filtro:
+        pv_filtro = sorted({int(x) for x in puntos_venta_filtro})
     may_scope, min_scope, consolidado_scope = resolve_executive_scope(
         mayorista_sucursales,
         minorista_sucursales,
@@ -752,6 +804,7 @@ def run_executive_summary(
             consolidado_scope,
             fecha_comparacion_anio=fecha_comp_anio,
             top_productos_orden=orden_tp,
+            puntos_venta=pv_filtro,
         ),
         "mayorista": _build_seccion(
             cursor,
@@ -759,6 +812,7 @@ def run_executive_summary(
             may_scope,
             fecha_comparacion_anio=fecha_comp_anio,
             top_productos_orden=orden_tp,
+            puntos_venta=pv_filtro,
         ),
         "minorista": _build_seccion(
             cursor,
@@ -766,12 +820,15 @@ def run_executive_summary(
             min_scope,
             fecha_comparacion_anio=fecha_comp_anio,
             top_productos_orden=orden_tp,
+            puntos_venta=pv_filtro,
         ),
     }
 
     cons = secciones["consolidado"]
     split = (
-        _split_canal(cursor, hoy, may_scope, min_scope, consolidado_scope)
+        _split_canal(
+            cursor, hoy, may_scope, min_scope, consolidado_scope, pv_filtro
+        )
         if consolidado_scope
         else {"mayorista": 0.0, "minorista": 0.0, "consolidado": 0.0}
     )
@@ -802,6 +859,7 @@ def run_executive_summary(
                 "paridad informe rentabilidad AdministraNET (venta_rentabilidad_resumen)."
             ),
             "sucursales_filtro": list(sucursales_filtro) if sucursales_filtro else [],
+            "punto_venta_filtrados": pv_filtro,
             "sucursales_clasificadas_total": len(classified_all),
             "sin_sucursales_clasificadas": len(classified_all) == 0,
             "top_productos_orden": orden_tp,

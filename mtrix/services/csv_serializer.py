@@ -30,6 +30,7 @@ HEADERS = {
 }
 
 TIPOS_ORDEN = ("CI", "PD", "ES", "VD", "FV")
+CEP_DEFAULT = "9400"
 _SCI = re.compile(r"[eE]")
 
 
@@ -44,18 +45,51 @@ def sanitizar_campo(campo: Any, vacio: str = "NA") -> str:
     return texto.strip()
 
 
+def ean_invalido(campo: Any) -> bool:
+    texto = str(campo or "").strip()
+    if texto == "" or texto.upper() == "NA":
+        return True
+    return texto.replace("0", "") == ""
+
+
 def ean_completo(campo: Any) -> str:
     if campo is None:
-        return "0"
+        return ""
     texto = str(campo).strip()
     if texto == "":
-        return "0"
+        return ""
     if _SCI.search(texto):
         try:
             return f"{int(float(texto.replace(',', '.')))}"
         except (ValueError, OverflowError):
             texto = texto
-    return sanitizar_campo(texto, vacio="0")
+    return sanitizar_campo(texto, vacio="")
+
+
+def ean_mtrix(ean: Any, *codigos_internos: Any) -> str | None:
+    """EAN de barras o código interno. None si no hay identificador válido (no emitir 0)."""
+    candidato = ean_completo(ean)
+    if candidato and not ean_invalido(candidato):
+        return candidato
+    for interno in codigos_internos:
+        texto = sanitizar_campo(interno, vacio="")
+        if texto and not ean_invalido(texto):
+            return texto
+    return None
+
+
+def cep_mtrix(campo: Any) -> str:
+    """Diversey: CEP no puede ir vacío ni 0; si no hay dato → 9400 (Río Gallegos)."""
+    if campo is None:
+        return CEP_DEFAULT
+    texto = str(campo).strip()
+    if texto == "" or texto.upper() == "NA":
+        return CEP_DEFAULT
+    if texto.replace("0", "") == "":
+        return CEP_DEFAULT
+    if texto.isdigit() and len(texto) < 4:
+        return CEP_DEFAULT
+    return sanitizar_campo(texto, vacio=CEP_DEFAULT)
 
 
 def cnpj_cliente_mtrix(cnpj_original: Any, razon_social: Any) -> str:
@@ -119,6 +153,43 @@ def tipo_documento_vd(tipo_comp: str) -> tuple[str, bool]:
     return "N", False
 
 
+def _cod_vendedor_fv_clave(cod: Any, nome: Any) -> tuple[int | float, str]:
+    """Orden determinístico: menor COD_VENDEDOR numérico; empate por nombre."""
+    texto = str(cod or "").strip()
+    try:
+        num: int | float = int(float(texto.replace(",", ".")))
+    except (ValueError, TypeError):
+        num = float("inf")
+    return num, str(nome or "").strip().upper()
+
+
+def agregar_fv(rows: Iterable[dict]) -> list[dict]:
+    """Una fila por CNPJ_CLIENTE (IDENTIFICACAO CLIENTE). Vendedor determinístico."""
+    elegidos: dict[str, dict] = {}
+    orden: list[str] = []
+    for row in rows:
+        cuit = sanitizar_campo(row.get("CNPJ_CLIENTE"), vacio="0")
+        candidato = {
+            "CNPJ_CLIENTE": cuit,
+            "COD_GERENTE": row.get("COD_GERENTE") or "1",
+            "NOME_GERENTE": row.get("NOME_GERENTE") or "GERENTE GENERAL",
+            "COD_SUPERVISOR": row.get("COD_SUPERVISOR") or "1",
+            "NOME_SUPERVISOR": row.get("NOME_SUPERVISOR") or "SUPERVISOR",
+            "COD_VENDEDOR": row.get("COD_VENDEDOR"),
+            "NOME_VENDEDOR": row.get("NOME_VENDEDOR"),
+        }
+        if cuit not in elegidos:
+            elegidos[cuit] = candidato
+            orden.append(cuit)
+            continue
+        actual = elegidos[cuit]
+        if _cod_vendedor_fv_clave(candidato["COD_VENDEDOR"], candidato["NOME_VENDEDOR"]) < _cod_vendedor_fv_clave(
+            actual["COD_VENDEDOR"], actual["NOME_VENDEDOR"]
+        ):
+            elegidos[cuit] = candidato
+    return [elegidos[cuit] for cuit in orden]
+
+
 def agregar_vd(rows: Iterable[dict], multiplicador_cantidad: int = 1, multiplicador_precio: int = 1) -> list[dict]:
     agrupados: dict[str, dict] = {}
     orden: list[str] = []
@@ -131,11 +202,18 @@ def agregar_vd(rows: Iterable[dict], multiplicador_cantidad: int = 1, multiplica
         # V.3.5 agrupa por COD_CLIENTE crudo (CUIT o "0"), no por el CNPJ de pantalla.
         codigo_crudo = str(row.get("COD_CLIENTE") or row.get("cod_cliente") or "")
         cnpj = cnpj_cliente_mtrix(codigo_crudo, row.get("RAZAO_SOCIAL") or row.get("razao_social"))
-        ean = ean_completo(row.get("EAN") or row.get("ean"))
+        ean = ean_mtrix(
+            row.get("EAN") or row.get("ean"),
+            row.get("CODIGO_INTERNO") or row.get("codigo_interno"),
+            row.get("CODIGO_PRODUTO") or row.get("codigo_produto"),
+            row.get("ID_ART") or row.get("id_articulo") or row.get("id_art"),
+        )
+        if not ean:
+            continue
         data = str(row.get("DATA") or row.get("data") or "")
         nota = str(row.get("NOTA_FISCAL") or row.get("nota_fiscal") or "")
         vendedor = str(row.get("VENDEDOR") or row.get("vendedor") or "")
-        cep = str(row.get("CEP") or row.get("cep") or "0")
+        cep = cep_mtrix(row.get("CEP") or row.get("cep"))
         clave = f"{nota}|{ean}|{data}|{codigo_crudo}|{vendedor}|{tipo_doc}|{cep}"
         if clave not in agrupados:
             agrupados[clave] = {
@@ -184,7 +262,7 @@ def serialize(tipo: str, rows: list[dict], cfg: dict, generated_at: datetime) ->
                         sanitizar_campo(row.get("RAZAO_SOCIAL")),
                         sanitizar_campo(row.get("ENDERECO")),
                         sanitizar_campo(row.get("BAIRRO")),
-                        sanitizar_campo(row.get("CEP"), vacio="0"),
+                        cep_mtrix(row.get("CEP")),
                         sanitizar_campo(row.get("CIDADE") or row.get("CIUDAD")),
                         sanitizar_campo(row.get("ESTADO")),
                         sanitizar_campo(row.get("NOME_RESPONSAVEL")),
@@ -205,6 +283,14 @@ def serialize(tipo: str, rows: list[dict], cfg: dict, generated_at: datetime) ->
             marca = (row.get("DIVISAO_MARCA") or "").strip()
             rubro = (row.get("DIVISAO_RUBRO") or "").strip()
             division = marca or rubro or "OTROS PRODUCTOS"
+            ean = ean_mtrix(
+                row.get("EAN"),
+                row.get("CODIGO_PRODUTO"),
+                row.get("CODIGO_INTERNO"),
+                row.get("ID_ART") or row.get("id_articulo"),
+            )
+            if not ean:
+                continue
             lineas.append(
                 _join(
                     [
@@ -214,7 +300,7 @@ def serialize(tipo: str, rows: list[dict], cfg: dict, generated_at: datetime) ->
                         razon,
                         sanitizar_campo(row.get("CODIGO_PRODUTO")),
                         sanitizar_campo(row.get("TIPO_EMBALAGEM") or "0"),
-                        ean_completo(row.get("EAN")),
+                        ean,
                         sanitizar_campo(row.get("TIPO_COD_BARRAS") or "1"),
                         sanitizar_campo(row.get("DESCRICAO")),
                         sanitizar_campo(division),
@@ -226,13 +312,20 @@ def serialize(tipo: str, rows: list[dict], cfg: dict, generated_at: datetime) ->
         fecha = str(cfg.get("fecha_archivo") or "")
         mult = int(cfg.get("multiplicador_cantidad") or 1)
         for row in rows:
+            ean = ean_mtrix(
+                row.get("EAN"),
+                row.get("CODIGO_INTERNO") or row.get("CODIGO_PRODUTO"),
+                row.get("ID_ART") or row.get("id_articulo"),
+            )
+            if not ean:
+                continue
             lineas.append(
                 _join(
                     [
                         fecha,
                         fornecedor,
                         distribuidor,
-                        ean_completo(row.get("EAN")),
+                        ean,
                         convertir_cantidad(row.get("QTDE_TOTAL"), mult),
                     ]
                 )
@@ -252,30 +345,30 @@ def serialize(tipo: str, rows: list[dict], cfg: dict, generated_at: datetime) ->
                         sanitizar_campo(row["COD_CLIENTE"]),
                         sanitizar_campo(row["DATA"]),
                         sanitizar_campo(row["NOTA_FISCAL"]),
-                        ean_completo(row["EAN"]),
+                        row["EAN"],
                         row["QTDE"],
                         row["PRECO"],
                         sanitizar_campo(row["VENDEDOR"]),
                         sanitizar_campo(row["TIPO_DOC"]),
-                        sanitizar_campo(row["CEP"], vacio="0"),
+                        cep_mtrix(row["CEP"]),
                     ]
                 )
             )
     elif tipo == "FV":
-        for row in rows:
+        for row in agregar_fv(rows):
             # V.3.5 escribe CNPJ_CLIENTE crudo; no aplica ObtenerCNPJClienteMTRIX.
             lineas.append(
                 _join(
                     [
                         fornecedor,
                         distribuidor,
-                        sanitizar_campo(row.get("CNPJ_CLIENTE")),
-                        sanitizar_campo(row.get("COD_GERENTE") or "1"),
-                        sanitizar_campo(row.get("NOME_GERENTE") or "GERENTE GENERAL"),
-                        sanitizar_campo(row.get("COD_SUPERVISOR") or "1"),
-                        sanitizar_campo(row.get("NOME_SUPERVISOR") or "SUPERVISOR"),
-                        sanitizar_campo(row.get("COD_VENDEDOR")),
-                        sanitizar_campo(row.get("NOME_VENDEDOR")),
+                        sanitizar_campo(row["CNPJ_CLIENTE"]),
+                        sanitizar_campo(row["COD_GERENTE"]),
+                        sanitizar_campo(row["NOME_GERENTE"]),
+                        sanitizar_campo(row["COD_SUPERVISOR"]),
+                        sanitizar_campo(row["NOME_SUPERVISOR"]),
+                        sanitizar_campo(row["COD_VENDEDOR"]),
+                        sanitizar_campo(row["NOME_VENDEDOR"]),
                     ]
                 )
             )

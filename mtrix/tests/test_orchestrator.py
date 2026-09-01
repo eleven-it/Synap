@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from mtrix.extractors.base import ExportConfig
 from mtrix.models import MtrixArtifact, MtrixConfig, MtrixJob
 from mtrix.services.csv_serializer import TIPOS_ORDEN
-from mtrix.services.orchestrator import crear_job, ejecutar_job
+from mtrix.services.orchestrator import config_to_export, crear_job, ejecutar_job
 
 
 def _export_cfg(base: str) -> ExportConfig:
@@ -149,3 +149,20 @@ class OrchestratorTests(TestCase):
             tipos = list(MtrixArtifact.objects.filter(job=job).values_list("tipo", flat=True))
             self.assertEqual(tipos, ["PD"])
             self.assertEqual(MtrixArtifact.objects.filter(job=job, tipo="PD").count(), 1)
+
+    @patch("mtrix.services.orchestrator.obtener_razon_empresa", return_value="SMART")
+    @patch("mtrix.services.orchestrator.obtener_cnpj_distribuidor", return_value="30711007462")
+    @patch(
+        "mtrix.services.orchestrator.resolver_fechas_mysql",
+        return_value=("2026-08-22", "2026-08-27"),
+    )
+    def test_cnpj_sale_del_cuit_empresa_no_del_config(self, mock_fechas, _cnpj, _razon):
+        cfg = MtrixConfig.objects.get(base_empresa=self.base)
+        cfg.cnpj_fornecedor = "20939802593"
+        cfg.fecha_personalizada = True
+        cfg.save()
+        export = config_to_export(cfg, origen=MtrixJob.Origen.CRON)
+        self.assertEqual(export.cnpj_fornecedor, "30711007462")
+        self.assertEqual(export.cnpj_distribuidor, "30711007462")
+        kwargs = mock_fechas.call_args.kwargs
+        self.assertFalse(kwargs["usar_personalizada"])

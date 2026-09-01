@@ -116,7 +116,7 @@
                                 data-href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}"
                                 onclick="if(this.dataset.href) location.href=this.dataset.href">
                                 <td class="max-w-[12rem] px-4 py-2.5 text-sm text-gray-900 dark:text-white sm:max-w-none sm:px-5">{{ item.descripcion }}</td>
-                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums text-gray-600 dark:text-gray-300 sm:px-5">{{ item.stock_terminado_display }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums sm:px-5 {% if item.stock_terminado_es_negativo %}font-semibold text-rose-600 dark:text-rose-400{% else %}text-gray-600 dark:text-gray-300{% endif %}">{{ item.stock_terminado_display }}</td>
                                 <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-rose-700 dark:text-rose-300 sm:px-5">{{ item.resta_urgente_display }}</td>
                                 <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-orange-700 dark:text-orange-300 sm:px-5">{{ item.resta_urgente_ped_display }}</td>
                             </tr>

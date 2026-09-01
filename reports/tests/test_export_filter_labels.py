@@ -68,6 +68,39 @@ class ExportFilterLabelsTest(SimpleTestCase):
         self.assertEqual(labels.get("Sucursales"), "Sucursal Centro, Sucursal Norte")
         inst.labels_for.assert_called()
 
+    def test_ventas_sin_seleccion_declara_todas_sucursales_y_pv(self):
+        lines = build_export_filter_lines(
+            "ventas-por-vendedor",
+            {"filters": {"fecha_inicio_facturacion": "2026-08-01"}},
+            {},
+            None,
+        )
+        labels = dict(lines)
+        self.assertEqual(labels.get("Sucursales"), "Todas")
+        self.assertEqual(labels.get("Puntos de venta"), "Todos")
+
+    def test_slug_sin_alcance_no_fuerza_todas(self):
+        lines = build_export_filter_lines(
+            "stock-existencias",
+            {"filters": {"fecha_inicio": "2026-08-01"}},
+            {},
+            None,
+        )
+        labels = dict(lines)
+        self.assertNotIn("Sucursales", labels)
+        self.assertNotIn("Puntos de venta", labels)
+
+    def test_punto_venta_id_escalar_entra_en_alcance(self):
+        lines = build_export_filter_lines(
+            "ventas-netas",
+            {"filters": {"punto_venta_id": 7, "sucursales": []}},
+            {},
+            None,
+        )
+        labels = dict(lines)
+        self.assertEqual(labels.get("Sucursales"), "Todas")
+        self.assertEqual(labels.get("Puntos de venta"), "7")
+
     def test_filter_labels_extra_en_payload(self):
         lines = build_export_filter_lines(
             "comprobantes-rutas",

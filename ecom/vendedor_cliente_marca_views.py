@@ -16,8 +16,10 @@ from ecom.permissions import EcomConfigVendedorClienteMarcaPermission
 from ecom.pedido_masivo_stub_views import _StubMayoristappPermisoView
 from ecom.services.vendedor_cliente_marca import (
     ConflictoMarcaCliente,
+    _normalizar_enteros_positivos,
     _normalizar_ids_domicilio,
     anular_terna,
+    anular_ternas_lote,
     buscar_clientes_activos,
     buscar_marcas_activas,
     buscar_sucursales_cliente,
@@ -65,7 +67,48 @@ def _mensaje_resumen_lote(resumen: Dict[str, Any]) -> str:
     if n_err:
         partes.append(f"{n_err} error{'es' if n_err != 1 else ''}.")
     if not partes:
-        return "No se procesó ninguna sucursal."
+        return "No se procesó ninguna relación."
+    return " ".join(partes)
+
+
+def _extraer_cod_marcas(data: Dict[str, Any]) -> List[int]:
+    """Lee ``CodMarcas`` (lista) o un único ``CodMarca`` (compat)."""
+    ids_raw = data.get("CodMarcas")
+    if ids_raw is None:
+        ids_raw = data.get("cod_marcas")
+    if isinstance(ids_raw, list) and len(ids_raw) > 0:
+        return _normalizar_enteros_positivos(ids_raw)
+    single = to_int_or_none(data.get("CodMarca"))
+    if single is not None and single > 0:
+        return [single]
+    return []
+
+
+def _extraer_ids_terna(data: Dict[str, Any]) -> List[int]:
+    """Lee ``ids`` (lista) o un único ``id`` / ``id_terna`` (compat)."""
+    ids_raw = data.get("ids")
+    if isinstance(ids_raw, list) and len(ids_raw) > 0:
+        return _normalizar_enteros_positivos(ids_raw)
+    single = to_int_or_none(data.get("id") or data.get("id_terna"))
+    if single is not None and single > 0:
+        return [single]
+    return []
+
+
+def _mensaje_resumen_anular_lote(resumen: Dict[str, Any]) -> str:
+    n_ok = int(resumen.get("n_anuladas") or 0)
+    n_omit = int(resumen.get("n_omitidas") or 0)
+    partes: List[str] = []
+    if n_ok:
+        partes.append(
+            f"Se anularon {n_ok} relación{'es' if n_ok != 1 else ''}."
+        )
+    if n_omit:
+        partes.append(
+            f"{n_omit} no encontrada{'s' if n_omit != 1 else ''} o ya anulada{'s' if n_omit != 1 else ''}."
+        )
+    if not partes:
+        return "Ninguna relación activa para anular."
     return " ".join(partes)
 
 
@@ -125,7 +168,7 @@ class VendedorClienteMarcaCrearAPIView(APIView):
         data = request.data if isinstance(request.data, dict) else {}
         cod_viajante = to_int_or_none(data.get("CodViajante"))
         id_cliente = to_int_or_none(data.get("id_cliente"))
-        cod_marca = to_int_or_none(data.get("CodMarca"))
+        cod_marcas = _extraer_cod_marcas(data)
         ids_domicilio = _extraer_ids_domicilio(data)
         usuario_mod = _usuario_mod_from_request(request)
 
@@ -134,14 +177,19 @@ class VendedorClienteMarcaCrearAPIView(APIView):
                 {"ok": False, "error": "Falta id_cliente_domicilio o ids_cliente_domicilio válidos."},
                 status=400,
             )
+        if not cod_marcas:
+            return Response(
+                {"ok": False, "error": "Falta CodMarca o CodMarcas válidos."},
+                status=400,
+            )
 
-        if len(ids_domicilio) == 1:
+        if len(ids_domicilio) == 1 and len(cod_marcas) == 1:
             try:
                 ok, msg, terna = crear_terna(
                     base,
                     cod_viajante,
                     id_cliente,
-                    cod_marca,
+                    cod_marcas[0],
                     ids_domicilio[0],
                     usuario_mod=usuario_mod,
                 )
@@ -164,9 +212,10 @@ class VendedorClienteMarcaCrearAPIView(APIView):
             base,
             cod_viajante,
             id_cliente,
-            cod_marca,
+            cod_marcas[0],
             ids_domicilio,
             usuario_mod=usuario_mod,
+            cod_marcas=cod_marcas,
         )
         ok_any = (resumen["n_creadas"] + resumen["n_ya_existian"]) > 0
         mensaje = _mensaje_resumen_lote(resumen)
@@ -197,11 +246,31 @@ class VendedorClienteMarcaAnularAPIView(APIView):
         if not base:
             return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
         data = request.data if isinstance(request.data, dict) else {}
-        tid = to_int_or_none(data.get("id") or data.get("id_terna"))
-        ok, msg = anular_terna(base, tid, usuario_mod=_usuario_mod_from_request(request))
-        if not ok:
-            return Response({"ok": False, "error": msg}, status=400)
-        return Response({"ok": True, "message": msg})
+        ids_terna = _extraer_ids_terna(data)
+        if not ids_terna:
+            return Response({"ok": False, "error": "Falta id o ids válidos."}, status=400)
+        usuario_mod = _usuario_mod_from_request(request)
+        if len(ids_terna) == 1:
+            ok, msg = anular_terna(base, ids_terna[0], usuario_mod=usuario_mod)
+            if not ok:
+                return Response({"ok": False, "error": msg}, status=400)
+            return Response({"ok": True, "message": msg})
+
+        resumen = anular_ternas_lote(base, ids_terna, usuario_mod=usuario_mod)
+        if resumen.get("error"):
+            return Response({"ok": False, "error": resumen["error"]}, status=400)
+        n_ok = int(resumen.get("n_anuladas") or 0)
+        mensaje = _mensaje_resumen_anular_lote(resumen)
+        body: Dict[str, Any] = {
+            "ok": n_ok > 0,
+            "message": mensaje,
+            "resumen": resumen,
+            "lote": True,
+        }
+        if n_ok < 1:
+            body["error"] = mensaje
+            return Response(body, status=400)
+        return Response(body)
 
 
 class VendedorClienteMarcaVendedoresAPIView(APIView):

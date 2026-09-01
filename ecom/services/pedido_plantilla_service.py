@@ -204,6 +204,7 @@ def cargar_pedido_en_draft_masivo(
         id_domicilio_fijo=id_domicilio,
         cod_mov_origen=cod,
         consulta=consulta,
+        sess_user=sess_user,
     )
     if err_draft or draft is None:
         return None, err_draft or "No se pudo crear el borrador.", meta

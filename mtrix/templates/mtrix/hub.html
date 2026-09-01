@@ -34,6 +34,9 @@
 <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
   <h2 class="font-semibold text-slate-900 dark:text-white">Última corrida</h2>
   <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Estado: {{ ultimo_job.get_status_display }} · {{ ultimo_job.created_at|date:"d/m/Y H:i" }}</p>
+  {% if config.last_vd_enviado_hasta %}
+  <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Último VD enviado hasta {{ config.last_vd_enviado_hasta|date:"d/m/Y" }}</p>
+  {% endif %}
   <a href="{% url 'mtrix:job_detail' ultimo_job.id %}" class="mt-2 inline-block text-sm font-medium text-sky-600">Ver detalle</a>
 </div>
 {% endif %}

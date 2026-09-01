@@ -15,17 +15,70 @@
   <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
     <h2 class="font-semibold text-slate-900 dark:text-white">Exportación</h2>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
-      <label class="block text-sm">CNPJ fornecedor
-        <input name="cnpj_fornecedor" value="{{ config.cnpj_fornecedor }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
-      </label>
-      <label class="block text-sm">Proveedores (vacío = todos; un archivo por categoría)
-        <input name="codigo_proveedor_principal" value="{{ config.codigo_proveedor_principal }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
-      </label>
-      <label class="block text-sm">Días a procesar
+      <div class="block text-sm sm:col-span-2">
+        <span class="font-medium">CUIT de la empresa</span>
+        <p class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">{{ cuit_empresa|default:"No se pudo leer datosempresa" }}</p>
+        <p class="mt-1 text-xs text-slate-500">Se usa como CNPJ fornecedor (prefijo AR) y como distribuidor. No se carga a mano.</p>
+      </div>
+      <div class="block text-sm sm:col-span-2">
+        <span class="font-medium">Último VD enviado</span>
+        <p class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
+          {% if config.last_vd_enviado_hasta %}{{ config.last_vd_enviado_hasta|date:"d/m/Y" }}{% else %}Todavía no se envió por SFTP. La primera corrida automática usará los días a procesar.{% endif %}
+        </p>
+        <p class="mt-1 text-xs text-slate-500">La siguiente corrida automática toma ventas desde ese día (solape de 1 día) hasta hoy. CI, PD, ES y FV se regeneran completos.</p>
+      </div>
+      <div class="block text-sm sm:col-span-2" x-data="mtrixProveedoresBuscador()">
+        <span class="font-medium">Proveedores</span>
+        <p class="mt-0.5 text-xs text-slate-500">Busque por nombre, código o CUIT. Vacío = todos. Un archivo por categoría.</p>
+        <input type="hidden" name="codigo_proveedor_principal" value="{{ config.codigo_proveedor_principal }}" :value="codigosCsv">
+        <div class="mt-1 flex min-h-[2.5rem] flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-900">
+          <template x-for="item in seleccionados" :key="item.codigo">
+            <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+              <span x-text="item.nombre ? (item.codigo + ' · ' + item.nombre) : item.codigo"></span>
+              <button type="button" class="rounded-full p-0.5 hover:bg-sky-200 dark:hover:bg-sky-800" @click="quitar(item.codigo)" aria-label="Quitar proveedor">
+                <span class="material-icons text-sm leading-none">close</span>
+              </button>
+            </span>
+          </template>
+          <div class="relative min-w-[12rem] flex-1">
+            <input type="search"
+                   x-model="busqueda"
+                   @input.debounce.300ms="buscar()"
+                   @focus="mostrar = sugerenciasVisibles.length > 0"
+                   @keydown.escape="mostrar = false"
+                   @keydown.arrow-down.prevent="mover(1)"
+                   @keydown.arrow-up.prevent="mover(-1)"
+                   @keydown.enter.prevent="confirmarActiva()"
+                   autocomplete="off"
+                   placeholder="Escriba para buscar…"
+                   class="w-full border-0 bg-transparent px-1 py-0.5 text-sm outline-none dark:text-white"
+                   aria-autocomplete="list"
+                   aria-controls="mtrix-sugerencias-proveedor"
+                   :aria-expanded="mostrar ? 'true' : 'false'">
+            <ul id="mtrix-sugerencias-proveedor"
+                x-show="mostrar && sugerenciasVisibles.length"
+                x-cloak
+                class="absolute z-20 mt-1 max-h-56 w-full min-w-[16rem] overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800">
+              <template x-for="(item, idx) in sugerenciasVisibles" :key="item.codigo">
+                <li>
+                  <button type="button"
+                          class="flex w-full flex-col px-3 py-2 text-left text-sm"
+                          :class="idx === activa ? 'bg-sky-50 dark:bg-sky-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+                          @click="seleccionar(item)">
+                    <span class="font-medium text-slate-900 dark:text-white" x-text="item.nombre || ('Proveedor ' + item.codigo)"></span>
+                    <span class="text-xs text-slate-500" x-text="'Código ' + item.codigo + (item.cuit ? ' · ' + item.cuit : '')"></span>
+                  </button>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <label class="block text-sm">Días a procesar (solo primera corrida automática)
         <input type="number" min="1" name="dias_a_procesar" value="{{ config.dias_a_procesar }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900">
       </label>
       <div class="mt-2">
-        <span class="block text-sm">Fecha personalizada</span>
+        <span class="block text-sm">Fecha personalizada (solo Generar ahora / preview)</span>
         <input type="hidden" name="fecha_personalizada" :value="fechaPersonalizada ? '1' : ''">
         <button type="button" @click="fechaPersonalizada = !fechaPersonalizada"
                 class="mt-1 inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium"
@@ -98,11 +151,78 @@
   </div>
   <button type="submit" class="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white">Guardar</button>
 </form>
+{{ proveedores_seleccionados|json_script:"mtrix-proveedores-iniciales" }}
 <script>
 document.getElementById('mtrix-sftp-test')?.addEventListener('click', async function () {
   const r = await fetch('{% url "mtrix:api_sftp_probar" %}', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' } });
   const data = await r.json();
   if (window.SynapMessages) { SynapMessages.show(data.mensaje || '', data.ok ? 'success' : 'error'); }
 });
+
+function mtrixProveedoresBuscador() {
+  const el = document.getElementById('mtrix-proveedores-iniciales');
+  let iniciales = [];
+  try { iniciales = el ? JSON.parse(el.textContent) : []; } catch (e) { iniciales = []; }
+  return {
+    buscarUrl: '{% url "mtrix:api_proveedores_buscar" %}',
+    seleccionados: Array.isArray(iniciales) ? iniciales.filter(function (p) { return p && p.codigo != null; }) : [],
+    busqueda: '',
+    sugerencias: [],
+    mostrar: false,
+    activa: 0,
+    get codigosCsv() {
+      return this.seleccionados.map(function (p) { return p.codigo; }).join(',');
+    },
+    get sugerenciasVisibles() {
+      const usados = {};
+      this.seleccionados.forEach(function (p) { usados[p.codigo] = true; });
+      return this.sugerencias.filter(function (p) { return !usados[p.codigo]; });
+    },
+    async buscar() {
+      const q = (this.busqueda || '').trim();
+      if (!q) {
+        this.sugerencias = [];
+        this.mostrar = false;
+        return;
+      }
+      try {
+        const r = await fetch(this.buscarUrl + '?q=' + encodeURIComponent(q), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await r.json();
+        this.sugerencias = (data && data.proveedores) || [];
+        this.activa = 0;
+        this.mostrar = this.sugerenciasVisibles.length > 0;
+      } catch (e) {
+        this.sugerencias = [];
+        this.mostrar = false;
+        if (window.SynapMessages) {
+          SynapMessages.show('No se pudo buscar proveedores.', 'error');
+        }
+      }
+    },
+    seleccionar(item) {
+      if (!item || item.codigo == null) return;
+      if (this.seleccionados.some(function (p) { return p.codigo === item.codigo; })) return;
+      this.seleccionados.push(item);
+      this.busqueda = '';
+      this.sugerencias = [];
+      this.mostrar = false;
+    },
+    quitar(codigo) {
+      this.seleccionados = this.seleccionados.filter(function (p) { return p.codigo !== codigo; });
+    },
+    mover(delta) {
+      const n = this.sugerenciasVisibles.length;
+      if (!n) return;
+      this.mostrar = true;
+      this.activa = (this.activa + delta + n) % n;
+    },
+    confirmarActiva() {
+      const item = this.sugerenciasVisibles[this.activa];
+      if (item) this.seleccionar(item);
+    },
+  };
+}
 </script>
 {% endblock %}

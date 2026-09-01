@@ -26,6 +26,12 @@ CAMPOS_TABLERO_CANTIDAD = (
     "stock_proceso",
 )
 
+# Inventario real en Tablero de producción: Terminado (Pack usa ``total``) y
+# aliases de stock terminado — no ocultar saldos negativos (paridad Armado).
+CAMPOS_TABLERO_SIN_CLAMP_NEGATIVOS = frozenset(
+    {"total", "terminado", "stock_terminado"}
+)
+
 
 def parse_modo_presentacion_operativa(raw: Optional[str]) -> str:
     modo = (raw or "").strip().lower()
@@ -188,8 +194,33 @@ def enriquecer_fila_tablero_presentacion(
     out["presentacion_modo"] = modo
     for campo in CAMPOS_TABLERO_CANTIDAD:
         if campo in out:
-            out[f"{campo}_display"] = _display_cantidad_tablero(out[campo], modo)
-            out[f"{campo}_docenas_pcp"] = docenas_enteras_pcp(out[campo])
+            clamp = campo not in CAMPOS_TABLERO_SIN_CLAMP_NEGATIVOS
+            out[f"{campo}_display"] = _display_cantidad_tablero(
+                out[campo], modo, clamp_negativos=clamp
+            )
+            out[f"{campo}_docenas_pcp"] = docenas_enteras_pcp(
+                out[campo], clamp_negativos=clamp
+            )
+            if not clamp:
+                try:
+                    saldo = int(round(float(out[campo] or 0)))
+                except (TypeError, ValueError):
+                    saldo = 0
+                out[f"{campo}_es_negativo"] = saldo < 0
+    # Alias Terminado (Pack): raw ``terminado`` / ``stock_terminado`` fuera del loop.
+    for campo in ("terminado", "stock_terminado"):
+        if campo in out and f"{campo}_display" not in out:
+            out[f"{campo}_display"] = _display_cantidad_tablero(
+                out[campo], modo, clamp_negativos=False
+            )
+            out[f"{campo}_docenas_pcp"] = docenas_enteras_pcp(
+                out[campo], clamp_negativos=False
+            )
+            try:
+                saldo = int(round(float(out[campo] or 0)))
+            except (TypeError, ValueError):
+                saldo = 0
+            out[f"{campo}_es_negativo"] = saldo < 0
     _enriquecer_bloque_demanda_pcp(out)
     if "a_enviar" not in out:
         from mpr.services import _calcular_a_enviar_componente
@@ -269,9 +300,16 @@ def enriquecer_resumen_tablero_kpi_presentacion(
             "resta_urgente_ped",
             "a_fabricar",
         ):
+            clamp = campo not in CAMPOS_TABLERO_SIN_CLAMP_NEGATIVOS
             item[f"{campo}_display"] = _display_cantidad_tablero(
-                item.get(campo, 0), modo_n
+                item.get(campo, 0), modo_n, clamp_negativos=clamp
             )
+            if not clamp:
+                try:
+                    saldo = int(round(float(item.get(campo) or 0)))
+                except (TypeError, ValueError):
+                    saldo = 0
+                item[f"{campo}_es_negativo"] = saldo < 0
         tot_stock += int(round(float(item.get("stock_terminado") or 0)))
         tot_resta += int(round(float(item.get("resta_urgente") or 0)))
         tot_ped += int(round(float(item.get("resta_urgente_ped") or 0)))
@@ -281,7 +319,9 @@ def enriquecer_resumen_tablero_kpi_presentacion(
     out["totales_packs_stock"] = tot_stock
     out["totales_packs_resta"] = tot_resta
     out["totales_packs_ped"] = tot_ped
-    out["totales_packs_stock_display"] = _display_cantidad_tablero(tot_stock, modo_n)
+    out["totales_packs_stock_display"] = _display_cantidad_tablero(
+        tot_stock, modo_n, clamp_negativos=False
+    )
     out["totales_packs_resta_display"] = _display_cantidad_tablero(tot_resta, modo_n)
     out["totales_packs_ped_display"] = _display_cantidad_tablero(tot_ped, modo_n)
     return out

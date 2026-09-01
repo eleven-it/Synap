@@ -74,6 +74,39 @@ def _clausula_in(column: str, ids: Sequence[int]) -> tuple[str, List[int]]:
     return (f" AND {column} IN ({placeholders})", ids_int)
 
 
+def _normalize_scope_ids(values: Optional[Sequence]) -> List[int]:
+    out: List[int] = []
+    for raw in values or []:
+        parsed = to_int_or_none(raw)
+        if parsed is not None:
+            out.append(parsed)
+    return out
+
+
+def _cc_periodo_scope_on_clause(
+    *,
+    table_alias: str = "cc_periodo",
+    sucursales: Optional[Sequence[int]] = None,
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> tuple[str, List[int]]:
+    """Cláusulas de alcance sucursal/PV para ON de anti-join (nunca en WHERE)."""
+    parts: List[str] = []
+    params: List[int] = []
+    suc_ids = _normalize_scope_ids(sucursales)
+    pv_ids = _normalize_scope_ids(puntos_venta)
+    if suc_ids:
+        ph = ", ".join(["%s"] * len(suc_ids))
+        parts.append(f"{table_alias}.CodSucursal IN ({ph})")
+        params.extend(suc_ids)
+    if pv_ids:
+        ph = ", ".join(["%s"] * len(pv_ids))
+        parts.append(f"{table_alias}.id_pv IN ({ph})")
+        params.extend(pv_ids)
+    if not parts:
+        return "", []
+    return " AND " + " AND ".join(parts), params
+
+
 def _fmt_fecha_ddmmaaaa(value: Any) -> str:
     """Fecha a dd/MM/yyyy (español); '-' si vacía/nula."""
     if value is None or value == "":
@@ -140,6 +173,8 @@ def get_clientes_sin_ventas(
     fecha_desde: Any,
     fecha_hasta: Any,
     cod_viajantes: Optional[Sequence[int]] = None,
+    sucursales: Optional[Sequence[int]] = None,
+    puntos_venta: Optional[Sequence[int]] = None,
     usa_id_manual: bool = False,
     incluir_domicilio: bool = False,
 ) -> Dict[str, Any]:
@@ -174,6 +209,17 @@ def get_clientes_sin_ventas(
         where_vendedor = frag
         where_params = ids
 
+    scope_on, scope_params = _cc_periodo_scope_on_clause(
+        table_alias="cc_periodo",
+        sucursales=sucursales,
+        puntos_venta=puntos_venta,
+    )
+    ultima_scope_on, ultima_scope_params = _cc_periodo_scope_on_clause(
+        table_alias="cc2",
+        sucursales=sucursales,
+        puntos_venta=puntos_venta,
+    )
+
     sql = f"""
         SELECT
             viajantes.CodViajante,
@@ -189,6 +235,7 @@ def get_clientes_sin_ventas(
                 WHERE cc2.Codigo = cliente.Codigo
                   AND cc2.Anulado = 'No'
                   AND cc2.TipoComprobante NOT IN ('NCA','NCB')
+                  {ultima_scope_on}
             ) AS UltimaCompra
         FROM cliente
         LEFT JOIN cuentacliente AS cc_periodo
@@ -196,6 +243,7 @@ def get_clientes_sin_ventas(
             AND cc_periodo.Fecha BETWEEN %s AND %s
             AND cc_periodo.TipoComprobante NOT IN ('NCA','NCB')
             AND cc_periodo.Anulado = 'No'
+            {scope_on}
         LEFT JOIN viajantes
             ON viajantes.CodViajante = cliente.CodViajante
         WHERE cc_periodo.Codigo IS NULL
@@ -205,7 +253,13 @@ def get_clientes_sin_ventas(
         GROUP BY cliente.Codigo
         ORDER BY viajantes.Nombre ASC, cliente.Nombre_cliente ASC
     """
-    params: List[Any] = [desde, hasta, *where_params]
+    params: List[Any] = [
+        *ultima_scope_params,
+        desde,
+        hasta,
+        *scope_params,
+        *where_params,
+    ]
 
     pool = get_mysql_pool()
     with pool.get_connection(base_empresa) as conn:
@@ -217,7 +271,13 @@ def get_clientes_sin_ventas(
         datos = _armar_filas(rows, colnames, incluir_domicilio)
 
         resumen_vendedores, resumen_global = _resumen_por_vendedor(
-            cursor, desde, hasta, where_vendedor, where_params
+            cursor,
+            desde,
+            hasta,
+            where_vendedor,
+            where_params,
+            sucursales=sucursales,
+            puntos_venta=puntos_venta,
         )
 
     modo_todos = len(resumen_vendedores) > 1
@@ -274,7 +334,15 @@ def _resumen_por_vendedor(
     hasta: str,
     where_vendedor: str,
     where_params: Sequence[Any],
+    *,
+    sucursales: Optional[Sequence[int]] = None,
+    puntos_venta: Optional[Sequence[int]] = None,
 ) -> tuple[List[Dict[str, Any]], Dict[str, int]]:
+    scope_on, scope_params = _cc_periodo_scope_on_clause(
+        table_alias="cc_periodo",
+        sucursales=sucursales,
+        puntos_venta=puntos_venta,
+    )
     sql_resumen = f"""
         SELECT
             viajantes.CodViajante,
@@ -288,6 +356,7 @@ def _resumen_por_vendedor(
             AND cc_periodo.Fecha BETWEEN %s AND %s
             AND cc_periodo.TipoComprobante NOT IN ('NCA','NCB')
             AND cc_periodo.Anulado = 'No'
+            {scope_on}
         LEFT JOIN viajantes
             ON viajantes.CodViajante = cliente.CodViajante
         WHERE cliente.Estado = 'Activo'
@@ -296,7 +365,7 @@ def _resumen_por_vendedor(
         GROUP BY viajantes.CodViajante, viajantes.Nombre
         ORDER BY viajantes.Nombre ASC
     """
-    cursor.execute(sql_resumen, [desde, hasta, *where_params])
+    cursor.execute(sql_resumen, [desde, hasta, *scope_params, *where_params])
     filas = cursor.fetchall()
 
     resumen: List[Dict[str, Any]] = []

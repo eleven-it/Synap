@@ -23,14 +23,19 @@ SELECT
     cliente.nombre_cliente AS RAZAO_SOCIAL,
     DATE_FORMAT(cuentacliente.Fecha, '%%Y%%m%%d') AS DATA,
     CAST(cuentacliente.NroComprobante AS CHAR(50)) AS NOTA_FISCAL,
+    articulo.IDArt AS ID_ART,
+    IF(articulo.codartprov IS NOT NULL AND articulo.codartprov <> '',
+       CAST(articulo.codartprov AS CHAR(255)), '') AS CODIGO_INTERNO,
     IF(articulo.NroCodBarraF IS NOT NULL AND articulo.NroCodBarraF <> '',
        CAST(articulo.NroCodBarraF AS CHAR(255)), '0') AS EAN,
     stock.Cantidad AS QTDE,
     stock.PrecioVentaxU AS PRECO,
     CAST(cuentacliente.CodViajante AS CHAR(20)) AS VENDEDOR,
     cuentacliente.TipoComprobante AS TIPO_COMP,
-    IF(departamento.cod_postal IS NOT NULL AND TRIM(departamento.cod_postal) <> '',
-       CAST(departamento.cod_postal AS CHAR(20)), '0') AS CEP
+    IF(departamento.cod_postal IS NOT NULL AND TRIM(departamento.cod_postal) <> ''
+       AND TRIM(departamento.cod_postal) <> '0'
+       AND CHAR_LENGTH(TRIM(departamento.cod_postal)) >= 4,
+       CAST(departamento.cod_postal AS CHAR(20)), '9400') AS CEP
 FROM cuentacliente
 RIGHT JOIN stock ON (stock.CodigoMovimiento = cuentacliente.CodigoMovimiento)
 LEFT JOIN articulo ON (articulo.IDArt = stock.IDArt)

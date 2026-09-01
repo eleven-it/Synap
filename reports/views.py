@@ -35,6 +35,20 @@ BUILDER_HYBRID_SLUGS = frozenset(
         "stock-existencias",
     }
 )
+
+# Informes de ventas BO con filtro Punto de venta visible en UI (excluye bo-stock-facturacion).
+SLUGS_VENTAS_CON_PUNTO_VENTA = frozenset(
+    {
+        "ventas-objetivos-vs-bo",
+        "ventas-por-vendedor",
+        "ventas-por-articulo",
+        "ventas-marca-superart",
+        "ventas-bom-docenas",
+        "ventas-marcas-mensual",
+    }
+)
+
+
 class ReportsLoginRequiredMixin(LoginRequiredMixin):
     """
     Mixin personalizado para Reports que funciona con AdministraNETUser.
@@ -232,6 +246,7 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "is_declarative": is_declarative,
                 "can_builder": BuilderReportsPermission().has_permission(self.request, self),
                 "report_config_for_script": config if isinstance(config, dict) else {},
+                "mostrar_filtro_punto_venta": report.slug in SLUGS_VENTAS_CON_PUNTO_VENTA,
             }
         )
         if report.slug == self.CLIENTES_SIN_VENTAS_SLUG:
