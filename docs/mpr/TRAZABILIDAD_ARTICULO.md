@@ -135,7 +135,7 @@ Si se alcanza el `limit` (default 2000) en pre-período o rango → advertencia 
 3. KPI strip: Pedido, Terminado, Movimientos  
 4. **§1 BOM**  
 5. **§2 Demanda viva** — tabla PED + resumen **Stock / Cubierto con stock / PED Urgente** (sobre el total pendiente)  
-6. **§3 Movimientos**: tarjetas saldo inicial / saldo al cierre + tabla con **thead sticky** en el scroll único del shell (`#mpr-reportes-scroll`). Sin panel con `overflow` anidado (evita scroll a tirones).
+6. **§3 Movimientos**: tarjetas saldo inicial / saldo al cierre + tabla con **thead sticky** en el scroll único del shell (`#mpr-reportes-scroll`). Sin panel con `overflow` anidado (evita scroll a tirones). Los `th` usan `z-30`, fondo opaco y sombra negativa (máscara) para que el `tbody` no se pinte por encima del encabezado.
 
 ---
 
