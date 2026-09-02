@@ -37,7 +37,7 @@ Servicio único: `construir_analisis_trazabilidad_articulo` en `mpr/services_kar
 |--------|--------|
 | Demanda PED | `listar_demanda_ped_por_articulo` → `_listar_demanda_ped_vivo_fifo` |
 | Stock / brecha | Stock Terminado + fórmulas tablero pack (brechas en payload; UI no las destaca) |
-| Movimientos | OPP/OPA MSTOCK + REM (`stock`) + **Stock Inicial** + **inventario/faltante/sobrante/conteo** MSTOCK; FA omitido en listado |
+| Movimientos | OPP/OPA MSTOCK + REM (`stock`) + **ingresos MSTOCK** que mueven depósito (Stock Inicial, inventario/faltante/sobrante/conteo, ajuste/rotura/transferencia/mov. interno/desarmado); FA omitido en listado |
 | Pre-período | Misma recolección con `solo_pre_periodo` → `saldo_inicial` |
 | Saldo corrido | Arranca en saldo inicial histórico; solo filas `afecta_deposito` |
 
@@ -91,12 +91,34 @@ Los eventos MPR (envío, parte, clasificación) **no** entran al saldo corrido: 
 
 | Clase UI | Origen | Saldo |
 |----------|--------|-------|
-| `opp` | Entrada producción | Suma entrada |
+| `opp` | Producción o transferencia interna | Entrada − salida; al consolidar el pipeline se conservan ambos lados y las transferencias internas netean 0 |
 | `opa` | Armado pack | Entrada pack / salida componentes |
 | `rem` | Remito cliente | Salida |
 | `fa` | Factura | **Omitido** |
 | `inventario` | Ajuste MSTOCK (faltante/sobrante/conteo/inventario) | Según entrada/salida; columna **Conteo** = saldo depósito tras el ajuste |
 | `stock_inicial` | MSTOCK Stock Inicial (alta inicial en depósito) | Entrada |
+| `ajuste` | MSTOCK Ajuste, Rotura, Transferencia, Mov. Interno *, Desarmado | Entrada − salida; **Conteo** = — |
+
+### Motivos MSTOCK «Ingreso de movimiento de stock» (canónico `MOTIVOS_MOVIMIENTO`)
+
+Lista canónica en `core/services/administranet_stock.py`. El análisis incluye los que **mueven stock en el eje** del artículo:
+
+| Código | Motivo | Incluido | Clase UI | Notas |
+|--------|--------|----------|----------|-------|
+| 1 | Stock Inicial | Sí | `stock_inicial` | Alta inicial en depósito |
+| 2 | Ajuste | Sí | `ajuste` | Por `motivo_movimiento` o `TipoComp` |
+| 3 | Faltante | Sí | `inventario` | Campañas / conteo |
+| 4 | Sobrante | Sí | `inventario` | Campañas / conteo |
+| 5 | Rotura | Sí | `ajuste` | |
+| 6 | Transferencia | Sí | `ajuste` | En pipeline consolidado netea 0 si es interna |
+| 7 | Mov. Interno Salida | Sí | `ajuste` | |
+| 8 | Mov. Interno Entrada | Sí | `ajuste` | |
+| 9 | Armado | No | — | Collector OPA/ARMADO (`tipo_mov`) |
+| 10 | Desarmado | Sí | `ajuste` | |
+| 11 | Pedido producción | No | — | `tipo_mov=OPT` ignorado |
+| 12 | Parte producción | No | — | Collector OPP (`tipo_mov`) |
+
+Consulta SQL: `_consultar_movimientos_inventario_mstock` filtra por keywords `LIKE` sobre `motivo_movimiento` y valores exactos `LOWER(TipoComp) IN (…)` definidos en `mpr/services_kardex_articulo.py`.
 
 ### Saldo inicial histórico
 

@@ -18,15 +18,53 @@ ClasificacionKardex = Literal["entrada", "salida", "ignorar"]
 
 MOTIVO_PARTE_PRODUCCION = "Parte producción"
 
+# Keywords LIKE sobre movimiento_stock.motivo_movimiento (LOWER … LIKE %kw%).
+MOTIVOS_MSTOCK_MOTIVO_LIKE_KEYWORDS = (
+    "faltante",
+    "sobrante",
+    "inventario",
+    "conteo",
+    "stock inicial",
+    "ajuste",
+    "rotura",
+    "transferencia",
+    "mov. interno",
+    "desarmado",
+)
+
 MOTIVOS_INVENTARIO_KEYWORDS = ("faltante", "sobrante", "inventario", "conteo")
 
 MOTIVOS_STOCK_INICIAL_KEYWORDS = ("stock inicial",)
 
-MOTIVOS_MSTOCK_DEPOSITO_EXTRA = (
-    "stock inicial",
+MOTIVOS_AJUSTE_DEPOSITO_KEYWORDS = (
     "ajuste",
-    "transferencia",
     "rotura",
+    "transferencia",
+    "mov. interno",
+    "desarmado",
+)
+
+# Valores exactos LOWER para stock.TipoComp IN (…).
+MOTIVOS_MSTOCK_TIPOCOMP_INVENTARIO = (
+    "faltante",
+    "sobrante",
+    "inventario",
+    "ajuste inventario",
+    "conteo",
+)
+MOTIVOS_MSTOCK_TIPOCOMP_STOCK_INICIAL = ("stock inicial",)
+MOTIVOS_MSTOCK_TIPOCOMP_AJUSTE = (
+    "ajuste",
+    "rotura",
+    "transferencia",
+    "mov. interno salida",
+    "mov. interno entrada",
+    "desarmado",
+)
+MOTIVOS_MSTOCK_TIPOCOMP_DEPOSITO = (
+    *MOTIVOS_MSTOCK_TIPOCOMP_INVENTARIO,
+    *MOTIVOS_MSTOCK_TIPOCOMP_STOCK_INICIAL,
+    *MOTIVOS_MSTOCK_TIPOCOMP_AJUSTE,
 )
 
 PRIORIDAD_FUENTE_DEDUPE = {
@@ -84,7 +122,35 @@ def _es_motivo_stock_inicial(
     motivo = (motivo_movimiento or "").strip().lower()
     if any(kw in motivo for kw in MOTIVOS_STOCK_INICIAL_KEYWORDS):
         return True
-    return (tipo_comp or "").strip().lower() in MOTIVOS_STOCK_INICIAL_KEYWORDS
+    return (tipo_comp or "").strip().lower() in MOTIVOS_MSTOCK_TIPOCOMP_STOCK_INICIAL
+
+
+def _es_motivo_ajuste_deposito(
+    motivo_movimiento: Optional[str],
+    tipo_comp: Optional[str] = None,
+) -> bool:
+    """Ajuste, rotura, transferencia, mov. interno o desarmado (no inventario/conteo)."""
+    motivo = (motivo_movimiento or "").strip().lower()
+    if _es_motivo_inventario(motivo_movimiento, tipo_comp):
+        return False
+    if _es_motivo_stock_inicial(motivo_movimiento, tipo_comp):
+        return False
+    if any(kw in motivo for kw in MOTIVOS_AJUSTE_DEPOSITO_KEYWORDS):
+        return True
+    tipo = (tipo_comp or "").strip().lower()
+    return tipo in MOTIVOS_MSTOCK_TIPOCOMP_AJUSTE
+
+
+def _es_motivo_ingreso_deposito(
+    motivo_movimiento: Optional[str],
+    tipo_comp: Optional[str] = None,
+) -> bool:
+    """MSTOCK ingreso que mueve stock en el eje (tipo_mov vacío típico)."""
+    return (
+        _es_motivo_stock_inicial(motivo_movimiento, tipo_comp)
+        or _es_motivo_inventario(motivo_movimiento, tipo_comp)
+        or _es_motivo_ajuste_deposito(motivo_movimiento, tipo_comp)
+    )
 
 
 def _clasificar_movimiento_analisis(
@@ -111,6 +177,9 @@ def _clasificar_movimiento_analisis(
 
     if _es_motivo_inventario(motivo_movimiento, tipo_comp):
         return "inventario", True
+
+    if _es_motivo_ajuste_deposito(motivo_movimiento, tipo_comp):
+        return "ajuste", True
 
     clasif = _clasificar_movimiento_kardex(tipo_mov, motivo_movimiento)
     if clasif == "entrada":
@@ -289,6 +358,12 @@ def _fetch_nombre_deposito(base_empresa: str, id_deposito: int) -> str:
 def _normalizar_fila_kardex(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Convierte fila SQL a movimiento kardex con entrada/salida según clasificación.
 
+    OPP:
+    - producción nueva: suele tener solo ``Entrada``;
+    - transferencia interna del pipeline: tiene ``Salida`` en origen y ``Entrada``
+      en destino bajo el mismo movimiento. Se conservan ambos lados para que
+      netee cero al consolidar varios depósitos.
+
     OPA/ARMADO:
     - componente: suele tener ``Salida`` (egreso de Semi);
     - pack terminado: suele tener ``Entrada`` (ingreso a Terminado).
@@ -304,7 +379,7 @@ def _normalizar_fila_kardex(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     total_entrada = int(float(row.get("total_entrada") or 0))
     total_salida = int(float(row.get("total_salida") or 0))
     if clasif == "entrada":
-        entrada, salida = total_entrada, 0
+        entrada, salida = total_entrada, total_salida
     elif total_salida > 0:
         entrada, salida = 0, total_salida
     elif total_entrada > 0:
@@ -421,7 +496,7 @@ def _consultar_movimientos_inventario_mstock(
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
 ) -> List[Dict[str, Any]]:
-    """MSTOCK inventario / faltante / sobrante / conteo por motivo o TipoComp."""
+    """MSTOCK ingreso depósito: inventario, stock inicial y ajustes por motivo o TipoComp."""
     from mpr.services import _nombre_tabla
 
     id_art = to_int_or_none(id_articulo)
@@ -429,15 +504,9 @@ def _consultar_movimientos_inventario_mstock(
         return []
 
     lim = max(1, min(int(limit or 500), 5000))
-    # Orden MUST coincidir con los %s del SQL: IDArt, 5× LIKE motivo, filtros, LIMIT.
-    params: List[Any] = [
-        id_art,
-        "%faltante%",
-        "%sobrante%",
-        "%inventario%",
-        "%conteo%",
-        "%stock inicial%",
-    ]
+    like_patterns = [f"%{kw}%" for kw in MOTIVOS_MSTOCK_MOTIVO_LIKE_KEYWORDS]
+    # Orden MUST coincidir con los %s del SQL: IDArt, N× LIKE motivo, filtros, LIMIT.
+    params: List[Any] = [id_art, *like_patterns]
     filtros_extra = ""
     clausula_dep, params_dep = _clausula_filtro_depositos(
         id_deposito=id_deposito,
@@ -457,7 +526,10 @@ def _consultar_movimientos_inventario_mstock(
 
     params.append(lim)
 
-    extra_tipos = ", ".join([f"'{t}'" for t in MOTIVOS_MSTOCK_DEPOSITO_EXTRA])
+    like_clauses = "\n                    OR ".join(
+        ["LOWER(COALESCE(m.motivo_movimiento, '')) LIKE %s"] * len(like_patterns)
+    )
+    tipocomp_in = ", ".join([f"'{t}'" for t in MOTIVOS_MSTOCK_TIPOCOMP_DEPOSITO])
 
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
@@ -486,15 +558,8 @@ def _consultar_movimientos_inventario_mstock(
                   AND UPPER(TRIM(COALESCE(m.tipo_comprobante, ''))) = 'MSTOCK'
                   AND UPPER(TRIM(COALESCE(m.tipo_mov, ''))) NOT IN ('OPP', 'OPA', 'ARMADO', 'OPT')
                   AND (
-                    LOWER(COALESCE(m.motivo_movimiento, '')) LIKE %s
-                    OR LOWER(COALESCE(m.motivo_movimiento, '')) LIKE %s
-                    OR LOWER(COALESCE(m.motivo_movimiento, '')) LIKE %s
-                    OR LOWER(COALESCE(m.motivo_movimiento, '')) LIKE %s
-                    OR LOWER(COALESCE(m.motivo_movimiento, '')) LIKE %s
-                    OR LOWER(COALESCE(s.TipoComp, '')) IN (
-                        'faltante', 'sobrante', 'inventario', 'ajuste inventario', 'conteo',
-                        {extra_tipos}
-                    )
+                    {like_clauses}
+                    OR LOWER(COALESCE(s.TipoComp, '')) IN ({tipocomp_in})
                   )
                   {filtros_extra}
                 GROUP BY
@@ -628,9 +693,7 @@ def _normalizar_fila_analisis_stock(
 def _normalizar_fila_analisis_mstock(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     fila_k = _normalizar_fila_kardex(row)
     if not fila_k:
-        if _es_motivo_inventario(row.get("motivo_movimiento"), row.get("tipo_comp")) or _es_motivo_stock_inicial(
-            row.get("motivo_movimiento"), row.get("tipo_comp")
-        ):
+        if _es_motivo_ingreso_deposito(row.get("motivo_movimiento"), row.get("tipo_comp")):
             return _normalizar_fila_analisis_stock(row, fuente="mstock")
         return None
     clase_ui, afecta = _clasificar_movimiento_analisis(
