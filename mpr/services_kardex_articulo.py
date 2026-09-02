@@ -38,6 +38,23 @@ PRIORIDAD_FUENTE_DEDUPE = {
 }
 
 
+def _clausula_filtro_depositos(
+    *,
+    id_deposito: Optional[int] = None,
+    ids_deposito: Optional[List[int]] = None,
+    alias: str = "s",
+) -> tuple[str, List[Any]]:
+    """Fragmento SQL ``AND alias.CodDeposito …`` para un depósito o lista (pipeline)."""
+    dep = to_int_or_none(id_deposito)
+    if dep is not None:
+        return f" AND {alias}.CodDeposito = %s", [dep]
+    ids = [d for d in (to_int_or_none(x) for x in (ids_deposito or [])) if d is not None]
+    if ids:
+        placeholders = ",".join(["%s"] * len(ids))
+        return f" AND {alias}.CodDeposito IN ({placeholders})", ids
+    return "", []
+
+
 def _afecta_deposito_terminado(comprobante: Optional[str]) -> bool:
     """FA se lista pero no mueve saldo corrido Terminado (paridad _gen_kardex_610_t6)."""
     return (comprobante or "").upper() != "FA"
@@ -165,6 +182,7 @@ def _consultar_movimientos_kardex_articulo(
     id_articulo: int,
     *,
     id_deposito: Optional[int] = None,
+    ids_deposito: Optional[List[int]] = None,
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
@@ -179,10 +197,12 @@ def _consultar_movimientos_kardex_articulo(
     lim = max(1, min(int(limit or 500), 5000))
     params: List[Any] = [id_art, MOTIVO_PARTE_PRODUCCION]
     filtros_extra = ""
-    dep = to_int_or_none(id_deposito)
-    if dep is not None:
-        filtros_extra += " AND s.CodDeposito = %s"
-        params.append(dep)
+    clausula_dep, params_dep = _clausula_filtro_depositos(
+        id_deposito=id_deposito,
+        ids_deposito=ids_deposito,
+    )
+    filtros_extra += clausula_dep
+    params.extend(params_dep)
 
     fd = to_date_or_none(fecha_desde)
     fh = to_date_or_none(fecha_hasta)
@@ -312,6 +332,7 @@ def _consultar_movimientos_stock_rem_fa(
     id_articulo: int,
     *,
     id_deposito: Optional[int] = None,
+    ids_deposito: Optional[List[int]] = None,
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
@@ -326,10 +347,12 @@ def _consultar_movimientos_stock_rem_fa(
     lim = max(1, min(int(limit or 500), 5000))
     params: List[Any] = [id_art]
     filtros_extra = ""
-    dep = to_int_or_none(id_deposito)
-    if dep is not None:
-        filtros_extra += " AND s.CodDeposito = %s"
-        params.append(dep)
+    clausula_dep, params_dep = _clausula_filtro_depositos(
+        id_deposito=id_deposito,
+        ids_deposito=ids_deposito,
+    )
+    filtros_extra += clausula_dep
+    params.extend(params_dep)
 
     fd = to_date_or_none(fecha_desde)
     fh = to_date_or_none(fecha_hasta)
@@ -393,6 +416,7 @@ def _consultar_movimientos_inventario_mstock(
     id_articulo: int,
     *,
     id_deposito: Optional[int] = None,
+    ids_deposito: Optional[List[int]] = None,
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
@@ -415,10 +439,12 @@ def _consultar_movimientos_inventario_mstock(
         "%stock inicial%",
     ]
     filtros_extra = ""
-    dep = to_int_or_none(id_deposito)
-    if dep is not None:
-        filtros_extra += " AND s.CodDeposito = %s"
-        params.append(dep)
+    clausula_dep, params_dep = _clausula_filtro_depositos(
+        id_deposito=id_deposito,
+        ids_deposito=ids_deposito,
+    )
+    filtros_extra += clausula_dep
+    params.extend(params_dep)
 
     fd = to_date_or_none(fecha_desde)
     fh = to_date_or_none(fecha_hasta)
@@ -717,11 +743,12 @@ def _fetch_stock_terminado_analisis(
     id_articulo: int,
     *,
     id_deposito: Optional[int] = None,
+    ids_deposito: Optional[List[int]] = None,
 ) -> Optional[int]:
-    """Saldo Terminado real (depósito puntual, tipo_mpr=Terminado o suma_stock='Si').
+    """Saldo en depósito(s) del eje de análisis (Terminado puntual o suma pipeline).
 
-    Sin ``id_deposito``, prioriza el depósito MPR Terminado (mismo eje que el
-    golden sample ``exports/kardex_610_t6_terminado.xlsx``).
+    Sin filtro de depósito, prioriza el depósito MPR Terminado (paridad golden sample).
+    Con ``ids_deposito``, suma saldo en todos (pipeline fabricados consolidado).
     """
     from mpr.services import _nombre_tabla, get_deposito_terminado_mpr
 
@@ -729,15 +756,24 @@ def _fetch_stock_terminado_analisis(
     if not (base_empresa or "").strip() or id_art is None:
         return None
     dep = to_int_or_none(id_deposito)
-    if dep is None:
-        dep = to_int_or_none(get_deposito_terminado_mpr(base_empresa))
+    dep_ids = [d for d in (to_int_or_none(x) for x in (ids_deposito or [])) if d is not None]
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             tbl_sd = _nombre_tabla(cursor, "stock_deposito")
             tbl_dep = _nombre_tabla(cursor, "deposito")
             if not tbl_sd:
                 return None
-            if dep is not None:
+            if dep_ids:
+                placeholders = ",".join(["%s"] * len(dep_ids))
+                cursor.execute(
+                    f"""
+                    SELECT COALESCE(SUM(sd.saldo), 0) AS stock_terminado
+                    FROM {tbl_sd} sd
+                    WHERE sd.id_articulo = %s AND sd.id_deposito IN ({placeholders})
+                    """,
+                    [id_art, *dep_ids],
+                )
+            elif dep is not None:
                 cursor.execute(
                     f"""
                     SELECT COALESCE(SUM(sd.saldo), 0) AS stock_terminado
@@ -746,27 +782,38 @@ def _fetch_stock_terminado_analisis(
                     """,
                     [id_art, dep],
                 )
-            elif tbl_dep:
-                cursor.execute(
-                    f"""
-                    SELECT COALESCE(SUM(sd.saldo), 0) AS stock_terminado
-                    FROM {tbl_sd} sd
-                    INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
-                      AND COALESCE(d.anulado, 'No') = 'No'
-                      AND COALESCE(d.suma_stock, 'Si') = 'Si'
-                    WHERE sd.id_articulo = %s
-                    """,
-                    [id_art],
-                )
-            else:
-                cursor.execute(
-                    f"""
-                    SELECT COALESCE(SUM(sd.saldo), 0) AS stock_terminado
-                    FROM {tbl_sd} sd
-                    WHERE sd.id_articulo = %s
-                    """,
-                    [id_art],
-                )
+            elif dep is None:
+                dep = to_int_or_none(get_deposito_terminado_mpr(base_empresa))
+                if dep is not None:
+                    cursor.execute(
+                        f"""
+                        SELECT COALESCE(SUM(sd.saldo), 0) AS stock_terminado
+                        FROM {tbl_sd} sd
+                        WHERE sd.id_articulo = %s AND sd.id_deposito = %s
+                        """,
+                        [id_art, dep],
+                    )
+                elif tbl_dep:
+                    cursor.execute(
+                        f"""
+                        SELECT COALESCE(SUM(sd.saldo), 0) AS stock_terminado
+                        FROM {tbl_sd} sd
+                        INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
+                          AND COALESCE(d.anulado, 'No') = 'No'
+                          AND COALESCE(d.suma_stock, 'Si') = 'Si'
+                        WHERE sd.id_articulo = %s
+                        """,
+                        [id_art],
+                    )
+                else:
+                    cursor.execute(
+                        f"""
+                        SELECT COALESCE(SUM(sd.saldo), 0) AS stock_terminado
+                        FROM {tbl_sd} sd
+                        WHERE sd.id_articulo = %s
+                        """,
+                        [id_art],
+                    )
             row = cursor.fetchone()
             if not row:
                 return None
@@ -808,6 +855,7 @@ def _recolectar_movimientos_analisis(
     id_articulo: int,
     *,
     id_deposito: Optional[int] = None,
+    ids_deposito: Optional[List[int]] = None,
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
@@ -833,14 +881,18 @@ def _recolectar_movimientos_analisis(
         q_hasta = fecha_hasta
 
     movs: List[Dict[str, Any]] = []
+    filtro_dep = {
+        "id_deposito": id_deposito,
+        "ids_deposito": ids_deposito,
+    }
 
     for row in _consultar_movimientos_kardex_articulo(
         base_empresa,
         id_articulo,
-        id_deposito=id_deposito,
         fecha_desde=q_desde,
         fecha_hasta=q_hasta,
         limit=limit,
+        **filtro_dep,
     ):
         fila = _normalizar_fila_analisis_mstock(row)
         if fila:
@@ -849,10 +901,10 @@ def _recolectar_movimientos_analisis(
     for row in _consultar_movimientos_stock_rem_fa(
         base_empresa,
         id_articulo,
-        id_deposito=id_deposito,
         fecha_desde=q_desde,
         fecha_hasta=q_hasta,
         limit=limit,
+        **filtro_dep,
     ):
         fila = _normalizar_fila_analisis_stock(row, fuente="stock")
         if fila:
@@ -861,10 +913,10 @@ def _recolectar_movimientos_analisis(
     for row in _consultar_movimientos_inventario_mstock(
         base_empresa,
         id_articulo,
-        id_deposito=id_deposito,
         fecha_desde=q_desde,
         fecha_hasta=q_hasta,
         limit=limit,
+        **filtro_dep,
     ):
         fila = _normalizar_fila_analisis_mstock(row)
         if fila:
@@ -906,11 +958,13 @@ def construir_analisis_trazabilidad_articulo(
     from datetime import date as date_type, datetime as datetime_type
 
     from mpr.services import (
+        ETIQUETA_EJE_PIPELINE_FABRICADOS,
         _fetch_descripciones_articulo,
         calcular_max_packs_armado_1ra,
         get_bom_detalle,
         get_deposito_semi_elaborado_mpr,
         get_deposito_terminado_mpr,
+        get_depositos_pipeline_fabricados_mpr,
         get_id_en_abm_por_articulo,
         listar_demanda_ped_por_articulo,
     )
@@ -961,37 +1015,67 @@ def construir_analisis_trazabilidad_articulo(
     es_pack = id_en_abm is not None
     bom = get_bom_detalle(base_empresa, id_en_abm) if id_en_abm else None
 
-    # Eje por defecto según tipo de artículo (paridad Excel golden sample para packs).
+    # Eje por defecto según tipo de artículo (pack → Terminado; componente → pipeline fabricados).
     dep_id = to_int_or_none(id_deposito)
+    dep_ids: Optional[List[int]] = None
+    es_pipeline_fabricados = False
     dep_default_canonico = False
     if dep_id is None:
-        dep_canon = (
-            get_deposito_terminado_mpr(base_empresa)
-            if es_pack
-            else get_deposito_semi_elaborado_mpr(base_empresa)
-        )
-        dep_id = to_int_or_none(dep_canon)
-        dep_default_canonico = dep_id is not None
+        if es_pack:
+            dep_canon = get_deposito_terminado_mpr(base_empresa)
+            dep_id = to_int_or_none(dep_canon)
+        else:
+            dep_ids = get_depositos_pipeline_fabricados_mpr(base_empresa)
+            es_pipeline_fabricados = bool(dep_ids)
+            if len(dep_ids) == 1:
+                dep_id = dep_ids[0]
+                dep_ids = None
+                es_pipeline_fabricados = False
+        dep_default_canonico = dep_id is not None or bool(dep_ids)
     deposito: Optional[Dict[str, Any]] = None
-    if dep_id is not None:
+    if es_pipeline_fabricados and dep_ids:
+        deposito = {
+            "id": None,
+            "ids": dep_ids,
+            "nombre": ETIQUETA_EJE_PIPELINE_FABRICADOS,
+            "es_default_canonico": dep_default_canonico,
+            "tipo_eje": "pipeline_fabricados",
+        }
+    elif dep_id is not None:
         deposito = {
             "id": dep_id,
+            "ids": [dep_id],
             "nombre": _fetch_nombre_deposito(base_empresa, dep_id),
             "es_default_canonico": dep_default_canonico,
             "tipo_eje": "terminado" if es_pack else "semi",
         }
 
+    filtro_eje: Dict[str, Any] = {}
+    if dep_ids:
+        filtro_eje["ids_deposito"] = dep_ids
+    elif dep_id is not None:
+        filtro_eje["id_deposito"] = dep_id
+
     demanda_filas = listar_demanda_ped_por_articulo(base_empresa, id_art, limit=limit)
     p_ped = sum(int(to_int_or_none(f.get("cantidad_pendiente_prod")) or 0) for f in demanda_filas)
 
     stock_terminado = _fetch_stock_terminado_analisis(
-        base_empresa, id_art, id_deposito=dep_id
+        base_empresa,
+        id_art,
+        id_deposito=dep_id if not dep_ids else None,
+        ids_deposito=dep_ids,
     )
     if stock_terminado is None:
-        advertencias.append(
-            "No se pudo calcular el stock Terminado actual; revise el depósito "
-            "tipo_mpr=Terminado (o depósitos suma_stock)."
-        )
+        if es_pipeline_fabricados:
+            advertencias.append(
+                "No se pudo calcular el stock consolidado del pipeline fabricados "
+                "(Producción + Semi + 2.ª selección); revise la configuración de depósitos MPR."
+            )
+        else:
+            advertencias.append(
+                "No se pudo calcular el stock Terminado actual; revise el depósito "
+                "tipo_mpr=Terminado (o depósitos suma_stock)."
+            )
         stock_terminado = 0
 
     reserva = _fetch_stock_reserva_articulo(base_empresa, id_art)
@@ -1001,11 +1085,11 @@ def construir_analisis_trazabilidad_articulo(
     pre_movs = _recolectar_movimientos_analisis(
         base_empresa,
         id_art,
-        id_deposito=dep_id,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         limit=limit,
         solo_pre_periodo=True,
+        **filtro_eje,
     )
     pre_movs_stock = [m for m in pre_movs if m.get("afecta_deposito", True)]
     if len(pre_movs) >= limit:
@@ -1020,10 +1104,10 @@ def construir_analisis_trazabilidad_articulo(
         movs_crudos = _recolectar_movimientos_analisis(
             base_empresa,
             id_art,
-            id_deposito=dep_id,
             fecha_desde=fecha_desde,
             fecha_hasta=fecha_hasta,
             limit=limit,
+            **filtro_eje,
         )
         neto = sum(
             (int(m.get("entrada") or 0) - int(m.get("salida") or 0))
@@ -1043,10 +1127,10 @@ def construir_analisis_trazabilidad_articulo(
     movimientos = _recolectar_movimientos_analisis(
         base_empresa,
         id_art,
-        id_deposito=dep_id,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         limit=limit,
+        **filtro_eje,
     )
     if len(movimientos) >= limit:
         advertencias.append(
@@ -1067,7 +1151,7 @@ def construir_analisis_trazabilidad_articulo(
     if movimientos:
         saldo_final = int(movimientos[-1].get("saldo_corrido") or saldo_inicial)
 
-    # Conciliación: con Hasta ≥ hoy sobre el eje Terminado (o depósito elegido), el corrido debe cerrar.
+    # Conciliación: con Hasta ≥ hoy sobre el eje elegido, el corrido debe cerrar.
     hasta_str = to_date_or_none(fecha_hasta)
     hasta_date: Optional[date_type] = None
     if hasta_str:
@@ -1076,6 +1160,7 @@ def construir_analisis_trazabilidad_articulo(
         except (ValueError, TypeError):
             hasta_date = None
     hoy = date_type.today()
+    etiqueta_eje_stock = (deposito or {}).get("nombre") or "depósito del análisis"
     if (
         calculado_ok
         and hasta_date is not None
@@ -1084,14 +1169,15 @@ def construir_analisis_trazabilidad_articulo(
     ):
         advertencias.append(
             f"El saldo reconstruido al cierre ({saldo_final}) no coincide con "
-            f"el stock actual del depósito ({stock_terminado}). Puede haber movimientos "
-            "no capturados, truncado por límite o un depósito distinto al eje del análisis."
+            f"el stock actual del eje ({stock_terminado} en {etiqueta_eje_stock}). "
+            "Puede haber movimientos no capturados, truncado por límite o un depósito "
+            "distinto al eje del análisis."
         )
 
     dep_semi = dep_id
     if es_pack and dep_id is None:
         dep_semi = get_deposito_terminado_mpr(base_empresa)
-    elif not es_pack and dep_id is None:
+    elif not es_pack:
         dep_semi = get_deposito_semi_elaborado_mpr(base_empresa)
     capacidad_semi = 0
     if es_pack and dep_semi is not None:
@@ -1155,7 +1241,9 @@ def construir_analisis_trazabilidad_articulo(
             "total_salidas": sum(int(m.get("salida") or 0) for m in movimientos),
             "max_packs": max_packs,
             "deposito_id": (deposito or {}).get("id"),
+            "deposito_ids": (deposito or {}).get("ids") or [],
             "deposito_nombre": (deposito or {}).get("nombre"),
+            "tipo_eje": (deposito or {}).get("tipo_eje"),
         },
         "saldo_inicial": {
             "valor": saldo_inicial,

@@ -5714,6 +5714,33 @@ def get_deposito_2da_seleccion_mpr(base_empresa: str) -> Optional[int]:
     return _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_2DA_SELECCION)
 
 
+TIPOS_MPR_PIPELINE_FABRICADOS = (
+    TIPO_MPR_PRODUCCION,
+    TIPO_MPR_SEMI_ELABORADO,
+    TIPO_MPR_2DA_SELECCION,
+)
+
+ETIQUETA_EJE_PIPELINE_FABRICADOS = "Pipeline fabricados (Producción + Semi + 2da)"
+
+
+def get_depositos_pipeline_fabricados_mpr(base_empresa: str) -> List[int]:
+    """IDs de depósitos del pipeline fabricados: Producción, Semi elaborado y 2.ª selección."""
+    if not (base_empresa or "").strip():
+        return []
+    vistos: set[int] = set()
+    ids: List[int] = []
+    for getter in (
+        get_deposito_produccion_mpr,
+        get_deposito_semi_elaborado_mpr,
+        get_deposito_2da_seleccion_mpr,
+    ):
+        dep = to_int_or_none(getter(base_empresa))
+        if dep is not None and dep not in vistos:
+            vistos.add(dep)
+            ids.append(dep)
+    return ids
+
+
 def get_deposito_planchado_mpr(base_empresa: str) -> Optional[int]:
     """Depósito de planchado (tipo_mpr=Planchado): etapa de inspección aprobatoria desde Producción."""
     return _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_PLANCHADO)
