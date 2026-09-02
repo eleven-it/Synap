@@ -23,7 +23,7 @@ Informe **canónico** por artículo que **reconstruye la historia del rango** pe
 Cabecera: artículo, rango, pack/componente, Terminado actual.  
 **No se muestra** «A producir» ni timeline MPR duplicada. KPI strip: Pedido / Terminado / Movimientos.
 
-Al **Analizar** / **Actualizar** se muestra el **modal de espera Synap** (`mpr-post-loading` / `synapShowPostLoading`).
+Al **Analizar** / **Actualizar** se muestra el **modal de espera Synap** (`mpr-post-loading` / `synapShowPostLoading`). **Analizar** toma el **Desde/Hasta** (y presentación) del chrome superior en el momento del submit, aunque no se haya pulsado Actualizar.
 
 La entrada del hub se llama **Análisis trazabilidad** (slug `kardex_articulo`, retrocompatible).
 

@@ -840,6 +840,8 @@ class TestKardexArticuloUIRender(SimpleTestCase):
         self.assertNotIn("alert(", html)
         self.assertNotIn("window.confirm", html)
         self.assertNotIn('name="id_deposito"', html)
+        self.assertIn("sincronizarPeriodoShell", html)
+        self.assertIn('@submit="sincronizarPeriodoShell()"', html)
 
     def test_kpi_strip_kardex_brecha_pack(self):
         from django.template.loader import render_to_string
