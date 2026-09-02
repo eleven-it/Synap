@@ -85,7 +85,13 @@
         <span>Rango {{ fecha_desde_display }} — {{ fecha_hasta_display }}</span>
         {% if meta.deposito %}
         <span class="hidden sm:inline" aria-hidden="true">·</span>
-        <span>Eje stock: <strong>{{ meta.deposito.nombre }}</strong>{% if meta.articulo.es_pack %} (pack terminado){% else %} (componente Semi){% endif %}</span>
+        {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
+        <span>Eje stock: <strong>{{ meta.deposito.nombre }}</strong> (componente fabricado)</span>
+        {% elif meta.articulo.es_pack %}
+        <span>Eje stock: <strong>{{ meta.deposito.nombre }}</strong> (pack terminado)</span>
+        {% else %}
+        <span>Eje stock: <strong>{{ meta.deposito.nombre }}</strong></span>
+        {% endif %}
         {% endif %}
         <span class="hidden sm:inline" aria-hidden="true">·</span>
         {% if meta.articulo.es_pack %}
@@ -96,7 +102,11 @@
         {% if meta.stock and meta.deposito %}
         <span class="hidden sm:inline" aria-hidden="true">·</span>
         <span>
+            {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
+            Stock consolidado pipeline:
+            {% else %}
             Stock en {{ meta.deposito.nombre }}:
+            {% endif %}
             <strong class="tabular-nums {% if meta.stock.negativo %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">{{ meta.stock.terminado|default:0 }}</strong>
         </span>
         {% endif %}

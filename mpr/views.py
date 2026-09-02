@@ -4733,6 +4733,7 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                 meta["deposito"] = data.get("deposito")
                 if meta["deposito"]:
                     meta["id_deposito"] = meta["deposito"].get("id")
+                    meta["ids_deposito"] = meta["deposito"].get("ids") or []
                 meta["advertencias"] = data.get("advertencias") or []
                 meta["demanda_ped"] = data.get("demanda_ped") or meta["demanda_ped"]
                 meta["stock"] = data.get("stock") or meta["stock"]

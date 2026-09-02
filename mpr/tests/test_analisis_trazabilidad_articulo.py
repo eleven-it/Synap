@@ -13,10 +13,47 @@ from mpr.services_kardex_articulo import (
     _calcular_saldo_corrido_analisis,
     _calcular_saldo_inicial_terminado,
     _clasificar_movimiento_analisis,
+    _clausula_filtro_depositos,
     _deduplicar_movimientos,
     _unificar_y_saldo_corrido,
     construir_analisis_trazabilidad_articulo,
 )
+
+
+class TestClausulaFiltroDepositos(SimpleTestCase):
+    def test_un_deposito_genera_igualdad(self):
+        sql, params = _clausula_filtro_depositos(id_deposito=3)
+        self.assertIn("CodDeposito = %s", sql)
+        self.assertEqual(params, [3])
+
+    def test_lista_genera_in(self):
+        sql, params = _clausula_filtro_depositos(ids_deposito=[5, 3, 4])
+        self.assertIn("CodDeposito IN", sql)
+        self.assertEqual(params, [5, 3, 4])
+
+    def test_id_deposito_prioriza_sobre_lista(self):
+        sql, params = _clausula_filtro_depositos(id_deposito=6, ids_deposito=[5, 3])
+        self.assertIn("CodDeposito = %s", sql)
+        self.assertEqual(params, [6])
+
+
+class TestTransferenciaPipelineNeteaCero(SimpleTestCase):
+    """Transferencia Prod→Semi en mismo MSTOCK no altera saldo consolidado."""
+
+    def test_movimiento_con_entrada_y_salida_neto_cero(self):
+        movs = [
+            {
+                "fecha_sort": date(2026, 8, 3),
+                "codigo_movimiento": 900,
+                "entrada": 50,
+                "salida": 50,
+                "afecta_deposito": True,
+                "clase_ui": "inventario",
+            },
+        ]
+        out = _unificar_y_saldo_corrido(movs, saldo_inicial=120)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["saldo_corrido"], 120)
 
 
 class TestAfectaDepositoTerminado(SimpleTestCase):
@@ -409,8 +446,7 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
         self.assertEqual(len(fa_rows), 0)
         self.assertEqual(payload["movimientos"], [])
 
-    @patch("mpr.services_kardex_articulo._fetch_nombre_deposito", return_value="Semi elaborado")
-    @patch("mpr.services.get_deposito_semi_elaborado_mpr", return_value=3)
+    @patch("mpr.services.get_depositos_pipeline_fabricados_mpr", return_value=[5, 3, 4])
     @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
     @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
@@ -464,8 +500,9 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
         self.assertEqual(payload["movimientos"][0]["codigo_movimiento"], 2)
         self.assertEqual(payload["movimientos"][0]["saldo_corrido"], 80)
         self.assertEqual(payload["kpis"]["saldo_final"], 80)
-        # Eje Semi por defecto para componentes.
-        self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"), 3)
+        # Eje pipeline fabricados por defecto para componentes.
+        self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("ids_deposito"), [5, 3, 4])
+        self.assertIsNone(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"))
 
 
 class TestEventosMprNoAlteranSaldoKardex(SimpleTestCase):
@@ -491,32 +528,84 @@ class TestEventosMprNoAlteranSaldoKardex(SimpleTestCase):
         self.assertEqual(movs, [])
 
 
-class TestComponenteUsaDepositoSemiPorDefecto(SimpleTestCase):
-    @patch("mpr.services_kardex_articulo._fetch_nombre_deposito", return_value="Semi elaborado")
-    @patch("mpr.services.get_deposito_semi_elaborado_mpr", return_value=3)
+class TestComponenteUsaPipelineFabricadosPorDefecto(SimpleTestCase):
+    @patch("mpr.services.get_depositos_pipeline_fabricados_mpr", return_value=[5, 3, 4])
     @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
     @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
     @patch("mpr.services.get_bom_detalle", return_value=None)
     @patch("mpr.services.get_id_en_abm_por_articulo", return_value=None)
     @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
-    @patch("mpr.services_kardex_articulo._fetch_stock_terminado_analisis", return_value=0)
+    @patch("mpr.services_kardex_articulo._fetch_stock_terminado_analisis", return_value=150)
     @patch("mpr.services_kardex_articulo._fetch_stock_reserva_articulo", return_value=0)
     @patch(
         "mpr.services._fetch_descripciones_articulo",
         return_value={1401: ("610", "Componente prueba")},
     )
     @patch("mpr.services_kardex_articulo._recolectar_movimientos_analisis", return_value=[])
-    def test_componente_sin_filtro_explicito_usa_semi(self, mock_recolectar, *_mocks):
+    def test_componente_sin_filtro_explicito_usa_pipeline(
+        self,
+        mock_recolectar,
+        mock_desc,
+        mock_reserva,
+        mock_fetch_stock,
+        *_mocks,
+    ):
         payload = construir_analisis_trazabilidad_articulo(
             "empresa92",
             1401,
             fecha_desde="2026-07-01",
             fecha_hasta="2026-09-30",
         )
-        self.assertEqual(payload["deposito"]["id"], 3)
-        self.assertEqual(payload["deposito"]["tipo_eje"], "semi")
-        self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"), 3)
+        self.assertIsNone(payload["deposito"]["id"])
+        self.assertEqual(payload["deposito"]["ids"], [5, 3, 4])
+        self.assertEqual(payload["deposito"]["tipo_eje"], "pipeline_fabricados")
+        self.assertIn("Pipeline fabricados", payload["deposito"]["nombre"])
+        self.assertEqual(payload["stock"]["terminado"], 150)
+        mock_fetch_stock.assert_called_once()
+        self.assertEqual(mock_fetch_stock.call_args.kwargs.get("ids_deposito"), [5, 3, 4])
+        self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("ids_deposito"), [5, 3, 4])
+        self.assertIsNone(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"))
+
+
+class TestPackUsaTerminadoPorDefecto(SimpleTestCase):
+    @patch("mpr.services_kardex_articulo._fetch_nombre_deposito", return_value="Terminado")
+    @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
+    @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
+    @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
+    @patch("mpr.services.get_bom_detalle", return_value=None)
+    @patch("mpr.services.get_id_en_abm_por_articulo", return_value=24)
+    @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
+    @patch("mpr.services_kardex_articulo._fetch_stock_terminado_analisis", return_value=10)
+    @patch("mpr.services_kardex_articulo._fetch_stock_reserva_articulo", return_value=0)
+    @patch(
+        "mpr.services._fetch_descripciones_articulo",
+        return_value={1398: ("610", "Pack prueba")},
+    )
+    @patch("mpr.services_kardex_articulo._recolectar_movimientos_analisis", return_value=[])
+    def test_pack_sin_filtro_explicito_usa_terminado(
+        self,
+        mock_recolectar,
+        mock_desc,
+        mock_reserva,
+        mock_fetch_stock,
+        *_mocks,
+    ):
+        payload = construir_analisis_trazabilidad_articulo(
+            "empresa92",
+            1398,
+            fecha_desde="2026-07-01",
+            fecha_hasta="2026-09-30",
+        )
+        self.assertEqual(payload["deposito"]["id"], 6)
+        self.assertEqual(payload["deposito"]["tipo_eje"], "terminado")
+        mock_fetch_stock.assert_called_once_with(
+            "empresa92",
+            1398,
+            id_deposito=6,
+            ids_deposito=None,
+        )
+        self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"), 6)
 
 
 class TestGoldenSampleKardex610Blanco(SimpleTestCase):

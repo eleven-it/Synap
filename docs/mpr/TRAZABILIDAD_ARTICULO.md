@@ -67,7 +67,15 @@ El informe Synap debe reproducir la **misma narrativa** sobre el depósito `tipo
 
 Misma lógica para Mix (−29) y Negro (−131): OPA(s) + Faltante + REM; FA no mueve saldo.
 
-**Contrato de eje:** el depósito se resuelve **automáticamente** según el artículo analizado: **pack → Terminado** (`tipo_mpr=Terminado`), **componente → Semi elaborado**. No hay selector manual en la UI; la cabecera muestra el eje elegido.
+**Contrato de eje:** el depósito se resuelve **automáticamente** según el artículo analizado:
+
+| Tipo artículo | Eje stock | Stock KPI / conciliación | Movimientos |
+|---------------|-----------|--------------------------|-------------|
+| **Pack** (`id_en_abm` presente) | `tipo_mpr=Terminado` (un depósito) | Saldo en Terminado | Solo renglones que mueven Terminado |
+| **Componente fabricado** (sin `id_en_abm`) | **Pipeline fabricados**: Producción + Semi elaborado + 2.ª selección | **Suma** de saldo en esos 3 depósitos (como inventario consolidado fabricados) | Movimientos con `CodDeposito IN (…)` agrupados por comprobante; transferencias internas (p. ej. Prod→Semi) **netean 0** en el consolidado |
+
+Helper: `get_depositos_pipeline_fabricados_mpr` en `mpr/services.py`.  
+Cabecera UI: «Eje stock: Pipeline fabricados (Producción + Semi + 2da)». No hay selector manual; la cabecera muestra el eje elegido.
 
 Los eventos MPR (envío, parte, clasificación) **no** entran al saldo corrido: no mueven `stock_deposito` (ver `ENVIO_PRODUCCION_TABLERO.md`). Van en `eventos_mpr` / timeline, no en §3 Movimientos.
 

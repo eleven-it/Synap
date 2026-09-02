@@ -117,7 +117,7 @@
         <span class="text-sm font-bold tabular-nums text-white">{{ kpis.pedido|default:0 }}</span>
     </span>
     <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border {% if kpis.terminado|default:0 < 0 %}border-rose-500/40 bg-rose-900/30{% else %}border-sky-500/40 bg-sky-900/30{% endif %} px-2.5"
-          title="Stock en {{ kpis.deposito_nombre|default:'depósito canónico' }}">
+          title="{% if kpis.tipo_eje == 'pipeline_fabricados' %}Stock consolidado pipeline fabricados{% else %}Stock en {{ kpis.deposito_nombre|default:'depósito canónico' }}{% endif %}">
         <span class="text-[10px] font-semibold uppercase tracking-wide {% if kpis.terminado|default:0 < 0 %}text-rose-300{% else %}text-sky-300{% endif %}">Stock</span>
         <span class="text-sm font-bold tabular-nums {% if kpis.terminado|default:0 < 0 %}text-rose-100{% else %}text-sky-100{% endif %}">{{ kpis.terminado|default:0 }}</span>
     </span>
