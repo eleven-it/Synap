@@ -824,6 +824,8 @@ class TestKardexArticuloUIRender(SimpleTestCase):
         self.assertIn("modal_comprobante_movimiento.js", html)
         self.assertIn("sticky top-0", html)
         self.assertIn("mpr-kardex-thead-sticky", html)
+        self.assertIn("z-30", html)
+        self.assertIn("0_-16px_0_0_", html)
         self.assertIn("border-separate", html)
         self.assertIn("encabezado fijo", html)
         self.assertNotIn("max-h-[min(70vh,42rem)]", html)
