@@ -15,6 +15,8 @@ from mpr.services_kardex_articulo import (
     _clasificar_movimiento_analisis,
     _clausula_filtro_depositos,
     _deduplicar_movimientos,
+    _es_motivo_ingreso_deposito,
+    _normalizar_fila_analisis_mstock,
     _unificar_y_saldo_corrido,
     construir_analisis_trazabilidad_articulo,
 )
@@ -39,6 +41,25 @@ class TestClausulaFiltroDepositos(SimpleTestCase):
 
 class TestTransferenciaPipelineNeteaCero(SimpleTestCase):
     """Transferencia Prod→Semi en mismo MSTOCK no altera saldo consolidado."""
+
+    def test_normalizador_opp_conserva_entrada_y_salida(self):
+        """Regresión: no descartar el egreso del depósito origen."""
+        mov = _normalizar_fila_analisis_mstock(
+            {
+                "fecha": date(2026, 8, 4),
+                "codigo_movimiento": 6084,
+                "tipo_mov": "OPP",
+                "motivo_movimiento": "Parte producción",
+                "total_entrada": 84,
+                "total_salida": 84,
+            }
+        )
+
+        self.assertIsNotNone(mov)
+        self.assertEqual(mov["entrada"], 84)
+        self.assertEqual(mov["salida"], 84)
+        out = _unificar_y_saldo_corrido([mov], saldo_inicial=129)
+        self.assertEqual(out[0]["saldo_corrido"], 129)
 
     def test_movimiento_con_entrada_y_salida_neto_cero(self):
         movs = [
@@ -130,14 +151,99 @@ class TestClasificarMovimientoAnalisis(SimpleTestCase):
         self.assertEqual(clase, "stock_inicial")
         self.assertTrue(afecta)
 
+    def test_ajuste_por_motivo(self):
+        clase, afecta = _clasificar_movimiento_analisis(
+            tipo_mov="",
+            motivo_movimiento="Ajuste",
+            comprobante="MSTOCK",
+            tipo_comp="Ajuste",
+        )
+        self.assertEqual(clase, "ajuste")
+        self.assertTrue(afecta)
+
+    def test_mov_interno_entrada_incluido(self):
+        clase, afecta = _clasificar_movimiento_analisis(
+            tipo_mov="",
+            motivo_movimiento="Mov. Interno Entrada",
+            comprobante="MSTOCK",
+            tipo_comp="Mov. Interno Entrada",
+        )
+        self.assertEqual(clase, "ajuste")
+        self.assertTrue(afecta)
+
+    def test_desarmado_incluido(self):
+        clase, afecta = _clasificar_movimiento_analisis(
+            tipo_mov="",
+            motivo_movimiento="Desarmado",
+            comprobante="MSTOCK",
+            tipo_comp="Desarmado",
+        )
+        self.assertEqual(clase, "ajuste")
+        self.assertTrue(afecta)
+
+
+class TestEsMotivoIngresoDeposito(SimpleTestCase):
+    def test_ajuste_es_ingreso_deposito(self):
+        self.assertTrue(_es_motivo_ingreso_deposito("Ajuste", "Ajuste"))
+
+    def test_mov_interno_es_ingreso_deposito(self):
+        self.assertTrue(_es_motivo_ingreso_deposito("Mov. Interno Entrada", "Mov. Interno Entrada"))
+
+    def test_desarmado_es_ingreso_deposito(self):
+        self.assertTrue(_es_motivo_ingreso_deposito("Desarmado", "Desarmado"))
+
+    def test_armado_no_es_ingreso_deposito_por_motivo_vacio(self):
+        self.assertFalse(_es_motivo_ingreso_deposito("Armado", "Armado"))
+
+
+class TestNormalizarMstockAjuste(SimpleTestCase):
+    """Regresión: fila MSTOCK motivo Ajuste con entrada/salida no se pierde."""
+
+    def test_ajuste_con_entrada_se_normaliza(self):
+        mov = _normalizar_fila_analisis_mstock(
+            {
+                "fecha": date(2026, 8, 10),
+                "codigo_movimiento": 7001,
+                "tipo_mov": "",
+                "motivo_movimiento": "Ajuste",
+                "tipo_comp": "Ajuste",
+                "total_entrada": 15,
+                "total_salida": 0,
+            }
+        )
+        self.assertIsNotNone(mov)
+        self.assertEqual(mov["entrada"], 15)
+        self.assertEqual(mov["salida"], 0)
+        self.assertEqual(mov["clase_ui"], "ajuste")
+        self.assertTrue(mov["afecta_deposito"])
+
+    def test_mov_interno_con_salida_se_normaliza(self):
+        mov = _normalizar_fila_analisis_mstock(
+            {
+                "fecha": date(2026, 8, 11),
+                "codigo_movimiento": 7002,
+                "tipo_mov": "",
+                "motivo_movimiento": "Mov. Interno Salida",
+                "tipo_comp": "Mov. Interno Salida",
+                "total_entrada": 0,
+                "total_salida": 8,
+            }
+        )
+        self.assertIsNotNone(mov)
+        self.assertEqual(mov["salida"], 8)
+        self.assertEqual(mov["clase_ui"], "ajuste")
+
 
 class TestConsultarInventarioMstockParams(SimpleTestCase):
-    """Regresión: orden de binds IDArt + LIKE (faltante/sobrante/inventario/conteo/stock inicial)."""
+    """Regresión: orden de binds IDArt + LIKE motivos + filtros + LIMIT."""
 
     @patch("mpr.services_kardex_articulo.mysql_cursor")
     @patch("mpr.services._nombre_tabla", side_effect=lambda _c, t: t)
     def test_params_id_art_antes_de_likes(self, _nt, mock_cursor_ctx):
-        from mpr.services_kardex_articulo import _consultar_movimientos_inventario_mstock
+        from mpr.services_kardex_articulo import (
+            MOTIVOS_MSTOCK_MOTIVO_LIKE_KEYWORDS,
+            _consultar_movimientos_inventario_mstock,
+        )
 
         cursor = MagicMock()
         cursor.fetchall.return_value = []
@@ -156,15 +262,21 @@ class TestConsultarInventarioMstockParams(SimpleTestCase):
         )
         args = cursor.execute.call_args[0]
         params = list(args[1])
+        sql = args[0]
         self.assertEqual(params[0], 1399)
-        self.assertEqual(params[1], "%faltante%")
-        self.assertEqual(params[2], "%sobrante%")
-        self.assertEqual(params[3], "%inventario%")
-        self.assertEqual(params[4], "%conteo%")
-        self.assertEqual(params[5], "%stock inicial%")
-        self.assertEqual(params[6], "2026-07-01")
-        self.assertEqual(params[7], "2026-09-30 23:59:59")
-        self.assertEqual(params[8], 100)
+        n_likes = len(MOTIVOS_MSTOCK_MOTIVO_LIKE_KEYWORDS)
+        for i, kw in enumerate(MOTIVOS_MSTOCK_MOTIVO_LIKE_KEYWORDS):
+            self.assertEqual(params[1 + i], f"%{kw}%")
+        self.assertIn("%ajuste%", params)
+        self.assertIn("%transferencia%", params)
+        self.assertIn("%rotura%", params)
+        self.assertIn("%mov. interno%", params)
+        self.assertIn("%desarmado%", params)
+        self.assertEqual(params[1 + n_likes], "2026-07-01")
+        self.assertEqual(params[2 + n_likes], "2026-09-30 23:59:59")
+        self.assertEqual(params[3 + n_likes], 100)
+        self.assertIn("LOWER(COALESCE(s.TipoComp, '')) IN", sql)
+        self.assertEqual(sql.count("LIKE %s"), n_likes)
 
 
 class TestDeduplicarMovimientos(SimpleTestCase):
