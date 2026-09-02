@@ -4,12 +4,13 @@
           idArticuloInicial: '{{ meta.id_articulo|default:'' }}',
           codigoInicial: '{{ meta.codigo_articulo|default:''|escapejs }}',
           descripcionInicial: '{{ meta.descripcion_articulo|default:''|escapejs }}'
-      })">
+      })"
+      @submit="sincronizarPeriodoShell()">
     <input type="hidden" name="grupo" value="trazabilidad">
     <input type="hidden" name="reporte" value="timeline">
-    <input type="hidden" name="desde" value="{{ fecha_desde_iso }}">
-    <input type="hidden" name="hasta" value="{{ fecha_hasta_iso }}">
-    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
+    <input type="hidden" name="desde" value="{{ fecha_desde_iso }}" x-ref="desdeHidden">
+    <input type="hidden" name="hasta" value="{{ fecha_hasta_iso }}" x-ref="hastaHidden">
+    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}" x-ref="presentacionHidden">
     <input type="hidden" name="id_articulo" x-model="idArticulo">
 
     <div class="relative min-w-[14rem] flex-1" @click.outside="mostrarSugerencias = false">
@@ -96,6 +97,22 @@ function timelineArticuloFiltros(config) {
         sugerencias: [],
         mostrarSugerencias: false,
         sugerenciaActiva: 0,
+        sincronizarPeriodoShell() {
+            const desdeShell = document.getElementById('desde');
+            const hastaShell = document.getElementById('hasta');
+            if (desdeShell && desdeShell.value && this.$refs.desdeHidden) {
+                this.$refs.desdeHidden.value = desdeShell.value;
+            }
+            if (hastaShell && hastaShell.value && this.$refs.hastaHidden) {
+                this.$refs.hastaHidden.value = hastaShell.value;
+            }
+            const presentacionShell = document.querySelector(
+                'form[x-ref="filtrosForm"] input[name="presentacion"]'
+            );
+            if (presentacionShell && presentacionShell.value && this.$refs.presentacionHidden) {
+                this.$refs.presentacionHidden.value = presentacionShell.value;
+            }
+        },
         async buscarArticulos() {
             const q = (this.busqueda || '').trim();
             if (q.length < 2) {

@@ -9,12 +9,13 @@
           idArticuloInicial: '{{ meta.id_articulo|default:'' }}',
           codigoInicial: '{{ meta.articulo.codigo|default:''|escapejs }}',
           descripcionInicial: '{{ meta.articulo.descripcion|default:''|escapejs }}'
-      })">
+      })"
+      @submit="sincronizarPeriodoShell()">
     <input type="hidden" name="grupo" value="trazabilidad">
     <input type="hidden" name="reporte" value="kardex_articulo">
-    <input type="hidden" name="desde" value="{{ fecha_desde_iso }}">
-    <input type="hidden" name="hasta" value="{{ fecha_hasta_iso }}">
-    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
+    <input type="hidden" name="desde" value="{{ fecha_desde_iso }}" x-ref="desdeHidden">
+    <input type="hidden" name="hasta" value="{{ fecha_hasta_iso }}" x-ref="hastaHidden">
+    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}" x-ref="presentacionHidden">
     <input type="hidden" name="id_articulo" x-model="idArticulo">
 
     <div class="relative min-w-[16rem] flex-1" @click.outside="mostrarSugerencias = false">
@@ -359,6 +360,24 @@ function kardexArticuloFiltros(config) {
         sugerencias: [],
         mostrarSugerencias: false,
         sugerenciaActiva: 0,
+        sincronizarPeriodoShell() {
+            // El chrome superior (Desde/Hasta/presentación) puede haber cambiado
+            // sin "Actualizar"; Analizar debe usar esos valores vivos.
+            const desdeShell = document.getElementById('desde');
+            const hastaShell = document.getElementById('hasta');
+            if (desdeShell && desdeShell.value && this.$refs.desdeHidden) {
+                this.$refs.desdeHidden.value = desdeShell.value;
+            }
+            if (hastaShell && hastaShell.value && this.$refs.hastaHidden) {
+                this.$refs.hastaHidden.value = hastaShell.value;
+            }
+            const presentacionShell = document.querySelector(
+                'form[x-ref="filtrosForm"] input[name="presentacion"]'
+            );
+            if (presentacionShell && presentacionShell.value && this.$refs.presentacionHidden) {
+                this.$refs.presentacionHidden.value = presentacionShell.value;
+            }
+        },
         async buscarArticulos() {
             const q = (this.busqueda || '').trim();
             if (q.length < 2) {
