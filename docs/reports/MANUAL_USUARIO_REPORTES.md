@@ -26,6 +26,8 @@ El resumen del informe (encima de la tabla o KPIs) y el Excel indican **qué suc
 
 Los informes de **artículos de venta** no incluyen ítems tipo **Gasto** (`articulo.tipo_art`). Eso aplica a marcas mensual, licenciatarios (tramo AdministraNET), SuperArt, ventas netas por artículo/rubro, utilidad gerencial y backorder.
 
+La **facturación de renglón** en Ventas marcas mensual, SuperArt, Ventas por artículo, Ventas por vendedor y el detalle de artículo de Objetivos vs BO **incluye el descuento al pie de factura** (neto post-pie). Ventas Netas sigue usando la cabecera `SubtotalDesc` (sin abrir stock). En **Ventas marcas mensual**, **SuperArt** y **Ventas por artículo**, sin filtro de catálogo, la fila **Ajustes sin mercadería** suma esas cabeceras sin renglón de stock para que el total coincida con Ventas Netas. **Ventas por vendedor** (sin filtro de catálogo) ya toma la facturación de cabecera, así que ese total ya coincide.
+
 ### Idea clave
 
 Hay informes hermanos que no se reemplazan:
@@ -107,6 +109,7 @@ Puede comparar dos marcas (A y B) en el mismo período: KPIs y matriz con valore
 | Las etiquetas de cliente/vendedor no buscan | Actualice la página (caché) y vuelva a abrir el informe; debe cargar catálogos de esta familia. |
 | Matriz vacía con aviso de alcance | Su usuario no tiene vendedores en alcance o falló la validación; revise permisos comerciales. |
 | Más de 24 meses en el período | La matriz muestra como máximo 24 meses recientes y avisa en pantalla. |
+| Total distinto a Ventas Netas | Con filtro de marca o SuperArt no se incluyen FA/NC de cabecera sin mercadería. Quite esos filtros para ver **Ajustes sin mercadería** al pie y alinear el KPI. |
 | Descarga bloqueada en Safari iOS | Siga el aviso de Synap para completar la descarga (no use diálogos del navegador). |
 
 ---
@@ -158,7 +161,7 @@ Los **importes AdministraNET** (desde el 22/07/2026) incluyen el **descuento al 
 
 ### Para qué sirve
 
-Ver ventas del período agrupadas por **Marca → SuperArt → Artículo**, con **Packs**, **Docenas** y **Facturación** en cada nivel. Útil para analizar el mix por marca y SuperArt sin la matriz mensual de VMM.
+Ver ventas del período agrupadas por **Marca → SuperArt → Artículo**, con **Packs**, **Docenas** y **Facturación** en cada nivel. La **facturación incluye el descuento al pie de factura** (neto post-pie por renglón, igual que Ventas marcas mensual). Si hay comprobantes de cabecera **sin renglón de mercadería** (por ejemplo notas de crédito financieras), el informe los muestra al pie en **Ajustes sin mercadería** para que el total coincida con **Ventas Netas**. Útil para analizar el mix por marca y SuperArt sin la matriz mensual de VMM.
 
 ### Cómo usarlo
 
@@ -167,12 +170,14 @@ Ver ventas del período agrupadas por **Marca → SuperArt → Artículo**, con 
 3. Opcionalmente filtre por **rubro / subrubro / marca**, **SuperArt**, sucursal, punto de venta, depósitos, clientes y vendedores.
 4. Pulse **Actualizar**.
 5. Expanda marcas y SuperArt para ver artículos; ordene por facturación, packs o docenas.
-6. Exporte a Excel: archivo **plano** con columnas Marca | SuperArt | Articulo | Packs | Docenas | Facturacion.
+6. Si hay FA/NC de cabecera sin mercadería, aparece al pie la fila **Ajustes sin mercadería** (itálica); expandir para ver el cliente. Esa fila hace que el total coincida con **Ventas Netas**.
+7. Exporte a Excel: archivo **plano** con columnas Marca | SuperArt | Articulo | Packs | Docenas | Facturacion.
 
 ### Problemas frecuentes
 
 - **Sin datos:** revise período y filtros de marca/SuperArt; vacío en SuperArt = todos.
 - **Docenas distintas a packs:** el factor depende de la U.M. del artículo (P1, P2, CU, etc.), igual que en Ventas marcas mensual.
+- **Total distinto a Ventas Netas:** con filtros de marca/rubro/subrubro/SuperArt no se incluyen FA/NC de cabecera sin mercadería. Quite esos filtros para ver la fila **Ajustes sin mercadería** y alinear el total. Pares FA/NC anulados del mismo cliente (neto 0) no aparecen en esa fila.
 
 ---
 
@@ -246,4 +251,4 @@ Ver cuántos **artículos BOM (componentes)** salieron por venta facturada: cada
 
 ---
 
-*Manual de usuario – Informes (Reports). Synap. Actualizado 31/08/2026.*
+*Manual de usuario – Informes (Reports). Synap. Actualizado 03/09/2026.*

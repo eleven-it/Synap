@@ -16,8 +16,9 @@ Reutilizar el núcleo SQL de `run_ventas_objetivos_vs_bo` (facturación/unidades
 |------|----------|------------------------|--------|
 | Runner | Flag + `_armar_arbol_ventas_por_articulo` en `ventas_objetivos_bo_runner.py` | Runner 100% nuevo | Misma SQL base y filtros VO; menos duplicación |
 | JS | `ventas_por_articulo.js` nuevo | Fork masivo de `objetivos_ventas_bo.js` | Jerarquía distinta; VPV/VO intactos |
-| SQL detalle | `GROUP BY id_art, cod_proveedor, id_cliente` | Reagrupar en Python desde árbol vendedor | Menos datos y rollups claros |
+| SQL detalle | `GROUP BY id_art, cod_proveedor, id_cliente`; importe `sql_signo_imp_post_pie_expr` | Reagrupar en Python desde árbol vendedor | Menos datos y rollups claros; paridad post-pie con VMM |
 | Proveedor | `COALESCE(art.CodigoProveedor,0)` + `LEFT JOIN proveedor` | Solo código sin nombre | UX «Sin proveedor» |
+| Ajustes cabecera | Fila «Ajustes sin mercadería» al pie (`ajustes_sin_mercaderia.py`) | Sumar NC financieras al artículo más vendido | Paridad con Ventas Netas; misma UX que SuperArt/VMM |
 | Listado clientes | Mantener consulta clientes con histórico (paridad VPV) | Solo clientes con venta en período | Consistencia con informe origen |
 
 ---

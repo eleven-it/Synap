@@ -137,6 +137,23 @@
         .toUpperCase()
         .localeCompare(String(b?.nombre_articulo || "").toUpperCase());
     });
+    pinAjustesAlFinal(jerarquia);
+  }
+
+  function esAjusteCabecera(row) {
+    return Boolean(row && row.es_ajuste_cabecera);
+  }
+
+  function pinAjustesAlFinal(jerarquia) {
+    if (!Array.isArray(jerarquia) || jerarquia.length < 2) return;
+    const ajustes = [];
+    const resto = [];
+    jerarquia.forEach((nodo) => {
+      if (esAjusteCabecera(nodo)) ajustes.push(nodo);
+      else resto.push(nodo);
+    });
+    jerarquia.length = 0;
+    resto.concat(ajustes).forEach((nodo) => jerarquia.push(nodo));
   }
 
   function buildThead() {
@@ -200,9 +217,15 @@
       const artOpen = isArticleExpanded(st, idArt);
       const artSearch = [art.nombre_articulo, idArt].join(" ").toLowerCase();
       parts.push(`<tbody class="${tbClass}">`);
+      const artRowClass = esAjusteCabecera(art)
+        ? "bg-amber-50 dark:bg-amber-950/40 cursor-pointer select-none"
+        : "bg-slate-100 dark:bg-slate-800/90 cursor-pointer select-none";
+      const artLabel = esAjusteCabecera(art)
+        ? `<span class="text-xs font-semibold italic text-amber-900 dark:text-amber-200">${escHtml(art.nombre_articulo || "Ajustes")}</span>`
+        : `<span class="text-xs font-bold uppercase">${escHtml(art.nombre_articulo || "Artículo")}</span>`;
       parts.push(
-        `<tr class="bg-slate-100 dark:bg-slate-800/90 cursor-pointer select-none"${searchAttr(artSearch)} data-vpa-art-toggle="${escHtml(ag)}" data-vpa-art="${escHtml(idArt)}" role="button" tabindex="0" aria-expanded="${artOpen ? "true" : "false"}">` +
-          nombreCell(12, toggleHtml(ag, artOpen), `<span class="text-xs font-bold uppercase">${escHtml(art.nombre_articulo || "Artículo")}</span>`) +
+        `<tr class="${artRowClass}"${searchAttr(artSearch)} data-vpa-art-toggle="${escHtml(ag)}" data-vpa-art="${escHtml(idArt)}" role="button" tabindex="0" aria-expanded="${artOpen ? "true" : "false"}">` +
+          nombreCell(12, toggleHtml(ag, artOpen), artLabel) +
           metricCells(art) +
           "</tr></tbody>"
       );
@@ -213,9 +236,15 @@
         const provOpen = isExpanded(st, pk);
         const provSearch = [art.nombre_articulo, prov.nombre_proveedor].join(" ").toLowerCase();
         const provHidden = !artOpen;
+        const provRowClass = esAjusteCabecera(prov)
+          ? "vo-child-row bg-amber-50/70 dark:bg-amber-950/20"
+          : "vo-child-row bg-slate-50 dark:bg-slate-900/30";
+        const provLabel = esAjusteCabecera(prov)
+          ? `<span class="text-xs italic text-amber-800 dark:text-amber-200">${escHtml(prov.nombre_proveedor || "—")}</span>`
+          : `<span class="text-xs uppercase text-slate-700 dark:text-slate-200">Proveedor: ${escHtml(prov.nombre_proveedor || "—")}</span>`;
         parts.push(
-          `<tr class="vo-child-row bg-slate-50 dark:bg-slate-900/30 ${provHidden ? "hidden" : ""}"${searchAttr(provSearch)} data-parent="${escHtml(ag)}" data-vpa-prov-key="${escHtml(pk)}">` +
-            nombreCell(28, toggleHtml(pk, provOpen), `<span class="text-xs uppercase text-slate-700 dark:text-slate-200">Proveedor: ${escHtml(prov.nombre_proveedor || "—")}</span>`) +
+          `<tr class="${provRowClass} ${provHidden ? "hidden" : ""}"${searchAttr(provSearch)} data-parent="${escHtml(ag)}" data-vpa-prov-key="${escHtml(pk)}">` +
+            nombreCell(28, toggleHtml(pk, provOpen), provLabel) +
             metricCells(prov) +
             "</tr>"
         );
@@ -416,6 +445,22 @@
     if (periodEl && fa.fecha_inicio_facturacion && fa.fecha_fin_facturacion) {
       periodEl.textContent =
         "Período facturación: " + fa.fecha_inicio_facturacion + " — " + fa.fecha_fin_facturacion;
+    }
+
+    const notes = Array.isArray(payload.notes) ? payload.notes : [];
+    const ajusteNote = notes.find((n) => String(n).indexOf("Ajustes sin mercadería") !== -1)
+      || notes.find((n) => String(n).indexOf("Ventas Netas") !== -1);
+    const summaryEl = document.getElementById("vo-filters-summary");
+    if (summaryEl) {
+      const prev = summaryEl.querySelector("[data-vpa-ajuste-note]");
+      if (prev) prev.remove();
+      if (ajusteNote) {
+        const noteEl = document.createElement("span");
+        noteEl.setAttribute("data-vpa-ajuste-note", "1");
+        noteEl.className = "block mt-1 italic text-amber-800 dark:text-amber-200";
+        noteEl.textContent = ajusteNote;
+        summaryEl.appendChild(noteEl);
+      }
     }
   }
 

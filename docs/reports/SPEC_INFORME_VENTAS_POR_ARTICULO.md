@@ -32,6 +32,7 @@ Informe histórico de **unidades** y **facturación** del período, agrupado por
 ## 3. Métricas y datos
 
 - **Columnas:** UNIDADES (`cantidades_vendidas`), FACTURACIÓN (`facturacion`).
+- **Facturación de renglón:** mismo motor post-pie que Ventas marcas mensual (`signo × PrecioNetoxR × SubtotalDesc/SubTotal1`).
 - **Sin KPIs** de cabecera.
 - **Sin** objetivos, remitos, PEA, backorder, período backorder en UI ni consultas.
 - **Mismo rango** `fecha_inicio_facturacion` / `fecha_fin_facturacion` y filtros sucursal, depósito, PV, clientes, vendedores, lista de precio, **rubro/subrubro/marca (incluir y excluir)** que ventas por vendedor.
@@ -102,6 +103,10 @@ El sistema **DEBE** seguir la política manual/tiempo real de informes VO (cambi
 ### R6 — Paridad de métricas
 
 La suma de facturación y unidades por cliente bajo un artículo **DEBE** coincidir con la suma del mismo artículo en ventas por vendedor para mismo período y filtros equivalentes.
+
+### R7 — Ajustes sin mercadería
+
+Sin filtro de catálogo, el sistema **DEBE** incluir al pie un artículo descriptivo **«Ajustes sin mercadería»** (proveedor **«FA/NC de cabecera»**, hojas = cliente) con el neto de cabecera de FA/NC sin renglón SuperArt/venta vigente, para que el total coincida con Ventas Netas.
 
 ---
 

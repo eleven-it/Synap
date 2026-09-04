@@ -12,7 +12,7 @@ Documento para el flujo SDD (propuesta → spec → diseño → implementación)
 
 Informe **histórico de facturación por vendedor** con la **misma jerarquía y filtros** que el informe VO (`ventas-objetivos-vs-bo`): vendedor → estado compra (con/sin compra en el período) → cliente → rubro → subrubro → artículo.
 
-En pantalla **solo dos columnas** bajo el concepto de ventas de período: **UNIDADES** y **FACTURACIÓN** (importe alineado a renglón como hoy VO en detalle).
+En pantalla **solo dos columnas** bajo el concepto de ventas de período: **UNIDADES** y **FACTURACIÓN** (importe de renglón post-pie, igual que Ventas marcas mensual).
 
 No se muestran KPIs de cabecera (objetivo / falta / resumen numérico superior). La página puede omitir por completo la sección de KPIs del bloque VO o equivalente.
 
@@ -46,7 +46,7 @@ Para **unidades** y **facturación** por cliente y por **rubro / subrubro / art�
 
 3. **Unidades por cliente** (`stock` + `cuentacliente` + `cliente`): suma cantidades FA/NC en el mismo rango y filtros que el detalle por artículo.
 
-4. **Detalle por artículo** (`sql_venta_por_art`): `stock` ⋈ `cuentacliente` ⋈ `cliente` ⋈ `articulo` ⋈ `rubro` ⋈ `subrubro`, agregando `PrecioNetoxR` (facturación línea) y cantidades (unidades línea), agrupado por cliente + rubro + subrubro + artículo. **Imprescindible** para el árbol bajo cliente.
+4. **Detalle por artículo** (`sql_venta_por_art`): `stock` ⋈ `cuentacliente` ⋈ `cliente` ⋈ `articulo` ⋈ `rubro` ⋈ `subrubro`, agregando facturación de renglón **post-pie** (`sql_signo_imp_post_pie_expr`: signo × `PrecioNetoxR` × factor cabecera) y cantidades (unidades línea), agrupado por cliente + rubro + subrubro + artículo. **Imprescindible** para el árbol bajo cliente. Misma fórmula que Ventas por artículo / SuperArt / VMM.
 
 No hace falta **join a `stockp` de REM/PED** para este informe si no mostramos esas métricas ni las fusionamos al árbol.
 

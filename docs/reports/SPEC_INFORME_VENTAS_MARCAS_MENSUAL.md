@@ -74,6 +74,8 @@ Helper compartido: `reports/services/comprobante_descuento_cabecera.py` (`factor
 
 **Proyección:** `pf = round(f × coef, 2)` sobre facturación post-pie; `pu = CEILING(u × coef)` sin factor pie.
 
+**Ajustes sin mercadería:** sin filtro de marca/SuperArt (y fuera de modo comparar), el informe agrega al pie un vendedor sintético **«Ajustes sin mercadería»** con FA/NC de cabecera que no tienen renglón `tipo_art = Articulo` vigente. Packs/docenas = 0; el monto va al mes de la fecha de cabecera. Así el KPI de facturación coincide con **Ventas Netas**. Helper: `reports/services/ajustes_sin_mercaderia.py`.
+
 **Filtro marca parcial:** el factor se aplica por `CodigoMovimiento` completo (todas las líneas del FA reciben el mismo factor de cabecera). Al filtrar por una sola marca, la suma de líneas visibles puede diferir de `SubtotalDesc` prorrateado — paridad AdministraNET/DABRA (ADR-4).
 
 En `meta.extra.kpis` también: `tasa_regalia`, `tc` (valores efectivos usados).
@@ -193,7 +195,7 @@ Antes de ejecutar la matriz, el runner valida el alcance comercial de vendedores
 - **G13:** Dado modo comparar PUM vs PUW en 01/01/2026–31/01/2026, entonces `meta.extra.compare` incluye KPIs por marca y delta % facturación; la matriz muestra celdas `a`/`b` por mes.
 - **G14:** Dado modo comparar con marca A = marca B, entonces la UI muestra aviso Synap y el backend responde nota en español sin HTTP 500.
 - **G15:** Dado PWA portrait en modo comparar, entonces tabs Marca A/B conmutan la vista sin nueva consulta y el delta permanece visible.
-- **G16:** Dado export en Safari iOS con descarga bloqueada, entonces `mprShowAviso` / `SynapMessages` explica cómo obtener el archivo (sin `alert` nativo).
+- **G17:** Dado el mismo período y PV que Ventas Netas, sin filtro de marca/SuperArt, cuando existen NCA de cabecera sin renglón Articulo vigente, entonces aparece al pie «Ajustes sin mercadería» y el KPI de facturación coincide con Ventas Netas.
 
 ---
 

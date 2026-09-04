@@ -226,11 +226,18 @@
     const cfg = getSortConfig(sortValue);
     const field = cfg.field;
     const desc = cfg.desc;
-    return [...filas].sort((a, b) => {
+    const ordenadas = [...filas].sort((a, b) => {
       const av = Number((a.total || {})[field]) || 0;
       const bv = Number((b.total || {})[field]) || 0;
       return desc ? bv - av : av - bv;
     });
+    const ajustes = [];
+    const resto = [];
+    ordenadas.forEach((vend) => {
+      if (vend && vend.es_ajuste_cabecera) ajustes.push(vend);
+      else resto.push(vend);
+    });
+    return resto.concat(ajustes);
   }
 
   function isPortraitMobile() {
@@ -681,10 +688,23 @@
   function renderAviso(extra, notes) {
     const el = document.getElementById("vmm-aviso-meses");
     if (!el) return;
-    const msg = extra?.aviso_meses || (Array.isArray(notes) ? notes.find(Boolean) : "") || "";
+    const parts = [];
+    if (extra?.aviso_meses) parts.push(extra.aviso_meses);
+    if (Array.isArray(notes)) {
+      notes.forEach((n) => {
+        const t = String(n || "").trim();
+        if (t && t !== extra?.aviso_meses) parts.push(t);
+      });
+    }
+    const msg = parts.join(" ");
     if (msg) {
       el.textContent = msg;
       el.classList.remove("hidden");
+      if (parts.some((p) => p.indexOf("Ajustes sin mercadería") !== -1 || p.indexOf("Ventas Netas") !== -1)) {
+        el.classList.add("italic", "text-amber-800", "dark:text-amber-200");
+      } else {
+        el.classList.remove("italic", "text-amber-800", "dark:text-amber-200");
+      }
     } else {
       el.textContent = "";
       el.classList.add("hidden");
@@ -776,7 +796,10 @@
       html += `<button type="button" class="vmm-vend-toggle flex w-full min-h-[44px] items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-slate-800 hover:bg-sky-50/60 dark:text-slate-100 dark:hover:bg-slate-800/60" data-vend-key="${escHtml(vkey)}" aria-expanded="${isExp}">`;
       html += `<span class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg bg-sky-50 text-base text-sky-700 dark:bg-sky-950/40 dark:text-sky-300" aria-hidden="true">${chev}</span>`;
       html += `<span class="min-w-0 flex-1">`;
-      html += `<span class="block truncate">${escHtml(vend.nombre || vkey)}</span>`;
+      const vendTitleClass = vend.es_ajuste_cabecera
+        ? "block truncate italic text-amber-900 dark:text-amber-200"
+        : "block truncate";
+      html += `<span class="${vendTitleClass}">${escHtml(vend.nombre || vkey)}</span>`;
       html += `<span class="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] font-normal">`;
       html += `<span class="text-slate-500 dark:text-slate-400">${escHtml(unidadHdr)} <span class="font-semibold tabular-nums text-slate-800 dark:text-slate-100">${fmtNum(tot.u)}</span></span>`;
       html += `<span class="font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">Monto ${fmtMoney(tot.f)}</span>`;
@@ -918,11 +941,15 @@
       const vkey = String(vend.cod ?? "");
       const isExp = Boolean(expanded[vkey]);
       const chev = isExp ? CHV.expandido : CHV.colapsado;
-      tbody += `<tr class="bg-slate-50 dark:bg-slate-800/80 font-semibold text-xs text-slate-800 dark:text-slate-100 border-t-2 border-slate-200 dark:border-slate-600">`;
+      const vendRowClass = vend.es_ajuste_cabecera
+        ? "bg-amber-50 dark:bg-amber-950/40 font-semibold text-xs text-amber-900 dark:text-amber-100 border-t-2 border-amber-200 dark:border-amber-800"
+        : "bg-slate-50 dark:bg-slate-800/80 font-semibold text-xs text-slate-800 dark:text-slate-100 border-t-2 border-slate-200 dark:border-slate-600";
+      tbody += `<tr class="${vendRowClass}">`;
       tbody += `<td class="px-2 py-1.5 ${stickyCls}">`;
       tbody += `<button type="button" class="vmm-vend-toggle inline-flex min-h-[44px] w-full items-center gap-1 text-left hover:text-sky-600 dark:hover:text-sky-400" data-vend-key="${escHtml(vkey)}" aria-expanded="${isExp}">`;
       tbody += `<span class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-sky-600 dark:text-sky-400" aria-hidden="true">${chev}</span>`;
-      tbody += `<span class="min-w-0 truncate">${escHtml(vend.nombre || vkey)}</span>`;
+      const vendNombreClass = vend.es_ajuste_cabecera ? "min-w-0 truncate italic" : "min-w-0 truncate";
+      tbody += `<span class="${vendNombreClass}">${escHtml(vend.nombre || vkey)}</span>`;
       tbody += `</button></td>`;
       tbody += renderRowCells(vend.totales_mes, vend.total);
       tbody += `</tr>`;
