@@ -636,3 +636,18 @@ class TestVentasNetasFiltrosSucursalPv(unittest.TestCase):
         self.assertIn("cc.id_pv IN (%s,%s)", sql)
         self.assertEqual(params.count(10), 1)
         self.assertIn(11, params)
+
+
+class TestDashboardAttachTableToggleVentasNetas(unittest.TestCase):
+    def test_dashboard_js_define_attach_table_toggle(self):
+        from pathlib import Path
+
+        js = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "reports"
+            / "js"
+            / "dashboard.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("const attachTableToggle = (widget, data) => {", js)
+        self.assertIn("renderTable(widget, rows, { show: true, meta });", js)

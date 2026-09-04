@@ -33,5 +33,5 @@ Los README en la raíz (`README_REPORTS.md`, `README_INSTALLATION.md`) se mantie
 ### En el flujo de trabajo
 
 - Incluir en el **mismo commit** (o en un commit inmediato) los cambios de código y los de documentación.
-- En **code review**, comprobar que la documentación afectada esté actualizada.
+- En **code review** (PR a `Desarrollo`; ver [FLUJO_RAMAS_Y_PLAN.md](FLUJO_RAMAS_Y_PLAN.md)), comprobar que la documentación afectada esté actualizada.
 - Los **agentes y asistentes** de desarrollo deben usar y actualizar `docs/` según esta política (ver [.cursorrules](../../.cursorrules) y [docs/README.md](../README.md)).

@@ -325,6 +325,8 @@ if (dashboardRoot && !isWorkspaceMode) {
 - Guarda: periodo_tipo, fecha_inicio, fecha_fin, punto_venta, sucursales, refresh_interval
 - Carga al inicializar y aplica a los controles
 
+**«Ver tabla»:** `dashboard.js` es `type="module"`. El click de `[data-toggle-table]` lo cablea `attachTableToggle` **en el mismo módulo** (llama a `renderTable` con el dataset en caché). No usar el `attachTableToggle` de `cash_flow_detailed_movements.js` (script clásico, no visible al módulo). Sin esa función el gráfico pinta y el botón no muestra la tabla.
+
 **I. `initializeFiltersToggle()`** (líneas 222-265):
 - Adjunta handler al botón "Mostrar filtros"
 - Alterna visibilidad de `data-filters-wrapper` y `data-filters-container`

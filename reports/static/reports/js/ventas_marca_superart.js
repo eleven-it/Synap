@@ -141,6 +141,47 @@
         .toUpperCase()
         .localeCompare(String(b?.nombre_marca || "").toUpperCase());
     });
+    pinAjustesAlFinal(jerarquia);
+  }
+
+  function esAjusteCabecera(row) {
+    return Boolean(row && row.es_ajuste_cabecera);
+  }
+
+  function pinAjustesAlFinal(jerarquia) {
+    if (!Array.isArray(jerarquia) || jerarquia.length < 2) return;
+    const ajustes = [];
+    const resto = [];
+    jerarquia.forEach((marca) => {
+      if (esAjusteCabecera(marca)) ajustes.push(marca);
+      else resto.push(marca);
+    });
+    jerarquia.length = 0;
+    resto.concat(ajustes).forEach((marca) => jerarquia.push(marca));
+  }
+
+  function marcaNombreHtml(marca) {
+    const nom = escHtml(marca.nombre_marca || "Marca");
+    if (esAjusteCabecera(marca)) {
+      return `<span class="text-xs font-semibold italic text-amber-900 dark:text-amber-200">${nom}</span>`;
+    }
+    return `<span class="text-xs font-bold uppercase">${nom}</span>`;
+  }
+
+  function superartNombreHtml(sa) {
+    const nom = escHtml(sa.nombre_superart || "—");
+    if (esAjusteCabecera(sa)) {
+      return `<span class="text-xs italic text-amber-800 dark:text-amber-200">${nom}</span>`;
+    }
+    return `<span class="text-xs uppercase text-slate-700 dark:text-slate-200">SuperArt: ${nom}</span>`;
+  }
+
+  function articuloNombreHtml(art) {
+    const nom = escHtml(art.nombre_articulo || "—");
+    if (esAjusteCabecera(art)) {
+      return `<span class="text-xs italic text-slate-700 dark:text-slate-200">${nom}</span>`;
+    }
+    return `<span class="text-xs text-slate-800 dark:text-slate-200">Artículo: ${nom}</span>`;
   }
 
   function buildThead() {
@@ -213,9 +254,12 @@
       const marcaOpen = isMarcaExpanded(st, mk);
       const marcaSearch = [marca.nombre_marca, marca.codigo_marca].join(" ").toLowerCase();
       parts.push(`<tbody class="${tbClass}">`);
+      const marcaRowClass = esAjusteCabecera(marca)
+        ? "bg-amber-50 dark:bg-amber-950/40 cursor-pointer select-none"
+        : "bg-slate-100 dark:bg-slate-800/90 cursor-pointer select-none";
       parts.push(
-        `<tr class="bg-slate-100 dark:bg-slate-800/90 cursor-pointer select-none"${searchAttr(marcaSearch)} data-vmsa-marca-toggle="${escHtml(mk)}" data-vmsa-marca="${escHtml(mk)}" role="button" tabindex="0" aria-expanded="${marcaOpen ? "true" : "false"}">` +
-          nombreCell(12, toggleHtml(mk, marcaOpen), `<span class="text-xs font-bold uppercase">${escHtml(marca.nombre_marca || "Marca")}</span>`) +
+        `<tr class="${marcaRowClass}"${searchAttr(marcaSearch)} data-vmsa-marca-toggle="${escHtml(mk)}" data-vmsa-marca="${escHtml(mk)}" role="button" tabindex="0" aria-expanded="${marcaOpen ? "true" : "false"}">` +
+          nombreCell(12, toggleHtml(mk, marcaOpen), marcaNombreHtml(marca)) +
           metricCells(marca) +
           "</tr></tbody>"
       );
@@ -226,9 +270,12 @@
         const saOpen = isExpanded(st, sk);
         const saSearch = [marca.nombre_marca, sa.nombre_superart, sa.id_manual].join(" ").toLowerCase();
         const saHidden = !marcaOpen;
+        const saRowClass = esAjusteCabecera(sa)
+          ? "vo-child-row bg-amber-50/70 dark:bg-amber-950/20"
+          : "vo-child-row bg-slate-50 dark:bg-slate-900/30";
         parts.push(
-          `<tr class="vo-child-row bg-slate-50 dark:bg-slate-900/30 ${saHidden ? "hidden" : ""}"${searchAttr(saSearch)} data-parent="${escHtml(mk)}" data-vmsa-sa-key="${escHtml(sk)}">` +
-            nombreCell(28, toggleHtml(sk, saOpen), `<span class="text-xs uppercase text-slate-700 dark:text-slate-200">SuperArt: ${escHtml(sa.nombre_superart || "—")}</span>`) +
+          `<tr class="${saRowClass} ${saHidden ? "hidden" : ""}"${searchAttr(saSearch)} data-parent="${escHtml(mk)}" data-vmsa-sa-key="${escHtml(sk)}">` +
+            nombreCell(28, toggleHtml(sk, saOpen), superartNombreHtml(sa)) +
             metricCells(sa) +
             "</tr>"
         );
@@ -239,7 +286,7 @@
           const hideArt = saHidden || !saOpen;
           parts.push(
             `<tr class="vo-child-row hover:bg-slate-50 dark:hover:bg-slate-700/40 ${hideArt ? "hidden" : ""}"${searchAttr(artSearch)} data-parent="${escHtml(sk)}">` +
-              nombreCell(44, '<span class="inline-block w-5"></span>', `<span class="text-xs text-slate-800 dark:text-slate-200">Artículo: ${escHtml(art.nombre_articulo || "—")}</span>`) +
+              nombreCell(44, '<span class="inline-block w-5"></span>', articuloNombreHtml(art)) +
               metricCells(art) +
               "</tr>"
           );
@@ -429,6 +476,22 @@
     if (periodEl && fa.fecha_inicio_facturacion && fa.fecha_fin_facturacion) {
       periodEl.textContent =
         "Período facturación: " + fa.fecha_inicio_facturacion + " — " + fa.fecha_fin_facturacion;
+    }
+
+    const notes = Array.isArray(payload.notes) ? payload.notes : [];
+    const ajusteNote = notes.find((n) => String(n).indexOf("Ajustes sin mercadería") !== -1)
+      || notes.find((n) => String(n).indexOf("Ventas Netas") !== -1);
+    const summaryEl = document.getElementById("vo-filters-summary");
+    if (summaryEl) {
+      const prev = summaryEl.querySelector("[data-vmsa-ajuste-note]");
+      if (prev) prev.remove();
+      if (ajusteNote) {
+        const noteEl = document.createElement("span");
+        noteEl.setAttribute("data-vmsa-ajuste-note", "1");
+        noteEl.className = "block mt-1 italic text-amber-800 dark:text-amber-200";
+        noteEl.textContent = ajusteNote;
+        summaryEl.appendChild(noteEl);
+      }
     }
   }
 

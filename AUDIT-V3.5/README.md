@@ -34,6 +34,9 @@
 | 16 | [V2-ENVIRONMENT-TOPOLOGY](./16-V2-ENVIRONMENT-TOPOLOGY.md) | **COMPLETE** |
 | 17 | [V1-V2-BACKPORT-POLICY](./17-V1-V2-BACKPORT-POLICY.md) | **COMPLETE** |
 | 18 | [CUSTOMER-MIGRATION-STRATEGY](./18-CUSTOMER-MIGRATION-STRATEGY.md) | **COMPLETE** |
+| 19 | [SYNAP-V2-SOLUTION-ARCHITECTURE-PLAN](./19-SYNAP-V2-SOLUTION-ARCHITECTURE-PLAN.md) | **COMPLETE — APROBADO** |
+| 20 | [V1-CHANGE-LEDGER](./20-V1-CHANGE-LEDGER.md) | **ACTIVE PROCESS** |
+| 21 | [V2-KICKOFF-STATUS](./21-V2-KICKOFF-STATUS.md) | **IN PROGRESS** |
 | — | [SYNAP-V2-PRODUCT-BASELINE](./SYNAP-V2-PRODUCT-BASELINE.md) | **COMPLETE — REQUIERE APROBACIÓN** |
 
 ---
@@ -48,14 +51,17 @@
 | **Variabilidad** | Mayormente config/DB; código client-specific acotado (DABRA report, BEST migration) |
 | **Repo v2 recomendado** | **Option B:** repo nuevo `Synap-v2` con branches develop/staging/main — **no** replicar 3 repos |
 | **v2 R1 scope** | Capacidades compartidas críticas + arquitectura nueva; **no** todo v1 |
+| **Sync v1→v2** | **V1 Change Ledger** obligatorio post-kickoff — v1 sigue con updates pequeñas |
+| **UI v2** | shadcn + sidebar vertical; backend API-first primero |
 
 ---
 
 ## Punto de entrada
 
-1. [`SYNAP-V2-PRODUCT-BASELINE.md`](./SYNAP-V2-PRODUCT-BASELINE.md)
-2. [`14-V2-RELEASE-1-SCOPE.md`](./14-V2-RELEASE-1-SCOPE.md)
-3. [`15-V2-REPOSITORY-STRATEGY.md`](./15-V2-REPOSITORY-STRATEGY.md)
+1. [`19-SYNAP-V2-SOLUTION-ARCHITECTURE-PLAN.md`](./19-SYNAP-V2-SOLUTION-ARCHITECTURE-PLAN.md)
+2. [`20-V1-CHANGE-LEDGER.md`](./20-V1-CHANGE-LEDGER.md)
+3. [`SYNAP-V2-PRODUCT-BASELINE.md`](./SYNAP-V2-PRODUCT-BASELINE.md)
+4. [`15-V2-REPOSITORY-STRATEGY.md`](./15-V2-REPOSITORY-STRATEGY.md)
 
 ---
 

@@ -20,7 +20,18 @@ from django.utils import timezone
 from core.models import UsuarioExtendido
 from reports.models import ReportDefinition, ReportExecutionLog
 from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
+from reports.services.ajustes_sin_mercaderia import (
+    CODIGO_SINTETICO_AJUSTES,
+    NOMBRE_AJUSTES,
+    NOMBRE_FA_NC_CABECERA,
+    NOTA_AJUSTES_INCLUIDOS,
+    NOTA_AJUSTES_OMITIDOS_CATALOGO,
+    TIPOS_COMP_VENTA,
+    consultar_ajustes_sin_mercaderia,
+    pin_ajustes_al_final,
+)
 from reports.services.connection_pool import get_mysql_pool
+from reports.services.ventas_marcas_mensual_rules import sql_signo_imp_post_pie_expr
 from reports.services.objetivos_ventas_contract import (
     calcular_falta,
     calcular_total_consolidado_objetivos,
@@ -928,6 +939,51 @@ def _flatten_filas_ventas_por_articulo(arbol: List[Dict[str, Any]]) -> List[Dict
     return rows
 
 
+def _nodo_ajustes_ventas_por_articulo(filas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Árbol sintético artículo → FA/NC de cabecera → clientes."""
+    clientes: List[Dict[str, Any]] = []
+    fact = 0.0
+    for row in filas or []:
+        f = float(row.get("facturacion") or 0)
+        fact += f
+        codigo = int(row.get("codigo_cliente") or 0)
+        clientes.append(
+            {
+                "tipo": "cliente",
+                "codigo_cliente": codigo,
+                "nombre_cliente": (row.get("nombre_cliente") or "").strip() or f"Cliente {codigo}",
+                "cantidades_vendidas": 0.0,
+                "facturacion": f,
+                "es_ajuste_cabecera": True,
+            }
+        )
+    clientes.sort(
+        key=lambda c: (
+            (c.get("nombre_cliente") or "").upper(),
+            int(c.get("codigo_cliente") or 0),
+        )
+    )
+    return {
+        "tipo": "articulo",
+        "id_art": CODIGO_SINTETICO_AJUSTES,
+        "nombre_articulo": NOMBRE_AJUSTES,
+        "cantidades_vendidas": 0.0,
+        "facturacion": fact,
+        "es_ajuste_cabecera": True,
+        "children": [
+            {
+                "tipo": "proveedor",
+                "codigo_proveedor": 0,
+                "nombre_proveedor": NOMBRE_FA_NC_CABECERA,
+                "cantidades_vendidas": 0.0,
+                "facturacion": fact,
+                "es_ajuste_cabecera": True,
+                "children": clientes,
+            }
+        ],
+    }
+
+
 def _stats_jerarquia_articulo_para_log(arbol: List[Dict[str, Any]]) -> Dict[str, int]:
     n_art = len(arbol)
     n_prov = 0
@@ -1518,6 +1574,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 params_venta_art.extend(cat_params_art)
             detalle_flat_por_cliente: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
             detalle_filas_articulo: List[Dict[str, Any]] = []
+            ajustes_cabecera_vpa: List[Dict[str, Any]] = []
+            signo_imp_linea = sql_signo_imp_post_pie_expr()
             if solo_ventas_articulo:
                 where_art = list(where_uni)
                 params_art: List[Any] = list(params_uni)
@@ -1542,13 +1600,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         COALESCE(MAX(prov.Nombre), '') AS nombre_proveedor,
                         cc.Codigo AS codigo_cliente,
                         COALESCE(MAX(cl_uni.nombre_cliente), '') AS nombre_cliente,
-                        SUM(CASE
-                            WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
-                                THEN COALESCE(st.PrecioNetoxR, 0)
-                            WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
-                                THEN -COALESCE(st.PrecioNetoxR, 0)
-                            ELSE 0
-                        END) AS factu_linea,
+                        SUM({signo_imp_linea}) AS factu_linea,
                         SUM(CASE
                             WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
                                 THEN COALESCE(st.Cantidad, 0)
@@ -1581,6 +1633,51 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                             "cantidades_vendidas": float(r[7] or 0),
                         }
                     )
+                if not vo_filtra_catalogo_articulo:
+                    where_cc_parts = [
+                        "cc.Fecha >= %s",
+                        "cc.Fecha <= %s",
+                        "cc.Anulado = 'No'",
+                        "cc.CodigoMovimiento <> 0",
+                        f"cc.TipoComprobante IN {TIPOS_COMP_VENTA}",
+                    ]
+                    params_cc: List[Any] = [fi_fac_sql, ff_fac_sql]
+                    if sucursales_ints:
+                        phs = ",".join(["%s"] * len(sucursales_ints))
+                        where_cc_parts.append(f"cc.CodSucursal IN ({phs})")
+                        params_cc.extend(sucursales_ints)
+                    if puntos_venta_ints:
+                        phpv = ",".join(["%s"] * len(puntos_venta_ints))
+                        where_cc_parts.append(f"cc.id_pv IN ({phpv})")
+                        params_cc.extend(puntos_venta_ints)
+                    if clientes_excluidos:
+                        ph = ",".join(["%s"] * len(clientes_excluidos))
+                        where_cc_parts.append(f"cc.Codigo NOT IN ({ph})")
+                        params_cc.extend(clientes_excluidos)
+                    if clientes_incluir:
+                        phc = ",".join(["%s"] * len(clientes_incluir))
+                        where_cc_parts.append(f"cc.Codigo IN ({phc})")
+                        params_cc.extend(clientes_incluir)
+                    if vendedores_excluidos:
+                        phv = ",".join(["%s"] * len(vendedores_excluidos))
+                        where_cc_parts.append(f"cl.CodViajante NOT IN ({phv})")
+                        params_cc.extend(vendedores_excluidos)
+                    if vendedores_incluir:
+                        phv = ",".join(["%s"] * len(vendedores_incluir))
+                        where_cc_parts.append(f"cl.CodViajante IN ({phv})")
+                        params_cc.extend(vendedores_incluir)
+                    if alcance_viaj_filtro:
+                        alcance_sql_cc, alcance_params_cc = _sql_in_viajantes("cl", alcance_viaj_filtro)
+                        if alcance_sql_cc:
+                            where_cc_parts.append(alcance_sql_cc.lstrip(" AND "))
+                            params_cc.extend(alcance_params_cc)
+                    ajustes_cabecera_vpa = consultar_ajustes_sin_mercaderia(
+                        cursor,
+                        where_cc_parts,
+                        params_cc,
+                        renglon_ok_sql=sql_excluir_tipo_art_gasto("art"),
+                        group_by="cliente",
+                    )
             else:
                 sql_venta_por_art = f"""
                     SELECT
@@ -1591,13 +1688,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
                         COALESCE(art.IDArt, 0) AS id_art,
                         COALESCE(MAX(art.NombreArticulo), '') AS nombre_articulo,
-                        SUM(CASE
-                            WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
-                                THEN COALESCE(st.PrecioNetoxR, 0)
-                            WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
-                                THEN -COALESCE(st.PrecioNetoxR, 0)
-                            ELSE 0
-                        END) AS factu_linea,
+                        SUM({signo_imp_linea}) AS factu_linea,
                         SUM(CASE
                             WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
                                 THEN COALESCE(st.Cantidad, 0)
@@ -1820,6 +1911,12 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     metric_key,
                     orden_forma,
                 )
+                if ajustes_cabecera_vpa:
+                    arbol.append(_nodo_ajustes_ventas_por_articulo(ajustes_cabecera_vpa))
+                    arbol = pin_ajustes_al_final(
+                        arbol,
+                        es_ajuste=lambda n: int(n.get("id_art") or 0) == CODIGO_SINTETICO_AJUSTES,
+                    )
                 rows_out = _flatten_filas_ventas_por_articulo(arbol)
                 _mark_phase("armado_jerarquia")
                 _jstats = _stats_jerarquia_articulo_para_log(arbol)
@@ -2136,6 +2233,9 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                             "Filtros rubro/subrubro/marca (incluir/excluir): limitan artículos "
                             "con ventas en el período de facturación."
                         )
+                        notes.append(NOTA_AJUSTES_OMITIDOS_CATALOGO)
+                    elif any(int(a.get("id_art") or 0) == CODIGO_SINTETICO_AJUSTES for a in arbol):
+                        notes.append(NOTA_AJUSTES_INCLUIDOS)
                 else:
                     notes.append(
                         "Informe ventas por vendedor: sin objetivos, remitos, pedidos en armado ni backorder; "

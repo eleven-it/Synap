@@ -10,6 +10,7 @@ from reports.services.ventas_objetivos_bo_runner import (
     _flatten_filas_ventas_por_articulo,
     _nest_articulo_proveedor_cliente,
     _nombre_proveedor_display,
+    _nodo_ajustes_ventas_por_articulo,
     _vo_sql_filtros_articulo,
 )
 
@@ -125,3 +126,27 @@ class VentasPorArticuloExportTests(SimpleTestCase):
                 "facturacion",
             ],
         )
+
+
+class VentasPorArticuloPostPieTest(SimpleTestCase):
+    def test_detalle_linea_usa_expr_post_pie(self):
+        import inspect
+
+        from reports.services import ventas_objetivos_bo_runner as mod
+
+        src = inspect.getsource(mod.run_ventas_objetivos_vs_bo)
+        self.assertIn("sql_signo_imp_post_pie_expr", src)
+        self.assertGreaterEqual(src.count("SUM({signo_imp_linea})"), 2)
+
+    def test_nodo_ajustes_cabecera(self):
+        nodo = _nodo_ajustes_ventas_por_articulo(
+            [
+                {"codigo_cliente": 1, "nombre_cliente": "A", "facturacion": -40.0},
+                {"codigo_cliente": 2, "nombre_cliente": "B", "facturacion": -10.0},
+            ]
+        )
+        self.assertEqual(nodo["nombre_articulo"], "Ajustes sin mercadería")
+        self.assertTrue(nodo["es_ajuste_cabecera"])
+        self.assertAlmostEqual(nodo["facturacion"], -50.0, places=2)
+        self.assertEqual(nodo["children"][0]["nombre_proveedor"], "FA/NC de cabecera")
+        self.assertEqual(len(nodo["children"][0]["children"]), 2)

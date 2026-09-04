@@ -43,6 +43,7 @@ Período **01/01/2025 – 31/12/2025**, usuario activo, base `administranet`:
 | R4 Export | OK — headers test + rama `export_service` |
 | R5 Recarga manual | OK — `isInformeQuerySoloManualORealtime` incluye slug |
 | R6 Paridad métricas | OK aproximado (misma órden de magnitud 2025); ver nota ±1,5 % vs VPV |
+| R7 Ajustes sin mercadería | OK — nodo sintético + helper compartido (`test_nodo_ajustes_cabecera`) |
 
 ## UI
 
