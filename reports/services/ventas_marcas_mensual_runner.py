@@ -18,6 +18,16 @@ from django.conf import settings
 from core.utils.administranet_types import str_or_default, to_date_or_none, to_decimal_or_none, to_int_or_none
 from reports.models import ReportDefinition
 from reports.services.connection_pool import get_mysql_pool
+from reports.services.ajustes_sin_mercaderia import (
+    CODIGO_SINTETICO_AJUSTES,
+    NOMBRE_AJUSTES,
+    NOTA_AJUSTES_INCLUIDOS,
+    NOTA_AJUSTES_OMITIDOS_CATALOGO,
+    consultar_ajustes_sin_mercaderia,
+    filtros_catalogo_restringen,
+    pin_ajustes_al_final,
+)
+from reports.services.articulo_venta_sql import sql_solo_tipo_art_articulo
 from reports.services.query_runner import QueryResult, QueryRunnerService
 from reports.services.ventas_objetivos_bo_runner import (
     _parse_int_list,
@@ -40,6 +50,7 @@ from reports.services.ventas_marcas_mensual_rules import (
     TIPOS_NC as _TIPOS_NC,
     factor_docenas_unimed,
     sql_base_where_clauses,
+    sql_comprobantes_in_clause,
     sql_factor_docenas_expr as _sql_factor_docenas_expr,
     sql_signo_imp_post_pie_expr,
     sql_signo_qty_expr,
@@ -300,6 +311,39 @@ def sort_filas_vendedores(
         filas,
         key=lambda v: float((v.get("total") or {}).get(key) or 0),
         reverse=descendente,
+    )
+
+
+def _sql_rows_ajustes_vmm(cursor, where_cc_parts: List[str], params_cc: List[Any]) -> List[Dict[str, Any]]:
+    """Filas de matriz: vendedor sintético × cliente × mes, packs/docenas = 0."""
+    out: List[Dict[str, Any]] = []
+    for row in consultar_ajustes_sin_mercaderia(
+        cursor,
+        where_cc_parts,
+        params_cc,
+        renglon_ok_sql=sql_solo_tipo_art_articulo("art"),
+        group_by="cliente_mes",
+    ):
+        out.append(
+            {
+                "ven": CODIGO_SINTETICO_AJUSTES,
+                "vend_nombre": NOMBRE_AJUSTES,
+                "codigo_cliente": str(row.get("codigo_cliente") or ""),
+                "nombre_cliente": row.get("nombre_cliente") or "",
+                "anio_mes": row.get("anio_mes") or "",
+                "packs": 0.0,
+                "docenas": 0.0,
+                "facturacion": float(row.get("facturacion") or 0),
+            }
+        )
+    return out
+
+
+def _pin_ajustes_vmm(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return pin_ajustes_al_final(
+        filas,
+        es_ajuste=lambda v: int(v.get("cod") or 0) == CODIGO_SINTETICO_AJUSTES,
+        hijos_key="clientes",
     )
 
 
@@ -702,35 +746,42 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
 
     where_parts = sql_base_where_clauses()
     params: List[Any] = [fi_sql, ff_sql]
+    where_cc_parts = [
+        "cc.Fecha >= %s",
+        "cc.Fecha <= %s",
+        "cc.Anulado = 'No'",
+        "cc.CodigoMovimiento <> 0",
+        f"cc.TipoComprobante IN ({sql_comprobantes_in_clause()})",
+    ]
+    params_cc: List[Any] = [fi_sql, ff_sql]
+
+    def _append_cc_filter(clause: str, values: List[Any]) -> None:
+        where_parts.append(clause)
+        params.extend(values)
+        where_cc_parts.append(clause)
+        params_cc.extend(values)
 
     if sucursales_ints:
         phs = ",".join(["%s"] * len(sucursales_ints))
-        where_parts.append(f"cc.CodSucursal IN ({phs})")
-        params.extend(sucursales_ints)
+        _append_cc_filter(f"cc.CodSucursal IN ({phs})", sucursales_ints)
     if puntos_venta_ints:
         phpv = ",".join(["%s"] * len(puntos_venta_ints))
-        where_parts.append(f"cc.id_pv IN ({phpv})")
-        params.extend(puntos_venta_ints)
+        _append_cc_filter(f"cc.id_pv IN ({phpv})", puntos_venta_ints)
     if clientes_excluidos:
         ph = ",".join(["%s"] * len(clientes_excluidos))
-        where_parts.append(f"cc.Codigo NOT IN ({ph})")
-        params.extend(clientes_excluidos)
+        _append_cc_filter(f"cc.Codigo NOT IN ({ph})", clientes_excluidos)
     if clientes_incluir:
         ph = ",".join(["%s"] * len(clientes_incluir))
-        where_parts.append(f"cc.Codigo IN ({ph})")
-        params.extend(clientes_incluir)
+        _append_cc_filter(f"cc.Codigo IN ({ph})", clientes_incluir)
     if vendedores_excluidos:
         phv = ",".join(["%s"] * len(vendedores_excluidos))
-        where_parts.append(f"cc.CodViajante NOT IN ({phv})")
-        params.extend(vendedores_excluidos)
+        _append_cc_filter(f"cc.CodViajante NOT IN ({phv})", vendedores_excluidos)
     if vendedores_incluir:
         phvi = ",".join(["%s"] * len(vendedores_incluir))
-        where_parts.append(f"cc.CodViajante IN ({phvi})")
-        params.extend(vendedores_incluir)
+        _append_cc_filter(f"cc.CodViajante IN ({phvi})", vendedores_incluir)
     if alcance_viaj_filtro:
         alcance_sql, alcance_params = _sql_in_viajantes("cc", alcance_viaj_filtro)
-        where_parts.append(alcance_sql.lstrip(" AND "))
-        params.extend(alcance_params)
+        _append_cc_filter(alcance_sql.lstrip(" AND "), alcance_params)
 
     where_parts_base = list(where_parts)
     params_base = list(params)
@@ -875,6 +926,12 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
                             um_desconocidas.add(um_t)
                     sql_rows.append(row)
 
+                if not filtros_catalogo_restringen(
+                    marcas_incluidos=marcas_incluidos,
+                    superarts=superarts,
+                ):
+                    sql_rows.extend(_sql_rows_ajustes_vmm(cursor, where_cc_parts, params_cc))
+
             if export_detalle:
                 from reports.services.ventas_marcas_mensual_export import fetch_detalle_for_filters
 
@@ -958,6 +1015,7 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
         )
     else:
         filas, kpis_base = build_filas_matriz(sql_rows, meses, modo_unidades)
+        filas = _pin_ajustes_vmm(filas)
         kpis = _compute_kpis_licencia(kpis_base, tasa_regalia, tc_efectivo)
         coef_proy_activo = coef_proyeccion if incluir_proyeccion else None
         if incluir_proyeccion:
@@ -1020,6 +1078,17 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
         "marca_b": compare_meta["cod_b"] if compare_meta else None,
     }
 
+    notes: List[str] = []
+    if aviso_meses:
+        notes.append(aviso_meses)
+    if any(int(v.get("cod") or 0) == CODIGO_SINTETICO_AJUSTES for v in filas):
+        notes.append(NOTA_AJUSTES_INCLUIDOS)
+    elif not compare_meta and filtros_catalogo_restringen(
+        marcas_incluidos=marcas_incluidos,
+        superarts=superarts,
+    ):
+        notes.append(NOTA_AJUSTES_OMITIDOS_CATALOGO)
+
     return QueryResult(
         meta={
             "slug": report.slug,
@@ -1037,5 +1106,5 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
             "regalias": kpis["regalias"],
             "regalias_tc": kpis["regalias_tc"],
         },
-        notes=[aviso_meses] if aviso_meses else [],
+        notes=notes,
     )

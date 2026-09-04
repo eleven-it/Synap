@@ -4561,6 +4561,49 @@ const updateLastUpdateTime = () => {
   }
 };
 
+const attachTableToggle = (widget, data) => {
+  const toggleButton = widget.querySelector("[data-toggle-table]");
+  const tableWrapper = widget.querySelector("[data-widget-table-wrapper]");
+  if (!toggleButton || !tableWrapper) return;
+
+  const setButtonLabel = (btn, showTable) => {
+    btn.innerHTML = showTable
+      ? `
+          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M4 5h16M4 10h16M4 15h16M8 20h8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="hidden sm:inline">Ocultar tabla</span>
+        `
+      : `
+          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M4 5h16M4 10h16M4 15h16M4 20h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="hidden sm:inline">Ver tabla</span>
+        `;
+  };
+
+  const liveButton = toggleButton.cloneNode(true);
+  toggleButton.parentNode.replaceChild(liveButton, toggleButton);
+  setButtonLabel(liveButton, false);
+  tableWrapper.classList.add("hidden");
+
+  liveButton.onclick = () => {
+    const currentTableWrapper = widget.querySelector("[data-widget-table-wrapper]");
+    if (!currentTableWrapper) return;
+    const isTableHidden = currentTableWrapper.classList.contains("hidden");
+    if (isTableHidden) {
+      const cached = widget.dataset?.widgetId ? widgetDataCache.get(widget.dataset.widgetId) : null;
+      const rows = cached?.data ?? data;
+      const meta = cached?.meta || {};
+      renderTable(widget, rows, { show: true, meta });
+      setButtonLabel(liveButton, true);
+    } else {
+      currentTableWrapper.classList.add("hidden");
+      setButtonLabel(liveButton, false);
+    }
+  };
+};
+
 const renderWidgets = (payload) => {
   if (isWorkspaceMode) {
     return;

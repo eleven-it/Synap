@@ -233,17 +233,28 @@
     const packs = row.packs != null ? String(row.packs) : "—";
     const docenas = row.docenas != null ? String(row.docenas) : "—";
     const childCount = (row.children || []).length;
-    const sub =
-      row.tipo === "marca"
-        ? `${childCount} SuperArt(s)`
-        : row.tipo === "superart"
-          ? `${childCount} artículo(s)`
-          : "";
+    const esAjuste = Boolean(row.es_ajuste_cabecera);
+    const titleClass = esAjuste
+      ? "text-sm font-semibold italic text-amber-900 dark:text-amber-200"
+      : "text-sm font-bold text-slate-900 dark:text-white";
+    let sub = "";
+    if (esAjuste) {
+      sub =
+        row.tipo === "marca"
+          ? "FA/NC de cabecera sin mercadería (alinea con Ventas Netas)"
+          : row.tipo === "superart"
+            ? `${childCount} cliente(s)`
+            : "Importe de cabecera";
+    } else if (row.tipo === "marca") {
+      sub = `${childCount} SuperArt(s)`;
+    } else if (row.tipo === "superart") {
+      sub = `${childCount} artículo(s)`;
+    }
     return `
       <article class="${CARD_ARTICLE_CLASS}">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <p class="text-sm font-bold text-slate-900 dark:text-white">${escHtml(nombre)}</p>
+            <p class="${titleClass}">${escHtml(nombre)}</p>
             ${sub ? `<p class="text-xs text-slate-500 dark:text-slate-400">${escHtml(sub)}</p>` : ""}
           </div>
           <p class="shrink-0 text-sm font-bold tabular-nums text-sky-700 dark:text-sky-300">${fmtMoneyArs(row.facturacion)}</p>
@@ -256,12 +267,19 @@
   }
 
   function ventasArticuloCardHtml(row) {
+    const esAjuste = Boolean(row.es_ajuste_cabecera);
+    const titleClass = esAjuste
+      ? "text-sm font-semibold italic text-amber-900 dark:text-amber-200"
+      : "text-sm font-bold text-slate-900 dark:text-white";
+    const sub = esAjuste
+      ? "FA/NC de cabecera sin mercadería (alinea con Ventas Netas)"
+      : `${(row.children || []).length} proveedor(es)`;
     return `
       <article class="${CARD_ARTICLE_CLASS}">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <p class="text-sm font-bold text-slate-900 dark:text-white">${escHtml(row.nombre_articulo || "Artículo")}</p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">${(row.children || []).length} proveedor(es)</p>
+            <p class="${titleClass}">${escHtml(row.nombre_articulo || "Artículo")}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">${escHtml(sub)}</p>
           </div>
           <p class="shrink-0 text-sm font-bold tabular-nums text-sky-700 dark:text-sky-300">${fmtMoneyArs(row.facturacion)}</p>
         </div>

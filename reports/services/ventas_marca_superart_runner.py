@@ -2,7 +2,7 @@
 """
 Informe Ventas por marca y SuperArt: jerarquía Marca → SuperArt → Artículo.
 
-Reutiliza signo FA/NC, factor docenas y filtros catálogo de VMM / ventas_objetivos_bo.
+Reutiliza signo FA/NC, factor docenas, importe post-pie y filtros catálogo de VMM / ventas_objetivos_bo.
 """
 
 from __future__ import annotations
@@ -16,7 +16,19 @@ from core.utils.administranet_types import str_or_default, to_date_or_none, to_d
 from reports.models import ReportDefinition
 from reports.services.connection_pool import get_mysql_pool
 from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
+from reports.services.ajustes_sin_mercaderia import (
+    CODIGO_SINTETICO_AJUSTES as CODIGO_MARCA_AJUSTES,
+    ID_MANUAL_AJUSTES,
+    NOMBRE_AJUSTES as NOMBRE_MARCA_AJUSTES,
+    NOMBRE_FA_NC_CABECERA as NOMBRE_SUPERART_AJUSTES,
+    NOTA_AJUSTES_INCLUIDOS,
+    NOTA_AJUSTES_OMITIDOS_CATALOGO,
+    consultar_ajustes_sin_mercaderia,
+    filtros_catalogo_restringen,
+    pin_ajustes_al_final,
+)
 from reports.services.query_runner import QueryResult, QueryRunnerService
+from reports.services.ventas_marcas_mensual_rules import sql_signo_imp_post_pie_expr
 from reports.services.ventas_marcas_mensual_runner import (
     _resolve_marcas_incluidos,
     _sql_factor_docenas_expr,
@@ -40,6 +52,9 @@ _ORDER_DIRECTION_MAP = {
     "asc": 1,
     "desc": -1,
 }
+
+TIPOS_COMP_VENTA = "('FA','FB','FC','FE','FM','NCA','NCB','NCC','NCE','NCM')"
+STOCK_TIPO_COMP_VENTA = "('Venta','Venta TPV','Devol - Cliente','ND Anul NC')"
 
 
 def _parse_str_list(raw: Any) -> List[str]:
@@ -87,6 +102,8 @@ def _display_marca(codigo_marca: Any, nombre_marca: Any) -> Tuple[int, str]:
 
 def _display_superart(id_manual: Any) -> Tuple[str, str]:
     manual = str_or_default(id_manual, "").strip()
+    if manual == ID_MANUAL_AJUSTES:
+        return ID_MANUAL_AJUSTES, NOMBRE_SUPERART_AJUSTES
     if not manual:
         return "", "Sin SuperArt"
     return manual, manual
@@ -278,9 +295,64 @@ def _totales_desde_arbol(arbol: List[Dict[str, Any]]) -> Dict[str, Any]:
         "packs": packs,
         "docenas": docenas,
         "facturacion": fact,
-        "total_marcas": len(arbol or []),
-        "total_articulos": len(articulos),
+        "articulos": len(articulos),
     }
+
+
+def _filtros_catalogo_restringen(
+    marcas_incluidos: List[int],
+    marcas_excluidos: List[int],
+    rubros_incluidos: List[int],
+    rubros_excluidos: List[int],
+    subrubros_incluidos: List[int],
+    subrubros_excluidos: List[int],
+    superarts: List[str],
+) -> bool:
+    return filtros_catalogo_restringen(
+        marcas_incluidos,
+        marcas_excluidos,
+        rubros_incluidos,
+        rubros_excluidos,
+        subrubros_incluidos,
+        subrubros_excluidos,
+        superarts,
+    )
+
+
+def _consultar_ajustes_sin_mercaderia(
+    cursor,
+    where_cc_parts: List[str],
+    params_cc: List[Any],
+) -> List[Dict[str, Any]]:
+    """Adapta cabeceras sin renglón SuperArt a filas del árbol marca → SuperArt → cliente."""
+    filas: List[Dict[str, Any]] = []
+    for row in consultar_ajustes_sin_mercaderia(
+        cursor,
+        where_cc_parts,
+        params_cc,
+        renglon_ok_sql=sql_excluir_tipo_art_gasto("art"),
+        group_by="cliente",
+    ):
+        filas.append(
+            {
+                "codigo_marca": CODIGO_MARCA_AJUSTES,
+                "nombre_marca": NOMBRE_MARCA_AJUSTES,
+                "id_manual": ID_MANUAL_AJUSTES,
+                "id_art": 0,
+                "nombre_articulo": row["nombre_cliente"],
+                "packs": 0.0,
+                "docenas": 0.0,
+                "facturacion": float(row.get("facturacion") or 0),
+            }
+        )
+    return filas
+
+
+def _pin_ajustes_al_final(arbol: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return pin_ajustes_al_final(
+        arbol,
+        es_ajuste=lambda m: int(m.get("codigo_marca") or 0) == CODIGO_MARCA_AJUSTES,
+    )
 
 
 def run_ventas_marca_superart(report: ReportDefinition, payload: Dict, user) -> QueryResult:
@@ -399,55 +471,56 @@ def run_ventas_marca_superart(report: ReportDefinition, payload: Dict, user) -> 
             ELSE 0
         END
     """
-    signo_imp = """
-        CASE
-            WHEN cc.TipoComprobante IN ('FA','FB','FC','FE','FM') THEN COALESCE(st.PrecioNetoxR, 0)
-            WHEN cc.TipoComprobante IN ('NCA','NCB','NCC','NCE','NCM') THEN -COALESCE(st.PrecioNetoxR, 0)
-            ELSE 0
-        END
-    """
+    signo_imp = sql_signo_imp_post_pie_expr()
     factor_sql = _sql_factor_docenas_expr()
 
+    where_cc_parts = [
+        "cc.Fecha >= %s",
+        "cc.Fecha <= %s",
+        "cc.Anulado = 'No'",
+        "cc.CodigoMovimiento <> 0",
+        f"cc.TipoComprobante IN {TIPOS_COMP_VENTA}",
+    ]
+    params_cc: List[Any] = [fi_sql, ff_sql]
     where_parts = [
         "cc.Fecha >= %s",
         "cc.Fecha <= %s",
         "cc.Anulado = 'No'",
         "cc.CodigoMovimiento <> 0",
-        "cc.TipoComprobante IN ('FA','FB','FC','FE','FM','NCA','NCB','NCC','NCE','NCM')",
+        f"cc.TipoComprobante IN {TIPOS_COMP_VENTA}",
         "st.Anulado = 'No'",
-        "st.TipoComp IN ('Venta','Venta TPV','Devol - Cliente','ND Anul NC')",
+        f"st.TipoComp IN {STOCK_TIPO_COMP_VENTA}",
         sql_excluir_tipo_art_gasto("art"),
     ]
     params: List[Any] = [fi_sql, ff_sql]
 
+    def _append_cc_filter(clause: str, values: List[Any]) -> None:
+        where_parts.append(clause)
+        params.extend(values)
+        where_cc_parts.append(clause)
+        params_cc.extend(values)
+
     if sucursales_ints:
         phs = ",".join(["%s"] * len(sucursales_ints))
-        where_parts.append(f"cc.CodSucursal IN ({phs})")
-        params.extend(sucursales_ints)
+        _append_cc_filter(f"cc.CodSucursal IN ({phs})", sucursales_ints)
     if puntos_venta_ints:
         phpv = ",".join(["%s"] * len(puntos_venta_ints))
-        where_parts.append(f"cc.id_pv IN ({phpv})")
-        params.extend(puntos_venta_ints)
+        _append_cc_filter(f"cc.id_pv IN ({phpv})", puntos_venta_ints)
     if clientes_excluidos:
         ph = ",".join(["%s"] * len(clientes_excluidos))
-        where_parts.append(f"cc.Codigo NOT IN ({ph})")
-        params.extend(clientes_excluidos)
+        _append_cc_filter(f"cc.Codigo NOT IN ({ph})", clientes_excluidos)
     if clientes_incluir:
         ph = ",".join(["%s"] * len(clientes_incluir))
-        where_parts.append(f"cc.Codigo IN ({ph})")
-        params.extend(clientes_incluir)
+        _append_cc_filter(f"cc.Codigo IN ({ph})", clientes_incluir)
     if vendedores_excluidos:
         phv = ",".join(["%s"] * len(vendedores_excluidos))
-        where_parts.append(f"cc.CodViajante NOT IN ({phv})")
-        params.extend(vendedores_excluidos)
+        _append_cc_filter(f"cc.CodViajante NOT IN ({phv})", vendedores_excluidos)
     if vendedores_incluir:
         phvi = ",".join(["%s"] * len(vendedores_incluir))
-        where_parts.append(f"cc.CodViajante IN ({phvi})")
-        params.extend(vendedores_incluir)
+        _append_cc_filter(f"cc.CodViajante IN ({phvi})", vendedores_incluir)
     if alcance_viaj_filtro:
         alcance_sql, alcance_params = _sql_in_viajantes("cc", alcance_viaj_filtro)
-        where_parts.append(alcance_sql.lstrip(" AND "))
-        params.extend(alcance_params)
+        _append_cc_filter(alcance_sql.lstrip(" AND "), alcance_params)
 
     sql_rows: List[Dict[str, Any]] = []
     marcas_incluidos: List[int] = []
@@ -512,6 +585,17 @@ def run_ventas_marca_superart(report: ReportDefinition, payload: Dict, user) -> 
                 row["facturacion"] = float(dec_fact) if dec_fact is not None else 0.0
                 sql_rows.append(row)
 
+            if not _filtros_catalogo_restringen(
+                marcas_incluidos,
+                marcas_excluidos,
+                rubros_incluidos,
+                rubros_excluidos,
+                subrubros_incluidos,
+                subrubros_excluidos,
+                superarts,
+            ):
+                sql_rows.extend(_consultar_ajustes_sin_mercaderia(cursor, where_cc_parts, params_cc))
+
     except Exception as ex:
         logger.exception("ventas_marca_superart: error SQL")
         return QueryResult(
@@ -523,6 +607,7 @@ def run_ventas_marca_superart(report: ReportDefinition, payload: Dict, user) -> 
 
     arbol = _nest_marca_superart_articulo(sql_rows)
     arbol = _sort_arbol_marca_superart(arbol, metric_key, orden_forma)
+    arbol = _pin_ajustes_al_final(arbol)
     planas = _flatten_filas_marca_superart(arbol)
     totals = _totales_desde_arbol(arbol)
 
@@ -550,6 +635,19 @@ def run_ventas_marca_superart(report: ReportDefinition, payload: Dict, user) -> 
     notes = [
         f"Ventas del período: {fi_sql} a {ff_sql}. Jerarquía Marca → SuperArt → Artículo."
     ]
+    catalogo_restringe = _filtros_catalogo_restringen(
+        marcas_incluidos,
+        marcas_excluidos,
+        rubros_incluidos,
+        rubros_excluidos,
+        subrubros_incluidos,
+        subrubros_excluidos,
+        superarts,
+    )
+    if any(int(m.get("codigo_marca") or 0) == CODIGO_MARCA_AJUSTES for m in arbol):
+        notes.append(NOTA_AJUSTES_INCLUIDOS)
+    elif catalogo_restringe:
+        notes.append(NOTA_AJUSTES_OMITIDOS_CATALOGO)
 
     return QueryResult(
         meta={

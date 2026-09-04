@@ -475,20 +475,18 @@ class UmDesconocidasMetaTest(SimpleTestCase):
             }
         }
         cursor = Mock()
-        cursor.fetchall.return_value = [
-            (
-                10,
-                "Vendedor",
-                "C1",
-                "Cliente",
-                "202607",
-                12.0,
-                1.0,
-                1000.0,
-                "XX,P1",
-            )
-        ]
-        cursor.description = [
+        product_row = (
+            10,
+            "Vendedor",
+            "C1",
+            "Cliente",
+            "202607",
+            12.0,
+            1.0,
+            1000.0,
+            "XX,P1",
+        )
+        product_desc = [
             ("ven",),
             ("vend_nombre",),
             ("codigo_cliente",),
@@ -499,6 +497,23 @@ class UmDesconocidasMetaTest(SimpleTestCase):
             ("facturacion",),
             ("ums_raw",),
         ]
+
+        def fake_execute(sql, params=None):
+            if "NOT EXISTS" in (sql or ""):
+                cursor.description = [
+                    ("codigo_cliente",),
+                    ("nombre_cliente",),
+                    ("anio_mes",),
+                    ("facturacion",),
+                ]
+                cursor.fetchall.return_value = []
+            else:
+                cursor.description = product_desc
+                cursor.fetchall.return_value = [product_row]
+
+        cursor.execute = fake_execute
+        cursor.fetchall.return_value = [product_row]
+        cursor.description = product_desc
         conn = Mock()
         conn.cursor.return_value = cursor
         pool = MagicMock()
@@ -1128,3 +1143,38 @@ class VentasMarcasMensualExportPostPieTest(SimpleTestCase):
         suma_detalle = sum(r["facturacion"] for r in rows)
         self.assertAlmostEqual(suma_detalle, 800.0, places=2)
         self.assertAlmostEqual(sum(r["unidades"] for r in rows), 10.0, places=2)
+
+
+class VentasMarcasMensualAjustesCabeceraTest(SimpleTestCase):
+    def test_pin_deja_ajustes_al_final_y_suma_kpi(self):
+        from reports.services.ventas_marcas_mensual_runner import _pin_ajustes_vmm
+
+        rows = [
+            {
+                "ven": 1,
+                "vend_nombre": "Vendedor",
+                "codigo_cliente": "10",
+                "nombre_cliente": "Cliente A",
+                "anio_mes": "202608",
+                "packs": 12.0,
+                "docenas": 1.0,
+                "facturacion": 800.0,
+            },
+            {
+                "ven": -1,
+                "vend_nombre": "Ajustes sin mercadería",
+                "codigo_cliente": "99",
+                "nombre_cliente": "Cliente NC",
+                "anio_mes": "202608",
+                "packs": 0.0,
+                "docenas": 0.0,
+                "facturacion": -100.0,
+            },
+        ]
+        filas, kpis = build_filas_matriz(rows, ["202608"], "packs")
+        filas = _pin_ajustes_vmm(filas)
+        self.assertAlmostEqual(kpis["facturacion"], 700.0, places=2)
+        self.assertAlmostEqual(kpis["unidades"], 12.0, places=2)
+        self.assertEqual(filas[-1]["nombre"], "Ajustes sin mercadería")
+        self.assertTrue(filas[-1]["es_ajuste_cabecera"])
+        self.assertEqual(filas[-1]["clientes"][0]["nombre"], "Cliente NC")
