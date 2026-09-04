@@ -1,6 +1,10 @@
 # 17 — V1 / V2 Backport Policy
 
-**Estado:** COMPLETE
+**Estado:** COMPLETE — actualizado 02/09/2026  
+**Complemento obligatorio:** [`20-V1-CHANGE-LEDGER.md`](./20-V1-CHANGE-LEDGER.md) (forward-port / contemplar cambios v1)
+
+> **v1 no está congelado al 100%.** Puede recibir actualizaciones pequeñas (bugs, hotfixes, ajustes operativos).  
+> **Toda** actualización post-kickoff v2 **debe** entrar al V1 Change Ledger.
 
 ---
 
@@ -8,29 +12,32 @@
 
 | Type | v1 action | v2 action | Cross-port |
 |------|-----------|-----------|:----------:|
-| **SECURITY FIX** | ✅ Apply immediately | ✅ Apply if exists | v1→v2 **YES** |
-| **DATA CORRUPTION FIX** | ✅ Apply immediately | ✅ Apply if exists | v1→v2 **YES** |
-| **CRITICAL BUSINESS FIX** | ✅ Apply (customer down) | ✅ Apply if capability exists | v1→v2 **EVALUATE** |
-| **FUNCTIONAL FIX** | ✅ If customer uses v1 | ✅ If in scope | v1→v2 if same capability |
-| **UX FIX** | ⚠️ Minimal hotfix only | ✅ Normal development | v2→v1 **NO** |
-| **NEW FEATURE** | ❌ **NO** (v1 frozen) | ✅ v2 only | — |
-| **ARCHITECTURAL CHANGE** | ❌ **NO** | ✅ v2 only | v2→v1 **NEVER** |
-| **PERFORMANCE** | ⚠️ If blocking ops | ✅ v2 normal | Evaluate case by case |
-| **REFACTOR** | ❌ NO | ✅ v2 only | — |
-| **DOCS** | ⚠️ v1 maintenance docs only | ✅ v2 product docs | Independent |
+| **SECURITY FIX** | ✅ Apply immediately | ✅ Apply (ledger APPLY NOW) | v1→v2 **YES** |
+| **DATA CORRUPTION FIX** | ✅ Apply immediately | ✅ Apply (ledger APPLY NOW) | v1→v2 **YES** |
+| **CRITICAL BUSINESS FIX** | ✅ Apply (customer down) | Ledger EVALUATE → ticket | v1→v2 **YES eval** |
+| **FUNCTIONAL FIX** | ✅ Permitido (pequeño) | Ledger → APPLY WHEN PORT READY | v1→v2 **track** |
+| **UX FIX** | ⚠️ Solo si bloquea operación | **N/A** (UI v2 = shadcn) | v2→v1 **NO** |
+| **NEW FEATURE** | ⚠️ Evitar; si inevitable → ledger + product | Preferir v2 only | Ledger **DEFER/APPLY** |
+| **ARCHITECTURAL CHANGE** | ❌ **NO** en v1 | ✅ v2 only | v2→v1 **NEVER** |
+| **PERFORMANCE** | ⚠️ Si bloquea ops | Evaluar + ledger | Case by case |
+| **REFACTOR** | ❌ NO en v1 | ✅ v2 only | — |
+| **DOCS** | ✅ v1 ok | N/A o espejo | Independent |
+| **SCHEMA / MYSQL DDL** | ✅ vía catalog | Ledger **APPLY NOW** adapter | v1→v2 **YES** |
 
 ---
 
 ## Direction rules
 
-### v1 → v2
+### v1 → v2 (forward-port — vía Ledger)
 
 | When | Action |
 |------|--------|
-| Security vulnerability in shared code pattern | Port fix to v2 foundation immediately |
-| Business rule discovery (bug was "working as designed" wrong) | Document + implement correctly in v2 |
-| Customer reports v1-only bug in non-migrated capability | Fix v1; **create v2 ticket** if capability in R1 scope |
-| Data fix script | Run on shared MySQL; document for v2 adapter |
+| **Cualquier merge post-kickoff** | Fila en V1 Change Ledger + decisión |
+| Security vulnerability in shared code pattern | Port fix to v2 **APPLY NOW** |
+| Business rule discovery | Document + implement in v2; ticket ligado a Port |
+| Customer reports v1-only bug | Fix v1; ledger; ticket v2 si capability en scope |
+| Data fix / schema | Shared MySQL + documentar adapter v2 |
+| UX-only v1 | Ledger **N/A** (no portar templates) |
 
 ### v2 → v1
 

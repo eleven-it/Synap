@@ -29,8 +29,8 @@ Los README de proyecto (`README_REPORTS.md`, `README_INSTALLATION.md`) permanece
 
 ## Uso de esta carpeta por ramas
 
-- **Desarrollo:** La carpeta `docs/` se versiona y se sube a la rama **Desarrollo**.
-- **Staging y Produccion:** Al promover código de Desarrollo a Staging (o de Staging a Produccion), la carpeta `docs/` **no** debe formar parte del release. Al hacer merge a Staging, ejecutar en esa rama: `git rm -r docs` y commit, de modo que Staging y Produccion no incluyan documentación. Ver [general/FLUJO_RAMAS_Y_PLAN.md](general/FLUJO_RAMAS_Y_PLAN.md).
+- **Desarrollo:** La carpeta `docs/` se versiona y se sube a la rama **Desarrollo**. El trabajo diario **no** se commitea sobre `Desarrollo`: va en ramas `feat/` / `fix/` y entra por pull request. Ver [general/FLUJO_RAMAS_Y_PLAN.md](general/FLUJO_RAMAS_Y_PLAN.md).
+- **Staging y Produccion:** Al promover código de Desarrollo a Staging (o de Staging a Produccion), la carpeta `docs/` **no** debe formar parte del release. Merge a Staging **sin commit**, `git rm` de `docs/` y `openspec/`, y recién entonces el commit de merge. Ver [general/FLUJO_RAMAS_Y_PLAN.md](general/FLUJO_RAMAS_Y_PLAN.md).
 
 ## OpenSpec (especificaciones)
 
