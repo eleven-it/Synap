@@ -228,6 +228,123 @@ def hay_descuadre(
     return actual != snapshot + ajuste
 
 
+# Orígenes del neto post-snapshot (UI fórmula-first + desglose)
+CAT_ARMADO_MPR = "armado_mpr"
+CAT_REMITOS = "remitos"
+CAT_FACTURAS = "facturas"
+CAT_NOTAS_CREDITO = "notas_credito"
+CAT_AJUSTES = "ajustes"
+CAT_OTROS = "otros"
+
+CATEGORIAS_POST_SNAPSHOT: Tuple[str, ...] = (
+    CAT_ARMADO_MPR,
+    CAT_REMITOS,
+    CAT_FACTURAS,
+    CAT_NOTAS_CREDITO,
+    CAT_AJUSTES,
+    CAT_OTROS,
+)
+
+ETIQUETAS_POST_SNAPSHOT: Dict[str, str] = {
+    CAT_ARMADO_MPR: "Entradas armado MPR",
+    CAT_REMITOS: "Remitos",
+    CAT_FACTURAS: "Facturas",
+    CAT_NOTAS_CREDITO: "Notas de crédito",
+    CAT_AJUSTES: "Ajustes inventario",
+    CAT_OTROS: "Otros",
+}
+
+_PALABRAS_ARMADO_MPR = (
+    "armado",
+    "surtido",
+    "opt",
+    "mpr",
+    "semi",
+    "2da",
+    "segunda",
+)
+
+
+def _texto_indica_armado_mpr(*partes: Any) -> bool:
+    blob = " ".join(str_or_default(p, "") for p in partes).strip().lower()
+    if not blob:
+        return False
+    return any(p in blob for p in _PALABRAS_ARMADO_MPR)
+
+
+def clasificar_movimiento_post_snapshot(
+    comprobante: Any,
+    tipo_comp: Any = None,
+    detalle: Any = None,
+) -> str:
+    """Asigna categoría de origen al renglón legacy post-snapshot."""
+    comp = str_or_default(comprobante, "").strip().upper()
+    if comp == "REM":
+        return CAT_REMITOS
+    if comp in {"FA", "FB"}:
+        return CAT_FACTURAS
+    if comp in {"NCA", "NCB"}:
+        return CAT_NOTAS_CREDITO
+    if comp == "MSTOCK":
+        if _texto_indica_armado_mpr(tipo_comp, detalle):
+            return CAT_ARMADO_MPR
+        return CAT_AJUSTES
+    if _texto_indica_armado_mpr(comp, tipo_comp, detalle):
+        return CAT_ARMADO_MPR
+    return CAT_OTROS
+
+
+def etiqueta_categoria_post_snapshot(categoria: Any) -> str:
+    key = str_or_default(categoria, "").strip()
+    return ETIQUETAS_POST_SNAPSHOT.get(key, ETIQUETAS_POST_SNAPSHOT[CAT_OTROS])
+
+
+def desglose_post_snapshot_vacio() -> Dict[str, Decimal]:
+    return {c: Decimal("0") for c in CATEGORIAS_POST_SNAPSHOT} | {"total": Decimal("0")}
+
+
+def chips_desglose_post_snapshot(desglose: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Lista de chips no nulos para UI (etiqueta + neto)."""
+    data = desglose or {}
+    chips: List[Dict[str, Any]] = []
+    for cat in CATEGORIAS_POST_SNAPSHOT:
+        val = to_decimal_or_none(data.get(cat)) or Decimal("0")
+        if val == 0:
+            continue
+        chips.append(
+            {
+                "categoria": cat,
+                "etiqueta": etiqueta_categoria_post_snapshot(cat),
+                "neto": val,
+            }
+        )
+    return chips
+
+
+def formatear_formula_diferencia_real(
+    cantidad_contada: Any,
+    saldo_snapshot: Any,
+    ajuste_efectivo: Any,
+) -> Optional[str]:
+    """Texto legible: Contado − (Snapshot + Mov) = Diferencia."""
+    contado = to_decimal_or_none(cantidad_contada)
+    if contado is None:
+        return None
+    snap = to_decimal_or_none(saldo_snapshot) or Decimal("0")
+    mov = to_decimal_or_none(ajuste_efectivo) or Decimal("0")
+    teorico = snap + mov
+    diff = contado - teorico
+
+    def _fmt(v: Decimal) -> str:
+        if v == v.to_integral_value():
+            return str(int(v))
+        return format(v.normalize(), "f")
+
+    return (
+        f"{_fmt(contado)} − ({_fmt(snap)} + {_fmt(mov)}) = {_fmt(diff)}"
+    )
+
+
 def calcular_saldo_final_post_mstock(
     cantidad_contada: Any,
     diferencia_real: Any,
@@ -263,6 +380,12 @@ def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
     diff_real = to_decimal_or_none(linea.get("diferencia_real"))
     if diff_real is None:
         diff_real = calcular_diferencia_real(linea.get("cantidad_contada"), disp_ajust)
+    desglose = linea.get("post_snapshot")
+    if not isinstance(desglose, dict):
+        desglose = desglose_post_snapshot_vacio()
+        if ajuste_sys is not None:
+            desglose["total"] = ajuste_sys
+            desglose[CAT_OTROS] = ajuste_sys
     linea["ajuste_sistema"] = ajuste_sys
     linea["ajuste_manual"] = ajuste_man
     linea["ajuste_efectivo"] = ajuste_eff
@@ -274,6 +397,13 @@ def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
         diff_real,
         linea.get("saldo_actual_ref"),
         disponible_ajustado=disp_ajust,
+    )
+    linea["post_snapshot"] = desglose
+    linea["post_snapshot_chips"] = chips_desglose_post_snapshot(desglose)
+    linea["formula_diferencia"] = formatear_formula_diferencia_real(
+        linea.get("cantidad_contada"),
+        saldo_snap,
+        ajuste_eff,
     )
     return linea
 
@@ -1186,6 +1316,15 @@ def calcular_ajuste_post_snapshot(
     id_campana: int,
 ) -> Dict[Tuple[int, int], Decimal]:
     """Neto agregado (entrada − salida) post-snapshot por (id_articulo, id_deposito)."""
+    desglose = calcular_ajuste_post_snapshot_desglose(base_empresa, id_campana)
+    return {clave: datos.get("total", Decimal("0")) for clave, datos in desglose.items()}
+
+
+def calcular_ajuste_post_snapshot_desglose(
+    base_empresa: str,
+    id_campana: int,
+) -> Dict[Tuple[int, int], Dict[str, Decimal]]:
+    """Neto post-snapshot desglosado por origen + total, por (artículo, depósito)."""
     campana = obtener_campana(base_empresa, id_campana)
     if not campana:
         return {}
@@ -1198,7 +1337,7 @@ def calcular_ajuste_post_snapshot(
     if not depositos:
         return {}
 
-    resultado: Dict[Tuple[int, int], Decimal] = {}
+    resultado: Dict[Tuple[int, int], Dict[str, Decimal]] = {}
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             tbl_stock = _nombre_tabla(cursor, "stock")
@@ -1206,14 +1345,27 @@ def calcular_ajuste_post_snapshot(
                 return {}
             ts = tbl_stock.replace("`", "``")
             ph = ",".join(["%s"] * len(depositos))
+            tbl_ms = _nombre_tabla(cursor, "movimiento_stock")
+            join_ms = ""
+            detalle_expr = "''"
+            if tbl_ms:
+                tms = tbl_ms.replace("`", "``")
+                join_ms = (
+                    f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
+                )
+                detalle_expr = "COALESCE(ms.detalle, '')"
             cursor.execute(
                 f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, "
+                f"COALESCE(s.Comprobante, '') AS comprobante, "
+                f"COALESCE(s.TipoComp, '') AS tipo_comp, "
+                f"{detalle_expr} AS detalle, "
                 f"SUM(COALESCE(s.Entrada, 0)) - SUM(COALESCE(s.Salida, 0)) AS neto "
                 f"FROM `{ts}` s "
+                f"{join_ms}"
                 f"WHERE s.CodDeposito IN ({ph}) "
                 f"AND s.FechaControl >= %s "
                 f"AND COALESCE(s.Anulado, 'No') <> 'Si' "
-                f"GROUP BY s.IDArt, s.CodDeposito",
+                f"GROUP BY s.IDArt, s.CodDeposito, s.Comprobante, s.TipoComp, {detalle_expr}",
                 [*depositos, fecha_snapshot],
             )
             for row in cursor.fetchall():
@@ -1222,9 +1374,25 @@ def calcular_ajuste_post_snapshot(
                 if id_art is None or id_dep is None:
                     continue
                 neto = to_decimal_or_none(row.get("neto")) or Decimal("0")
-                resultado[(id_art, id_dep)] = neto
+                if neto == 0:
+                    continue
+                cat = clasificar_movimiento_post_snapshot(
+                    row.get("comprobante"),
+                    row.get("tipo_comp"),
+                    row.get("detalle"),
+                )
+                clave = (id_art, id_dep)
+                if clave not in resultado:
+                    resultado[clave] = desglose_post_snapshot_vacio()
+                resultado[clave][cat] = resultado[clave].get(cat, Decimal("0")) + neto
+                resultado[clave]["total"] = resultado[clave].get("total", Decimal("0")) + neto
     except Exception as exc:
-        logger.warning("calcular_ajuste_post_snapshot %s/%s: %s", base_empresa, id_campana, exc)
+        logger.warning(
+            "calcular_ajuste_post_snapshot_desglose %s/%s: %s",
+            base_empresa,
+            id_campana,
+            exc,
+        )
     return resultado
 
 
@@ -1259,6 +1427,7 @@ def listar_movimientos_post_snapshot(
             cursor.execute(
                 f"SELECT s.id_stock, s.FechaControl, s.Fecha, "
                 f"COALESCE(s.Entrada, 0) AS Entrada, COALESCE(s.Salida, 0) AS Salida, "
+                f"COALESCE(s.Comprobante, '-') AS comprobante, "
                 f"COALESCE(s.TipoComp, '-') AS motivo, "
                 f"COALESCE(s.NroComprobante, '-') AS nro, "
                 f"{select_detalle} "
@@ -1275,6 +1444,11 @@ def listar_movimientos_post_snapshot(
                 salida = to_decimal_or_none(row.get("Salida")) or Decimal("0")
                 fc = row.get("FechaControl")
                 fc_txt = fc.strftime("%d/%m/%Y") if hasattr(fc, "strftime") else str_or_default(fc, "")
+                cat = clasificar_movimiento_post_snapshot(
+                    row.get("comprobante"),
+                    row.get("motivo"),
+                    row.get("detalle"),
+                )
                 movimientos.append(
                     {
                         "id_stock": to_int_or_none(row.get("id_stock")),
@@ -1283,9 +1457,12 @@ def listar_movimientos_post_snapshot(
                         "entrada": entrada,
                         "salida": salida,
                         "neto": entrada - salida,
+                        "comprobante": str_or_default(row.get("comprobante"), "-"),
                         "motivo": str_or_default(row.get("motivo"), "-"),
                         "nro": str_or_default(row.get("nro"), "-"),
                         "detalle": str_or_default(row.get("detalle"), ""),
+                        "categoria": cat,
+                        "categoria_etiqueta": etiqueta_categoria_post_snapshot(cat),
                     }
                 )
             return movimientos
@@ -1735,6 +1912,7 @@ def listar_lineas_analizador(
         logger.warning("listar_lineas_analizador %s/%s: %s", base_empresa, id_campana, exc)
         return []
 
+    desglose_map = calcular_ajuste_post_snapshot_desglose(base_empresa, cid)
     candidatos = listar_contadores_candidatos(base_empresa)
     etiquetas_contador = {
         c["id_usuario"]: c["etiqueta"]
@@ -1744,6 +1922,14 @@ def listar_lineas_analizador(
         )
     }
     for linea in lineas:
+        id_art = to_int_or_none(linea.get("id_articulo"))
+        id_dep = to_int_or_none(linea.get("id_deposito"))
+        if id_art is not None and id_dep is not None:
+            linea["post_snapshot"] = desglose_map.get(
+                (id_art, id_dep), desglose_post_snapshot_vacio()
+            )
+        else:
+            linea["post_snapshot"] = desglose_post_snapshot_vacio()
         enriquecer_linea_analizador(linea)
         uid = linea.get("id_contador")
         linea["contador_etiqueta"] = etiquetas_contador.get(uid, "") if uid else ""
@@ -2110,6 +2296,7 @@ def listar_movimientos_post_snapshot_campana(
                 f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, "
                 f"s.FechaControl AS fecha_control, "
                 f"COALESCE(s.Entrada, 0) AS Entrada, COALESCE(s.Salida, 0) AS Salida, "
+                f"COALESCE(s.Comprobante, '-') AS comprobante, "
                 f"COALESCE(s.TipoComp, '-') AS motivo, "
                 f"COALESCE(s.NroComprobante, '-') AS nro, "
                 f"{select_detalle}, "
@@ -2130,6 +2317,11 @@ def listar_movimientos_post_snapshot_campana(
             for row in cursor.fetchall():
                 entrada = to_decimal_or_none(row.get("Entrada")) or Decimal("0")
                 salida = to_decimal_or_none(row.get("Salida")) or Decimal("0")
+                cat = clasificar_movimiento_post_snapshot(
+                    row.get("comprobante"),
+                    row.get("motivo"),
+                    row.get("detalle"),
+                )
                 movimientos.append(
                     {
                         "id_articulo": to_int_or_none(row.get("id_articulo")),
@@ -2140,9 +2332,12 @@ def listar_movimientos_post_snapshot_campana(
                         "entrada": entrada,
                         "salida": salida,
                         "neto": entrada - salida,
+                        "comprobante": str_or_default(row.get("comprobante"), "-"),
                         "motivo": str_or_default(row.get("motivo"), "-"),
                         "nro": str_or_default(row.get("nro"), "-"),
                         "detalle": str_or_default(row.get("detalle"), ""),
+                        "categoria": cat,
+                        "categoria_etiqueta": etiqueta_categoria_post_snapshot(cat),
                     }
                 )
             return movimientos

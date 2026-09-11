@@ -86,7 +86,9 @@
       </div>
 
       <p class="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
-        Marcas vacías = todas · La búsqueda filtra en vivo sobre las filas cargadas · Diferencia real = contado − (disponible + cargado después) · Saldo final = saldo actual del depósito + diferencia real (previsto tras autorizar; no modifica el conteo).
+        Marcas vacías = todas · La búsqueda filtra en vivo sobre las filas cargadas ·
+        <strong class="font-semibold text-slate-600 dark:text-slate-300">Diferencia real = Contado − (Stock al snapshot + Mov. después del snapshot)</strong>
+        · Saldo final = saldo actual del depósito + diferencia real (previsto tras autorizar; no modifica el conteo).
       </p>
     </form>
 
@@ -151,11 +153,11 @@
           <tr>
             <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Código</th>
             <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Artículo</th>
-            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Disponible</th>
-            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Cargado después</th>
-            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Disponible ajustado</th>
+            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Saldo congelado al abrir el conteo">Stock al snapshot</th>
+            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Neto de movimientos en el depósito desde el snapshot (entradas − salidas). Expandí la fila para ver el origen.">Mov. después del snapshot</th>
+            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Stock al snapshot + mov. después">Stock teórico hoy</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Contado</th>
-            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Diferencia real</th>
+            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Contado − stock teórico hoy">Diferencia real</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Saldo en stock_deposito tras autorizar MSTOCK (saldo actual + diferencia real). Solo lectura.">Saldo final</th>
             <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Contador</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Detalle</th>
@@ -173,30 +175,57 @@
               <div class="flex items-center gap-1.5">
                 <span>{{ l.nombre }}</span>
                 {% if l.descuadre %}
-                <span class="material-icons text-base text-amber-500" title="Descuadre: el saldo actual del depósito no coincide con disponible + cargado del sistema">warning</span>
+                <span class="material-icons text-base text-amber-500" title="Descuadre: el saldo actual del depósito no coincide con stock al snapshot + mov. del sistema">warning</span>
                 {% endif %}
               </div>
             </td>
             <td class="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{{ l.saldo_snapshot|floatformat:0 }}</td>
             <td class="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
-              <div class="inline-flex items-center justify-end gap-1">
-                <span>{% if l.ajuste_efectivo is not None %}{{ l.ajuste_efectivo|floatformat:0 }}{% else %}0{% endif %}</span>
-                {% if l.ajuste_manual is not None %}
-                <span class="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">manual</span>
-                {% endif %}
-                {% if puede_recalcular %}
-                <button type="button"
-                        @click="abrirOverride({{ l.id_linea }}, '{{ l.codigo|escapejs }}', {% if l.ajuste_efectivo is not None %}{{ l.ajuste_efectivo }}{% else %}0{% endif %}, {% if l.ajuste_manual is not None %}{{ l.ajuste_manual }}{% else %}null{% endif %})"
-                        class="ml-0.5 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-purple-600 dark:hover:bg-slate-700 dark:hover:text-purple-400"
-                        title="Ajustar override manual">
-                  <span class="material-icons text-sm" aria-hidden="true">edit</span>
-                </button>
+              <div class="inline-flex flex-col items-end gap-1">
+                <div class="inline-flex items-center justify-end gap-1">
+                  {% if l.post_snapshot_chips %}
+                  <button type="button"
+                          @click="toggleOrigenes({{ l.id_linea }})"
+                          class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-purple-600 dark:hover:bg-slate-700 dark:hover:text-purple-400"
+                          :title="origenesAbiertos['{{ l.id_linea }}'] ? 'Ocultar orígenes' : 'Ver orígenes del movimiento'"
+                          :aria-expanded="!!origenesAbiertos['{{ l.id_linea }}']">
+                    <span class="material-icons text-sm" aria-hidden="true"
+                          x-text="origenesAbiertos['{{ l.id_linea }}'] ? 'expand_less' : 'expand_more'"></span>
+                  </button>
+                  {% endif %}
+                  <span>{% if l.ajuste_efectivo is not None %}{{ l.ajuste_efectivo|floatformat:0 }}{% else %}0{% endif %}</span>
+                  {% if l.ajuste_manual is not None %}
+                  <span class="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">manual</span>
+                  {% endif %}
+                  {% if puede_recalcular %}
+                  <button type="button"
+                          @click="abrirOverride({{ l.id_linea }}, '{{ l.codigo|escapejs }}', {% if l.ajuste_efectivo is not None %}{{ l.ajuste_efectivo }}{% else %}0{% endif %}, {% if l.ajuste_manual is not None %}{{ l.ajuste_manual }}{% else %}null{% endif %})"
+                          class="ml-0.5 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-purple-600 dark:hover:bg-slate-700 dark:hover:text-purple-400"
+                          title="Ajustar override manual">
+                    <span class="material-icons text-sm" aria-hidden="true">edit</span>
+                  </button>
+                  {% endif %}
+                </div>
+                {% if l.post_snapshot_chips %}
+                <div x-show="origenesAbiertos['{{ l.id_linea }}']" x-cloak
+                     class="flex max-w-[16rem] flex-wrap justify-end gap-1">
+                  {% for chip in l.post_snapshot_chips %}
+                  <span class="rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums
+                    {% if chip.neto > 0 %}bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200
+                    {% elif chip.neto < 0 %}bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200
+                    {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}"
+                    title="{{ chip.etiqueta }}">
+                    {{ chip.etiqueta }} {% if chip.neto > 0 %}+{% endif %}{{ chip.neto|floatformat:0 }}
+                  </span>
+                  {% endfor %}
+                </div>
                 {% endif %}
               </div>
             </td>
             <td class="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{{ l.disponible_ajustado|floatformat:0 }}</td>
             <td class="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{% if l.cantidad_contada is not None %}{{ l.cantidad_contada|floatformat:0 }}{% else %}—{% endif %}</td>
-            <td class="px-3 py-2.5 text-right tabular-nums font-semibold {% if l.diferencia_real and l.diferencia_real < 0 %}text-red-600{% elif l.diferencia_real and l.diferencia_real > 0 %}text-emerald-600{% else %}text-slate-500{% endif %}">
+            <td class="px-3 py-2.5 text-right tabular-nums font-semibold {% if l.diferencia_real and l.diferencia_real < 0 %}text-red-600{% elif l.diferencia_real and l.diferencia_real > 0 %}text-emerald-600{% else %}text-slate-500{% endif %}"
+                {% if l.formula_diferencia %}title="{{ l.formula_diferencia }}"{% endif %}>
               {% if l.diferencia_real is not None %}{{ l.diferencia_real|floatformat:0 }}{% else %}—{% endif %}
             </td>
             <td class="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-800 dark:text-slate-100" title="Saldo previsto en depósito tras autorizar">
@@ -375,6 +404,13 @@
 function analizadorInvFisico() {
   return {
     confirmOpen: false,
+    origenesAbiertos: {},
+    toggleOrigenes(idLinea) {
+      var key = String(idLinea);
+      var next = Object.assign({}, this.origenesAbiertos);
+      next[key] = !next[key];
+      this.origenesAbiertos = next;
+    },
     recalcOpen: false,
     overrideOpen: false,
     ceroOpen: false,
