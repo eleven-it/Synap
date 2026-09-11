@@ -94,8 +94,13 @@ def _clausula_filtro_depositos(
 
 
 def _afecta_deposito_terminado(comprobante: Optional[str]) -> bool:
-    """FA se lista pero no mueve saldo corrido Terminado (paridad _gen_kardex_610_t6)."""
-    return (comprobante or "").upper() != "FA"
+    """True solo si el comprobante mueve stock en depósito.
+
+    Facturas (FA/FB) no mueven Terminado (el stock ya salió por REM): no se
+    listan ni entran al saldo corrido.
+    """
+    comp = (comprobante or "").strip().upper()
+    return comp not in ("FA", "FB")
 
 
 def _es_motivo_inventario(
@@ -165,9 +170,11 @@ def _clasificar_movimiento_analisis(
     comp = (comprobante or "").strip().upper()
     tipo = (tipo_mov or "").strip().upper()
 
-    if comp in ("REM", "FA"):
-        clase = "rem" if comp == "REM" else "fa"
-        return clase, _afecta_deposito_terminado(comp)
+    if comp == "REM":
+        return "rem", True
+    if comp in ("FA", "FB"):
+        # Facturas: no mueven stock; se descartan en normalización/listado.
+        return "fa", False
 
     if fuente.startswith("mpr_"):
         return fuente.replace("mpr_", "mpr_"), True
@@ -412,7 +419,10 @@ def _consultar_movimientos_stock_rem_fa(
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
 ) -> List[Dict[str, Any]]:
-    """REM/FA directos en tabla stock (no MSTOCK)."""
+    """REM (y anulaciones) en tabla stock: solo comprobantes que mueven depósito.
+
+    FA/FB no se consultan: no mueven stock (paridad reconstrucción kardex).
+    """
     from mpr.services import _nombre_tabla
 
     id_art = to_int_or_none(id_articulo)
@@ -459,7 +469,7 @@ def _consultar_movimientos_stock_rem_fa(
                     COALESCE(SUM(s.Salida), 0) AS total_salida
                 FROM {tbl_stock} s
                 WHERE s.IDArt = %s
-                  AND s.Comprobante IN ('REM', 'FA')
+                  AND s.Comprobante = 'REM'
                   AND COALESCE(s.Anulado, 'No') <> 'Si'
                   {filtros_extra}
                 GROUP BY
@@ -666,6 +676,9 @@ def _normalizar_fila_analisis_stock(
         tipo_comp=row.get("tipo_comp"),
         fuente=fuente,
     )
+    # Solo movimientos que mueven stock entran al listado y al saldo corrido.
+    if not afecta:
+        return None
     total_entrada = int(float(row.get("total_entrada") or 0))
     total_salida = int(float(row.get("total_salida") or 0))
     if total_entrada <= 0 and total_salida <= 0:
@@ -685,7 +698,7 @@ def _normalizar_fila_analisis_stock(
         "detalle": str_or_default(row.get("detalle"), ""),
         "operario": "-",
         "clase_ui": clase_ui,
-        "afecta_deposito": afecta,
+        "afecta_deposito": True,
         "fuente": fuente,
     }
 
@@ -703,11 +716,13 @@ def _normalizar_fila_analisis_mstock(row: Dict[str, Any]) -> Optional[Dict[str, 
         tipo_comp=row.get("tipo_comp"),
         fuente=str_or_default(row.get("fuente"), "mstock"),
     )
+    if not afecta:
+        return None
     return {
         **fila_k,
         "fecha_sort": row.get("fecha"),
         "clase_ui": clase_ui,
-        "afecta_deposito": afecta,
+        "afecta_deposito": True,
         "fuente": str_or_default(row.get("fuente"), "mstock"),
     }
 
@@ -924,7 +939,7 @@ def _recolectar_movimientos_analisis(
     limit: int = 500,
     solo_pre_periodo: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Unifica MSTOCK OPP/OPA, REM/FA, inventario y eventos MPR."""
+    """Unifica MSTOCK OPP/OPA, REM (stock) e inventario; sin FA/FB."""
     from datetime import date as date_type, datetime as datetime_type, timedelta
 
     corte_str = to_date_or_none(fecha_desde)
@@ -1199,7 +1214,7 @@ def construir_analisis_trazabilidad_articulo(
         advertencias.append(
             "Se alcanzó el límite de movimientos del período; la historia listada puede estar truncada."
         )
-    # Solo movimientos que mueven stock Terminado (p. ej. FA se omite).
+    # Solo movimientos que mueven stock (FA/FB ya no llegan del collector).
     movimientos = [m for m in movimientos if m.get("afecta_deposito", True)]
     movimientos = _unificar_y_saldo_corrido(movimientos, saldo_inicial=saldo_inicial)
 

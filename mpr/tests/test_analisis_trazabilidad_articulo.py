@@ -17,6 +17,7 @@ from mpr.services_kardex_articulo import (
     _deduplicar_movimientos,
     _es_motivo_ingreso_deposito,
     _normalizar_fila_analisis_mstock,
+    _normalizar_fila_analisis_stock,
     _unificar_y_saldo_corrido,
     construir_analisis_trazabilidad_articulo,
 )
@@ -84,6 +85,9 @@ class TestAfectaDepositoTerminado(SimpleTestCase):
     def test_fa_no_afecta_deposito(self):
         self.assertFalse(_afecta_deposito_terminado("FA"))
 
+    def test_fb_no_afecta_deposito(self):
+        self.assertFalse(_afecta_deposito_terminado("FB"))
+
 
 class TestClasificarMovimientoAnalisis(SimpleTestCase):
     def test_opa_clase_ui(self):
@@ -120,6 +124,30 @@ class TestClasificarMovimientoAnalisis(SimpleTestCase):
         )
         self.assertEqual(clase, "fa")
         self.assertFalse(afecta)
+
+    def test_fb_clase_ui_sin_efecto_deposito(self):
+        clase, afecta = _clasificar_movimiento_analisis(
+            tipo_mov="FB",
+            motivo_movimiento="",
+            comprobante="FB",
+        )
+        self.assertEqual(clase, "fa")
+        self.assertFalse(afecta)
+
+    def test_normalizar_stock_descarta_factura(self):
+        self.assertIsNone(
+            _normalizar_fila_analisis_stock(
+                {
+                    "comprobante": "FA",
+                    "tipo_mov": "FA",
+                    "total_entrada": 0,
+                    "total_salida": 12,
+                    "nro_comprobante": "0001-1",
+                    "detalle": "Venta",
+                    "fecha": date(2026, 9, 1),
+                }
+            )
+        )
 
     def test_inventario_por_motivo(self):
         clase, afecta = _clasificar_movimiento_analisis(

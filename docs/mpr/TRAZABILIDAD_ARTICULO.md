@@ -17,7 +17,7 @@ Informe **canónico** por artículo que **reconstruye la historia del rango** pe
 **Contrato de reconstrucción**
 
 - Lo **anterior al Desde** no se lista fila a fila: se consolida en **saldo inicial histórico**.  
-- En el rango se listan movimientos con `afecta_deposito` (OPA, REM, INV, OPP…). **FA** y similares se omiten.  
+- En el rango se listan movimientos con `afecta_deposito` (OPA, REM, INV, OPP…). **FA/FB** no se consultan ni listan.  
 - Saldo corrido = saldo inicial + movimientos del rango → explica el stock **al Hasta** (y, si Hasta es hoy, debería conciliar con **Terminado actual**).
 
 Cabecera: artículo, rango, pack/componente, Terminado actual.  
@@ -83,9 +83,11 @@ Los eventos MPR (envío, parte, clasificación) **no** entran al saldo corrido: 
 
 ## Reglas de saldo y clasificación
 
-### FA y movimientos que no mueven stock
+### FA / FB y movimientos que no mueven stock
 
-`afecta_deposito=False` (típicamente **FA**) **no se listan**.
+Facturas (**FA**, **FB**) **no se consultan ni se listan**: no mueven `stock_deposito` (el stock ya salió por REM). El collector de `stock` solo trae **REM**. Cualquier fila con `afecta_deposito=False` se descarta en normalización y antes del saldo corrido.
+
+La reconstrucción del §3 Movimientos es **solo** con movimientos que mueven stock (OPA, REM, INV, OPP, Stock Inicial, ajustes MSTOCK, etc.).
 
 ### Clases en pantalla
 
@@ -94,7 +96,7 @@ Los eventos MPR (envío, parte, clasificación) **no** entran al saldo corrido: 
 | `opp` | Producción o transferencia interna | Entrada − salida; al consolidar el pipeline se conservan ambos lados y las transferencias internas netean 0 |
 | `opa` | Armado pack | Entrada pack / salida componentes |
 | `rem` | Remito cliente | Salida |
-| `fa` | Factura | **Omitido** |
+| `fa` | Factura FA/FB | **Omitido** (no mueve stock; no se consulta) |
 | `inventario` | Ajuste MSTOCK (faltante/sobrante/conteo/inventario) | Según entrada/salida; columna **Conteo** = saldo depósito tras el ajuste |
 | `stock_inicial` | MSTOCK Stock Inicial (alta inicial en depósito) | Entrada |
 | `ajuste` | MSTOCK Ajuste, Rotura, Transferencia, Mov. Interno *, Desarmado | Entrada − salida; **Conteo** = — |
