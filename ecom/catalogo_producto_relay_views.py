@@ -207,22 +207,18 @@ def _session_pv_activo(request: Request) -> Optional[int]:
 
 
 def _obtener_id_deposito(request: Request) -> int:
-    """Obtiene id_deposito desde sesión (deposito activo o mayoristapp); default 1."""
-    sess = getattr(request, "session", None) or {}
-    dep = sess.get("deposito")
-    if dep is not None:
-        id_dep = to_int_or_none(dep)
-        if id_dep is not None:
-            return id_dep
+    """Depósito del vendedor para catálogo/carrito (sin default silencioso a 1)."""
+    from ecom.services.deposito_vendedor import (
+        DepositoVendedorNoResuelto,
+        resolver_id_deposito_desde_request,
+    )
 
-    ma = sess.get("mayoristapp") or {}
-    dep_ma = ma.get("deposito")
-    if dep_ma is not None:
-        id_dep = to_int_or_none(dep_ma)
-        if id_dep is not None:
-            return id_dep
-
-    return 1
+    try:
+        return resolver_id_deposito_desde_request(request, permitir_body=False)
+    except DepositoVendedorNoResuelto:
+        # Catálogo: degradación controlada solo si no hay sesión de vendedor.
+        # El checkout masivo/simple NO usa este fallback (fail-closed allí).
+        return 1
 
 
 class CatalogoArticulosListadoRelayAPIView(APIView):

@@ -141,6 +141,8 @@ Para bajar costo de servidor (clientes con muchas sucursales / timeout de 8 s), 
 
 **Stock Terminado (packs):** cada ítem del catálogo (`GET …/pedido-masivo/articulos/`) y cada fila de artículo en la matriz (`serializar_matriz` / `GET …/matriz/`) incluye `stock_disponible_packs` (número, hasta 3 decimales). Origen: depósito físico con `tipo_mpr = 'Terminado'` (`get_deposito_terminado_mpr` en `mpr/services.py`); disponible = `max(0, saldo − saldo_pedido_cliente)` vía `StockService.get_disponible_map` (bulk, sin N+1). Unidad: packs según `multiplo_cantidad_vta` / `multiplo_empaque` (misma convención que validación de celdas). Si no hay depósito Terminado configurado, el campo es `0`.
 
+**Depósito de despacho al confirmar (crítico):** el PED se graba con `comp_ped.id_deposito_despacho` / `stockp.CodDeposito` = depósito del **vendedor** (`usuarios.id_deposito` vía sesión o MySQL). Helper: `ecom.services.deposito_vendedor.resolver_id_deposito_vendedor` (fail-closed: **no** usa default `1`). Un body con `id_deposito` erróneo **no** pisa el del vendedor. Sin depósito resoluble, la confirmación responde `sin_deposito_vendedor`.
+
 #### Columna stock, catálogo completo y multi-select — 31/07/2026 (`?v=masivo40`)
 
 | Aspecto | Comportamiento |

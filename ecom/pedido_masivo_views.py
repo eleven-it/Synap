@@ -21,6 +21,10 @@ from ecom.permissions import (
     EcomPedidoCapturaPermission,
     usuario_puede_matriz_multi_columna,
 )
+from ecom.services.deposito_vendedor import (
+    DepositoVendedorNoResuelto,
+    resolver_id_deposito_desde_request,
+)
 
 from ecom.services.pedido_masivo_matriz import (
     anular_borrador_masivo_usuario,
@@ -341,9 +345,10 @@ class PedidoMasivoConfirmarAPIView(APIView):
                 "sin_pv",
             )
 
-        id_dep = to_int_or_none(data.get("id_deposito")) or to_int_or_none(
-            sess.get("id_deposito")
-        ) or 1
+        try:
+            id_dep = resolver_id_deposito_desde_request(request, data=data, permitir_body=True)
+        except DepositoVendedorNoResuelto as exc:
+            return None, _err(str(exc), "sin_deposito_vendedor")
         cv = cod_viajante_sesion(sess)
 
         flags = _flags_cabecera_masivo(request)
@@ -762,7 +767,14 @@ class PedidoMasivoArticulosAPIView(APIView):
         if cv is None or idc is None:
             return _err("Se requieren viajante e id_cliente.")
         lista_id = to_int_or_none(request.query_params.get("lista_id")) or 1
-        id_dep = to_int_or_none(request.query_params.get("id_deposito")) or 1
+        try:
+            id_dep = resolver_id_deposito_desde_request(
+                request,
+                data={"id_deposito": request.query_params.get("id_deposito")},
+                permitir_body=True,
+            )
+        except DepositoVendedorNoResuelto as exc:
+            return _err(str(exc), "sin_deposito_vendedor")
         todos_raw = str(request.query_params.get("todos") or "").strip().lower()
         listar_todos = todos_raw in ("1", "true", "si", "sí", "yes")
         tam_default = 5000 if listar_todos else 20
@@ -809,9 +821,10 @@ class PedidoMasivoPreviewAPIView(APIView):
         if not cabecera:
             return _err(err_cab or "Cabecera comercial inválida.")
 
-        id_dep = to_int_or_none(data.get("id_deposito")) or to_int_or_none(
-            sess.get("id_deposito")
-        ) or 1
+        try:
+            id_dep = resolver_id_deposito_desde_request(request, data=data, permitir_body=True)
+        except DepositoVendedorNoResuelto as exc:
+            return _err(str(exc), "sin_deposito_vendedor")
 
         preview = calcular_totales_lote_masivo(
             draft,
