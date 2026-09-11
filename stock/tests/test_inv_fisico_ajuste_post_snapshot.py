@@ -112,6 +112,42 @@ class FuncionesPurasAjustePostSnapshotTest(SimpleTestCase):
         self.assertEqual(linea["diferencia_real"], Decimal("5879"))
         self.assertEqual(linea["saldo_final"], Decimal("11437"))
         self.assertTrue(linea["descuadre"])
+        self.assertEqual(
+            linea["formula_diferencia"],
+            "11347 − (4853 + 615) = 5879",
+        )
+
+
+class ClasificarMovimientoPostSnapshotTest(SimpleTestCase):
+    def test_remitos_facturas_nc(self):
+        self.assertEqual(svc.clasificar_movimiento_post_snapshot("REM"), svc.CAT_REMITOS)
+        self.assertEqual(svc.clasificar_movimiento_post_snapshot("FA"), svc.CAT_FACTURAS)
+        self.assertEqual(svc.clasificar_movimiento_post_snapshot("NCA"), svc.CAT_NOTAS_CREDITO)
+
+    def test_mstock_armado_vs_ajuste(self):
+        self.assertEqual(
+            svc.clasificar_movimiento_post_snapshot("MSTOCK", "Movimiento", "Armado 1ra OPT"),
+            svc.CAT_ARMADO_MPR,
+        )
+        self.assertEqual(
+            svc.clasificar_movimiento_post_snapshot("MSTOCK", "Faltante", "Ajuste conteo"),
+            svc.CAT_AJUSTES,
+        )
+
+    def test_chips_y_suma_categorias(self):
+        desglose = {
+            **svc.desglose_post_snapshot_vacio(),
+            "armado_mpr": Decimal("100"),
+            "remitos": Decimal("-40"),
+            "total": Decimal("60"),
+        }
+        chips = svc.chips_desglose_post_snapshot(desglose)
+        self.assertEqual(len(chips), 2)
+        self.assertEqual(chips[0]["etiqueta"], "Entradas armado MPR")
+        self.assertEqual(
+            sum((c["neto"] for c in chips), Decimal("0")),
+            Decimal("60"),
+        )
 
 
 class RecalcularAjustePostSnapshotTest(SimpleTestCase):
