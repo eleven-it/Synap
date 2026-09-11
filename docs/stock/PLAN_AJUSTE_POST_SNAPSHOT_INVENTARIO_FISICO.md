@@ -24,7 +24,7 @@ Antes de autorizar, el supervisor ve y puede ajustar el **gap de movimientos pos
 | 7 | Flujo operativo | Conteo inicia a la mañana → durante el día se cargan partes/QA/armado → cierre el mismo día o después → analizador → ajustar y/o aprobar. |
 | 8 | Multi-día | El ajuste **acumula** desde el snapshot hasta el momento del recálculo / autorización. |
 | 9 | Permisos y auditoría | Solo roles de **supervisor de inventario** (`gestionar` / `autorizar` según acción). Auditoría de ajustes. Visualizar **quién contó** (contador que registró la cantidad). |
-| 10 | Nombres UI | **Cargado después**, **Disponible ajustado**, **Diferencia real**. |
+| 10 | Nombres UI | **Stock al snapshot**, **Mov. después del snapshot** (desglose por origen al expandir), **Stock teórico hoy**, **Diferencia real** (tooltip con fórmula). |
 
 ## Fórmulas (UI y MSTOCK)
 

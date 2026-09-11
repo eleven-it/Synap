@@ -57,12 +57,14 @@ Reconteo ciego: `EnRevision → EnConteo`.
 **Fórmulas:**
 
 ```
-Cargado después (ajuste_sistema) = Σ (Entrada − Salida) post-snapshot por artículo×depósito
-Ajuste efectivo                  = ajuste_manual si existe; si no, ajuste_sistema
-Disponible ajustado              = saldo_snapshot + ajuste_efectivo
-Diferencia real                  = cantidad_contada − disponible_ajustado  (NULL si no contado)
-Saldo final (UI)                 = saldo_actual_ref + diferencia_real  (NULL si no contado)
-                                 → saldo previsto en stock_deposito tras autorizar MSTOCK
+Mov. después del snapshot (ajuste_sistema) = Σ (Entrada − Salida) post-snapshot por artículo×depósito
+Ajuste efectivo                            = ajuste_manual si existe; si no, ajuste_sistema
+Stock teórico hoy (disponible_ajustado)    = saldo_snapshot + ajuste_efectivo
+Diferencia real                            = cantidad_contada − disponible_ajustado  (NULL si no contado)
+                                           = Contado − (Stock al snapshot + Mov. después)
+Saldo final (UI)                           = saldo_actual_ref + diferencia_real  (NULL si no contado)
+                                           → saldo previsto en stock_deposito tras autorizar MSTOCK
+Orígenes (chips UI / Excel)                = armado MPR, remitos, facturas, NC, ajustes, otros (suma = ajuste_sistema)
 ```
 
 **Control de descuadre:** `saldo_actual_ref` = `stock_deposito.saldo` al recalcular; si difiere de `snapshot + ajuste_sistema`, el analizador muestra aviso (no bloquea). Sin descuadre, **Saldo final** coincide con **Contado**.
@@ -126,7 +128,7 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 
 `inventario_fisico_crear_view` acepta `contadores` (lista) + `contadores_texto` y `accion` (`crear_abrir`/`crear_borrador`); `inventario_fisico_monitor_view` acepta `accion=reasignar`.
 
-**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Disponible** (`saldo_snapshot`), **Cargado después**, **Disponible ajustado**, **Contado**, **Diferencia real**, **Saldo final** (previsto post-MSTOCK), **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); enlace **Exportar Excel** (informe multi-hoja de impacto de saldos); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. **Saldo final** es solo lectura/UI: no modifica conteos ni escribe stock. Contado **0** no entra en «No contados» (es conteo explícito). Chip **`N no contados`** (N = campaña completa, sin filtro de marcas) y acción **Marcar no contados como 0** cuando el supervisor tiene permiso `gestionar` y la campaña está en **EnConteo** o **EnRevision** (ver sección siguiente).
+**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Stock al snapshot** (`saldo_snapshot`), **Mov. después del snapshot** (neto + chips de origen expandibles: armado MPR, remitos, facturas, NC, ajustes, otros), **Stock teórico hoy**, **Contado**, **Diferencia real** (tooltip con fórmula `Contado − (Snapshot + Mov.)`), **Saldo final** (previsto post-MSTOCK), **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); enlace **Exportar Excel** (informe multi-hoja de impacto de saldos, con columnas de desglose); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. **Saldo final** es solo lectura/UI: no modifica conteos ni escribe stock. Contado **0** no entra en «No contados» (es conteo explícito). Chip **`N no contados`** (N = campaña completa, sin filtro de marcas) y acción **Marcar no contados como 0** cuando el supervisor tiene permiso `gestionar` y la campaña está en **EnConteo** o **EnRevision** (ver sección siguiente).
 
 ### Exportación Excel (impacto de saldos)
 
@@ -338,7 +340,7 @@ Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`,
 - [ ] Asignar contadores; abrir conteo (`EnConteo`).
 - [ ] Monitor muestra progreso y conflictos sync.
 - [ ] Cerrar conteo → `EnRevision`.
-- [ ] Analizador: filtros faltante/sobrante; multi-marca (GET `marcas_incluidos`); búsqueda en vivo por código/nombre; columnas **Disponible**, **Cargado después**, **Disponible ajustado**, **Diferencia real**, **Contador**; botón actualizar ajustes; detalle línea con movimientos post-snapshot en ≤ 2 clics desde monitor.
+- [ ] Analizador: filtros faltante/sobrante; multi-marca (GET `marcas_incluidos`); búsqueda en vivo por código/nombre; columnas **Stock al snapshot**, **Mov. después del snapshot** (chips de origen), **Stock teórico hoy**, **Diferencia real** (tooltip fórmula), **Contador**; botón actualizar ajustes; detalle línea con movimientos post-snapshot en ≤ 2 clics desde monitor.
 - [ ] Autorizar bloqueado si hay `pendientes_cliente` o conflictos sync.
 - [ ] Autorizar OK → campaña `Aplicado`, MSTOCK Faltante/Sobrante según **diferencia real**, línea diff_real=0 sin movimiento.
 - [ ] Anular en `EnConteo` → `Anulado` sin MSTOCK.
