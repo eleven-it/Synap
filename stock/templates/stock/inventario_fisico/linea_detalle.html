@@ -71,24 +71,23 @@
           <thead class="bg-slate-50 dark:bg-slate-800/50">
             <tr>
               <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Fecha</th>
-              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Origen</th>
-              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Motivo</th>
               <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Comprobante</th>
-              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Entrada</th>
-              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Salida</th>
+              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Qué hizo</th>
               <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Neto</th>
+              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Origen</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {% for m in movimientos %}
             <tr>
               <td class="px-4 py-2 tabular-nums text-slate-700 dark:text-slate-200">{{ m.fecha_control }}</td>
-              <td class="px-4 py-2 text-slate-700 dark:text-slate-200">{{ m.categoria_etiqueta|default:"Otros" }}</td>
-              <td class="px-4 py-2 text-slate-700 dark:text-slate-200">{{ m.motivo }}</td>
-              <td class="px-4 py-2 font-mono text-xs text-slate-600 dark:text-slate-300">{{ m.nro }}</td>
-              <td class="px-4 py-2 text-right tabular-nums text-emerald-600">{{ m.entrada|floatformat:0 }}</td>
-              <td class="px-4 py-2 text-right tabular-nums text-red-600">{{ m.salida|floatformat:0 }}</td>
-              <td class="px-4 py-2 text-right tabular-nums font-medium text-slate-800 dark:text-slate-100">{{ m.neto|floatformat:0 }}</td>
+              <td class="px-4 py-2 font-mono text-xs leading-snug text-slate-700 dark:text-slate-200">{{ m.comprobante_etiqueta|default:m.comprobante }}</td>
+              <td class="px-4 py-2 text-slate-700 dark:text-slate-200">{{ m.sentido|default:"—" }}</td>
+              <td class="px-4 py-2 text-right tabular-nums font-semibold
+                {% if m.neto > 0 %}text-emerald-600{% elif m.neto < 0 %}text-red-600{% else %}text-slate-800 dark:text-slate-100{% endif %}">
+                {% if m.neto > 0 %}+{% endif %}{{ m.neto|floatformat:0 }}
+              </td>
+              <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ m.categoria_etiqueta|default:"Otros" }}</td>
             </tr>
             {% endfor %}
           </tbody>
