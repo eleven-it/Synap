@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import tempfile
+from typing import Any
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -34,6 +35,8 @@ from reports.services.monthly_reporting_template_builder import TEMPLATE_DIR, bu
 from reports.services.ventas_mensuales_licenciatarios_importer import (
     _coerce_decimal,
     _coerce_month,
+    _detect_puma_sw_layout,
+    _parse_puma_layout,
     compute_file_sha256,
     import_monthly_reporting_file,
     normalize_seed_key,
@@ -85,7 +88,9 @@ from reports.services.ventas_mensuales_licenciatarios_merger import (
     compute_ytd,
     filter_merge_result_by_clientes_excluidos,
     merge_pack_year,
+    resolve_anet_match,
     seed_months_in_range,
+    _build_match_indexes,
 )
 from reports.services.monthly_reporting_client_match_service import (
     MatchActor,
@@ -98,6 +103,7 @@ from reports.services.monthly_reporting_superart_service import (
     activate_catalog_version,
     classify_superart,
     get_or_create_active_catalog,
+    list_catalog_entries,
     list_qa_pending,
     make_classify_fn,
     register_qa_pending,
@@ -470,8 +476,9 @@ class MonthlyReportingImportTests(TestCase):
             1,
         )
 
-    def test_replace_actualiza_y_audita(self):
+    def test_replace_purga_seed_del_pack_y_recrea(self):
         import_monthly_reporting_file("levis_bw", self.file_path)
+        old_row_id = MonthlyReportingSeedRow.objects.get().pk
         updated_path = _build_levis_seed_xlsx(
             Path(self.tempdir.name) / "seed_v2.xlsx",
             units=20,
@@ -482,15 +489,34 @@ class MonthlyReportingImportTests(TestCase):
             updated_path,
             replace_mode=True,
         )
-        self.assertEqual(result.batch.rows_updated, 1)
-        self.assertEqual(result.batch.rows_created, 0)
+        self.assertEqual(result.batch.rows_created, 1)
+        self.assertEqual(result.batch.rows_updated, 0)
+        self.assertEqual(MonthlyReportingSeedRow.objects.count(), 1)
         row = MonthlyReportingSeedRow.objects.get()
+        self.assertNotEqual(row.pk, old_row_id)
         self.assertEqual(row.units, Decimal("20.000000"))
         self.assertEqual(row.amount, Decimal("2000.00"))
-        replacements = result.batch.audit_json.get("replacements", [])
-        self.assertEqual(len(replacements), 1)
-        self.assertIn("before", replacements[0])
-        self.assertIn("after", replacements[0])
+
+    def test_replace_mismo_sha_supersede_batch_aplicado(self):
+        """--replace con el mismo archivo libera unique (pack, sha) applied."""
+        first = import_monthly_reporting_file("levis_bw", self.file_path)
+        second = import_monthly_reporting_file(
+            "levis_bw",
+            self.file_path,
+            replace_mode=True,
+        )
+        self.assertFalse(second.duplicate)
+        self.assertEqual(second.batch.estado, MonthlyReportingImportBatch.Estado.APPLIED)
+        first.batch.refresh_from_db()
+        self.assertEqual(first.batch.estado, MonthlyReportingImportBatch.Estado.FAILED)
+        self.assertIn("Supersedido", first.batch.error_message)
+        self.assertEqual(
+            MonthlyReportingImportBatch.objects.filter(
+                estado=MonthlyReportingImportBatch.Estado.APPLIED
+            ).count(),
+            1,
+        )
+        self.assertEqual(MonthlyReportingSeedRow.objects.count(), 1)
 
     def test_batch_fallido_no_persiste_filas(self):
         with self.assertRaises(RuntimeError):
@@ -503,6 +529,73 @@ class MonthlyReportingImportTests(TestCase):
         failed = MonthlyReportingImportBatch.objects.latest("id")
         self.assertEqual(failed.estado, MonthlyReportingImportBatch.Estado.FAILED)
         self.assertIn("Fallo simulado", failed.error_message)
+
+
+class PumaLayoutParserTests(SimpleTestCase):
+    """Parser Puma BW vs SW — columnas UF / Product Group."""
+
+    def _bw_rows(self) -> list[tuple[Any, ...]]:
+        header = [None] * 12
+        header[6] = "Razón social"
+        header[7] = "city"
+        header[8] = "store type"
+        header[9] = "Product Group"
+        header[10] = date(2026, 1, 1)
+        data = [None] * 12
+        data[6] = "Cliente BW SA"
+        data[7] = "CABA"
+        data[8] = "Puma Store"
+        data[9] = "Men BW"
+        data[10] = 100
+        data[11] = 5000
+        return [(), (), (), tuple(header), tuple(data)]
+
+    def _sw_rows(self) -> list[tuple[Any, ...]]:
+        header = [None] * 13
+        header[6] = "Razón social"
+        header[7] = "city"
+        header[8] = "UF"
+        header[9] = "store type"
+        header[10] = "Product Group"
+        header[11] = date(2026, 1, 1)
+        data = [None] * 13
+        data[6] = "Cliente SW SA"
+        data[7] = "GBA"
+        data[8] = "BA"
+        data[9] = "Franchise"
+        data[10] = "Women SW"
+        data[11] = 40
+        data[12] = 3200
+        return [(), (), (), tuple(header), tuple(data)]
+
+    def test_detect_sw_por_header_uf(self):
+        header = self._sw_rows()[3]
+        self.assertTrue(_detect_puma_sw_layout(header, "puma_bw"))
+
+    def test_detect_sw_fallback_pack_id(self):
+        header = self._bw_rows()[3]
+        self.assertFalse(_detect_puma_sw_layout(header, "puma_bw"))
+        self.assertTrue(_detect_puma_sw_layout(header, "puma_sw"))
+
+    def test_parse_puma_bw_lee_store_y_product_group(self):
+        parsed = _parse_puma_layout(self._bw_rows(), default_year=2026, pack_id="puma_bw")
+        self.assertEqual(len(parsed), 1)
+        cell = parsed[0]
+        self.assertEqual(cell.customer_name, "Cliente BW SA")
+        self.assertEqual(cell.store_type, "Puma Store")
+        self.assertEqual(cell.product_group, "Men BW")
+        self.assertEqual(cell.uf, "")
+        self.assertEqual(cell.units, Decimal("100.000000"))
+
+    def test_parse_puma_sw_lee_uf_store_y_product_group(self):
+        parsed = _parse_puma_layout(self._sw_rows(), default_year=2026, pack_id="puma_sw")
+        self.assertEqual(len(parsed), 1)
+        cell = parsed[0]
+        self.assertEqual(cell.customer_name, "Cliente SW SA")
+        self.assertEqual(cell.uf, "BA")
+        self.assertEqual(cell.store_type, "Franchise")
+        self.assertEqual(cell.product_group, "Women SW")
+        self.assertEqual(cell.amount, Decimal("3200.00"))
 
 
 class MonthlyReportingImporterNormalizeTests(SimpleTestCase):
@@ -842,6 +935,9 @@ class MonthlyReportingClientMatchServiceTests(TestCase):
         self.match.refresh_from_db()
         self.assertEqual(self.match.estado, MonthlyReportingClientMatch.Estado.MATCHED)
         self.assertEqual(self.match.anet_cliente_id, 999)
+        self.assertEqual(resolve_client_identity(self.match), "seed:name:cliente-x")
+        meta = match_to_aggregate_row(self.match, "empresa_demo")
+        self.assertEqual(meta["anet_cliente_id"], 999)
         audit = MonthlyReportingClientMatchAudit.objects.get(match=self.match)
         self.assertEqual(audit.before_json["estado"], "pending")
         self.assertEqual(audit.after_json["anet_cliente_id"], 999)
@@ -940,6 +1036,114 @@ class MonthlyReportingClientMatchServiceTests(TestCase):
         self.assertEqual(vartat[0].city, "Córdoba")
 
 
+class PumaMergerGenderFanOutTests(TestCase):
+    """Puma post-cutover: fan-out Men/Women y matches por Product Group."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.pack_bw = MonthlyReportingPack.objects.get(pack_id="puma_bw")
+        self.match_men = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:puma-men",
+            seed_customer_name="Cliente Puma Dual",
+            seed_product_group="Men BW",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=880,
+            base_empresa="demo",
+        )
+        self.match_women = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:puma-women",
+            seed_customer_name="Cliente Puma Dual",
+            seed_product_group="Women BW",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=880,
+            base_empresa="demo",
+        )
+
+    def test_resolve_anet_match_por_product_group(self):
+        by_anet, by_anet_pg, by_name = _build_match_indexes()
+        men = resolve_anet_match(
+            codigo_cliente=880,
+            nombre_cliente="Cliente Puma Dual",
+            matches_by_anet=by_anet,
+            matches_by_anet_pg=by_anet_pg,
+            matches_by_name=by_name,
+            product_group="Men BW",
+        )
+        women = resolve_anet_match(
+            codigo_cliente=880,
+            nombre_cliente="Cliente Puma Dual",
+            matches_by_anet=by_anet,
+            matches_by_anet_pg=by_anet_pg,
+            matches_by_name=by_name,
+            product_group="Women BW",
+        )
+        self.assertEqual(men.seed_key, "name:puma-men")
+        self.assertEqual(women.seed_key, "name:puma-women")
+
+    def test_merge_puma_fan_out_dos_filas_por_genero(self):
+        def _anet_agosto(**kwargs):
+            return [
+                AnetSalesRow(
+                    codigo_cliente=880,
+                    nombre_cliente="Cliente Puma Dual",
+                    month=date(2026, 8, 1),
+                    units=Decimal("15"),
+                    amount=Decimal("150"),
+                    units_men=Decimal("10"),
+                    units_women=Decimal("5"),
+                    amount_men=Decimal("100"),
+                    amount_women=Decimal("50"),
+                )
+            ]
+
+        result = merge_pack_year(
+            pack=self.pack_bw,
+            year=2026,
+            month_from=8,
+            month_to=8,
+            base_empresa="demo",
+            fetch_anet_fn=_anet_agosto,
+        )
+        agosto = [r for r in result.rows if r.month == date(2026, 8, 1)]
+        self.assertEqual(len(agosto), 2)
+        identities = {r.identity for r in agosto}
+        self.assertEqual(
+            identities,
+            {"seed:name:puma-men", "seed:name:puma-women"},
+        )
+        by_pg = {r.product_group: r for r in agosto}
+        self.assertEqual(by_pg["Men BW"].units, Decimal("10"))
+        self.assertEqual(by_pg["Women BW"].units, Decimal("5"))
+
+    def test_merge_puma_sin_match_emite_identidad_anet_pg(self):
+        MonthlyReportingClientMatch.objects.all().delete()
+
+        def _anet(**kwargs):
+            return [
+                AnetSalesRow(
+                    codigo_cliente=881,
+                    nombre_cliente="Solo ANET",
+                    month=date(2026, 8, 1),
+                    units=Decimal("4"),
+                    amount=Decimal("40"),
+                    units_men=Decimal("4"),
+                    amount_men=Decimal("40"),
+                )
+            ]
+
+        result = merge_pack_year(
+            pack=self.pack_bw,
+            year=2026,
+            month_from=8,
+            month_to=8,
+            base_empresa="demo",
+            fetch_anet_fn=_anet,
+        )
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].identity, "anet:demo:881|pg:Men BW")
+        self.assertEqual(result.rows[0].product_group, "Men BW")
+
+
 class MonthlyReportingSuperArtServiceTests(TestCase):
     """Phase 4.2 — catálogo SuperArt Men/Women + QA."""
 
@@ -1008,6 +1212,33 @@ class MonthlyReportingSuperArtServiceTests(TestCase):
         codes = [p.superart for p in list_qa_pending()]
         self.assertIn("A-ART", codes)
         self.assertIn("Z-ART", codes)
+
+    def test_list_catalog_entries_filtra_genero_y_q(self):
+        version = MonthlyReportingSuperArtCatalogVersion.objects.create(
+            version=10,
+            source_label="filtros",
+            estado=MonthlyReportingSuperArtCatalogVersion.Estado.DRAFT,
+        )
+        seed_catalog_entries(
+            version,
+            [("PUMA-M-01", "men"), ("PUMA-W-02", "women"), ("PUMA-M-99", "men")],
+        )
+        activate_catalog_version(version)
+        all_entries = list_catalog_entries()
+        self.assertEqual(len(all_entries), 3)
+        men_only = list_catalog_entries(genero="men")
+        self.assertEqual(len(men_only), 2)
+        self.assertTrue(all(e["genero"] == "men" for e in men_only))
+        women_only = list_catalog_entries(genero="women")
+        self.assertEqual(len(women_only), 1)
+        self.assertEqual(women_only[0]["superart"], "PUMA-W-02")
+        by_q = list_catalog_entries(q="puma-m")
+        self.assertEqual(len(by_q), 2)
+        self.assertEqual(by_q[0]["superart"], "PUMA-M-01")
+        self.assertEqual(by_q[1]["superart"], "PUMA-M-99")
+
+    def test_list_catalog_entries_sin_activo_devuelve_vacio(self):
+        self.assertEqual(list_catalog_entries(), [])
 
 
 class DzPkParityTests(SimpleTestCase):
@@ -1702,6 +1933,14 @@ class LicenciatariosSuperArtApiTests(TestCase):
             LicenciatariosSuperArtQAListAPIView,
         )
 
+        version = MonthlyReportingSuperArtCatalogVersion.objects.create(
+            version=1,
+            source_label="api-test",
+            estado=MonthlyReportingSuperArtCatalogVersion.Estado.DRAFT,
+        )
+        seed_catalog_entries(version, [("CAT-01", "men")])
+        activate_catalog_version(version)
+
         factory = APIRequestFactory()
         request = factory.get("/api/reports/licenciatarios/superart-qa/")
         force_authenticate(request, user=self._user())
@@ -1711,6 +1950,10 @@ class LicenciatariosSuperArtApiTests(TestCase):
         self.assertFalse(response.data["can_edit"])
         self.assertGreaterEqual(response.data["pending_count"], 2)
         self.assertIn("superart", response.data["pending"][0])
+        self.assertIn("catalog", response.data)
+        self.assertIn("catalog_count", response.data)
+        self.assertGreaterEqual(response.data["catalog_count"], 1)
+        self.assertEqual(response.data["catalog"][0]["superart"], "CAT-01")
 
     def test_get_superart_qa_sin_permiso_operational_403(self):
         from rest_framework.test import APIRequestFactory, force_authenticate
@@ -1789,6 +2032,40 @@ class LicenciatariosSuperArtApiTests(TestCase):
             MonthlyReportingSuperArtQAPending.objects.filter(superart="API-SA-1").exists()
         )
         self.assertGreaterEqual(response.data["pending_count"], 1)
+
+    def test_post_superart_qa_reclasifica_catalogo_mensaje_actualizado(self):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.ventas_mensuales_licenciatarios_api_views import (
+            LicenciatariosSuperArtQAListAPIView,
+        )
+
+        version = MonthlyReportingSuperArtCatalogVersion.objects.create(
+            version=3,
+            source_label="reclass",
+            estado=MonthlyReportingSuperArtCatalogVersion.Estado.DRAFT,
+        )
+        seed_catalog_entries(version, [("EXIST-M", "men")])
+        activate_catalog_version(version)
+
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/reports/licenciatarios/superart-qa/",
+            {"superart": "EXIST-M", "genero": "women"},
+            format="json",
+        )
+        force_authenticate(request, user=self._user(clasificar=True))
+        request.session = self._session()
+        response = LicenciatariosSuperArtQAListAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["genero"], "women")
+        self.assertFalse(response.data["created"])
+        self.assertIn("actualizado", response.data["message"].lower())
+        entry = MonthlyReportingSuperArtCatalogEntry.objects.get(
+            version=version,
+            superart="EXIST-M",
+        )
+        self.assertEqual(entry.genero, "women")
 
 
     def test_runner_rechaza_rango_cruza_anios(self):
@@ -1931,11 +2208,17 @@ class LicenciatariosUiContractTests(TestCase):
         js = js_path.read_text(encoding="utf-8")
         self.assertIn('id="vml-superart-modal"', modal)
         self.assertIn('id="vml-superart-list"', modal)
+        self.assertIn('id="vml-superart-search"', modal)
+        self.assertIn("data-genero-filter", modal)
+        self.assertIn('id="vml-superart-tab-pending"', modal)
+        self.assertIn('id="vml-superart-tab-catalog"', modal)
         self.assertIn('id="vml-superart-qa-btn"', filters)
         self.assertIn('id="vml-superart-badge"', filters)
         self.assertIn('id="vml-qa-superart-list"', dashboard)
         self.assertIn("wireSuperartQaModal", js)
         self.assertIn("vml-superart-men-btn", js)
+        self.assertIn("fetchSuperartQa", js)
+        self.assertIn("_superartCatalog", js)
 
     @patch("reports.ventas_mensuales_licenciatarios_api_views.user_has_full_access", return_value=True)
     def test_api_auditoria_fecha_dd_mm_yyyy(self, _full):
