@@ -103,6 +103,31 @@ def list_qa_pending():
     )
 
 
+def list_catalog_entries(
+    *,
+    genero: str = "",
+    q: str = "",
+    limit: int = 2000,
+) -> list[dict[str, str]]:
+    """Entradas del catálogo activo, filtrables por género y búsqueda parcial."""
+    version = get_active_catalog_version()
+    if version is None:
+        return []
+
+    qs = version.entries.all()
+    gen = (genero or "").strip().lower()
+    if gen in _VALID_GENEROS:
+        qs = qs.filter(genero=gen)
+    query = (q or "").strip()
+    if query:
+        qs = qs.filter(superart__icontains=query)
+
+    return [
+        {"superart": entry.superart, "genero": entry.genero}
+        for entry in qs.order_by("superart")[:limit]
+    ]
+
+
 @transaction.atomic
 def get_or_create_active_catalog(
     *,

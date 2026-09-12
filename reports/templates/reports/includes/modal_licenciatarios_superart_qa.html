@@ -1,5 +1,5 @@
 {% comment %}
-Modal Synap — clasificación SuperArt desconocidos (packs Puma / VML).
+Modal Synap — catálogo SuperArt activo y pendientes QA (packs Puma / VML).
 {% endcomment %}
 <div id="vml-superart-modal"
      class="fixed inset-0 z-[80] hidden items-center justify-center p-4"
@@ -8,17 +8,17 @@ Modal Synap — clasificación SuperArt desconocidos (packs Puma / VML).
      aria-labelledby="vml-superart-modal-title"
      hidden>
     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" data-vml-superart-overlay tabindex="-1"></div>
-    <div class="relative w-full max-w-2xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-5 sm:p-6 flex flex-col gap-4 max-h-[90vh] overflow-hidden">
+    <div class="relative w-full max-w-3xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-5 sm:p-6 flex flex-col gap-4 max-h-[90vh] overflow-hidden">
         <div class="flex items-start gap-3 shrink-0">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200">
                 <span class="material-icons text-xl" aria-hidden="true">category</span>
             </div>
             <div class="min-w-0 flex-1">
                 <h3 id="vml-superart-modal-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                    Clasificar SuperArt desconocidos
+                    SuperArt — catálogo y pendientes
                 </h3>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Asigne género Men o Women a SuperArt de packs Puma que aún no están en el catálogo activo.
+                    Clasifique SuperArt pendientes o edite el género del catálogo activo (Men / Women).
                 </p>
                 <p id="vml-superart-catalog-info" class="mt-1 text-[10px] text-slate-400 dark:text-slate-500 m-0"></p>
             </div>
@@ -29,8 +29,53 @@ Modal Synap — clasificación SuperArt desconocidos (packs Puma / VML).
             </button>
         </div>
 
-        <div id="vml-superart-list" class="flex-1 overflow-y-auto min-h-[8rem] border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-800">
-            <p class="p-4 text-xs text-slate-500 dark:text-slate-400 m-0">Cargando pendientes…</p>
+        <div class="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 shrink-0" role="tablist" aria-label="Secciones SuperArt">
+            <button type="button"
+                    id="vml-superart-tab-pending"
+                    class="vml-superart-tab flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                    role="tab"
+                    aria-selected="true"
+                    aria-controls="vml-superart-list"
+                    data-superart-tab="pending">
+                Pendientes
+                <span id="vml-superart-tab-pending-badge" class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-violet-600 text-white text-[10px] font-bold">0</span>
+            </button>
+            <button type="button"
+                    id="vml-superart-tab-catalog"
+                    class="vml-superart-tab flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="vml-superart-list"
+                    data-superart-tab="catalog">
+                Catálogo
+                <span id="vml-superart-tab-catalog-badge" class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-slate-500 dark:bg-slate-600 text-white text-[10px] font-bold">0</span>
+            </button>
+        </div>
+
+        <div id="vml-superart-toolbar" class="hidden flex flex-col sm:flex-row gap-2 shrink-0">
+            <div class="relative flex-1">
+                <span class="material-icons absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400 pointer-events-none" aria-hidden="true">search</span>
+                <input type="search"
+                       id="vml-superart-search"
+                       class="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                       placeholder="Buscar SuperArt…"
+                       autocomplete="off">
+            </div>
+            <div class="flex items-center gap-1 shrink-0" role="group" aria-label="Filtrar por género">
+                <button type="button"
+                        class="vml-superart-genero-filter inline-flex items-center min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                        data-genero-filter="">Todos</button>
+                <button type="button"
+                        class="vml-superart-genero-filter inline-flex items-center min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                        data-genero-filter="men">Men</button>
+                <button type="button"
+                        class="vml-superart-genero-filter inline-flex items-center min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                        data-genero-filter="women">Women</button>
+            </div>
+        </div>
+
+        <div id="vml-superart-list" class="flex-1 overflow-y-auto min-h-[8rem] border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-800" role="tabpanel">
+            <p class="p-4 text-xs text-slate-500 dark:text-slate-400 m-0">Cargando…</p>
         </div>
 
         <p id="vml-superart-modal-status" class="text-[11px] text-slate-500 dark:text-slate-400 min-h-[1rem] shrink-0" aria-live="polite"></p>

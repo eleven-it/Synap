@@ -113,6 +113,7 @@ def merged_to_dashboard_rows(
                 "fuente": row.source,
                 "pendiente": row.pending,
                 "match_estado": row.match_estado,
+                "product_group": row.product_group or "",
             }
         )
     return out

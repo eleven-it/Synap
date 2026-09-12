@@ -24,6 +24,7 @@ from reports.services.monthly_reporting_client_match_service import (
 )
 from reports.services.monthly_reporting_superart_service import (
     get_active_catalog_version,
+    list_catalog_entries,
     list_qa_pending,
     resolve_superart_genero,
 )
@@ -200,10 +201,15 @@ class LicenciatariosSuperArtQAListAPIView(APIView):
         can_edit = _can_clasificar_superart(request.user)
         active = get_active_catalog_version()
         pending = [serialize_qa_pending(p) for p in list_qa_pending()[:500]]
+        genero = str_or_default(request.query_params.get("genero"), "").strip().lower()
+        q = str_or_default(request.query_params.get("q"), "").strip()
+        catalog = list_catalog_entries(genero=genero, q=q)
         return Response(
             {
                 "pending": pending,
                 "pending_count": len(pending),
+                "catalog": catalog,
+                "catalog_count": len(catalog),
                 "can_edit": can_edit,
                 "catalog_version": active.version if active else None,
             }
@@ -247,9 +253,17 @@ class LicenciatariosSuperArtQAListAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         pending_count = list_qa_pending().count()
+        if entry.get("created"):
+            message = (
+                f"SuperArt «{entry['superart']}» clasificado como {entry['genero']}."
+            )
+        else:
+            message = (
+                f"SuperArt «{entry['superart']}» actualizado a {entry['genero']}."
+            )
         payload = {
             **entry,
-            "message": f"SuperArt «{entry['superart']}» clasificado como {entry['genero']}.",
+            "message": message,
             "pending_count": pending_count,
         }
         return Response(payload)
