@@ -44,7 +44,8 @@ Generar y (más adelante) previsualizar el **pack Monthly Reporting** que Best S
 5. Royalty = Sales × tasa del pack (Levi’s 20 %, LW/Puma 13 % salvo config).  
 6. **Amounts ANET (22/07+):** mismo motor que VMM — `signo × PrecioNetoxR × (SubtotalDesc/SubTotal1)` (descuento al pie de factura). El seed ene–jun / jul 1–21 **no** se recalcula (congelado tal como se envió).
 7. **Match cliente seed→ANET:** el vínculo auditable (`MonthlyReportingClientMatch`) es propio de este informe (híbrido). Los mapeos confirmados de negocio (Libro1, 17/08/2026) aplican aquí — ver [MAPEO_CLIENTES_LICENCIATARIOS_SEED_ANET.md](MAPEO_CLIENTES_LICENCIATARIOS_SEED_ANET.md). Pendientes visibles en el panel hasta vincular.
-8. **Artículos de venta (tramo ANET):** solo `articulo.tipo_art = 'Articulo'` (excluye `Gasto` y `Servicio`; misma cláusula que VMM).
+8. **Consolidación por cliente:** el informe y el export MUST emitir **una fila por cliente** (identidad `anet:{base}:{codigo}` si matcheado; `seed:{seed_key}` si pendiente). La columna **Product group** MUST reflejar el PG del **pack** exportado, no el PG del match alternativo del mismo código ANET. En Puma, SuperArt sigue clasificando género interno (`units_men` / `units_women`) sin fan-out a filas separadas.
+9. **Artículos de venta (tramo ANET):** solo `articulo.tipo_art = 'Articulo'` (excluye `Gasto` y `Servicio`; misma cláusula que VMM).
 
 ---
 
