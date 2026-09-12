@@ -15,7 +15,7 @@
 | R2 | Import idempotente SHA-256 + `--replace` auditable | OK (tests Ph2) |
 | R3 | Merger cutover 21/22 julio sin doble conteo YTD | OK (tests Ph3) |
 | R4 | Match cliente auditable + pendientes visibles | OK (tests Ph4) |
-| R4b | Puma SW parser UF/PG + filas cliente×Product Group + fan-out Men/Women | OK (tests parser/merger Puma) |
+| R4b | Puma SW parser UF/PG; informe = **1 fila consolidada por cliente**; columna PG = del pack; SuperArt sigue desglosando género interno (units_men/women) | OK (tests parser/merger Puma + DABRA) |
 | R5 | Runner híbrido + export 6 packs + hoja QA | OK (tests Ph5) |
 | R6 | API permisos + modal Synap + rango mismo año | OK (tests Ph6) |
 | R7 | Conciliación planilla vs seed (dry-run) | OK (tests Ph7) |

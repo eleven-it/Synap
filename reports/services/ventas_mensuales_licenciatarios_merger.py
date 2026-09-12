@@ -78,6 +78,14 @@ def _build_match_indexes() -> tuple[
     return by_anet, by_anet_pg, by_name
 
 
+def _product_groups_for_pack(pack: MonthlyReportingPack) -> set[str]:
+    """Product Groups válidos para resolver match en el contexto del pack."""
+    if pack.pack_id in PUMA_GENDER_PRODUCT_GROUPS:
+        return set(PUMA_GENDER_PRODUCT_GROUPS[pack.pack_id].values())
+    pg = str_or_default(pack.product_group, "").strip()
+    return {pg} if pg else set()
+
+
 def resolve_anet_match(
     *,
     codigo_cliente: int,
@@ -86,92 +94,54 @@ def resolve_anet_match(
     matches_by_anet_pg: dict[tuple[int, str], MonthlyReportingClientMatch],
     matches_by_name: dict[str, MonthlyReportingClientMatch],
     product_group: str = "",
+    pack: Optional[MonthlyReportingPack] = None,
 ) -> Optional[MonthlyReportingClientMatch]:
     anet_id = to_int_or_none(codigo_cliente)
     pg = str_or_default(product_group, "").strip()
+    pack_pgs = _product_groups_for_pack(pack) if pack is not None else set()
+
     if anet_id is not None and pg:
-        hit = matches_by_anet_pg.get((anet_id, pg))
-        if hit is not None:
-            return hit
+        if not pack_pgs or pg in pack_pgs:
+            hit = matches_by_anet_pg.get((anet_id, pg))
+            if hit is not None:
+                return hit
+
     if anet_id is not None and anet_id in matches_by_anet:
         candidates = matches_by_anet[anet_id]
+        if pack is not None and pack_pgs:
+            scoped = [
+                c
+                for c in candidates
+                if str_or_default(c.seed_product_group, "").strip() in pack_pgs
+            ]
+            if scoped:
+                pack_pg = str_or_default(pack.product_group, "").strip()
+                exact = [
+                    c
+                    for c in scoped
+                    if str_or_default(c.seed_product_group, "").strip() == pack_pg
+                ]
+                if exact:
+                    return exact[0]
+                if len(scoped) == 1:
+                    return scoped[0]
+                return scoped[0]
+            if len(candidates) == 1:
+                return candidates[0]
+            return None
         if len(candidates) == 1:
             return candidates[0]
+
     name_key = _normalize_customer_name(nombre_cliente)
     if name_key:
-        return matches_by_name.get(name_key)
+        by_name = matches_by_name.get(name_key)
+        if by_name is not None:
+            if pack is None or not pack_pgs:
+                return by_name
+            match_pg = str_or_default(by_name.seed_product_group, "").strip()
+            if match_pg in pack_pgs:
+                return by_name
     return None
-
-
-def _is_puma_gender_pack(pack: MonthlyReportingPack) -> bool:
-    return (
-        pack.template_family == MonthlyReportingPack.TemplateFamily.PUMA
-        or pack.pack_id in PUMA_GENDER_PRODUCT_GROUPS
-    )
-
-
-def _puma_gender_labels(pack: MonthlyReportingPack) -> dict[str, str]:
-    return PUMA_GENDER_PRODUCT_GROUPS.get(pack.pack_id, {})
-
-
-def _anet_identity_without_match(base_empresa: str, codigo_cliente: int, product_group: str) -> str:
-    base = str_or_default(base_empresa, "default").strip() or "default"
-    pg = str_or_default(product_group, "").strip()
-    if pg:
-        return f"anet:{base}:{codigo_cliente}|pg:{pg}"
-    return f"anet:{base}:{codigo_cliente}"
-
-
-def _merged_from_anet_gender_slice(
-    agg: AnetSalesRow,
-    *,
-    base_empresa: str,
-    match: Optional[MonthlyReportingClientMatch],
-    product_group: str,
-    units: Decimal,
-    amount: Decimal,
-    units_men: Decimal,
-    units_women: Decimal,
-    amount_men: Decimal,
-    amount_women: Decimal,
-    month: date,
-) -> MergedClientMonth:
-    if match is not None:
-        identity = resolve_client_identity(match, base_empresa)
-        display_name = match.seed_customer_name or agg.nombre_cliente
-        match_estado = match.estado
-        pending = match.estado == MonthlyReportingClientMatch.Estado.PENDING
-        city = (match.seed_city or "").strip()
-        store_type = (match.seed_store_type or "").strip()
-        pg = (match.seed_product_group or product_group or "").strip()
-        anet_cliente_id = match.anet_cliente_id or agg.codigo_cliente
-    else:
-        pg = str_or_default(product_group, "").strip()
-        identity = _anet_identity_without_match(base_empresa, agg.codigo_cliente, pg)
-        display_name = agg.nombre_cliente
-        match_estado = "anet_only"
-        pending = False
-        city = ""
-        store_type = ""
-        anet_cliente_id = agg.codigo_cliente
-    return MergedClientMonth(
-        identity=identity,
-        display_name=display_name,
-        match_estado=match_estado,
-        month=month,
-        units=units,
-        amount=amount,
-        units_men=units_men,
-        units_women=units_women,
-        amount_men=amount_men,
-        amount_women=amount_women,
-        source="anet",
-        pending=pending,
-        anet_cliente_id=anet_cliente_id,
-        city=city,
-        store_type=store_type,
-        product_group=pg,
-    )
 
 
 @dataclass
@@ -249,7 +219,11 @@ def load_seed_rows(
     )
 
 
-def seed_row_to_merged(row: MonthlyReportingSeedRow, base_empresa: str) -> MergedClientMonth:
+def seed_row_to_merged(
+    row: MonthlyReportingSeedRow,
+    base_empresa: str,
+    pack: MonthlyReportingPack,
+) -> MergedClientMonth:
     match = row.match
     meta = match_to_aggregate_row(match, base_empresa)
     return MergedClientMonth(
@@ -268,7 +242,7 @@ def seed_row_to_merged(row: MonthlyReportingSeedRow, base_empresa: str) -> Merge
         anet_cliente_id=match.anet_cliente_id,
         city=(row.city or match.seed_city or "").strip(),
         store_type=(row.store_type or match.seed_store_type or "").strip(),
-        product_group=(match.seed_product_group or "").strip(),
+        product_group=str_or_default(pack.product_group, "").strip(),
     )
 
 
@@ -276,8 +250,11 @@ def anet_row_to_merged(
     row: AnetSalesRow,
     *,
     base_empresa: str,
+    pack: MonthlyReportingPack,
     match: Optional[MonthlyReportingClientMatch] = None,
 ) -> MergedClientMonth:
+    base = str_or_default(base_empresa, "default").strip() or "default"
+    pack_pg = str_or_default(pack.product_group, "").strip()
     if match is not None:
         identity = resolve_client_identity(match, base_empresa)
         display_name = match.seed_customer_name or row.nombre_cliente
@@ -285,16 +262,14 @@ def anet_row_to_merged(
         pending = match.estado == MonthlyReportingClientMatch.Estado.PENDING
         city = (match.seed_city or "").strip()
         store_type = (match.seed_store_type or "").strip()
-        product_group = (match.seed_product_group or "").strip()
         anet_cliente_id = match.anet_cliente_id or row.codigo_cliente
     else:
-        identity = f"anet:{base_empresa}:{row.codigo_cliente}"
+        identity = f"anet:{base}:{row.codigo_cliente}"
         display_name = row.nombre_cliente
         match_estado = "anet_only"
         pending = False
         city = ""
         store_type = ""
-        product_group = ""
         anet_cliente_id = row.codigo_cliente
     return MergedClientMonth(
         identity=identity,
@@ -312,7 +287,7 @@ def anet_row_to_merged(
         anet_cliente_id=anet_cliente_id,
         city=city,
         store_type=store_type,
-        product_group=product_group,
+        product_group=pack_pg,
     )
 
 
@@ -461,14 +436,12 @@ def merge_pack_year(
 
     seed_months = seed_months_in_range(year, month_from, month_to)
     for seed_row in load_seed_rows(pack, year, seed_months):
-        merged = seed_row_to_merged(seed_row, base_empresa)
+        merged = seed_row_to_merged(seed_row, base_empresa, pack)
         _add_row(acc, merged)
         if merged.pending:
             pending_clients[merged.identity] = match_to_aggregate_row(seed_row.match, base_empresa)
 
     matches_by_anet, matches_by_anet_pg, matches_by_name = _build_match_indexes()
-    puma_gender = _is_puma_gender_pack(pack)
-    gender_labels = _puma_gender_labels(pack) if puma_gender else {}
 
     def _qa_hook(superart: str, sample: Optional[dict] = None) -> None:
         key = (superart or "").strip()
@@ -494,78 +467,20 @@ def merge_pack_year(
         )
         month_date = date(year, month, 1)
         for _key, agg in aggregate_anet_rows(anet_rows).items():
-            if puma_gender and gender_labels:
-                slices: list[tuple[str, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]] = []
-                men_label = gender_labels.get("men", "")
-                women_label = gender_labels.get("women", "")
-                if agg.units_men != 0 or agg.amount_men != 0:
-                    slices.append(
-                        (
-                            men_label,
-                            agg.units_men,
-                            agg.amount_men,
-                            agg.units_men,
-                            Decimal("0"),
-                            agg.amount_men,
-                            Decimal("0"),
-                        )
-                    )
-                if agg.units_women != 0 or agg.amount_women != 0:
-                    slices.append(
-                        (
-                            women_label,
-                            agg.units_women,
-                            agg.amount_women,
-                            Decimal("0"),
-                            agg.units_women,
-                            Decimal("0"),
-                            agg.amount_women,
-                        )
-                    )
-                if not slices and (agg.units != 0 or agg.amount != 0):
-                    match = resolve_anet_match(
-                        codigo_cliente=agg.codigo_cliente,
-                        nombre_cliente=agg.nombre_cliente,
-                        matches_by_anet=matches_by_anet,
-                        matches_by_anet_pg=matches_by_anet_pg,
-                        matches_by_name=matches_by_name,
-                    )
-                    merged = anet_row_to_merged(agg, base_empresa=base_empresa, match=match)
-                    merged.month = month_date
-                    _add_row(acc, merged)
-                    continue
-                for pg_label, units, amount, u_men, u_women, a_men, a_women in slices:
-                    match = resolve_anet_match(
-                        codigo_cliente=agg.codigo_cliente,
-                        nombre_cliente=agg.nombre_cliente,
-                        matches_by_anet=matches_by_anet,
-                        matches_by_anet_pg=matches_by_anet_pg,
-                        matches_by_name=matches_by_name,
-                        product_group=pg_label,
-                    )
-                    merged = _merged_from_anet_gender_slice(
-                        agg,
-                        base_empresa=base_empresa,
-                        match=match,
-                        product_group=pg_label,
-                        units=units,
-                        amount=amount,
-                        units_men=u_men,
-                        units_women=u_women,
-                        amount_men=a_men,
-                        amount_women=a_women,
-                        month=month_date,
-                    )
-                    _add_row(acc, merged)
-                continue
             match = resolve_anet_match(
                 codigo_cliente=agg.codigo_cliente,
                 nombre_cliente=agg.nombre_cliente,
                 matches_by_anet=matches_by_anet,
                 matches_by_anet_pg=matches_by_anet_pg,
                 matches_by_name=matches_by_name,
+                pack=pack,
             )
-            merged = anet_row_to_merged(agg, base_empresa=base_empresa, match=match)
+            merged = anet_row_to_merged(
+                agg,
+                base_empresa=base_empresa,
+                pack=pack,
+                match=match,
+            )
             merged.month = month_date
             _add_row(acc, merged)
 
