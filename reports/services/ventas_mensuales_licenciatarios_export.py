@@ -215,8 +215,13 @@ def _autosize_sales_columns(
         ws.column_dimensions[letter].width = width
 
 
-def _client_meta_from_rows(rows: Iterable[MergedClientMonth]) -> Dict[str, dict]:
+def _client_meta_from_rows(
+    rows: Iterable[MergedClientMonth],
+    *,
+    default_product_group: str = "",
+) -> Dict[str, dict]:
     meta: Dict[str, dict] = {}
+    pack_pg = str_or_default(default_product_group, "").strip()
     for row in rows:
         bucket = meta.setdefault(
             row.identity,
@@ -224,7 +229,7 @@ def _client_meta_from_rows(rows: Iterable[MergedClientMonth]) -> Dict[str, dict]
                 "display_name": row.display_name,
                 "city": "",
                 "store_type": "",
-                "product_group": "",
+                "product_group": pack_pg,
                 "match_estado": row.match_estado,
                 "pending": row.pending,
             },
@@ -232,12 +237,11 @@ def _client_meta_from_rows(rows: Iterable[MergedClientMonth]) -> Dict[str, dict]
         bucket["display_name"] = row.display_name
         bucket["match_estado"] = row.match_estado
         bucket["pending"] = row.pending
+        bucket["product_group"] = pack_pg
         if row.city:
             bucket["city"] = row.city
         if row.store_type:
             bucket["store_type"] = row.store_type
-        if row.product_group:
-            bucket["product_group"] = row.product_group
     return meta
 
 
@@ -262,7 +266,7 @@ def _write_levis_sales_sheet(
     )
 
     by_client: dict[str, dict[date, MergedClientMonth]] = defaultdict(dict)
-    client_meta = _client_meta_from_rows(rows)
+    client_meta = _client_meta_from_rows(rows, default_product_group=product_group)
     for row in rows:
         by_client[row.identity][row.month] = row
 
@@ -281,7 +285,7 @@ def _write_levis_sales_sheet(
             (1, meta["display_name"]),
             (2, meta.get("city") or ""),
             (3, meta.get("store_type") or ""),
-            (4, meta.get("product_group") or product_group),
+            (4, meta.get("product_group") or product_group or ""),
         ):
             cell = ws.cell(row=excel_row, column=col_idx, value=value)
             cell.font = DATA_FONT

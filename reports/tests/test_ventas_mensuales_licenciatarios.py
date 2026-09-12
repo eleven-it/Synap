@@ -935,7 +935,7 @@ class MonthlyReportingClientMatchServiceTests(TestCase):
         self.match.refresh_from_db()
         self.assertEqual(self.match.estado, MonthlyReportingClientMatch.Estado.MATCHED)
         self.assertEqual(self.match.anet_cliente_id, 999)
-        self.assertEqual(resolve_client_identity(self.match), "seed:name:cliente-x")
+        self.assertEqual(resolve_client_identity(self.match), "anet:empresa_demo:999")
         meta = match_to_aggregate_row(self.match, "empresa_demo")
         self.assertEqual(meta["anet_cliente_id"], 999)
         audit = MonthlyReportingClientMatchAudit.objects.get(match=self.match)
@@ -1036,8 +1036,8 @@ class MonthlyReportingClientMatchServiceTests(TestCase):
         self.assertEqual(vartat[0].city, "Córdoba")
 
 
-class PumaMergerGenderFanOutTests(TestCase):
-    """Puma post-cutover: fan-out Men/Women y matches por Product Group."""
+class PumaMergerConsolidacionTests(TestCase):
+    """Puma post-cutover: una fila consolidada por cliente; género en units_men/women."""
 
     def setUp(self):
         seed_monthly_reporting_packs(MonthlyReportingPack)
@@ -1068,6 +1068,7 @@ class PumaMergerGenderFanOutTests(TestCase):
             matches_by_anet_pg=by_anet_pg,
             matches_by_name=by_name,
             product_group="Men BW",
+            pack=self.pack_bw,
         )
         women = resolve_anet_match(
             codigo_cliente=880,
@@ -1076,11 +1077,12 @@ class PumaMergerGenderFanOutTests(TestCase):
             matches_by_anet_pg=by_anet_pg,
             matches_by_name=by_name,
             product_group="Women BW",
+            pack=self.pack_bw,
         )
         self.assertEqual(men.seed_key, "name:puma-men")
         self.assertEqual(women.seed_key, "name:puma-women")
 
-    def test_merge_puma_fan_out_dos_filas_por_genero(self):
+    def test_merge_puma_una_fila_consolidada_por_cliente(self):
         def _anet_agosto(**kwargs):
             return [
                 AnetSalesRow(
@@ -1105,17 +1107,15 @@ class PumaMergerGenderFanOutTests(TestCase):
             fetch_anet_fn=_anet_agosto,
         )
         agosto = [r for r in result.rows if r.month == date(2026, 8, 1)]
-        self.assertEqual(len(agosto), 2)
-        identities = {r.identity for r in agosto}
-        self.assertEqual(
-            identities,
-            {"seed:name:puma-men", "seed:name:puma-women"},
-        )
-        by_pg = {r.product_group: r for r in agosto}
-        self.assertEqual(by_pg["Men BW"].units, Decimal("10"))
-        self.assertEqual(by_pg["Women BW"].units, Decimal("5"))
+        self.assertEqual(len(agosto), 1)
+        row = agosto[0]
+        self.assertEqual(row.identity, "anet:demo:880")
+        self.assertEqual(row.units, Decimal("15"))
+        self.assertEqual(row.units_men, Decimal("10"))
+        self.assertEqual(row.units_women, Decimal("5"))
+        self.assertEqual(row.product_group, "Men BW")
 
-    def test_merge_puma_sin_match_emite_identidad_anet_pg(self):
+    def test_merge_puma_sin_match_emite_identidad_anet_sin_pg(self):
         MonthlyReportingClientMatch.objects.all().delete()
 
         def _anet(**kwargs):
@@ -1140,8 +1140,85 @@ class PumaMergerGenderFanOutTests(TestCase):
             fetch_anet_fn=_anet,
         )
         self.assertEqual(len(result.rows), 1)
-        self.assertEqual(result.rows[0].identity, "anet:demo:881|pg:Men BW")
+        self.assertEqual(result.rows[0].identity, "anet:demo:881")
         self.assertEqual(result.rows[0].product_group, "Men BW")
+
+
+class DabraConsolidacionClienteTests(TestCase):
+    """Cliente con varios matches ANET (pack distintos) → una fila por pack exportado."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.pack = MonthlyReportingPack.objects.get(pack_id="lw_propia")
+        self.match_lw = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:dabra-lw",
+            seed_customer_name="DABRA S.A.",
+            seed_city="Cap Fed",
+            seed_store_type="Multibrand",
+            seed_product_group="LW",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=368,
+            base_empresa="administranet",
+        )
+        for pg, seed_key in (
+            ("Men BW", "name:dabra-men-bw"),
+            ("Women BW", "name:dabra-women-bw"),
+            ("Men SW", "name:dabra-men-sw"),
+        ):
+            MonthlyReportingClientMatch.objects.create(
+                seed_key=seed_key,
+                seed_customer_name="DABRA S.A.",
+                seed_city="Cap Fed",
+                seed_store_type="Puma Store",
+                seed_product_group=pg,
+                estado=MonthlyReportingClientMatch.Estado.MATCHED,
+                anet_cliente_id=368,
+                base_empresa="administranet",
+            )
+        batch = MonthlyReportingImportBatch.objects.create(
+            pack=self.pack,
+            file_name="dabra.xlsx",
+            file_format="xlsx",
+            file_sha256="sha-dabra-lw",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        MonthlyReportingSeedRow.objects.create(
+            pack=self.pack,
+            match=self.match_lw,
+            month=date(2026, 6, 1),
+            units=Decimal("20"),
+            amount=Decimal("200"),
+            city="Cap Fed",
+            store_type="Multibrand",
+            batch=batch,
+        )
+
+    def test_dabra_export_lw_una_fila_agosto(self):
+        def _anet_agosto(**kwargs):
+            return [
+                AnetSalesRow(
+                    codigo_cliente=368,
+                    nombre_cliente="DABRA S.A.",
+                    month=date(2026, 8, 1),
+                    units=Decimal("50"),
+                    amount=Decimal("500"),
+                )
+            ]
+
+        result = merge_pack_year(
+            pack=self.pack,
+            year=2026,
+            month_from=8,
+            month_to=8,
+            base_empresa="administranet",
+            fetch_anet_fn=_anet_agosto,
+        )
+        self.assertEqual(len(result.rows), 1)
+        row = result.rows[0]
+        self.assertEqual(row.identity, "anet:administranet:368")
+        self.assertEqual(row.product_group, "LW")
+        self.assertEqual(row.store_type, "Multibrand")
+        self.assertEqual(row.units, Decimal("50"))
 
 
 class MonthlyReportingSuperArtServiceTests(TestCase):
