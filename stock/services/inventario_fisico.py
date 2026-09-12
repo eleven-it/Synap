@@ -299,6 +299,87 @@ def etiqueta_categoria_post_snapshot(categoria: Any) -> str:
     return ETIQUETAS_POST_SNAPSHOT.get(key, ETIQUETAS_POST_SNAPSHOT[CAT_OTROS])
 
 
+def formatear_comprobante_movimiento(
+    comprobante: Any,
+    nro: Any = None,
+    motivo: Any = None,
+) -> str:
+    """Etiqueta identificable: «NCA 0008-00000083 · Devol-Cliente»."""
+    comp = str_or_default(comprobante, "").strip()
+    nro_txt = str_or_default(nro, "").strip()
+    motivo_txt = str_or_default(motivo, "").strip()
+    if nro_txt in {"", "-"}:
+        nro_txt = ""
+    if motivo_txt in {"", "-"}:
+        motivo_txt = ""
+    if comp and nro_txt:
+        izquierda = f"{comp} {nro_txt}"
+    elif comp:
+        izquierda = comp
+    elif nro_txt:
+        izquierda = nro_txt
+    else:
+        izquierda = "—"
+    if motivo_txt:
+        return f"{izquierda} · {motivo_txt}"
+    return izquierda
+
+
+def sentido_movimiento(entrada: Any, salida: Any) -> str:
+    """«Entrada» / «Salida» según el movimiento legacy (qué hizo)."""
+    ent = to_decimal_or_none(entrada) or Decimal("0")
+    sal = to_decimal_or_none(salida) or Decimal("0")
+    if ent > 0 and sal <= 0:
+        return "Entrada"
+    if sal > 0 and ent <= 0:
+        return "Salida"
+    if ent > 0 and sal > 0:
+        return "Entrada/Salida"
+    neto = ent - sal
+    if neto > 0:
+        return "Entrada"
+    if neto < 0:
+        return "Salida"
+    return "—"
+
+
+def formatear_fecha_control_ui(fecha_control: Any) -> str:
+    """Fecha de comprobante para UI (dd/MM/yyyy o dd/MM/yyyy HH:MM)."""
+    if fecha_control is None:
+        return ""
+    if hasattr(fecha_control, "strftime"):
+        hora = getattr(fecha_control, "hour", 0) or 0
+        minuto = getattr(fecha_control, "minute", 0) or 0
+        segundo = getattr(fecha_control, "second", 0) or 0
+        if hora or minuto or segundo:
+            return fecha_control.strftime("%d/%m/%Y %H:%M")
+        return fecha_control.strftime("%d/%m/%Y")
+    txt = str_or_default(fecha_control, "").strip()
+    return txt
+
+
+def enriquecer_movimiento_post_snapshot(mov: Dict[str, Any]) -> Dict[str, Any]:
+    """Agrega comprobante_etiqueta y sentido para UI de identificación."""
+    entrada = to_decimal_or_none(mov.get("entrada")) or Decimal("0")
+    salida = to_decimal_or_none(mov.get("salida")) or Decimal("0")
+    mov["entrada"] = entrada
+    mov["salida"] = salida
+    if "neto" not in mov or mov.get("neto") is None:
+        mov["neto"] = entrada - salida
+    mov["comprobante_etiqueta"] = formatear_comprobante_movimiento(
+        mov.get("comprobante"),
+        mov.get("nro"),
+        mov.get("motivo"),
+    )
+    mov["sentido"] = sentido_movimiento(entrada, salida)
+    # Conservar crudo si hace falta export; UI usa fecha_control ya legible cuando viene datetime
+    if not isinstance(mov.get("fecha_control"), str):
+        mov["fecha_control"] = formatear_fecha_control_ui(mov.get("fecha_control"))
+    elif not mov.get("fecha_control"):
+        mov["fecha_control"] = ""
+    return mov
+
+
 def desglose_post_snapshot_vacio() -> Dict[str, Decimal]:
     return {c: Decimal("0") for c in CATEGORIAS_POST_SNAPSHOT} | {"total": Decimal("0")}
 
@@ -400,6 +481,8 @@ def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
     )
     linea["post_snapshot"] = desglose
     linea["post_snapshot_chips"] = chips_desglose_post_snapshot(desglose)
+    if not isinstance(linea.get("post_snapshot_detalle"), list):
+        linea["post_snapshot_detalle"] = []
     linea["formula_diferencia"] = formatear_formula_diferencia_real(
         linea.get("cantidad_contada"),
         saldo_snap,
@@ -1465,7 +1548,7 @@ def listar_movimientos_post_snapshot(
                         "categoria_etiqueta": etiqueta_categoria_post_snapshot(cat),
                     }
                 )
-            return movimientos
+            return [enriquecer_movimiento_post_snapshot(m) for m in movimientos]
     except Exception as exc:
         logger.warning("listar_movimientos_post_snapshot: %s", exc)
         return []
@@ -1913,6 +1996,7 @@ def listar_lineas_analizador(
         return []
 
     desglose_map = calcular_ajuste_post_snapshot_desglose(base_empresa, cid)
+    detalle_map = mapa_detalle_post_snapshot_por_linea(base_empresa, cid)
     candidatos = listar_contadores_candidatos(base_empresa)
     etiquetas_contador = {
         c["id_usuario"]: c["etiqueta"]
@@ -1928,8 +2012,12 @@ def listar_lineas_analizador(
             linea["post_snapshot"] = desglose_map.get(
                 (id_art, id_dep), desglose_post_snapshot_vacio()
             )
+            linea["post_snapshot_detalle"] = list(
+                detalle_map.get((id_art, id_dep), [])
+            )
         else:
             linea["post_snapshot"] = desglose_post_snapshot_vacio()
+            linea["post_snapshot_detalle"] = []
         enriquecer_linea_analizador(linea)
         uid = linea.get("id_contador")
         linea["contador_etiqueta"] = etiquetas_contador.get(uid, "") if uid else ""
@@ -2340,7 +2428,7 @@ def listar_movimientos_post_snapshot_campana(
                         "categoria_etiqueta": etiqueta_categoria_post_snapshot(cat),
                     }
                 )
-            return movimientos
+            return [enriquecer_movimiento_post_snapshot(m) for m in movimientos]
     except Exception as exc:
         logger.warning(
             "listar_movimientos_post_snapshot_campana %s/%s: %s",
@@ -2349,6 +2437,41 @@ def listar_movimientos_post_snapshot_campana(
             exc,
         )
         return []
+
+
+def mapa_detalle_post_snapshot_por_linea(
+    base_empresa: str,
+    id_campana: int,
+) -> Dict[Tuple[int, int], List[Dict[str, Any]]]:
+    """Detalle identificable post-snapshot indexado por (artículo, depósito)."""
+    resultado: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+    for mov in listar_movimientos_post_snapshot_campana(base_empresa, id_campana):
+        id_art = to_int_or_none(mov.get("id_articulo"))
+        id_dep = to_int_or_none(mov.get("id_deposito"))
+        if id_art is None or id_dep is None:
+            continue
+        neto = to_decimal_or_none(mov.get("neto")) or Decimal("0")
+        if neto == 0:
+            continue
+        clave = (id_art, id_dep)
+        resultado.setdefault(clave, []).append(
+            {
+                "comprobante_etiqueta": mov.get("comprobante_etiqueta")
+                or formatear_comprobante_movimiento(
+                    mov.get("comprobante"), mov.get("nro"), mov.get("motivo")
+                ),
+                "sentido": mov.get("sentido")
+                or sentido_movimiento(mov.get("entrada"), mov.get("salida")),
+                "neto": neto,
+                "categoria": mov.get("categoria") or CAT_OTROS,
+                "categoria_etiqueta": mov.get("categoria_etiqueta")
+                or etiqueta_categoria_post_snapshot(mov.get("categoria")),
+                "fecha_control": formatear_fecha_control_ui(mov.get("fecha_control"))
+                if not isinstance(mov.get("fecha_control"), str)
+                else str_or_default(mov.get("fecha_control"), ""),
+            }
+        )
+    return resultado
 
 
 def obtener_resumen_monitor(base_empresa: str, id_campana: int) -> Dict[str, Any]:
