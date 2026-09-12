@@ -18,6 +18,12 @@
   const canEditSuperart = filtersRoot?.dataset?.canEditSuperart === "true";
 
   let _lastQaSuperarts = [];
+  let _superartPending = [];
+  let _superartCatalog = [];
+  let _superartTab = "pending";
+  let _superartGeneroFilter = "";
+  let _superartSearchQuery = "";
+  let _superartSearchTimer = null;
 
   const NUM = new Intl.NumberFormat("es-AR", {
     minimumFractionDigits: 0,
@@ -161,6 +167,7 @@
         rec = {
           identity: id,
           cliente: row.cliente || "—",
+          product_group: row.product_group || "",
           pendiente: Boolean(row.pendiente),
           months: {},
           totU: 0,
@@ -175,7 +182,12 @@
       rec.totU += Number(row.unidades) || 0;
       rec.totF += Number(row.facturacion) || 0;
     });
-    const filas = Array.from(byId.values()).sort((a, b) => b.totF - a.totF || a.cliente.localeCompare(b.cliente, "es"));
+    const filas = Array.from(byId.values()).sort(
+      (a, b) =>
+        b.totF - a.totF ||
+        a.cliente.localeCompare(b.cliente, "es") ||
+        String(a.product_group || "").localeCompare(String(b.product_group || ""), "es"),
+    );
     return { meses, filas };
   }
 
@@ -187,7 +199,12 @@
       .trim()
       .toLowerCase();
     const visible = q
-      ? filas.filter((f) => String(f.cliente).toLowerCase().includes(q) || String(f.identity).toLowerCase().includes(q))
+      ? filas.filter(
+          (f) =>
+            String(f.cliente).toLowerCase().includes(q) ||
+            String(f.product_group || "").toLowerCase().includes(q) ||
+            String(f.identity).toLowerCase().includes(q),
+        )
       : filas;
     if (!filas.length) {
       container.innerHTML =
@@ -200,19 +217,29 @@
       return;
     }
     const unidadHdr = unidadLabel(extra?.unit_mode);
-    const sticky =
+    const stickyCliHdr =
       "sticky left-0 z-[5] bg-slate-50 dark:bg-slate-800/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
+    const stickyPgHdr =
+      "sticky left-[14rem] z-[5] bg-slate-50 dark:bg-slate-800/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
     const stickyCli =
       "sticky left-0 z-[5] bg-white dark:bg-slate-900 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]";
+    const stickyPg =
+      "sticky left-[14rem] z-[5] bg-white dark:bg-slate-900 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]";
+    const stickyTotCli =
+      "sticky left-0 z-[5] bg-slate-200/95 dark:bg-slate-700/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
+    const stickyTotPg =
+      "sticky left-[14rem] z-[5] bg-slate-200/95 dark:bg-slate-700/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
     let html = '<table class="min-w-full border-collapse text-xs">';
     html += '<thead class="sticky top-0 z-10 bg-slate-100/95 shadow-sm backdrop-blur-sm dark:bg-slate-900/95"><tr>';
-    html += `<th scope="col" class="px-2 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 min-w-[14rem] ${sticky}">Cliente</th>`;
+    html += `<th scope="col" class="px-2 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 min-w-[14rem] ${stickyCliHdr}">Cliente</th>`;
+    html += `<th scope="col" class="px-2 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 min-w-[8rem] ${stickyPgHdr}">Product Group</th>`;
     meses.forEach((ym) => {
       html += `<th scope="colgroup" colspan="2" class="px-1 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200 border-l border-sky-200/70 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/20">${escHtml(fmtMesYm(ym))}</th>`;
     });
     html += '<th scope="colgroup" colspan="2" class="px-1 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-100 border-l border-emerald-300/80 dark:border-emerald-800 bg-emerald-100/70 dark:bg-emerald-950/40">Total</th>';
     html += "</tr><tr>";
-    html += `<th class="px-2 py-1 ${sticky}"></th>`;
+    html += `<th class="px-2 py-1 ${stickyCliHdr}"></th>`;
+    html += `<th class="px-2 py-1 ${stickyPgHdr}"></th>`;
     const sub = (isTotal) => {
       const uCls = isTotal
         ? "px-1.5 py-1.5 text-right text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 bg-emerald-50/80 dark:bg-emerald-950/30"
@@ -234,6 +261,7 @@
         : "text-slate-800 dark:text-slate-100";
       html += `<tr class="${zebra}">`;
       html += `<th scope="row" class="px-2 py-1.5 text-left font-medium ${nameCls} ${stickyCli}">${escHtml(fila.cliente)}</th>`;
+      html += `<td class="px-2 py-1.5 text-left text-slate-600 dark:text-slate-300 ${stickyPg}">${escHtml(fila.product_group || "—")}</td>`;
       meses.forEach((ym) => {
         const cell = fila.months[ym] || { u: 0, f: 0 };
         const empty = !cell.u && !cell.f;
@@ -258,10 +286,8 @@
         colTot.months[ym].f += cell.f;
       });
     });
-    const stickyTot =
-      "sticky left-0 z-[5] bg-slate-200/95 dark:bg-slate-700/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]";
     html += '<tfoot class="sticky bottom-0 z-[6]"><tr class="bg-slate-200/95 dark:bg-slate-700/95 font-bold border-t-2 border-slate-300 dark:border-slate-600">';
-    html += `<th scope="row" class="px-2 py-2 text-left text-[10px] uppercase tracking-wide text-slate-800 dark:text-slate-100 ${stickyTot}">Totales</th>`;
+    html += `<th scope="row" colspan="2" class="px-2 py-2 text-left text-[10px] uppercase tracking-wide text-slate-800 dark:text-slate-100 ${stickyTotCli} ${stickyTotPg}">Totales</th>`;
     meses.forEach((ym) => {
       const cell = colTot.months[ym];
       const empty = !cell.u && !cell.f;
@@ -429,7 +455,7 @@
       return;
     }
     try {
-      const data = await fetchSuperartPending();
+      const data = await fetchSuperartQa();
       const apiCount = data.pending_count || 0;
       const merged = Math.max(apiCount, _lastQaSuperarts.length);
       updateSuperartBadgeCount(merged);
@@ -438,7 +464,7 @@
     }
   }
 
-  async function fetchSuperartPending() {
+  async function fetchSuperartQa() {
     const res = await fetch(superartQaApiUrl, {
       headers: { "X-Requested-With": "XMLHttpRequest" },
       credentials: "same-origin",
@@ -447,11 +473,67 @@
     return res.json();
   }
 
-  function renderSuperartList(pending) {
-    const list = document.getElementById("vml-superart-list");
-    if (!list) return;
+  function updateSuperartTabBadges(pendingCount, catalogCount) {
+    const pendingBadge = document.getElementById("vml-superart-tab-pending-badge");
+    const catalogBadge = document.getElementById("vml-superart-tab-catalog-badge");
+    if (pendingBadge) pendingBadge.textContent = String(pendingCount || 0);
+    if (catalogBadge) catalogBadge.textContent = String(catalogCount || 0);
+  }
+
+  function setSuperartTab(tab) {
+    _superartTab = tab === "catalog" ? "catalog" : "pending";
+    document.querySelectorAll(".vml-superart-tab").forEach((btn) => {
+      const active = btn.dataset.superartTab === _superartTab;
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+      btn.classList.toggle("bg-white", active);
+      btn.classList.toggle("dark:bg-slate-900", active);
+      btn.classList.toggle("text-violet-800", active);
+      btn.classList.toggle("dark:text-violet-200", active);
+      btn.classList.toggle("shadow-sm", active);
+      btn.classList.toggle("text-slate-600", !active);
+      btn.classList.toggle("dark:text-slate-400", !active);
+    });
+    const toolbar = document.getElementById("vml-superart-toolbar");
+    if (toolbar) {
+      toolbar.classList.toggle("hidden", _superartTab !== "catalog");
+    }
+    renderSuperartList();
+    updateSuperartStatusFooter();
+  }
+
+  function updateSuperartGeneroFilterButtons() {
+    document.querySelectorAll(".vml-superart-genero-filter").forEach((btn) => {
+      const val = btn.dataset.generoFilter || "";
+      const active = val === _superartGeneroFilter;
+      btn.classList.toggle("border-violet-500", active);
+      btn.classList.toggle("bg-violet-50", active);
+      btn.classList.toggle("dark:bg-violet-900/30", active);
+      btn.classList.toggle("text-violet-800", active);
+      btn.classList.toggle("dark:text-violet-200", active);
+      btn.classList.toggle("border-slate-200", !active);
+      btn.classList.toggle("dark:border-slate-700", !active);
+      btn.classList.toggle("bg-white", !active);
+      btn.classList.toggle("dark:bg-slate-800", !active);
+      btn.classList.toggle("text-slate-600", !active);
+      btn.classList.toggle("dark:text-slate-400", !active);
+    });
+  }
+
+  function filterSuperartCatalog() {
+    let items = Array.isArray(_superartCatalog) ? _superartCatalog.slice() : [];
+    if (_superartGeneroFilter) {
+      items = items.filter((e) => String(e.genero || "").toLowerCase() === _superartGeneroFilter);
+    }
+    const q = (_superartSearchQuery || "").trim().toLowerCase();
+    if (q) {
+      items = items.filter((e) => String(e.superart || "").toLowerCase().includes(q));
+    }
+    return items;
+  }
+
+  function mergePendingItems() {
     const merged = new Map();
-    (Array.isArray(pending) ? pending : []).forEach((p) => {
+    (Array.isArray(_superartPending) ? _superartPending : []).forEach((p) => {
       merged.set(String(p.superart || ""), p);
     });
     _lastQaSuperarts.forEach((code) => {
@@ -460,7 +542,65 @@
         merged.set(key, { superart: key, occurrence_count: 0 });
       }
     });
-    const items = Array.from(merged.values());
+    return Array.from(merged.values());
+  }
+
+  function renderGeneroButtons(raw, currentGenero) {
+    if (!canEditSuperart) {
+      const label = currentGenero === "women" ? "Women" : "Men";
+      const cls =
+        currentGenero === "women"
+          ? "border-pink-400 bg-pink-50 dark:bg-pink-900/30 text-pink-800 dark:text-pink-200"
+          : "border-sky-400 bg-sky-50 dark:bg-sky-900/30 text-sky-800 dark:text-sky-200";
+      return `<span class="inline-flex items-center min-h-[28px] px-2.5 py-1 text-[10px] font-semibold rounded-lg border ${cls}">${escHtml(label)}</span>`;
+    }
+    const attr = escAttr(raw);
+    const isMen = currentGenero === "men";
+    const isWomen = currentGenero === "women";
+    const menCls = isMen
+      ? "border-sky-500 bg-sky-100 dark:bg-sky-900/50 text-sky-900 dark:text-sky-100 ring-2 ring-sky-300 dark:ring-sky-700"
+      : "border-sky-400 bg-sky-50 dark:bg-sky-900/30 text-sky-800 dark:text-sky-200 hover:bg-sky-100 dark:hover:bg-sky-900/50";
+    const womenCls = isWomen
+      ? "border-pink-500 bg-pink-100 dark:bg-pink-900/50 text-pink-900 dark:text-pink-100 ring-2 ring-pink-300 dark:ring-pink-700"
+      : "border-pink-400 bg-pink-50 dark:bg-pink-900/30 text-pink-800 dark:text-pink-200 hover:bg-pink-100 dark:hover:bg-pink-900/50";
+    return `<div class="flex flex-wrap gap-2 shrink-0">
+      <button type="button" class="vml-superart-men-btn inline-flex items-center min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg border ${menCls}" data-superart="${attr}"${isMen ? " disabled" : ""}>Men</button>
+      <button type="button" class="vml-superart-women-btn inline-flex items-center min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg border ${womenCls}" data-superart="${attr}"${isWomen ? " disabled" : ""}>Women</button>
+    </div>`;
+  }
+
+  function renderSuperartList() {
+    const list = document.getElementById("vml-superart-list");
+    if (!list) return;
+
+    if (_superartTab === "catalog") {
+      const items = filterSuperartCatalog();
+      if (!items.length) {
+        const msg =
+          _superartCatalog.length === 0
+            ? "No hay entradas en el catálogo activo."
+            : "Ningún SuperArt coincide con los filtros.";
+        list.innerHTML = `<p class="p-4 text-xs text-slate-500 dark:text-slate-400 m-0">${escHtml(msg)}</p>`;
+        return;
+      }
+      list.innerHTML = items
+        .map((entry) => {
+          const raw = String(entry.superart || "—");
+          const code = escHtml(raw);
+          const genero = String(entry.genero || "men").toLowerCase();
+          return `<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-slate-800 dark:text-slate-100 m-0 truncate">${code}</p>
+              <p class="text-[10px] text-slate-500 dark:text-slate-400 m-0">En catálogo activo</p>
+            </div>
+            ${renderGeneroButtons(raw, genero)}
+          </div>`;
+        })
+        .join("");
+      return;
+    }
+
+    const items = mergePendingItems();
     if (!items.length) {
       list.innerHTML =
         '<p class="p-4 text-xs text-slate-500 dark:text-slate-400 m-0">No hay SuperArt pendientes de clasificar.</p>';
@@ -470,14 +610,10 @@
       .map((p) => {
         const raw = String(p.superart || "—");
         const code = escHtml(raw);
-        const attr = escAttr(raw);
         const count = Number(p.occurrence_count) || 0;
         const meta = count > 0 ? `${count} ocurrencia(s)` : "En preview actual";
         const actions = canEditSuperart
-          ? `<div class="flex flex-wrap gap-2 shrink-0">
-              <button type="button" class="vml-superart-men-btn inline-flex items-center min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg border border-sky-400 bg-sky-50 dark:bg-sky-900/30 text-sky-800 dark:text-sky-200 hover:bg-sky-100 dark:hover:bg-sky-900/50" data-superart="${attr}">Men</button>
-              <button type="button" class="vml-superart-women-btn inline-flex items-center min-h-[36px] px-3 py-1.5 text-[11px] font-semibold rounded-lg border border-pink-400 bg-pink-50 dark:bg-pink-900/30 text-pink-800 dark:text-pink-200 hover:bg-pink-100 dark:hover:bg-pink-900/50" data-superart="${attr}">Women</button>
-            </div>`
+          ? renderGeneroButtons(raw, "")
           : "";
         return `<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3">
           <div class="min-w-0">
@@ -488,6 +624,19 @@
         </div>`;
       })
       .join("");
+  }
+
+  function updateSuperartStatusFooter() {
+    const statusEl = document.getElementById("vml-superart-modal-status");
+    if (!statusEl) return;
+    const pendingCount = mergePendingItems().length;
+    const catalogTotal = Array.isArray(_superartCatalog) ? _superartCatalog.length : 0;
+    if (_superartTab === "catalog") {
+      const filtered = filterSuperartCatalog().length;
+      statusEl.textContent = `${filtered} de ${catalogTotal} en catálogo activo.`;
+    } else {
+      statusEl.textContent = `${pendingCount} pendiente(s) de clasificar.`;
+    }
   }
 
   async function classifySuperart(superart, genero) {
@@ -535,7 +684,27 @@
     const qaOpenBtn = document.getElementById("vml-qa-superart-btn");
     const statusEl = document.getElementById("vml-superart-modal-status");
     const catalogInfo = document.getElementById("vml-superart-catalog-info");
+    const searchInput = document.getElementById("vml-superart-search");
     let classifying = false;
+
+    async function applySuperartData(data) {
+      _superartPending = Array.isArray(data.pending) ? data.pending : [];
+      _superartCatalog = Array.isArray(data.catalog) ? data.catalog : [];
+      updateSuperartTabBadges(
+        Math.max(data.pending_count || 0, mergePendingItems().length),
+        data.catalog_count || _superartCatalog.length,
+      );
+      if (catalogInfo) {
+        const ver =
+          data.catalog_version != null
+            ? `Catálogo activo v${data.catalog_version}`
+            : "Sin catálogo activo (se creará al clasificar)";
+        catalogInfo.textContent = ver;
+      }
+      renderSuperartList();
+      updateSuperartStatusFooter();
+      updateSuperartBadgeCount(Math.max(data.pending_count || 0, _lastQaSuperarts.length));
+    }
 
     async function loadAndShow() {
       if (!canEditSuperart) {
@@ -547,18 +716,17 @@
         return;
       }
       if (statusEl) statusEl.textContent = "Cargando…";
+      _superartGeneroFilter = "";
+      _superartSearchQuery = "";
+      if (searchInput) searchInput.value = "";
+      updateSuperartGeneroFilterButtons();
       openModal(modal);
       try {
-        const data = await fetchSuperartPending();
-        renderSuperartList(data.pending || []);
-        if (catalogInfo) {
-          const ver = data.catalog_version != null ? `Catálogo activo v${data.catalog_version}` : "Sin catálogo activo (se creará al clasificar)";
-          catalogInfo.textContent = ver;
-        }
-        if (statusEl) {
-          statusEl.textContent = `${data.pending_count || 0} pendiente(s) en catálogo QA.`;
-        }
-        updateSuperartBadgeCount(Math.max(data.pending_count || 0, _lastQaSuperarts.length));
+        const data = await fetchSuperartQa();
+        const defaultTab =
+          (data.pending_count || 0) > 0 || _lastQaSuperarts.length > 0 ? "pending" : "catalog";
+        await applySuperartData(data);
+        setSuperartTab(defaultTab);
       } catch (err) {
         if (statusEl) statusEl.textContent = err.message || "Error al cargar.";
       }
@@ -570,11 +738,33 @@
     document.getElementById("vml-superart-modal-cancel")?.addEventListener("click", () => closeModal(modal));
     modal?.querySelector("[data-vml-superart-overlay]")?.addEventListener("click", () => closeModal(modal));
 
+    document.querySelectorAll(".vml-superart-tab").forEach((btn) => {
+      btn.addEventListener("click", () => setSuperartTab(btn.dataset.superartTab || "pending"));
+    });
+
+    document.querySelectorAll(".vml-superart-genero-filter").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        _superartGeneroFilter = btn.dataset.generoFilter || "";
+        updateSuperartGeneroFilterButtons();
+        renderSuperartList();
+        updateSuperartStatusFooter();
+      });
+    });
+
+    searchInput?.addEventListener("input", () => {
+      if (_superartSearchTimer) clearTimeout(_superartSearchTimer);
+      _superartSearchTimer = setTimeout(() => {
+        _superartSearchQuery = searchInput.value || "";
+        renderSuperartList();
+        updateSuperartStatusFooter();
+      }, 200);
+    });
+
     document.getElementById("vml-superart-list")?.addEventListener("click", async (ev) => {
       const menBtn = ev.target.closest(".vml-superart-men-btn");
       const womenBtn = ev.target.closest(".vml-superart-women-btn");
       const btn = menBtn || womenBtn;
-      if (!btn || classifying) return;
+      if (!btn || classifying || btn.disabled) return;
       const code = btn.dataset.superart || "";
       const genero = menBtn ? "men" : "women";
       classifying = true;
@@ -583,10 +773,11 @@
         const data = await classifySuperart(code, genero);
         showAviso(data.message || "SuperArt clasificado.", "success");
         removeLocalSuperart(code);
-        const refreshed = await fetchSuperartPending();
-        renderSuperartList(refreshed.pending || []);
-        if (statusEl) statusEl.textContent = `${refreshed.pending_count || 0} pendiente(s).`;
-        updateSuperartBadgeCount(Math.max(refreshed.pending_count || 0, _lastQaSuperarts.length));
+        const refreshed = await fetchSuperartQa();
+        await applySuperartData(refreshed);
+        if (_superartTab === "pending" && mergePendingItems().length === 0 && _superartCatalog.length > 0) {
+          setSuperartTab("catalog");
+        }
       } catch (err) {
         showAviso(err.message || "Error al clasificar.", "error");
       } finally {

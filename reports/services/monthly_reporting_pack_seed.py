@@ -83,6 +83,11 @@ MONTHLY_REPORTING_EXPORT_FILENAMES: dict[str, str] = {
 }
 
 # Archivos fuente seed / conciliación (Puma sigue .xlsb en disco de origen).
+PUMA_GENDER_PRODUCT_GROUPS: dict[str, dict[str, str]] = {
+    "puma_bw": {"men": "Men BW", "women": "Women BW"},
+    "puma_sw": {"men": "Men SW", "women": "Women SW"},
+}
+
 MONTHLY_REPORTING_SOURCE_FILENAMES: dict[str, str] = {
     **{
         pack_id: name

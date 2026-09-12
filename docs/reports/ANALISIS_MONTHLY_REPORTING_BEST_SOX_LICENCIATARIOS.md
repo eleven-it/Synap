@@ -92,7 +92,8 @@ Misma idea de hojas, pero:
 - Columnas fijas de licencia: Licencee, Type, Country, Currency, Year, Fantasia, Razón social, city, store type, Product Group.
 - Meses como **seriales Excel** (46023 = ene-2026…), no date headers `mmm-yy` en el mismo layout.
 - `monthly` título `Best Sox-BW` / `Best Sox-SW`; U.M. = **PACKS**; filas Men/Women (hoy en 0 en el resumen); tasa **13 %**.
-- SW incluye columna **UF** entre city y store type (BW no).
+- SW incluye columna **UF** entre city y store type (BW no). El import Synap detecta SW por celda «UF» en la fila de encabezados (o `pack_id=puma_sw`) y desplaza store type / Product Group una columna a la derecha respecto de BW.
+- **Informe dashboard:** una fila por **(cliente × Product Group)** — identidad estable `seed:{seed_key}` aunque el match esté vinculado a ANET; post-cutover Puma reparte ventas ANET Men/Women en filas separadas.
 - Estilos: no extraídos con fidelidad desde `.xlsb` (pyxlsb no lee tema/fuente); conviene convertir una copia a `.xlsx` o usar la plantilla Levi’s como proxy visual y validar en Excel.
 
 ---

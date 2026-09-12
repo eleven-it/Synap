@@ -19,10 +19,11 @@ class MatchActor:
 
 
 def resolve_client_identity(match: MonthlyReportingClientMatch, base_empresa: str = "") -> str:
-    """Identidad estable para agregados: seed pendiente o anet matcheado."""
-    if match.estado == MonthlyReportingClientMatch.Estado.MATCHED and match.anet_cliente_id:
-        base = (base_empresa or match.base_empresa or "default").strip()
-        return f"anet:{base}:{match.anet_cliente_id}"
+    """Identidad estable por fila seed (pendiente o matcheada).
+
+    Siempre ``seed:{seed_key}`` para no colapsar Men/Women del mismo cliente ANET.
+    ``anet_cliente_id`` queda en metadatos vía ``match_to_aggregate_row``.
+    """
     return f"seed:{match.seed_key}"
 
 

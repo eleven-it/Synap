@@ -217,12 +217,29 @@ def _parse_levis_layout(rows: list[tuple[Any, ...]], default_year: int = 2026) -
     return parsed
 
 
-def _parse_puma_layout(rows: list[tuple[Any, ...]], default_year: int = 2026) -> list[ParsedSeedCell]:
-    if len(rows) < 5:
-        return []
-    header = rows[3]
+def _header_has_uf_column(header: tuple[Any, ...]) -> bool:
+    """Detecta layout SW por celda «UF» en fila de encabezados (rows[3])."""
+    for cell in header:
+        if str_or_default(cell, "").strip().upper() == "UF":
+            return True
+    return False
+
+
+def _detect_puma_sw_layout(header: tuple[Any, ...], pack_id: str = "") -> bool:
+    """Primario: header con UF; fallback: pack_id puma_sw."""
+    if _header_has_uf_column(header):
+        return True
+    return str_or_default(pack_id, "").strip() == "puma_sw"
+
+
+def _scan_puma_month_columns(
+    header: tuple[Any, ...],
+    *,
+    start_col: int,
+    default_year: int,
+) -> list[tuple[int, date]]:
     month_columns: list[tuple[int, date]] = []
-    col = 10
+    col = start_col
     while col < len(header) and len(month_columns) < 12:
         month_value = _coerce_month(header[col], default_year=default_year)
         if month_value is None:
@@ -230,6 +247,33 @@ def _parse_puma_layout(rows: list[tuple[Any, ...]], default_year: int = 2026) ->
             continue
         month_columns.append((col, month_value))
         col += 2
+    return month_columns
+
+
+def _parse_puma_layout(
+    rows: list[tuple[Any, ...]],
+    default_year: int = 2026,
+    *,
+    pack_id: str = "",
+) -> list[ParsedSeedCell]:
+    if len(rows) < 5:
+        return []
+    header = rows[3]
+    is_sw = _detect_puma_sw_layout(header, pack_id)
+    if is_sw:
+        # SW: city=7, uf=8, store=9, pg=10; meses desde col 11 o primer serial válido ≥ col 10.
+        month_columns = _scan_puma_month_columns(
+            header, start_col=11, default_year=default_year
+        )
+        if not month_columns:
+            month_columns = _scan_puma_month_columns(
+                header, start_col=10, default_year=default_year
+            )
+    else:
+        # BW: city=7, store=8, pg=9, uf=""; meses desde col 10.
+        month_columns = _scan_puma_month_columns(
+            header, start_col=10, default_year=default_year
+        )
 
     parsed: list[ParsedSeedCell] = []
     for row in rows[4:]:
@@ -242,9 +286,14 @@ def _parse_puma_layout(rows: list[tuple[Any, ...]], default_year: int = 2026) ->
         if not customer_name or customer_name.lower() == "total":
             continue
         city = str_or_default(row[7] if len(row) > 7 else "", "")
-        store_type = str_or_default(row[8] if len(row) > 8 else "", "")
-        product_group = str_or_default(row[9] if len(row) > 9 else "", "")
-        uf = ""
+        if is_sw:
+            uf = str_or_default(row[8] if len(row) > 8 else "", "")
+            store_type = str_or_default(row[9] if len(row) > 9 else "", "")
+            product_group = str_or_default(row[10] if len(row) > 10 else "", "")
+        else:
+            uf = ""
+            store_type = str_or_default(row[8] if len(row) > 8 else "", "")
+            product_group = str_or_default(row[9] if len(row) > 9 else "", "")
         seed_key = normalize_seed_key(
             customer_name,
             city=city,
@@ -326,7 +375,7 @@ def parse_monthly_reporting_workbook(
         rows = _rows_from_pyxlsb(path)
 
     if pack.template_family == MonthlyReportingPack.TemplateFamily.PUMA:
-        return _parse_puma_layout(rows, default_year=default_year)
+        return _parse_puma_layout(rows, default_year=default_year, pack_id=pack.pack_id)
     return _parse_levis_layout(rows, default_year=default_year)
 
 
@@ -352,11 +401,13 @@ def _apply_parsed_rows(
     batch: MonthlyReportingImportBatch,
     parsed_rows: Iterable[ParsedSeedCell],
     replace_mode: bool,
-) -> tuple[int, int, list[dict]]:
+) -> tuple[int, int, int, list[dict]]:
     created = 0
     updated = 0
     skipped = 0
     audit_entries: list[dict] = []
+    if replace_mode:
+        MonthlyReportingSeedRow.objects.filter(pack=pack).delete()
     for cell in parsed_rows:
         match = _get_or_create_match(cell)
         existing = MonthlyReportingSeedRow.objects.filter(
@@ -421,7 +472,12 @@ def import_monthly_reporting_file(
     default_year: int = 2026,
     force_fail_after_parse: bool = False,
 ) -> ImportResult:
-    """Importa planilla seed con idempotencia por hash SHA-256."""
+    """Importa planilla seed con idempotencia por hash SHA-256.
+
+    Con ``replace_mode=True`` purga antes todas las filas seed del pack para
+    evitar residuos de imports previos con claves seed distintas (p. ej. tras
+    corregir layout SW/BW o Product Group).
+    """
     path = Path(file_path)
     pack = MonthlyReportingPack.objects.get(pack_id=pack_id)
     sha256 = compute_file_sha256(path)
@@ -469,6 +525,17 @@ def import_monthly_reporting_file(
     try:
         with transaction.atomic():
             MonthlyReportingImportBatch.objects.select_for_update().filter(pack=pack).exists()
+            # Liberar unique (pack, sha) applied: el lote previo queda fallido/supersedido.
+            if replace_mode:
+                MonthlyReportingImportBatch.objects.filter(
+                    pack=pack,
+                    file_sha256=sha256,
+                    estado=MonthlyReportingImportBatch.Estado.APPLIED,
+                    duplicate_of__isnull=True,
+                ).exclude(pk=batch.pk).update(
+                    estado=MonthlyReportingImportBatch.Estado.FAILED,
+                    error_message="Supersedido por reimport --replace con el mismo SHA-256.",
+                )
             parsed_rows = parse_monthly_reporting_workbook(
                 path,
                 pack,
