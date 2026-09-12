@@ -149,6 +149,49 @@ class ClasificarMovimientoPostSnapshotTest(SimpleTestCase):
             Decimal("60"),
         )
 
+    def test_formatear_comprobante_identificable(self):
+        self.assertEqual(
+            svc.formatear_comprobante_movimiento("NCA", "0008-00000083", "Devol - Cliente"),
+            "NCA 0008-00000083 · Devol - Cliente",
+        )
+        self.assertEqual(
+            svc.formatear_comprobante_movimiento("FA", "0008-00000364", "Venta"),
+            "FA 0008-00000364 · Venta",
+        )
+
+    def test_formatear_fecha_control_ui(self):
+        from datetime import datetime
+
+        self.assertEqual(
+            svc.formatear_fecha_control_ui(datetime(2026, 9, 10, 13, 14, 57)),
+            "10/09/2026 13:14",
+        )
+        self.assertEqual(
+            svc.formatear_fecha_control_ui(datetime(2026, 9, 10, 0, 0, 0)),
+            "10/09/2026",
+        )
+
+    def test_sentido_entrada_salida(self):
+        self.assertEqual(svc.sentido_movimiento(6, 0), "Entrada")
+        self.assertEqual(svc.sentido_movimiento(0, 6), "Salida")
+
+    def test_enriquecer_movimiento_post_snapshot(self):
+        mov = svc.enriquecer_movimiento_post_snapshot(
+            {
+                "comprobante": "REM",
+                "nro": "0008-00000302",
+                "motivo": "Anul Remito",
+                "entrada": Decimal("6"),
+                "salida": Decimal("0"),
+            }
+        )
+        self.assertEqual(mov["sentido"], "Entrada")
+        self.assertEqual(mov["neto"], Decimal("6"))
+        self.assertEqual(
+            mov["comprobante_etiqueta"],
+            "REM 0008-00000302 · Anul Remito",
+        )
+
 
 class RecalcularAjustePostSnapshotTest(SimpleTestCase):
     def _campana_en_revision(self):
