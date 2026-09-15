@@ -176,7 +176,7 @@
               <div class="flex items-center gap-1.5">
                 <span>{{ l.nombre }}</span>
                 {% if l.descuadre %}
-                <span class="material-icons text-base text-amber-500" title="Descuadre: el saldo actual del depósito no coincide con stock al snapshot + mov. del sistema">warning</span>
+                <span class="material-icons text-base text-amber-500" title="Descuadre: el saldo actual del depósito no coincide con snapshot + mov. hasta el conteo + mov. después del conteo">warning</span>
                 {% endif %}
               </div>
             </td>
@@ -184,11 +184,11 @@
             <td class="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
               <div class="inline-flex flex-col items-end gap-1">
                 <div class="inline-flex items-center justify-end gap-1">
-                  {% if l.post_snapshot_chips %}
+                  {% if l.ajuste_efectivo %}
                   <button type="button"
                           @click="toggleOrigenes({{ l.id_linea }})"
                           class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-purple-600 dark:hover:bg-slate-700 dark:hover:text-purple-400"
-                          :title="origenesAbiertos['{{ l.id_linea }}'] ? 'Ocultar orígenes' : 'Ver orígenes del movimiento'"
+                          :title="origenesAbiertos['{{ l.id_linea }}'] ? 'Ocultar movimientos' : 'Ver movimientos hasta el conteo'"
                           :aria-expanded="!!origenesAbiertos['{{ l.id_linea }}']">
                     <span class="material-icons text-sm" aria-hidden="true"
                           x-text="origenesAbiertos['{{ l.id_linea }}'] ? 'expand_less' : 'expand_more'"></span>
@@ -207,26 +207,11 @@
                   </button>
                   {% endif %}
                 </div>
-                {% if l.escenario_antes_etiqueta and l.cantidad_contada is not None %}
-                <span class="rounded-full px-1.5 py-0.5 text-[10px] font-medium
-                  {% if l.escenario_antes == 'sin_mov_antes_conteo' %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300
-                  {% else %}bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200{% endif %}"
-                  title="{{ l.escenario_antes_etiqueta }}">
-                  {{ l.escenario_antes_etiqueta }}
-                </span>
-                {% endif %}
-                {% if l.post_snapshot_chips %}
+                {% if l.ajuste_efectivo %}
                 <div x-show="origenesAbiertos['{{ l.id_linea }}']" x-cloak
-                     class="flex max-w-[16rem] flex-wrap justify-end gap-1">
-                  {% for chip in l.post_snapshot_chips %}
-                  <span class="rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums
-                    {% if chip.neto > 0 %}bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200
-                    {% elif chip.neto < 0 %}bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200
-                    {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}"
-                    title="{{ chip.etiqueta }} (hasta el conteo)">
-                    {{ chip.etiqueta }} {% if chip.neto > 0 %}+{% endif %}{{ chip.neto|floatformat:0 }}
-                  </span>
-                  {% endfor %}
+                     class="w-full min-w-[18rem] max-w-md text-left">
+                  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white text-xs shadow-sm dark:border-slate-600 dark:bg-slate-900"
+                       x-html="origenesHtml['{{ l.id_linea }}'] || ''"></div>
                 </div>
                 {% endif %}
               </div>
@@ -424,11 +409,85 @@ function analizadorInvFisico() {
   return {
     confirmOpen: false,
     origenesAbiertos: {},
-    toggleOrigenes(idLinea) {
+    origenesHtml: {},
+    origenesCargando: {},
+    movimientosUrlBase: '{% url "stock:api_campana_linea_movimientos" id_campana=campana.id_campana id_linea=999999 %}',
+    movimientosUrl(idLinea) {
+      return this.movimientosUrlBase.replace('999999', String(idLinea));
+    },
+    escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    },
+    fmtCantidad(neto) {
+      var n = Number(neto);
+      if (!isFinite(n)) return '0';
+      var r = Math.round(n);
+      return r > 0 ? ('+' + r) : String(r);
+    },
+    renderTablaMovimientos(movs) {
+      if (!movs || !movs.length) return '';
+      var rows = movs.map(function(m) {
+        var neto = Number(m.neto);
+        var color = neto > 0 ? 'text-emerald-600' : (neto < 0 ? 'text-red-600' : 'text-slate-600 dark:text-slate-300');
+        var tipo = (m.comprobante && m.comprobante !== '-') ? m.comprobante : (m.motivo || '-');
+        var nro = (m.nro && m.nro !== '-') ? m.nro : '—';
+        return '<tr class="border-t border-slate-100 dark:border-slate-700">'
+          + '<td class="whitespace-nowrap px-2 py-1 tabular-nums text-slate-700 dark:text-slate-200">' + this.escapeHtml(m.fecha_control || '') + '</td>'
+          + '<td class="px-2 py-1 text-slate-700 dark:text-slate-200">' + this.escapeHtml(tipo) + '</td>'
+          + '<td class="px-2 py-1 font-mono text-[11px] text-slate-600 dark:text-slate-300">' + this.escapeHtml(nro) + '</td>'
+          + '<td class="px-2 py-1 text-right tabular-nums font-medium ' + color + '">' + this.fmtCantidad(m.neto) + '</td>'
+          + '</tr>';
+      }.bind(this)).join('');
+      return '<table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">'
+        + '<thead class="bg-slate-50 dark:bg-slate-800/80"><tr>'
+        + '<th class="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fecha</th>'
+        + '<th class="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">Tipo</th>'
+        + '<th class="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">Nro</th>'
+        + '<th class="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cantidad</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    },
+    async toggleOrigenes(idLinea) {
       var key = String(idLinea);
       var next = Object.assign({}, this.origenesAbiertos);
-      next[key] = !next[key];
+      var abrir = !next[key];
+      next[key] = abrir;
       this.origenesAbiertos = next;
+      if (!abrir || this.origenesHtml[key] || this.origenesCargando[key]) return;
+      this.origenesCargando = Object.assign({}, this.origenesCargando, { [key]: true });
+      this.origenesHtml = Object.assign({}, this.origenesHtml, {
+        [key]: '<p class="px-2 py-2 text-[11px] text-slate-500">Cargando…</p>',
+      });
+      try {
+        var resp = await fetch(this.movimientosUrl(idLinea), {
+          method: 'GET',
+          headers: this.csrfHeaders(),
+          credentials: 'same-origin',
+        });
+        var data = await resp.json();
+        var html = '';
+        if (resp.ok && data && data.movimientos && data.movimientos.length) {
+          html = this.renderTablaMovimientos(data.movimientos);
+        }
+        this.origenesHtml = Object.assign({}, this.origenesHtml, { [key]: html });
+        if (!html) {
+          // Sin filas: cerrar expand (no mostrar vacío)
+          var cerrar = Object.assign({}, this.origenesAbiertos);
+          cerrar[key] = false;
+          this.origenesAbiertos = cerrar;
+        }
+      } catch (e) {
+        this.origenesHtml = Object.assign({}, this.origenesHtml, {
+          [key]: '<p class="px-2 py-2 text-[11px] text-red-600">No se pudieron cargar los movimientos.</p>',
+        });
+      } finally {
+        var loading = Object.assign({}, this.origenesCargando);
+        delete loading[key];
+        this.origenesCargando = loading;
+      }
     },
     recalcOpen: false,
     overrideOpen: false,
