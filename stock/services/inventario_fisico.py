@@ -254,6 +254,11 @@ ETIQUETAS_POST_SNAPSHOT: Dict[str, str] = {
     CAT_OTROS: "Otros",
 }
 
+# Fases de movimiento respecto al instante de conteo (UI / desglose)
+FASE_HASTA_CONTEO = "hasta_conteo"
+FASE_POST_CONTEO = "post_conteo"
+FASE_MSTOCK_CIERRE = "mstock_cierre"
+
 _PALABRAS_ARMADO_MPR = (
     "armado",
     "surtido",
@@ -299,87 +304,6 @@ def etiqueta_categoria_post_snapshot(categoria: Any) -> str:
     return ETIQUETAS_POST_SNAPSHOT.get(key, ETIQUETAS_POST_SNAPSHOT[CAT_OTROS])
 
 
-def formatear_comprobante_movimiento(
-    comprobante: Any,
-    nro: Any = None,
-    motivo: Any = None,
-) -> str:
-    """Etiqueta identificable: «NCA 0008-00000083 · Devol-Cliente»."""
-    comp = str_or_default(comprobante, "").strip()
-    nro_txt = str_or_default(nro, "").strip()
-    motivo_txt = str_or_default(motivo, "").strip()
-    if nro_txt in {"", "-"}:
-        nro_txt = ""
-    if motivo_txt in {"", "-"}:
-        motivo_txt = ""
-    if comp and nro_txt:
-        izquierda = f"{comp} {nro_txt}"
-    elif comp:
-        izquierda = comp
-    elif nro_txt:
-        izquierda = nro_txt
-    else:
-        izquierda = "—"
-    if motivo_txt:
-        return f"{izquierda} · {motivo_txt}"
-    return izquierda
-
-
-def sentido_movimiento(entrada: Any, salida: Any) -> str:
-    """«Entrada» / «Salida» según el movimiento legacy (qué hizo)."""
-    ent = to_decimal_or_none(entrada) or Decimal("0")
-    sal = to_decimal_or_none(salida) or Decimal("0")
-    if ent > 0 and sal <= 0:
-        return "Entrada"
-    if sal > 0 and ent <= 0:
-        return "Salida"
-    if ent > 0 and sal > 0:
-        return "Entrada/Salida"
-    neto = ent - sal
-    if neto > 0:
-        return "Entrada"
-    if neto < 0:
-        return "Salida"
-    return "—"
-
-
-def formatear_fecha_control_ui(fecha_control: Any) -> str:
-    """Fecha de comprobante para UI (dd/MM/yyyy o dd/MM/yyyy HH:MM)."""
-    if fecha_control is None:
-        return ""
-    if hasattr(fecha_control, "strftime"):
-        hora = getattr(fecha_control, "hour", 0) or 0
-        minuto = getattr(fecha_control, "minute", 0) or 0
-        segundo = getattr(fecha_control, "second", 0) or 0
-        if hora or minuto or segundo:
-            return fecha_control.strftime("%d/%m/%Y %H:%M")
-        return fecha_control.strftime("%d/%m/%Y")
-    txt = str_or_default(fecha_control, "").strip()
-    return txt
-
-
-def enriquecer_movimiento_post_snapshot(mov: Dict[str, Any]) -> Dict[str, Any]:
-    """Agrega comprobante_etiqueta y sentido para UI de identificación."""
-    entrada = to_decimal_or_none(mov.get("entrada")) or Decimal("0")
-    salida = to_decimal_or_none(mov.get("salida")) or Decimal("0")
-    mov["entrada"] = entrada
-    mov["salida"] = salida
-    if "neto" not in mov or mov.get("neto") is None:
-        mov["neto"] = entrada - salida
-    mov["comprobante_etiqueta"] = formatear_comprobante_movimiento(
-        mov.get("comprobante"),
-        mov.get("nro"),
-        mov.get("motivo"),
-    )
-    mov["sentido"] = sentido_movimiento(entrada, salida)
-    # Conservar crudo si hace falta export; UI usa fecha_control ya legible cuando viene datetime
-    if not isinstance(mov.get("fecha_control"), str):
-        mov["fecha_control"] = formatear_fecha_control_ui(mov.get("fecha_control"))
-    elif not mov.get("fecha_control"):
-        mov["fecha_control"] = ""
-    return mov
-
-
 def desglose_post_snapshot_vacio() -> Dict[str, Decimal]:
     return {c: Decimal("0") for c in CATEGORIAS_POST_SNAPSHOT} | {"total": Decimal("0")}
 
@@ -400,6 +324,198 @@ def chips_desglose_post_snapshot(desglose: Optional[Dict[str, Any]]) -> List[Dic
             }
         )
     return chips
+
+
+def es_mstock_cierre_inventario(
+    comprobante: Any,
+    detalle: Any,
+    id_campana: Any,
+) -> bool:
+    """True si el renglón es MSTOCK de cierre de inventario físico de la campaña."""
+    if str_or_default(comprobante, "").strip().upper() != "MSTOCK":
+        return False
+    cid = to_int_or_none(id_campana)
+    if cid is None:
+        return False
+    texto = str_or_default(detalle, "").lower()
+    if not texto:
+        return False
+    patrones = (
+        f"campaña #{cid}",
+        f"campaña {cid}",
+        f"campaña#{cid}",
+        f"campana #{cid}",
+        f"campana {cid}",
+        f"campana#{cid}",
+    )
+    return any(p in texto for p in patrones)
+
+
+def clasificar_fase_movimiento_conteo(
+    fecha_control: Any,
+    t_conteo: Any,
+    comprobante: Any,
+    detalle: Any,
+    id_campana: Any,
+) -> str:
+    """Clasifica un movimiento post-snapshot respecto al conteo."""
+    if es_mstock_cierre_inventario(comprobante, detalle, id_campana):
+        return FASE_MSTOCK_CIERRE
+    fc = _normalizar_ts(fecha_control)
+    corte = _normalizar_ts(t_conteo) if t_conteo is not None else None
+    if corte is not None and fc is not None and fc > corte:
+        return FASE_POST_CONTEO
+    return FASE_HASTA_CONTEO
+
+
+def resumen_escenario_linea(
+    cantidad_contada: Any,
+    mov_hasta_conteo: Any,
+    mov_post_conteo: Any,
+) -> Dict[str, Any]:
+    """Escenarios legibles para UI (antes / después del conteo)."""
+    contado = to_decimal_or_none(cantidad_contada)
+    mov_a = to_decimal_or_none(mov_hasta_conteo) or Decimal("0")
+    mov_b = to_decimal_or_none(mov_post_conteo) or Decimal("0")
+
+    if contado is None:
+        escenario_antes = "sin_conteo"
+        etiqueta_antes = "Sin conteo"
+        escenario_despues = "sin_conteo"
+        etiqueta_despues = ""
+    elif mov_a == Decimal("0"):
+        escenario_antes = "sin_mov_antes_conteo"
+        etiqueta_antes = "Sin mov. entre snapshot y conteo"
+        if mov_b == Decimal("0"):
+            escenario_despues = "sin_mov_post_conteo"
+            etiqueta_despues = ""
+        else:
+            escenario_despues = "con_mov_post_conteo"
+            signo = "+" if mov_b > 0 else ""
+            etiqueta_despues = f"Mov. después del conteo: {signo}{mov_b.normalize()}"
+    else:
+        escenario_antes = "con_mov_antes_conteo"
+        etiqueta_antes = "Con mov. entre snapshot y conteo"
+        if mov_b == Decimal("0"):
+            escenario_despues = "sin_mov_post_conteo"
+            etiqueta_despues = ""
+        else:
+            escenario_despues = "con_mov_post_conteo"
+            signo = "+" if mov_b > 0 else ""
+            etiqueta_despues = f"Mov. después del conteo: {signo}{mov_b.normalize()}"
+
+    return {
+        "escenario_antes": escenario_antes,
+        "escenario_despues": escenario_despues,
+        "escenario_antes_etiqueta": etiqueta_antes,
+        "escenario_despues_etiqueta": etiqueta_despues,
+    }
+
+
+def _formatear_fecha_control_mov(fecha_control: Any) -> str:
+    fc = _normalizar_ts(fecha_control)
+    if fc is not None:
+        if fc.hour or fc.minute or fc.second:
+            return fc.strftime("%d/%m/%Y %H:%M")
+        return fc.strftime("%d/%m/%Y")
+    return str_or_default(fecha_control, "")
+
+
+def _que_hizo_movimiento(entrada: Any, salida: Any) -> str:
+    ent = to_decimal_or_none(entrada) or Decimal("0")
+    sal = to_decimal_or_none(salida) or Decimal("0")
+    if ent > 0 and sal > 0:
+        return "Entrada/Salida"
+    if ent > 0:
+        return "Entrada"
+    if sal > 0:
+        return "Salida"
+    return "—"
+
+
+def desglose_desde_movimientos(
+    movimientos: Sequence[Dict[str, Any]],
+) -> Dict[str, Decimal]:
+    """Agrega neto por categoría a partir de renglones legacy."""
+    resultado = desglose_post_snapshot_vacio()
+    for mov in movimientos:
+        entrada = to_decimal_or_none(mov.get("Entrada") or mov.get("entrada")) or Decimal("0")
+        salida = to_decimal_or_none(mov.get("Salida") or mov.get("salida")) or Decimal("0")
+        neto = entrada - salida
+        if neto == 0:
+            continue
+        cat = clasificar_movimiento_post_snapshot(
+            mov.get("Comprobante") or mov.get("comprobante"),
+            mov.get("TipoComp") or mov.get("motivo") or mov.get("tipo_comp"),
+            mov.get("detalle"),
+        )
+        resultado[cat] = resultado.get(cat, Decimal("0")) + neto
+        resultado["total"] = resultado.get("total", Decimal("0")) + neto
+    return resultado
+
+
+def _particionar_movimientos_por_fase(
+    movimientos: Sequence[Dict[str, Any]],
+    *,
+    t_conteo: Any,
+    id_campana: Any,
+    cantidad_contada: Any,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], int, int]:
+    """Separa movimientos en hasta conteo (A), post conteo (B) y cuenta omitidos."""
+    contado = to_decimal_or_none(cantidad_contada)
+    hasta: List[Dict[str, Any]] = []
+    post: List[Dict[str, Any]] = []
+    post_omitidos = 0
+    mstock_omitidos = 0
+
+    for mov in movimientos:
+        fase = clasificar_fase_movimiento_conteo(
+            mov.get("FechaControl") or mov.get("fecha_control"),
+            t_conteo if contado is not None else None,
+            mov.get("Comprobante") or mov.get("comprobante"),
+            mov.get("detalle"),
+            id_campana,
+        )
+        if fase == FASE_MSTOCK_CIERRE:
+            mstock_omitidos += 1
+            continue
+        if contado is not None and fase == FASE_POST_CONTEO:
+            post_omitidos += 1
+            post.append(mov)
+            continue
+        hasta.append(mov)
+
+    return hasta, post, post_omitidos, mstock_omitidos
+
+
+def _aplicar_desglose_movimientos_linea(
+    linea: Dict[str, Any],
+    *,
+    movimientos: Sequence[Dict[str, Any]],
+    eventos: Sequence[Dict[str, Any]],
+    id_campana: Any,
+) -> None:
+    """Calcula netos A/B, desglose por categoría (solo A) y escenario en la fila."""
+    cantidad_contada = linea.get("cantidad_contada")
+    t_conteo = None
+    if to_decimal_or_none(cantidad_contada) is not None:
+        t_conteo = resolver_ts_conteo_linea(eventos, cantidad_contada)
+
+    hasta, post, _post_omit, _mstock_omit = _particionar_movimientos_por_fase(
+        movimientos,
+        t_conteo=t_conteo,
+        id_campana=id_campana,
+        cantidad_contada=cantidad_contada,
+    )
+    neto_hasta = calcular_neto_movimientos_post_snapshot(hasta)
+    neto_post = calcular_neto_movimientos_post_snapshot(post) if post else Decimal("0")
+
+    linea["mov_hasta_conteo"] = neto_hasta
+    linea["mov_post_conteo"] = neto_post
+    linea["t_conteo"] = t_conteo
+    linea["post_snapshot"] = desglose_desde_movimientos(hasta)
+    escenario = resumen_escenario_linea(cantidad_contada, neto_hasta, neto_post)
+    linea.update(escenario)
 
 
 def formatear_formula_diferencia_real(
@@ -424,6 +540,117 @@ def formatear_formula_diferencia_real(
     return (
         f"{_fmt(contado)} − ({_fmt(snap)} + {_fmt(mov)}) = {_fmt(diff)}"
     )
+
+
+def _normalizar_ts(valor: Any) -> Optional[datetime]:
+    """Convierte server_ts / client_ts de eventos a datetime comparable con FechaControl."""
+    if valor is None:
+        return None
+    if isinstance(valor, datetime):
+        return valor
+    texto = str_or_default(valor, "").strip()
+    if not texto:
+        return None
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S.%f",
+    ):
+        try:
+            return datetime.strptime(texto[:26], fmt)
+        except ValueError:
+            continue
+    fecha = to_date_or_none(texto)
+    if fecha:
+        try:
+            return datetime.strptime(fecha, "%Y-%m-%d")
+        except ValueError:
+            return None
+    return None
+
+
+def _ts_de_evento(evento: Dict[str, Any]) -> Optional[datetime]:
+    """Timestamp del evento: server_ts preferido, sino client_ts."""
+    return _normalizar_ts(evento.get("server_ts")) or _normalizar_ts(evento.get("client_ts"))
+
+
+def resolver_ts_conteo_linea(
+    eventos: Sequence[Dict[str, Any]],
+    cantidad_contada: Any,
+) -> Optional[datetime]:
+    """Resuelve t_conteo para una línea a partir de sus eventos de sync.
+
+    Busca desde el más reciente: cantidad igual a la contada; si no hay match,
+    último evento aceptado; si no, último evento de la lista.
+    """
+    if not eventos:
+        return None
+    contado = to_decimal_or_none(cantidad_contada)
+    if contado is None:
+        return None
+
+    ordenados = sorted(
+        list(eventos),
+        key=lambda e: (
+            _ts_de_evento(e) or datetime.min,
+            to_int_or_none(e.get("id_evento")) or 0,
+        ),
+    )
+
+    for evento in reversed(ordenados):
+        cant_ev = to_decimal_or_none(evento.get("cantidad"))
+        if cant_ev is not None and cant_ev == contado:
+            ts = _ts_de_evento(evento)
+            if ts is not None:
+                return ts
+
+    for evento in reversed(ordenados):
+        if str_or_default(evento.get("resultado"), "") == RESULTADO_ACEPTADO:
+            ts = _ts_de_evento(evento)
+            if ts is not None:
+                return ts
+
+    return _ts_de_evento(ordenados[-1])
+
+
+def calcular_neto_movimientos_post_snapshot(
+    movimientos: Sequence[Dict[str, Any]],
+    *,
+    fecha_hasta: Any = None,
+) -> Decimal:
+    """Suma neta (entrada − salida) de movimientos legacy, con tope superior opcional."""
+    corte = _normalizar_ts(fecha_hasta) if fecha_hasta is not None else None
+    total = Decimal("0")
+    for mov in movimientos:
+        fc = mov.get("FechaControl") or mov.get("fecha_control")
+        fc_norm = _normalizar_ts(fc) if fc is not None else None
+        if corte is not None and fc_norm is not None and fc_norm > corte:
+            continue
+        entrada = to_decimal_or_none(mov.get("Entrada")) or Decimal("0")
+        salida = to_decimal_or_none(mov.get("Salida")) or Decimal("0")
+        total += entrada - salida
+    return total
+
+
+def calcular_ajuste_sistema_linea(
+    cantidad_contada: Any,
+    movimientos: Sequence[Dict[str, Any]],
+    eventos: Sequence[Dict[str, Any]],
+) -> Tuple[Decimal, bool]:
+    """Neto post-snapshot para persistir en recalc.
+
+    Líneas contadas: movimientos hasta t_conteo (fallback a neto hasta ahora si falta ts).
+    Líneas sin contar: neto post-snapshot hasta ahora (solo informativo).
+
+    Devuelve (ajuste_sistema, usó_fallback_sin_ts).
+    """
+    if to_decimal_or_none(cantidad_contada) is not None:
+        t_conteo = resolver_ts_conteo_linea(eventos, cantidad_contada)
+        if t_conteo is None:
+            return calcular_neto_movimientos_post_snapshot(movimientos), True
+        return calcular_neto_movimientos_post_snapshot(movimientos, fecha_hasta=t_conteo), False
+    return calcular_neto_movimientos_post_snapshot(movimientos), False
 
 
 def calcular_saldo_final_post_mstock(
@@ -467,6 +694,16 @@ def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
         if ajuste_sys is not None:
             desglose["total"] = ajuste_sys
             desglose[CAT_OTROS] = ajuste_sys
+    mov_hasta = to_decimal_or_none(linea.get("mov_hasta_conteo"))
+    if mov_hasta is None:
+        mov_hasta = ajuste_eff
+        linea["mov_hasta_conteo"] = mov_hasta
+    mov_post = to_decimal_or_none(linea.get("mov_post_conteo"))
+    if mov_post is None:
+        mov_post = Decimal("0")
+        linea["mov_post_conteo"] = mov_post
+    if "escenario_antes" not in linea:
+        linea.update(resumen_escenario_linea(linea.get("cantidad_contada"), mov_hasta, mov_post))
     linea["ajuste_sistema"] = ajuste_sys
     linea["ajuste_manual"] = ajuste_man
     linea["ajuste_efectivo"] = ajuste_eff
@@ -481,13 +718,13 @@ def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
     )
     linea["post_snapshot"] = desglose
     linea["post_snapshot_chips"] = chips_desglose_post_snapshot(desglose)
-    if not isinstance(linea.get("post_snapshot_detalle"), list):
-        linea["post_snapshot_detalle"] = []
     linea["formula_diferencia"] = formatear_formula_diferencia_real(
         linea.get("cantidad_contada"),
         saldo_snap,
         ajuste_eff,
     )
+    if linea.get("t_conteo") is not None and "t_conteo_fmt" not in linea:
+        linea["t_conteo_fmt"] = _formatear_fecha_control_mov(linea.get("t_conteo"))
     return linea
 
 
@@ -1397,17 +1634,29 @@ def _insert_auditoria_ajuste(
 def calcular_ajuste_post_snapshot(
     base_empresa: str,
     id_campana: int,
+    *,
+    fecha_hasta: Any = None,
 ) -> Dict[Tuple[int, int], Decimal]:
     """Neto agregado (entrada − salida) post-snapshot por (id_articulo, id_deposito)."""
-    desglose = calcular_ajuste_post_snapshot_desglose(base_empresa, id_campana)
+    desglose = calcular_ajuste_post_snapshot_desglose(
+        base_empresa,
+        id_campana,
+        fecha_hasta=fecha_hasta,
+    )
     return {clave: datos.get("total", Decimal("0")) for clave, datos in desglose.items()}
 
 
 def calcular_ajuste_post_snapshot_desglose(
     base_empresa: str,
     id_campana: int,
+    *,
+    fecha_hasta: Any = None,
 ) -> Dict[Tuple[int, int], Dict[str, Decimal]]:
-    """Neto post-snapshot desglosado por origen + total, por (artículo, depósito)."""
+    """Neto post-snapshot desglosado por origen + total, por (artículo, depósito).
+
+    ``fecha_hasta`` opcional acota FechaControl superior (p. ej. t_conteo). Sin valor,
+    incluye todos los movimientos post-snapshot (UI desglose completo).
+    """
     campana = obtener_campana(base_empresa, id_campana)
     if not campana:
         return {}
@@ -1420,6 +1669,7 @@ def calcular_ajuste_post_snapshot_desglose(
     if not depositos:
         return {}
 
+    corte = _normalizar_ts(fecha_hasta) if fecha_hasta is not None else None
     resultado: Dict[Tuple[int, int], Dict[str, Decimal]] = {}
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
@@ -1437,6 +1687,11 @@ def calcular_ajuste_post_snapshot_desglose(
                     f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
                 )
                 detalle_expr = "COALESCE(ms.detalle, '')"
+            filtro_hasta = ""
+            params: List[Any] = [*depositos, fecha_snapshot]
+            if corte is not None:
+                filtro_hasta = "AND s.FechaControl <= %s "
+                params.append(corte)
             cursor.execute(
                 f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, "
                 f"COALESCE(s.Comprobante, '') AS comprobante, "
@@ -1447,9 +1702,10 @@ def calcular_ajuste_post_snapshot_desglose(
                 f"{join_ms}"
                 f"WHERE s.CodDeposito IN ({ph}) "
                 f"AND s.FechaControl >= %s "
+                f"{filtro_hasta}"
                 f"AND COALESCE(s.Anulado, 'No') <> 'Si' "
                 f"GROUP BY s.IDArt, s.CodDeposito, s.Comprobante, s.TipoComp, {detalle_expr}",
-                [*depositos, fecha_snapshot],
+                params,
             )
             for row in cursor.fetchall():
                 id_art = to_int_or_none(row.get("id_articulo"))
@@ -1484,15 +1740,29 @@ def listar_movimientos_post_snapshot(
     id_campana: int,
     id_articulo: int,
     id_deposito: int,
+    *,
+    cantidad_contada: Any = None,
+    solo_hasta_conteo: bool = True,
+    incluir_mstock_cierre: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Desglose de movimientos legacy posteriores al snapshot (solo lectura)."""
+    """Desglose de movimientos legacy posteriores al snapshot (solo lectura).
+
+    Por defecto devuelve solo movimientos hasta el conteo (Mov. A), excluyendo
+    post-conteo (B) y MSTOCK de cierre de campaña.
+    """
     campana = obtener_campana(base_empresa, id_campana)
     if not campana or not campana.get("fecha_snapshot"):
         return []
     id_art = to_int_or_none(id_articulo)
     id_dep = to_int_or_none(id_deposito)
-    if id_art is None or id_dep is None:
+    cid = to_int_or_none(id_campana)
+    if id_art is None or id_dep is None or cid is None:
         return []
+
+    t_conteo = None
+    if to_decimal_or_none(cantidad_contada) is not None:
+        eventos = listar_eventos_linea(base_empresa, cid, id_art, id_dep)
+        t_conteo = resolver_ts_conteo_linea(eventos, cantidad_contada)
 
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
@@ -1526,32 +1796,214 @@ def listar_movimientos_post_snapshot(
                 entrada = to_decimal_or_none(row.get("Entrada")) or Decimal("0")
                 salida = to_decimal_or_none(row.get("Salida")) or Decimal("0")
                 fc = row.get("FechaControl")
-                fc_txt = fc.strftime("%d/%m/%Y") if hasattr(fc, "strftime") else str_or_default(fc, "")
+                comprobante = str_or_default(row.get("comprobante"), "-")
+                detalle = str_or_default(row.get("detalle"), "")
+                fase = clasificar_fase_movimiento_conteo(
+                    fc, t_conteo, comprobante, detalle, cid
+                )
+                if fase == FASE_MSTOCK_CIERRE and not incluir_mstock_cierre:
+                    continue
+                if solo_hasta_conteo and to_decimal_or_none(cantidad_contada) is not None:
+                    if fase == FASE_POST_CONTEO:
+                        continue
+                    if fase == FASE_MSTOCK_CIERRE:
+                        continue
                 cat = clasificar_movimiento_post_snapshot(
-                    row.get("comprobante"),
+                    comprobante,
                     row.get("motivo"),
-                    row.get("detalle"),
+                    detalle,
                 )
                 movimientos.append(
                     {
                         "id_stock": to_int_or_none(row.get("id_stock")),
-                        "fecha_control": fc_txt,
+                        "fecha_control": _formatear_fecha_control_mov(fc),
                         "fecha": row.get("Fecha"),
                         "entrada": entrada,
                         "salida": salida,
                         "neto": entrada - salida,
-                        "comprobante": str_or_default(row.get("comprobante"), "-"),
+                        "comprobante": comprobante,
                         "motivo": str_or_default(row.get("motivo"), "-"),
                         "nro": str_or_default(row.get("nro"), "-"),
-                        "detalle": str_or_default(row.get("detalle"), ""),
+                        "detalle": detalle,
                         "categoria": cat,
                         "categoria_etiqueta": etiqueta_categoria_post_snapshot(cat),
+                        "fase": fase,
+                        "que_hizo": _que_hizo_movimiento(entrada, salida),
                     }
                 )
-            return [enriquecer_movimiento_post_snapshot(m) for m in movimientos]
+            return movimientos
     except Exception as exc:
         logger.warning("listar_movimientos_post_snapshot: %s", exc)
         return []
+
+
+def obtener_desglose_movimientos_linea(
+    base_empresa: str,
+    id_campana: int,
+    id_articulo: int,
+    id_deposito: int,
+    cantidad_contada: Any,
+) -> Dict[str, Any]:
+    """Desglose A/B de movimientos post-snapshot para una línea contada o no."""
+    cid = to_int_or_none(id_campana)
+    id_art = to_int_or_none(id_articulo)
+    id_dep = to_int_or_none(id_deposito)
+    vacio: Dict[str, Any] = {
+        "t_conteo": None,
+        "t_conteo_fmt": "",
+        "movimientos_hasta_conteo": [],
+        "neto_hasta_conteo": Decimal("0"),
+        "neto_post_conteo": Decimal("0"),
+        "movimientos_post_conteo_omitidos": 0,
+        "mstock_cierre_omitidos": 0,
+        "escenario": resumen_escenario_linea(None, Decimal("0"), Decimal("0")),
+    }
+    if cid is None or id_art is None or id_dep is None:
+        return vacio
+
+    campana = obtener_campana(base_empresa, cid)
+    if not campana or not campana.get("fecha_snapshot"):
+        return vacio
+
+    eventos = listar_eventos_linea(base_empresa, cid, id_art, id_dep)
+    t_conteo = None
+    if to_decimal_or_none(cantidad_contada) is not None:
+        t_conteo = resolver_ts_conteo_linea(eventos, cantidad_contada)
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            depositos = [
+                d
+                for d in (to_int_or_none(x) for x in (campana.get("depositos") or []))
+                if d is not None
+            ]
+            movs_map = _cargar_movimientos_post_snapshot_campana(
+                cursor, cid, campana["fecha_snapshot"], depositos
+            )
+    except Exception as exc:
+        logger.warning("obtener_desglose_movimientos_linea %s: %s", cid, exc)
+        return vacio
+
+    movs_raw = movs_map.get((id_art, id_dep), [])
+    hasta, post, post_omit, mstock_omit = _particionar_movimientos_por_fase(
+        movs_raw,
+        t_conteo=t_conteo,
+        id_campana=cid,
+        cantidad_contada=cantidad_contada,
+    )
+
+    def _fmt_mov(m: Dict[str, Any]) -> Dict[str, Any]:
+        entrada = to_decimal_or_none(m.get("Entrada")) or Decimal("0")
+        salida = to_decimal_or_none(m.get("Salida")) or Decimal("0")
+        fc = m.get("FechaControl")
+        comprobante = str_or_default(m.get("Comprobante") or m.get("comprobante"), "-")
+        detalle = str_or_default(m.get("detalle"), "")
+        cat = clasificar_movimiento_post_snapshot(
+            comprobante,
+            m.get("TipoComp") or m.get("motivo"),
+            detalle,
+        )
+        return {
+            "fecha_control": _formatear_fecha_control_mov(fc),
+            "comprobante": comprobante,
+            "motivo": str_or_default(m.get("TipoComp") or m.get("motivo"), "-"),
+            "nro": str_or_default(m.get("NroComprobante") or m.get("nro"), "-"),
+            "detalle": detalle,
+            "entrada": entrada,
+            "salida": salida,
+            "neto": entrada - salida,
+            "que_hizo": _que_hizo_movimiento(entrada, salida),
+            "fase": clasificar_fase_movimiento_conteo(
+                fc, t_conteo, comprobante, detalle, cid
+            ),
+            "categoria": cat,
+            "categoria_etiqueta": etiqueta_categoria_post_snapshot(cat),
+        }
+
+    neto_hasta = calcular_neto_movimientos_post_snapshot(hasta)
+    neto_post = calcular_neto_movimientos_post_snapshot(post) if post else Decimal("0")
+
+    return {
+        "t_conteo": t_conteo,
+        "t_conteo_fmt": _formatear_fecha_control_mov(t_conteo) if t_conteo else "",
+        "movimientos_hasta_conteo": [_fmt_mov(m) for m in hasta],
+        "neto_hasta_conteo": neto_hasta,
+        "neto_post_conteo": neto_post,
+        "movimientos_post_conteo_omitidos": post_omit,
+        "mstock_cierre_omitidos": mstock_omit,
+        "escenario": resumen_escenario_linea(cantidad_contada, neto_hasta, neto_post),
+    }
+
+
+def _agrupar_eventos_por_linea(
+    eventos: Sequence[Dict[str, Any]],
+) -> Dict[Tuple[int, int], List[Dict[str, Any]]]:
+    """Agrupa eventos de sync por (id_articulo, id_deposito)."""
+    por_clave: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+    for evento in eventos:
+        id_art = to_int_or_none(evento.get("id_articulo"))
+        id_dep = to_int_or_none(evento.get("id_deposito"))
+        if id_art is None or id_dep is None:
+            continue
+        por_clave.setdefault((id_art, id_dep), []).append(dict(evento))
+    return por_clave
+
+
+def _cargar_eventos_campana(cursor, id_campana: int) -> Dict[Tuple[int, int], List[Dict[str, Any]]]:
+    cursor.execute(
+        "SELECT id_evento, id_articulo, id_deposito, cantidad, client_ts, server_ts, resultado "
+        "FROM inv_fisico_evento WHERE id_campana = %s "
+        "ORDER BY id_articulo, id_deposito, COALESCE(server_ts, client_ts), id_evento",
+        [id_campana],
+    )
+    return _agrupar_eventos_por_linea([dict(r) for r in cursor.fetchall()])
+
+
+def _cargar_movimientos_post_snapshot_campana(
+    cursor,
+    id_campana: int,
+    fecha_snapshot: Any,
+    depositos: Sequence[int],
+) -> Dict[Tuple[int, int], List[Dict[str, Any]]]:
+    """Movimientos legacy post-snapshot de artículos presentes en la campaña."""
+    if not depositos:
+        return {}
+    tbl_stock = _nombre_tabla(cursor, "stock")
+    if not tbl_stock:
+        return {}
+    ts = tbl_stock.replace("`", "``")
+    ph = ",".join(["%s"] * len(depositos))
+    tbl_ms = _nombre_tabla(cursor, "movimiento_stock")
+    join_ms = ""
+    select_detalle = "'' AS detalle"
+    if tbl_ms:
+        tms = tbl_ms.replace("`", "``")
+        join_ms = f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
+        select_detalle = "COALESCE(ms.detalle, '') AS detalle"
+    cursor.execute(
+        f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, s.FechaControl, "
+        f"COALESCE(s.Entrada, 0) AS Entrada, COALESCE(s.Salida, 0) AS Salida, "
+        f"COALESCE(s.Comprobante, '') AS Comprobante, "
+        f"COALESCE(s.TipoComp, '') AS TipoComp, "
+        f"COALESCE(s.NroComprobante, '') AS NroComprobante, "
+        f"{select_detalle} "
+        f"FROM `{ts}` s "
+        f"{join_ms}"
+        f"INNER JOIN inv_fisico_linea l "
+        f"  ON l.id_campana = %s AND l.id_articulo = s.IDArt AND l.id_deposito = s.CodDeposito "
+        f"WHERE s.CodDeposito IN ({ph}) "
+        f"AND s.FechaControl >= %s AND COALESCE(s.Anulado, 'No') <> 'Si' "
+        f"ORDER BY s.IDArt, s.CodDeposito, s.FechaControl, s.id_stock",
+        [id_campana, *depositos, fecha_snapshot],
+    )
+    por_clave: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+    for row in cursor.fetchall():
+        id_art = to_int_or_none(row.get("id_articulo"))
+        id_dep = to_int_or_none(row.get("id_deposito"))
+        if id_art is None or id_dep is None:
+            continue
+        por_clave.setdefault((id_art, id_dep), []).append(dict(row))
+    return por_clave
 
 
 def _fetch_saldos_deposito(
@@ -1584,17 +2036,28 @@ def recalcular_ajuste_post_snapshot(
     id_usuario: int,
     pisar_overrides: bool = False,
 ) -> Tuple[bool, Dict[str, Any]]:
-    """Persiste ajuste_sistema, saldo_actual_ref y diferencia_real por línea."""
+    """Persiste ajuste_sistema, saldo_actual_ref y diferencia_real por línea.
+
+    Líneas contadas: neto de movimientos entre snapshot y t_conteo (momento del conteo).
+    Líneas sin contar: neto post-snapshot hasta ahora (informativo); diferencia_real NULL.
+    """
     campana = obtener_campana(base_empresa, id_campana)
     if not campana:
         return False, {"error": "Campaña no encontrada."}
     if campana["estado"] in (ESTADO_APLICADO, ESTADO_ANULADO):
         return True, {"omitido": True, "motivo": "estado_final"}
 
-    netos = calcular_ajuste_post_snapshot(base_empresa, id_campana)
+    fecha_snapshot = campana.get("fecha_snapshot")
+    if not fecha_snapshot:
+        return False, {"error": "La campaña no tiene fecha de snapshot."}
+
+    depositos = [
+        d for d in (to_int_or_none(x) for x in (campana.get("depositos") or [])) if d is not None
+    ]
     uid = to_int_or_none(id_usuario) or 0
     lineas_actualizadas = 0
     overrides_pisados = 0
+    sin_ts_conteo = 0
 
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
@@ -1605,6 +2068,13 @@ def recalcular_ajuste_post_snapshot(
                 [id_campana],
             )
             lineas = [dict(r) for r in cursor.fetchall()]
+            eventos_map = _cargar_eventos_campana(cursor, id_campana)
+            movimientos_map = _cargar_movimientos_post_snapshot_campana(
+                cursor,
+                id_campana,
+                fecha_snapshot,
+                depositos,
+            )
 
             for linea in lineas:
                 id_linea = to_int_or_none(linea.get("id_linea"))
@@ -1613,7 +2083,25 @@ def recalcular_ajuste_post_snapshot(
                 if id_linea is None or id_art is None or id_dep is None:
                     continue
 
-                ajuste_sys = netos.get((id_art, id_dep), Decimal("0"))
+                clave = (id_art, id_dep)
+                movs = movimientos_map.get(clave, [])
+                evs = eventos_map.get(clave, [])
+                ajuste_sys, fallback_sin_ts = calcular_ajuste_sistema_linea(
+                    linea.get("cantidad_contada"),
+                    movs,
+                    evs,
+                )
+                if fallback_sin_ts:
+                    sin_ts_conteo += 1
+                    logger.warning(
+                        "recalc campaña %s línea %s art %s dep %s: sin t_conteo, "
+                        "ajuste_sistema con neto hasta ahora",
+                        id_campana,
+                        id_linea,
+                        id_art,
+                        id_dep,
+                    )
+
                 saldo_snap = to_decimal_or_none(linea.get("saldo_snapshot")) or Decimal("0")
                 ajuste_manual = to_decimal_or_none(linea.get("ajuste_manual"))
 
@@ -1659,10 +2147,13 @@ def recalcular_ajuste_post_snapshot(
                     )
                 lineas_actualizadas += 1
 
-        return True, {
+        resultado: Dict[str, Any] = {
             "lineas_actualizadas": lineas_actualizadas,
             "overrides_pisados": overrides_pisados,
         }
+        if sin_ts_conteo:
+            resultado["lineas_sin_ts_conteo"] = sin_ts_conteo
+        return True, resultado
     except Exception as exc:
         logger.exception("recalcular_ajuste_post_snapshot %s: %s", id_campana, exc)
         return False, {"error": "No se pudo recalcular el ajuste post-snapshot."}
@@ -1995,8 +2486,30 @@ def listar_lineas_analizador(
         logger.warning("listar_lineas_analizador %s/%s: %s", base_empresa, id_campana, exc)
         return []
 
-    desglose_map = calcular_ajuste_post_snapshot_desglose(base_empresa, cid)
-    detalle_map = mapa_detalle_post_snapshot_por_linea(base_empresa, cid)
+    campana = obtener_campana(base_empresa, cid)
+    eventos_map: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+    movs_map: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+    if campana and campana.get("fecha_snapshot"):
+        depositos = [
+            d
+            for d in (to_int_or_none(x) for x in (campana.get("depositos") or []))
+            if d is not None
+        ]
+        try:
+            with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+                eventos_map = _cargar_eventos_campana(cursor, cid)
+                if depositos:
+                    movs_map = _cargar_movimientos_post_snapshot_campana(
+                        cursor, cid, campana["fecha_snapshot"], depositos
+                    )
+        except Exception as exc:
+            logger.warning(
+                "listar_lineas_analizador desglose %s/%s: %s",
+                base_empresa,
+                cid,
+                exc,
+            )
+
     candidatos = listar_contadores_candidatos(base_empresa)
     etiquetas_contador = {
         c["id_usuario"]: c["etiqueta"]
@@ -2009,15 +2522,14 @@ def listar_lineas_analizador(
         id_art = to_int_or_none(linea.get("id_articulo"))
         id_dep = to_int_or_none(linea.get("id_deposito"))
         if id_art is not None and id_dep is not None:
-            linea["post_snapshot"] = desglose_map.get(
-                (id_art, id_dep), desglose_post_snapshot_vacio()
-            )
-            linea["post_snapshot_detalle"] = list(
-                detalle_map.get((id_art, id_dep), [])
+            _aplicar_desglose_movimientos_linea(
+                linea,
+                movimientos=movs_map.get((id_art, id_dep), []),
+                eventos=eventos_map.get((id_art, id_dep), []),
+                id_campana=cid,
             )
         else:
             linea["post_snapshot"] = desglose_post_snapshot_vacio()
-            linea["post_snapshot_detalle"] = []
         enriquecer_linea_analizador(linea)
         uid = linea.get("id_contador")
         linea["contador_etiqueta"] = etiquetas_contador.get(uid, "") if uid else ""
@@ -2428,7 +2940,7 @@ def listar_movimientos_post_snapshot_campana(
                         "categoria_etiqueta": etiqueta_categoria_post_snapshot(cat),
                     }
                 )
-            return [enriquecer_movimiento_post_snapshot(m) for m in movimientos]
+            return movimientos
     except Exception as exc:
         logger.warning(
             "listar_movimientos_post_snapshot_campana %s/%s: %s",
@@ -2437,41 +2949,6 @@ def listar_movimientos_post_snapshot_campana(
             exc,
         )
         return []
-
-
-def mapa_detalle_post_snapshot_por_linea(
-    base_empresa: str,
-    id_campana: int,
-) -> Dict[Tuple[int, int], List[Dict[str, Any]]]:
-    """Detalle identificable post-snapshot indexado por (artículo, depósito)."""
-    resultado: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
-    for mov in listar_movimientos_post_snapshot_campana(base_empresa, id_campana):
-        id_art = to_int_or_none(mov.get("id_articulo"))
-        id_dep = to_int_or_none(mov.get("id_deposito"))
-        if id_art is None or id_dep is None:
-            continue
-        neto = to_decimal_or_none(mov.get("neto")) or Decimal("0")
-        if neto == 0:
-            continue
-        clave = (id_art, id_dep)
-        resultado.setdefault(clave, []).append(
-            {
-                "comprobante_etiqueta": mov.get("comprobante_etiqueta")
-                or formatear_comprobante_movimiento(
-                    mov.get("comprobante"), mov.get("nro"), mov.get("motivo")
-                ),
-                "sentido": mov.get("sentido")
-                or sentido_movimiento(mov.get("entrada"), mov.get("salida")),
-                "neto": neto,
-                "categoria": mov.get("categoria") or CAT_OTROS,
-                "categoria_etiqueta": mov.get("categoria_etiqueta")
-                or etiqueta_categoria_post_snapshot(mov.get("categoria")),
-                "fecha_control": formatear_fecha_control_ui(mov.get("fecha_control"))
-                if not isinstance(mov.get("fecha_control"), str)
-                else str_or_default(mov.get("fecha_control"), ""),
-            }
-        )
-    return resultado
 
 
 def obtener_resumen_monitor(base_empresa: str, id_campana: int) -> Dict[str, Any]:
@@ -2614,6 +3091,7 @@ def autorizar_y_aplicar_campana(
             "detalle": f"Inventario físico campaña #{id_campana}",
             "id_ref_movstock": 1,
             "id_pv": id_punto_venta,
+            "permitir_saldo_negativo": True,
         }
         ok, codigo_mov, _nro, mensaje_err, _schema = alta_movimiento(
             base_empresa=base_empresa,

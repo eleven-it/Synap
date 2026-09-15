@@ -87,7 +87,8 @@
 
       <p class="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
         Marcas vacías = todas · La búsqueda filtra en vivo sobre las filas cargadas ·
-        <strong class="font-semibold text-slate-600 dark:text-slate-300">Diferencia real = Contado − (Stock al snapshot + Mov. después del snapshot)</strong>
+        <strong class="font-semibold text-slate-600 dark:text-slate-300">Diferencia real = Contado − (Stock al snapshot + Mov. hasta el conteo)</strong>
+        · En líneas contadas, el movimiento neto va hasta el momento del conteo (no incluye movimientos posteriores)
         · Saldo final = saldo actual del depósito + diferencia real (previsto tras autorizar; no modifica el conteo).
       </p>
     </form>
@@ -154,10 +155,10 @@
             <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Código</th>
             <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Artículo</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Saldo congelado al abrir el conteo">Stock al snapshot</th>
-            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Neto de movimientos en el depósito desde el snapshot (entradas − salidas). Expandí la fila para ver cada comprobante (FA/REM/NC, qué hizo y neto).">Mov. después del snapshot</th>
-            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Stock al snapshot + mov. después">Stock teórico hoy</th>
+            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Neto de movimientos entre snapshot y conteo (entradas − salidas). El desglose expandible muestra solo movimientos hasta el conteo; no incluye mov. posteriores ni MSTOCK de cierre.">Mov. hasta el conteo</th>
+            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Stock al snapshot + mov. hasta el conteo">Stock teórico al conteo</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Contado</th>
-            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Contado − stock teórico hoy">Diferencia real</th>
+            <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Contado − stock teórico al conteo">Diferencia real</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300" title="Saldo en stock_deposito tras autorizar MSTOCK (saldo actual + diferencia real). Solo lectura.">Saldo final</th>
             <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Contador</th>
             <th class="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Detalle</th>
@@ -183,11 +184,11 @@
             <td class="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
               <div class="inline-flex flex-col items-end gap-1">
                 <div class="inline-flex items-center justify-end gap-1">
-                  {% if l.post_snapshot_detalle %}
+                  {% if l.post_snapshot_chips %}
                   <button type="button"
                           @click="toggleOrigenes({{ l.id_linea }})"
                           class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-purple-600 dark:hover:bg-slate-700 dark:hover:text-purple-400"
-                          :title="origenesAbiertos['{{ l.id_linea }}'] ? 'Ocultar detalle de movimientos' : 'Ver comprobantes que mueven stock'"
+                          :title="origenesAbiertos['{{ l.id_linea }}'] ? 'Ocultar orígenes' : 'Ver orígenes del movimiento'"
                           :aria-expanded="!!origenesAbiertos['{{ l.id_linea }}']">
                     <span class="material-icons text-sm" aria-hidden="true"
                           x-text="origenesAbiertos['{{ l.id_linea }}'] ? 'expand_less' : 'expand_more'"></span>
@@ -206,34 +207,26 @@
                   </button>
                   {% endif %}
                 </div>
-                {% if l.post_snapshot_detalle %}
+                {% if l.escenario_antes_etiqueta and l.cantidad_contada is not None %}
+                <span class="rounded-full px-1.5 py-0.5 text-[10px] font-medium
+                  {% if l.escenario_antes == 'sin_mov_antes_conteo' %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300
+                  {% else %}bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200{% endif %}"
+                  title="{{ l.escenario_antes_etiqueta }}">
+                  {{ l.escenario_antes_etiqueta }}
+                </span>
+                {% endif %}
+                {% if l.post_snapshot_chips %}
                 <div x-show="origenesAbiertos['{{ l.id_linea }}']" x-cloak
-                     class="mt-1 w-max max-w-[28rem] overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm dark:border-slate-600 dark:bg-slate-900">
-                  <table class="min-w-full text-[11px]">
-                    <thead class="bg-slate-50 dark:bg-slate-800/80">
-                      <tr>
-                        <th class="px-2 py-1 text-left font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Fecha</th>
-                        <th class="px-2 py-1 text-left font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Comprobante</th>
-                        <th class="px-2 py-1 text-left font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Qué hizo</th>
-                        <th class="px-2 py-1 text-right font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Neto</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                      {% for m in l.post_snapshot_detalle %}
-                      <tr>
-                        <td class="whitespace-nowrap px-2 py-1 tabular-nums text-[10px] text-slate-600 dark:text-slate-300">{{ m.fecha_control }}</td>
-                        <td class="px-2 py-1 font-mono text-[10px] leading-snug text-slate-700 dark:text-slate-200">{{ m.comprobante_etiqueta }}</td>
-                        <td class="px-2 py-1 text-slate-600 dark:text-slate-300">{{ m.sentido }}</td>
-                        <td class="px-2 py-1 text-right tabular-nums font-semibold
-                          {% if m.neto > 0 %}text-emerald-600 dark:text-emerald-400
-                          {% elif m.neto < 0 %}text-red-600 dark:text-red-400
-                          {% else %}text-slate-500{% endif %}">
-                          {% if m.neto > 0 %}+{% endif %}{{ m.neto|floatformat:0 }}
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                     class="flex max-w-[16rem] flex-wrap justify-end gap-1">
+                  {% for chip in l.post_snapshot_chips %}
+                  <span class="rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums
+                    {% if chip.neto > 0 %}bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200
+                    {% elif chip.neto < 0 %}bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200
+                    {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}"
+                    title="{{ chip.etiqueta }} (hasta el conteo)">
+                    {{ chip.etiqueta }} {% if chip.neto > 0 %}+{% endif %}{{ chip.neto|floatformat:0 }}
+                  </span>
+                  {% endfor %}
                 </div>
                 {% endif %}
               </div>
@@ -244,8 +237,18 @@
                 {% if l.formula_diferencia %}title="{{ l.formula_diferencia }}"{% endif %}>
               {% if l.diferencia_real is not None %}{{ l.diferencia_real|floatformat:0 }}{% else %}—{% endif %}
             </td>
-            <td class="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-800 dark:text-slate-100" title="Saldo previsto en depósito tras autorizar">
-              {% if l.saldo_final is not None %}{{ l.saldo_final|floatformat:0 }}{% else %}—{% endif %}
+            <td class="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-800 dark:text-slate-100">
+              <div class="inline-flex flex-col items-end gap-1">
+                <span title="Saldo previsto en depósito tras autorizar">
+                  {% if l.saldo_final is not None %}{{ l.saldo_final|floatformat:0 }}{% else %}—{% endif %}
+                </span>
+                {% if l.mov_post_conteo and l.mov_post_conteo != 0 and l.escenario_despues_etiqueta %}
+                <span class="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                      title="No entra en la diferencia; explica el saldo actual respecto al conteo">
+                  {{ l.escenario_despues_etiqueta }}
+                </span>
+                {% endif %}
+              </div>
             </td>
             <td class="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-300">
               {% if l.contador_etiqueta %}{{ l.contador_etiqueta }}{% elif l.id_contador %}#{{ l.id_contador }}{% else %}—{% endif %}

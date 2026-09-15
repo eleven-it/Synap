@@ -738,7 +738,7 @@ def inventario_fisico_linea_view(request, id_campana, id_linea):
         obtener_campana,
         obtener_linea_analizador,
         listar_eventos_linea,
-        listar_movimientos_post_snapshot,
+        obtener_desglose_movimientos_linea,
     )
 
     campana = obtener_campana(base_empresa, id_campana)
@@ -757,16 +757,18 @@ def inventario_fisico_linea_view(request, id_campana, id_linea):
         linea["id_articulo"],
         linea["id_deposito"],
     )
-    movimientos = listar_movimientos_post_snapshot(
+    desglose_mov = obtener_desglose_movimientos_linea(
         base_empresa,
         id_campana,
         linea["id_articulo"],
         linea["id_deposito"],
+        linea.get("cantidad_contada"),
     )
     context = {
         "campana": campana,
         "linea": linea,
         "eventos": eventos,
-        "movimientos": movimientos,
+        "movimientos": desglose_mov.get("movimientos_hasta_conteo", []),
+        "desglose_mov": desglose_mov,
     }
     return render(request, "stock/inventario_fisico/linea_detalle.html", context)

@@ -2487,7 +2487,10 @@ def alta_movimiento(
                     )
                     sd_row = cursor.fetchone()
                     saldo_actual = Decimal(str(sd_row[1] or 0)) if sd_row else Decimal(0)
-                    if es == "S" or salida > 0:
+                    # Inventario físico (Faltante de cierre) puede dejar saldo negativo:
+                    # el ajuste refleja el conteo, no un despacho operativo.
+                    permitir_negativo = bool(cabecera.get("permitir_saldo_negativo"))
+                    if (es == "S" or salida > 0) and not permitir_negativo:
                         if saldo_actual < salida:
                             conn.rollback()
                             return False, None, None, (

@@ -12,7 +12,7 @@ Módulo de **inventario físico / conteo ciego** migrado desde `Inventario.frm` 
 - Excluye `Fabricado 2da`, vacíos y tipos fuera del ámbito del depósito.
 - Conteo ciego offline-first (PWA Nivel A) con sync idempotente.
 - Analizador supervisor con diferencia `contado − snapshot` (columna UI **Disponible**, campo interno `saldo_snapshot`) y **ajuste post-snapshot** (ver sección siguiente).
-- **Ajuste post-snapshot (implementado):** gap de movimientos posteriores al snapshot; MSTOCK usa **Diferencia real**. Detalle en [`PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md`](PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md).
+- **Ajuste post-snapshot (implementado):** en líneas **contadas**, el gap usa solo movimientos entre snapshot y el **momento del conteo** (`t_conteo`); MSTOCK usa **Diferencia real**. Los movimientos posteriores al conteo (B) no entran en la fórmula. Detalle en la sección siguiente y en [`PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md`](PLAN_AJUSTE_POST_SNAPSHOT_INVENTARIO_FISICO.md).
 - Cantidades en UI (disponible, contado, diferencia, eventos) se muestran como **enteros** (sin decimales); el ingreso móvil usa `inputmode="numeric"` y validación JavaScript ≥ 0.
 - Autorización explícita y posteo MSTOCK vía `core/services/administranet_stock.py` (Faltante=3 / Sobrante=4).
 - **Sin** volcado automático a tablas legacy `inventario*` (fase 2 opcional).
@@ -54,37 +54,51 @@ Reconteo ciego: `EnRevision → EnConteo`.
 
 **Fuente de movimientos:** tabla legacy `stock` (renglones por artículo×depósito), filtrada por `CodDeposito IN depósitos de campaña`, `FechaControl >= inv_fisico_campana.fecha_snapshot` y `Anulado <> 'Si'`. Campo temporal **autoritativo = `stock.FechaControl`** (TIMESTAMP de inserción; no usar `stock.Fecha` ni solo la cabecera `movimiento_stock`). Desglose en detalle de línea con JOIN opcional a `movimiento_stock` para motivo/comprobante.
 
+**Corte en el conteo (`t_conteo`):** en líneas **contadas**, `t_conteo` se resuelve con `resolver_ts_conteo_linea` (`server_ts` preferido). Solo los movimientos con `fecha_snapshot ≤ FechaControl ≤ t_conteo` entran en `ajuste_sistema` (Mov. **A**). Los posteriores al conteo (Mov. **B**: producción, ventas, etc.) **no** recalculan la diferencia ni el MSTOCK: ya viven en `stock_deposito` y tras el cierre el saldo esperado es ≈ `contado + B`. El MSTOCK de cierre de la campaña se clasifica aparte y **no** se lista en el desglose de la fórmula.
+
+**Escenarios UI:**
+
+| Escenario | Condición | Etiqueta típica |
+|-----------|-----------|-----------------|
+| Sin mov. entre snapshot y conteo | Contada y A = 0 | Badge en analizador / detalle |
+| Con mov. entre snapshot y conteo | Contada y A ≠ 0 | Badge en analizador / detalle |
+| Mov. después del conteo | Contada y B ≠ 0 | Tip informativo junto a saldo final (no entra en la diff) |
+
 **Fórmulas:**
 
 ```
-Mov. después del snapshot (ajuste_sistema) = Σ (Entrada − Salida) post-snapshot por artículo×depósito
+Mov. hasta el conteo (ajuste_sistema, A)   = Σ (Entrada − Salida) con freeze ≤ FechaControl ≤ t_conteo
 Ajuste efectivo                            = ajuste_manual si existe; si no, ajuste_sistema
-Stock teórico hoy (disponible_ajustado)    = saldo_snapshot + ajuste_efectivo
+Stock teórico al conteo (disponible_ajustado) = saldo_snapshot + ajuste_efectivo
 Diferencia real                            = cantidad_contada − disponible_ajustado  (NULL si no contado)
-                                           = Contado − (Stock al snapshot + Mov. después)
+                                           = Contado − (Stock al snapshot + Mov. hasta el conteo)
+Mov. después del conteo (B)                = Σ post t_conteo excl. MSTOCK de cierre de la campaña
+                                           → NO entra en diferencia_real ni en MSTOCK
 Saldo final (UI)                           = saldo_actual_ref + diferencia_real  (NULL si no contado)
-                                           → saldo previsto en stock_deposito tras autorizar MSTOCK
-Orígenes (detalle UI)                      = por comprobante: «FA 0008-… · Venta», Qué hizo (Entrada/Salida), Neto
-Orígenes (chips / Excel)                   = armado MPR, remitos, facturas, NC, ajustes, otros (suma = ajuste_sistema)
+                                           → ≈ contado + B tras autorizar (respeta movimientos posteriores)
+Orígenes (detalle / API)                   = solo Mov. A (hasta el conteo); B y MSTOCK cierre omitidos
+Orígenes (chips / Excel de la fórmula)     = categorías sobre Mov. A (suma = ajuste_sistema)
 ```
 
-**Control de descuadre:** `saldo_actual_ref` = `stock_deposito.saldo` al recalcular; si difiere de `snapshot + ajuste_sistema`, el analizador muestra aviso (no bloquea). Sin descuadre, **Saldo final** coincide con **Contado**.
+Líneas **sin conteo:** `ajuste_sistema` informativo = neto post-snapshot hasta ahora; `diferencia_real` = NULL.
+
+**Control de descuadre:** `saldo_actual_ref` = `stock_deposito.saldo` al recalcular; si difiere de `snapshot + ajuste_sistema`, el analizador muestra aviso (no bloquea). Con B ≠ 0, **Saldo final** no tiene por qué coincidir con **Contado** (es esperado).
 
 **Flujo refresh / override / autorizar:**
 
-1. Al abrir analizador (estado no final): `recalcular_ajuste_post_snapshot(pisar_overrides=False)`.
+1. Al abrir analizador (estado no final): `recalcular_ajuste_post_snapshot(pisar_overrides=False)` con corte en `t_conteo` por línea contada.
 2. Botón **Actualizar ajustes post-snapshot** → POST `/stock/api/campana/<id>/ajuste/recalcular/`; modal Synap si hay overrides (conservar vs reemplazar).
 3. Override por línea → POST/DELETE `/stock/api/campana/<id>/linea/<id_linea>/ajuste/` + auditoría.
-4. Detalle línea → GET movimientos post-snapshot; tabla con fecha dd/MM/yyyy.
-5. **Autorizar** → recalc preservando overrides → MSTOCK solo líneas con `cantidad_contada IS NOT NULL` y `diferencia_real <> 0` (motivo 3 Faltante / 4 Sobrante por signo).
+4. Detalle línea / API movimientos → solo movimientos **hasta el conteo**; tip si hubo B.
+5. **Autorizar** → recalc preservando overrides → MSTOCK solo líneas con `cantidad_contada IS NOT NULL` y `diferencia_real <> 0` (motivo 3 Faltante / 4 Sobrante por signo; `permitir_saldo_negativo=True` en cabecera).
 
-**APIs nuevas (permiso `gestionar`):**
+**APIs (permiso `gestionar`):**
 
 | Ruta | Método | Acción |
 |------|--------|--------|
 | `/stock/api/campana/<id>/ajuste/recalcular/` | POST | Recalcular ajustes (`pisar_overrides` opcional) |
 | `/stock/api/campana/<id>/linea/<id_linea>/ajuste/` | POST / DELETE | Guardar / quitar override |
-| `/stock/api/campana/<id>/linea/<id_linea>/movimientos/` | GET | Desglose movimientos post-snapshot |
+| `/stock/api/campana/<id>/linea/<id_linea>/movimientos/` | GET | Desglose **hasta el conteo** + escenarios/netos A/B |
 | `/stock/api/campana/<id>/marcar-no-contados-cero/` | POST | Marcar masivamente **Contado = 0** en líneas sin contar (toda la campaña) |
 
 ### Rutas
@@ -129,7 +143,7 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 
 `inventario_fisico_crear_view` acepta `contadores` (lista) + `contadores_texto` y `accion` (`crear_abrir`/`crear_borrador`); `inventario_fisico_monitor_view` acepta `accion=reasignar`.
 
-**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Stock al snapshot** (`saldo_snapshot`), **Mov. después del snapshot** (neto + tabla expandible por comprobante: `FA/REM/NCA nro · motivo`, Qué hizo Entrada/Salida, Neto), **Stock teórico hoy**, **Contado**, **Diferencia real** (tooltip con fórmula `Contado − (Snapshot + Mov.)`), **Saldo final** (previsto post-MSTOCK), **Contador**; chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); enlace **Exportar Excel** (informe multi-hoja de impacto de saldos, con columnas de desglose); multi-marca con tags (`marcas_incluidos`, catálogo `listar_marcas_catalogo`, artículo `CodigoMarca`); botón **Aplicar filtros** envía GET preservando `filtro`. Búsqueda **Buscar en tabla** filtra en vivo (Alpine) por código y nombre sobre filas ya cargadas. **Saldo final** es solo lectura/UI: no modifica conteos ni escribe stock. Contado **0** no entra en «No contados» (es conteo explícito). Chip **`N no contados`** (N = campaña completa, sin filtro de marcas) y acción **Marcar no contados como 0** cuando el supervisor tiene permiso `gestionar` y la campaña está en **EnConteo** o **EnRevision** (ver sección siguiente).
+**Analizador (`analizador.html`)** — filtros de diferencia (Todas / Faltante / Sobrante / Con diferencia / **No contados**) vía GET `filtro` sobre **Diferencia real** o `cantidad_contada IS NULL` (`no_contados`); columnas **Stock al snapshot** (`saldo_snapshot`), **Mov. hasta el conteo** (neto A + desglose solo hasta `t_conteo`), **Stock teórico al conteo**, **Contado**, **Diferencia real** (tooltip `Contado − (Snapshot + Mov. hasta el conteo)`), **Saldo final** (previsto post-MSTOCK; tip si hubo Mov. B), **Contador**; badges de escenario (sin/con mov. entre snapshot y conteo); chip «manual» en override; ícono descuadre; botón **Actualizar ajustes post-snapshot** (modales Synap, sin `alert`/`confirm`/`prompt`); enlace **Exportar Excel**; multi-marca con tags (`marcas_incluidos`); búsqueda en vivo por código/nombre. **Saldo final** es solo lectura/UI. Contado **0** no entra en «No contados». Chip **`N no contados`** y **Marcar no contados como 0** con permiso `gestionar` en **EnConteo**/**EnRevision** (ver sección siguiente).
 
 ### Exportación Excel (impacto de saldos)
 
@@ -284,13 +298,13 @@ Las pantallas de conteo tienen **templates mobile dedicados** seleccionados por 
 
 ### MSTOCK
 
-Tras autorización (con recálculo fresco de ajustes), por cada grupo (depósito × motivo):
+Tras autorización (con recálculo fresco con corte en `t_conteo`), por cada grupo (depósito × motivo):
 
 - **Diferencia real** &lt; 0 → motivo **Faltante (3)**, renglón **Salida**.
 - **Diferencia real** &gt; 0 → motivo **Sobrante (4)**, renglón **Entrada**.
 - **Diferencia real** = 0 → sin movimiento (aunque la diferencia cruda snapshot ≠ 0).
 
-Invoca `administranet_stock.alta_movimiento` con cabecera MSTOCK y renglones normalizados (`administranet_types`). Auditoría por línea en `inv_fisico_ajuste_auditoria` con `accion='autorizacion'` y `codigo_movimiento`.
+Invoca `administranet_stock.alta_movimiento` con cabecera MSTOCK (`permitir_saldo_negativo=True` para faltantes de cierre) y renglones normalizados (`administranet_types`). Auditoría por línea en `inv_fisico_ajuste_auditoria` con `accion='autorizacion'` y `codigo_movimiento`. El MSTOCK corrige el desvío **al momento del conteo**; no anula los movimientos posteriores (B).
 
 ## Permisos
 
