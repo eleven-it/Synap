@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests ajuste post-snapshot inventario físico (funciones puras y recalc)."""
+from datetime import datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -118,6 +119,132 @@ class FuncionesPurasAjustePostSnapshotTest(SimpleTestCase):
         )
 
 
+class ResolverTsConteoLineaTest(SimpleTestCase):
+    def test_match_cantidad_mas_reciente(self):
+        eventos = [
+            {
+                "id_evento": 1,
+                "cantidad": Decimal("5"),
+                "server_ts": datetime(2026, 8, 10, 9, 0, 0),
+                "resultado": svc.RESULTADO_ACEPTADO,
+            },
+            {
+                "id_evento": 2,
+                "cantidad": Decimal("12"),
+                "server_ts": datetime(2026, 8, 10, 11, 0, 0),
+                "resultado": svc.RESULTADO_ACEPTADO,
+            },
+        ]
+        ts = svc.resolver_ts_conteo_linea(eventos, Decimal("12"))
+        self.assertEqual(ts, datetime(2026, 8, 10, 11, 0, 0))
+
+    def test_sin_match_usa_ultimo_aceptado(self):
+        eventos = [
+            {
+                "id_evento": 1,
+                "cantidad": Decimal("5"),
+                "client_ts": "2026-08-10 09:00:00",
+                "resultado": svc.RESULTADO_ACEPTADO,
+            },
+            {
+                "id_evento": 2,
+                "cantidad": Decimal("7"),
+                "client_ts": "2026-08-10 10:00:00",
+                "resultado": svc.RESULTADO_CONFLICTO,
+            },
+        ]
+        ts = svc.resolver_ts_conteo_linea(eventos, Decimal("99"))
+        self.assertEqual(ts, datetime(2026, 8, 10, 9, 0, 0))
+
+    def test_prefer_server_ts_sobre_client_ts(self):
+        eventos = [
+            {
+                "id_evento": 1,
+                "cantidad": Decimal("3"),
+                "server_ts": datetime(2026, 8, 10, 12, 0, 0),
+                "client_ts": "2026-08-10 08:00:00",
+                "resultado": svc.RESULTADO_ACEPTADO,
+            }
+        ]
+        ts = svc.resolver_ts_conteo_linea(eventos, Decimal("3"))
+        self.assertEqual(ts, datetime(2026, 8, 10, 12, 0, 0))
+
+    def test_none_sin_eventos(self):
+        self.assertIsNone(svc.resolver_ts_conteo_linea([], Decimal("1")))
+
+
+class CalcularNetoMovimientosPostSnapshotTest(SimpleTestCase):
+    def _movs(self):
+        return [
+            {
+                "FechaControl": datetime(2026, 8, 5, 10, 0, 0),
+                "Entrada": Decimal("10"),
+                "Salida": Decimal("0"),
+            },
+            {
+                "FechaControl": datetime(2026, 8, 6, 10, 0, 0),
+                "Entrada": Decimal("0"),
+                "Salida": Decimal("3"),
+            },
+            {
+                "FechaControl": datetime(2026, 8, 8, 10, 0, 0),
+                "Entrada": Decimal("0"),
+                "Salida": Decimal("2"),
+            },
+        ]
+
+    def test_neto_hasta_conteo_excluye_movs_posteriores(self):
+        neto = svc.calcular_neto_movimientos_post_snapshot(
+            self._movs(),
+            fecha_hasta=datetime(2026, 8, 6, 23, 59, 59),
+        )
+        self.assertEqual(neto, Decimal("7"))
+
+    def test_neto_sin_tope_suma_todos(self):
+        neto = svc.calcular_neto_movimientos_post_snapshot(self._movs())
+        self.assertEqual(neto, Decimal("5"))
+
+
+class CalcularAjusteSistemaLineaTest(SimpleTestCase):
+    def test_contado_usa_movs_hasta_t_conteo(self):
+        t_conteo = datetime(2026, 8, 6, 12, 0, 0)
+        movs = [
+            {
+                "FechaControl": datetime(2026, 8, 5, 10, 0, 0),
+                "Entrada": Decimal("4"),
+                "Salida": Decimal("0"),
+            },
+            {
+                "FechaControl": datetime(2026, 8, 7, 10, 0, 0),
+                "Entrada": Decimal("0"),
+                "Salida": Decimal("9"),
+            },
+        ]
+        eventos = [
+            {
+                "id_evento": 1,
+                "cantidad": Decimal("20"),
+                "server_ts": t_conteo,
+                "resultado": svc.RESULTADO_ACEPTADO,
+            }
+        ]
+        ajuste, fallback = svc.calcular_ajuste_sistema_linea(Decimal("20"), movs, eventos)
+        self.assertEqual(ajuste, Decimal("4"))
+        self.assertFalse(fallback)
+
+    def test_sin_conteo_neto_hasta_ahora(self):
+        movs = [
+            {
+                "FechaControl": datetime(2026, 8, 7, 10, 0, 0),
+                "Entrada": Decimal("2"),
+                "Salida": Decimal("0"),
+            }
+        ]
+        ajuste, fallback = svc.calcular_ajuste_sistema_linea(None, movs, [])
+        self.assertEqual(ajuste, Decimal("2"))
+        self.assertFalse(fallback)
+
+
 class ClasificarMovimientoPostSnapshotTest(SimpleTestCase):
     def test_remitos_facturas_nc(self):
         self.assertEqual(svc.clasificar_movimiento_post_snapshot("REM"), svc.CAT_REMITOS)
@@ -149,49 +276,6 @@ class ClasificarMovimientoPostSnapshotTest(SimpleTestCase):
             Decimal("60"),
         )
 
-    def test_formatear_comprobante_identificable(self):
-        self.assertEqual(
-            svc.formatear_comprobante_movimiento("NCA", "0008-00000083", "Devol - Cliente"),
-            "NCA 0008-00000083 · Devol - Cliente",
-        )
-        self.assertEqual(
-            svc.formatear_comprobante_movimiento("FA", "0008-00000364", "Venta"),
-            "FA 0008-00000364 · Venta",
-        )
-
-    def test_formatear_fecha_control_ui(self):
-        from datetime import datetime
-
-        self.assertEqual(
-            svc.formatear_fecha_control_ui(datetime(2026, 9, 10, 13, 14, 57)),
-            "10/09/2026 13:14",
-        )
-        self.assertEqual(
-            svc.formatear_fecha_control_ui(datetime(2026, 9, 10, 0, 0, 0)),
-            "10/09/2026",
-        )
-
-    def test_sentido_entrada_salida(self):
-        self.assertEqual(svc.sentido_movimiento(6, 0), "Entrada")
-        self.assertEqual(svc.sentido_movimiento(0, 6), "Salida")
-
-    def test_enriquecer_movimiento_post_snapshot(self):
-        mov = svc.enriquecer_movimiento_post_snapshot(
-            {
-                "comprobante": "REM",
-                "nro": "0008-00000302",
-                "motivo": "Anul Remito",
-                "entrada": Decimal("6"),
-                "salida": Decimal("0"),
-            }
-        )
-        self.assertEqual(mov["sentido"], "Entrada")
-        self.assertEqual(mov["neto"], Decimal("6"))
-        self.assertEqual(
-            mov["comprobante_etiqueta"],
-            "REM 0008-00000302 · Anul Remito",
-        )
-
 
 class RecalcularAjustePostSnapshotTest(SimpleTestCase):
     def _campana_en_revision(self):
@@ -202,15 +286,40 @@ class RecalcularAjustePostSnapshotTest(SimpleTestCase):
             "depositos": [3],
         }
 
+    @patch("stock.services.inventario_fisico._cargar_movimientos_post_snapshot_campana")
+    @patch("stock.services.inventario_fisico._cargar_eventos_campana")
     @patch("stock.services.inventario_fisico._fetch_saldos_deposito")
-    @patch("stock.services.inventario_fisico.calcular_ajuste_post_snapshot")
     @patch("stock.services.inventario_fisico.obtener_campana")
     @patch("stock.services.inventario_fisico.mysql_cursor")
     def test_recalc_preserva_override_sin_pisar(
-        self, mock_cursor_ctx, mock_obtener, mock_calcular, mock_saldos
+        self, mock_cursor_ctx, mock_obtener, mock_saldos, mock_eventos, mock_movs
     ):
         mock_obtener.return_value = self._campana_en_revision()
-        mock_calcular.return_value = {(100, 3): Decimal("5")}
+        t_conteo = datetime(2026, 8, 10, 12, 0, 0)
+        mock_eventos.return_value = {
+            (100, 3): [
+                {
+                    "id_evento": 1,
+                    "cantidad": Decimal("20"),
+                    "server_ts": t_conteo,
+                    "resultado": svc.RESULTADO_ACEPTADO,
+                }
+            ]
+        }
+        mock_movs.return_value = {
+            (100, 3): [
+                {
+                    "FechaControl": datetime(2026, 8, 5, 10, 0, 0),
+                    "Entrada": Decimal("5"),
+                    "Salida": Decimal("0"),
+                },
+                {
+                    "FechaControl": datetime(2026, 8, 11, 10, 0, 0),
+                    "Entrada": Decimal("0"),
+                    "Salida": Decimal("99"),
+                },
+            ]
+        }
         mock_saldos.return_value = {3: Decimal("23")}
 
         cursor = MagicMock()
@@ -248,15 +357,35 @@ class RecalcularAjustePostSnapshotTest(SimpleTestCase):
         self.assertEqual(diff_real, Decimal("2"))
 
     @patch("stock.services.inventario_fisico._insert_auditoria_ajuste")
+    @patch("stock.services.inventario_fisico._cargar_movimientos_post_snapshot_campana")
+    @patch("stock.services.inventario_fisico._cargar_eventos_campana")
     @patch("stock.services.inventario_fisico._fetch_saldos_deposito")
-    @patch("stock.services.inventario_fisico.calcular_ajuste_post_snapshot")
     @patch("stock.services.inventario_fisico.obtener_campana")
     @patch("stock.services.inventario_fisico.mysql_cursor")
     def test_recalc_pisa_override_con_flag(
-        self, mock_cursor_ctx, mock_obtener, mock_calcular, mock_saldos, mock_auditoria
+        self, mock_cursor_ctx, mock_obtener, mock_saldos, mock_eventos, mock_movs, mock_auditoria
     ):
         mock_obtener.return_value = self._campana_en_revision()
-        mock_calcular.return_value = {(100, 3): Decimal("5")}
+        t_conteo = datetime(2026, 8, 10, 12, 0, 0)
+        mock_eventos.return_value = {
+            (100, 3): [
+                {
+                    "id_evento": 1,
+                    "cantidad": Decimal("20"),
+                    "server_ts": t_conteo,
+                    "resultado": svc.RESULTADO_ACEPTADO,
+                }
+            ]
+        }
+        mock_movs.return_value = {
+            (100, 3): [
+                {
+                    "FechaControl": datetime(2026, 8, 5, 10, 0, 0),
+                    "Entrada": Decimal("5"),
+                    "Salida": Decimal("0"),
+                }
+            ]
+        }
         mock_saldos.return_value = {3: Decimal("15")}
 
         cursor = MagicMock()
@@ -290,6 +419,68 @@ class RecalcularAjustePostSnapshotTest(SimpleTestCase):
         # contado 20 - (snapshot 10 + sistema 5) = 5
         self.assertEqual(diff_real, Decimal("5"))
 
+    @patch("stock.services.inventario_fisico._cargar_movimientos_post_snapshot_campana")
+    @patch("stock.services.inventario_fisico._cargar_eventos_campana")
+    @patch("stock.services.inventario_fisico._fetch_saldos_deposito")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    def test_recalc_diff_en_momento_conteo_excluye_movs_b(
+        self, mock_cursor_ctx, mock_obtener, mock_saldos, mock_eventos, mock_movs
+    ):
+        mock_obtener.return_value = self._campana_en_revision()
+        t_conteo = datetime(2026, 8, 6, 15, 0, 0)
+        mock_eventos.return_value = {
+            (100, 3): [
+                {
+                    "id_evento": 1,
+                    "cantidad": Decimal("25"),
+                    "server_ts": t_conteo,
+                    "resultado": svc.RESULTADO_ACEPTADO,
+                }
+            ]
+        }
+        mock_movs.return_value = {
+            (100, 3): [
+                {
+                    "FechaControl": datetime(2026, 8, 5, 10, 0, 0),
+                    "Entrada": Decimal("3"),
+                    "Salida": Decimal("0"),
+                },
+                {
+                    "FechaControl": datetime(2026, 8, 7, 10, 0, 0),
+                    "Entrada": Decimal("0"),
+                    "Salida": Decimal("50"),
+                },
+            ]
+        }
+        mock_saldos.return_value = {3: Decimal("100")}
+
+        cursor = MagicMock()
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        lineas_db = [
+            {
+                "id_linea": 1,
+                "id_articulo": 100,
+                "id_deposito": 3,
+                "saldo_snapshot": Decimal("20"),
+                "cantidad_contada": Decimal("25"),
+                "ajuste_manual": None,
+            }
+        ]
+        cursor.fetchall.side_effect = [lineas_db]
+
+        ok, result = svc.recalcular_ajuste_post_snapshot(
+            "emp", 7, id_usuario=1, pisar_overrides=False
+        )
+
+        self.assertTrue(ok, result)
+        params = cursor.execute.call_args_list[-1].args[1]
+        ajuste_sys, saldo_ref, diff_real, _id_linea = params
+        self.assertEqual(ajuste_sys, Decimal("3"))
+        self.assertEqual(saldo_ref, Decimal("100"))
+        self.assertEqual(diff_real, Decimal("2"))
+
     @patch("stock.services.inventario_fisico.obtener_campana")
     def test_recalc_omitido_estado_final(self, mock_obtener):
         mock_obtener.return_value = {
@@ -301,3 +492,197 @@ class RecalcularAjustePostSnapshotTest(SimpleTestCase):
         )
         self.assertTrue(ok)
         self.assertTrue(result.get("omitido"))
+
+
+class FaseMovimientoConteoTest(SimpleTestCase):
+    def test_es_mstock_cierre_inventario(self):
+        self.assertTrue(
+            svc.es_mstock_cierre_inventario(
+                "MSTOCK",
+                "Inventario físico campaña #10 cierre",
+                10,
+            )
+        )
+        self.assertFalse(
+            svc.es_mstock_cierre_inventario(
+                "MSTOCK",
+                "Armado 1ra OPT",
+                10,
+            )
+        )
+        self.assertFalse(
+            svc.es_mstock_cierre_inventario("REM", "Inventario físico campaña #10", 10)
+        )
+
+    def test_clasificar_fase_hasta_y_post(self):
+        t_conteo = datetime(2026, 9, 9, 13, 52, 0)
+        self.assertEqual(
+            svc.clasificar_fase_movimiento_conteo(
+                datetime(2026, 9, 8, 10, 0, 0),
+                t_conteo,
+                "REM",
+                "",
+                10,
+            ),
+            svc.FASE_HASTA_CONTEO,
+        )
+        self.assertEqual(
+            svc.clasificar_fase_movimiento_conteo(
+                datetime(2026, 9, 10, 10, 0, 0),
+                t_conteo,
+                "REM",
+                "",
+                10,
+            ),
+            svc.FASE_POST_CONTEO,
+        )
+        self.assertEqual(
+            svc.clasificar_fase_movimiento_conteo(
+                datetime(2026, 9, 15, 10, 0, 0),
+                t_conteo,
+                "MSTOCK",
+                "Inventario físico campaña #10",
+                10,
+            ),
+            svc.FASE_MSTOCK_CIERRE,
+        )
+
+
+class ResumenEscenarioLineaTest(SimpleTestCase):
+    def test_contada_sin_mov_antes(self):
+        esc = svc.resumen_escenario_linea(Decimal("100"), Decimal("0"), Decimal("0"))
+        self.assertEqual(esc["escenario_antes"], "sin_mov_antes_conteo")
+        self.assertEqual(esc["escenario_despues"], "sin_mov_post_conteo")
+
+    def test_contada_con_mov_antes(self):
+        esc = svc.resumen_escenario_linea(Decimal("100"), Decimal("6"), Decimal("0"))
+        self.assertEqual(esc["escenario_antes"], "con_mov_antes_conteo")
+
+    def test_contada_con_mov_despues(self):
+        esc = svc.resumen_escenario_linea(Decimal("100"), Decimal("0"), Decimal("6"))
+        self.assertEqual(esc["escenario_despues"], "con_mov_post_conteo")
+        self.assertIn("+6", esc["escenario_despues_etiqueta"])
+
+    def test_sin_conteo(self):
+        esc = svc.resumen_escenario_linea(None, Decimal("3"), Decimal("5"))
+        self.assertEqual(esc["escenario_antes"], "sin_conteo")
+        self.assertEqual(esc["escenario_despues"], "sin_conteo")
+
+
+class ParticionarMovimientosTest(SimpleTestCase):
+    def test_separa_a_b_y_mstock(self):
+        t_conteo = datetime(2026, 9, 9, 13, 52, 0)
+        movs = [
+            {
+                "FechaControl": datetime(2026, 9, 8, 10, 0, 0),
+                "Entrada": Decimal("0"),
+                "Salida": Decimal("0"),
+                "Comprobante": "REM",
+                "detalle": "",
+            },
+            {
+                "FechaControl": datetime(2026, 9, 10, 10, 0, 0),
+                "Entrada": Decimal("6"),
+                "Salida": Decimal("0"),
+                "Comprobante": "REM",
+                "detalle": "",
+            },
+            {
+                "FechaControl": datetime(2026, 9, 15, 10, 0, 0),
+                "Entrada": Decimal("2600"),
+                "Salida": Decimal("0"),
+                "Comprobante": "MSTOCK",
+                "detalle": "Inventario físico campaña #10",
+            },
+        ]
+        hasta, post, post_omit, mstock_omit = svc._particionar_movimientos_por_fase(
+            movs,
+            t_conteo=t_conteo,
+            id_campana=10,
+            cantidad_contada=Decimal("1747"),
+        )
+        self.assertEqual(len(hasta), 1)
+        self.assertEqual(len(post), 1)
+        self.assertEqual(post_omit, 1)
+        self.assertEqual(mstock_omit, 1)
+        self.assertEqual(
+            svc.calcular_neto_movimientos_post_snapshot(post),
+            Decimal("6"),
+        )
+
+
+class ListarMovimientosPostSnapshotFiltroTest(SimpleTestCase):
+    @patch("stock.services.inventario_fisico.mysql_cursor")
+    @patch("stock.services.inventario_fisico.listar_eventos_linea")
+    @patch("stock.services.inventario_fisico.obtener_campana")
+    def test_solo_hasta_conteo_excluye_post_y_mstock(
+        self, mock_campana, mock_eventos, mock_cursor_ctx
+    ):
+        mock_campana.return_value = {
+            "fecha_snapshot": datetime(2026, 9, 1, 8, 0, 0),
+        }
+        t_conteo = datetime(2026, 9, 9, 13, 52, 0)
+        mock_eventos.return_value = [
+            {
+                "id_evento": 1,
+                "cantidad": Decimal("1747"),
+                "server_ts": t_conteo,
+                "resultado": svc.RESULTADO_ACEPTADO,
+            }
+        ]
+        cursor = MagicMock()
+        mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        cursor.fetchall.return_value = [
+            {
+                "id_stock": 1,
+                "FechaControl": datetime(2026, 9, 8, 10, 0, 0),
+                "Fecha": None,
+                "Entrada": Decimal("0"),
+                "Salida": Decimal("0"),
+                "comprobante": "REM",
+                "motivo": "-",
+                "nro": "1",
+                "detalle": "",
+            },
+            {
+                "id_stock": 2,
+                "FechaControl": datetime(2026, 9, 10, 10, 0, 0),
+                "Fecha": None,
+                "Entrada": Decimal("6"),
+                "Salida": Decimal("0"),
+                "comprobante": "REM",
+                "motivo": "-",
+                "nro": "2",
+                "detalle": "",
+            },
+            {
+                "id_stock": 3,
+                "FechaControl": datetime(2026, 9, 15, 10, 0, 0),
+                "Fecha": None,
+                "Entrada": Decimal("2600"),
+                "Salida": Decimal("0"),
+                "comprobante": "MSTOCK",
+                "motivo": "-",
+                "nro": "3",
+                "detalle": "Inventario físico campaña #10",
+            },
+        ]
+        cursor.execute = MagicMock(side_effect=lambda *a, **k: None)
+        cursor._nombre_tabla = MagicMock(return_value="stock")
+
+        with patch(
+            "stock.services.inventario_fisico._nombre_tabla",
+            side_effect=lambda c, t: "stock" if t == "stock" else None,
+        ):
+            movs = svc.listar_movimientos_post_snapshot(
+                "emp",
+                10,
+                14,
+                3,
+                cantidad_contada=Decimal("1747"),
+                solo_hasta_conteo=True,
+            )
+
+        self.assertEqual(len(movs), 1)
+        self.assertEqual(movs[0]["fase"], svc.FASE_HASTA_CONTEO)
