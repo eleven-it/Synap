@@ -870,33 +870,47 @@ def api_campana_linea_movimientos(request, id_campana, id_linea):
     if err:
         return err
 
-    from stock.services.inventario_fisico import obtener_linea_analizador, listar_movimientos_post_snapshot
+    from stock.services.inventario_fisico import obtener_linea_analizador, obtener_desglose_movimientos_linea
 
     linea = obtener_linea_analizador(ctx["base_empresa"], id_campana, id_linea)
     if not linea:
         return JsonResponse({"error": "Línea no encontrada en la campaña."}, status=404)
 
-    movimientos = listar_movimientos_post_snapshot(
+    desglose = obtener_desglose_movimientos_linea(
         ctx["base_empresa"],
         id_campana,
         linea["id_articulo"],
         linea["id_deposito"],
+        linea.get("cantidad_contada"),
     )
 
     def _mov_json(m):
         return {
-            "id_stock": m.get("id_stock"),
             "fecha_control": m.get("fecha_control"),
+            "comprobante": m.get("comprobante"),
+            "que_hizo": m.get("que_hizo"),
             "entrada": str(m.get("entrada", 0)),
             "salida": str(m.get("salida", 0)),
             "neto": str(m.get("neto", 0)),
             "motivo": m.get("motivo"),
             "nro": m.get("nro"),
             "detalle": m.get("detalle"),
+            "fase": m.get("fase"),
         }
+
+    escenario = desglose.get("escenario") or {}
 
     return JsonResponse({
         "ok": True,
         "id_linea": id_linea,
-        "movimientos": [_mov_json(m) for m in movimientos],
+        "t_conteo": desglose.get("t_conteo_fmt") or "",
+        "neto_hasta_conteo": str(desglose.get("neto_hasta_conteo", 0)),
+        "neto_post_conteo": str(desglose.get("neto_post_conteo", 0)),
+        "movimientos_post_conteo_omitidos": desglose.get("movimientos_post_conteo_omitidos", 0),
+        "mstock_cierre_omitidos": desglose.get("mstock_cierre_omitidos", 0),
+        "escenario_antes": escenario.get("escenario_antes"),
+        "escenario_despues": escenario.get("escenario_despues"),
+        "escenario_antes_etiqueta": escenario.get("escenario_antes_etiqueta"),
+        "escenario_despues_etiqueta": escenario.get("escenario_despues_etiqueta"),
+        "movimientos": [_mov_json(m) for m in desglose.get("movimientos_hasta_conteo", [])],
     })

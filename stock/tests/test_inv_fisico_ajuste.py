@@ -236,6 +236,10 @@ class AutorizarCampanaServiceTest(SimpleTestCase):
         mock_recalc.assert_called_once_with(
             "emp", 7, id_usuario=9, pisar_overrides=False
         )
+        cabecera = mock_alta.call_args_list[0].kwargs.get("cabecera") or mock_alta.call_args_list[0][1].get("cabecera")
+        if cabecera is None and len(mock_alta.call_args_list[0][0]) >= 4:
+            cabecera = mock_alta.call_args_list[0][0][3]
+        self.assertTrue(cabecera.get("permitir_saldo_negativo"))
 
     @patch("core.services.administranet_stock.alta_movimiento")
     @patch("stock.services.inventario_fisico.obtener_campana")
@@ -581,7 +585,8 @@ class AnalizadorVistaTest(SimpleTestCase):
         self.assertEqual(resp.status_code, 200)
         content = resp.content.decode()
         self.assertIn("Analizador", content)
-        self.assertIn("Disponible", content)
+        self.assertIn("Stock teórico al conteo", content)
+        self.assertIn("Mov. hasta el conteo", content)
         self.assertIn("Diferencia real", content)
         self.assertIn("Buscar en tabla", content)
         self.assertIn("-2", content)
