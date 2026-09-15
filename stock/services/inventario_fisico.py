@@ -218,14 +218,20 @@ def hay_descuadre(
     saldo_snapshot: Any,
     ajuste_sistema: Any,
     saldo_actual_ref: Any,
+    mov_post_conteo: Any = None,
 ) -> bool:
-    """True si stock_deposito.saldo difiere de snapshot + ajuste_sistema (control)."""
+    """True si el saldo de depósito no cuadra con snap + A + B (control).
+
+    ``ajuste_sistema`` es Mov. A (hasta el conteo). ``mov_post_conteo`` es Mov. B
+    (después del conteo, sin MSTOCK de cierre). Sin B, equivale a snap + A.
+    """
     actual = to_decimal_or_none(saldo_actual_ref)
     if actual is None:
         return False
     snapshot = to_decimal_or_none(saldo_snapshot) or Decimal("0")
     ajuste = to_decimal_or_none(ajuste_sistema) or Decimal("0")
-    return actual != snapshot + ajuste
+    post = to_decimal_or_none(mov_post_conteo) or Decimal("0")
+    return actual != snapshot + ajuste + post
 
 
 # Orígenes del neto post-snapshot (UI fórmula-first + desglose)
@@ -709,7 +715,12 @@ def enriquecer_linea_analizador(linea: Dict[str, Any]) -> Dict[str, Any]:
     linea["ajuste_efectivo"] = ajuste_eff
     linea["disponible_ajustado"] = disp_ajust
     linea["diferencia_real"] = diff_real
-    linea["descuadre"] = hay_descuadre(saldo_snap, ajuste_sys, linea.get("saldo_actual_ref"))
+    linea["descuadre"] = hay_descuadre(
+        saldo_snap,
+        ajuste_sys,
+        linea.get("saldo_actual_ref"),
+        mov_post,
+    )
     linea["saldo_final"] = calcular_saldo_final_post_mstock(
         linea.get("cantidad_contada"),
         diff_real,
