@@ -14,10 +14,7 @@
             <span class="rounded-full bg-violet-500/20 px-2 py-0.5 text-[11px] font-semibold text-violet-200">override manual</span>
             {% endif %}
             {% if linea.descuadre %}
-            <span class="material-icons text-base text-amber-400" title="Descuadre de saldo">warning</span>
-            {% endif %}
-            {% if linea.escenario_antes_etiqueta and linea.cantidad_contada is not None %}
-            <span class="rounded-full bg-sky-500/20 px-2 py-0.5 text-[11px] font-semibold text-sky-200">{{ linea.escenario_antes_etiqueta }}</span>
+            <span class="material-icons text-base text-amber-400" title="Descuadre: saldo actual ≠ snapshot + mov. hasta el conteo + mov. después del conteo">warning</span>
             {% endif %}
           </div>
           <p class="mt-1 text-xs leading-snug text-slate-300">
@@ -52,82 +49,46 @@
     </div>
     {% endif %}
 
-    {% if linea.mov_post_conteo and linea.mov_post_conteo != 0 and linea.escenario_despues_etiqueta %}
-    <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-      <p class="font-semibold">Movimiento posterior al conteo</p>
-      <p class="mt-0.5">
-        {{ linea.escenario_despues_etiqueta }}.
-        Este neto <strong>no entra</strong> en la diferencia real ni en el stock teórico al conteo;
-        sirve para explicar el saldo actual respecto a lo contado.
-        {% if desglose_mov.mstock_cierre_omitidos %}
-        Se omitieron {{ desglose_mov.mstock_cierre_omitidos }} MSTOCK de cierre de campaña.
-        {% endif %}
-      </p>
-    </div>
-    {% endif %}
-
+    {% if movimientos %}
     <div class="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Movimientos hasta el conteo</h2>
-        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-          Registros en stock con FechaControl entre el snapshot
-          {% if desglose_mov.t_conteo_fmt %}y el conteo ({{ desglose_mov.t_conteo_fmt }}){% else %}y hoy{% endif %}.
-          No se listan movimientos posteriores al conteo ni MSTOCK de cierre.
-        </p>
-        {% if linea.post_snapshot_chips %}
-        <div class="mt-2 flex flex-wrap gap-1.5">
-          {% for chip in linea.post_snapshot_chips %}
-          <span class="rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums
-            {% if chip.neto > 0 %}bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200
-            {% elif chip.neto < 0 %}bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200
-            {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
-            {{ chip.etiqueta }} {% if chip.neto > 0 %}+{% endif %}{{ chip.neto|floatformat:0 }}
-          </span>
-          {% endfor %}
-        </div>
-        {% endif %}
       </div>
-      {% if movimientos %}
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
           <thead class="bg-slate-50 dark:bg-slate-800/50">
             <tr>
               <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Fecha</th>
-              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Qué hizo</th>
-              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Origen</th>
-              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Motivo</th>
-              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Comprobante</th>
-              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Entrada</th>
-              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Salida</th>
-              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Neto</th>
+              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Tipo de comprobante</th>
+              <th class="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Nro de comprobante</th>
+              <th class="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Cantidad</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {% for m in movimientos %}
             <tr>
               <td class="px-4 py-2 tabular-nums text-slate-700 dark:text-slate-200">{{ m.fecha_control }}</td>
-              <td class="px-4 py-2 text-slate-700 dark:text-slate-200">{{ m.que_hizo|default:"—" }}</td>
-              <td class="px-4 py-2 text-slate-700 dark:text-slate-200">{{ m.categoria_etiqueta|default:"Otros" }}</td>
-              <td class="px-4 py-2 text-slate-700 dark:text-slate-200">{{ m.motivo }}</td>
-              <td class="px-4 py-2 font-mono text-xs text-slate-600 dark:text-slate-300">{{ m.nro }}</td>
-              <td class="px-4 py-2 text-right tabular-nums text-emerald-600">{{ m.entrada|floatformat:0 }}</td>
-              <td class="px-4 py-2 text-right tabular-nums text-red-600">{{ m.salida|floatformat:0 }}</td>
-              <td class="px-4 py-2 text-right tabular-nums font-medium text-slate-800 dark:text-slate-100">{{ m.neto|floatformat:0 }}</td>
+              <td class="px-4 py-2 text-slate-700 dark:text-slate-200">{% if m.comprobante and m.comprobante != '-' %}{{ m.comprobante }}{% else %}{{ m.motivo|default:"—" }}{% endif %}</td>
+              <td class="px-4 py-2 font-mono text-xs text-slate-600 dark:text-slate-300">{% if m.nro and m.nro != '-' %}{{ m.nro }}{% else %}—{% endif %}</td>
+              <td class="px-4 py-2 text-right tabular-nums font-medium {% if m.neto > 0 %}text-emerald-600{% elif m.neto < 0 %}text-red-600{% else %}text-slate-800 dark:text-slate-100{% endif %}">
+                {% if m.neto > 0 %}+{% endif %}{{ m.neto|floatformat:0 }}
+              </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-      {% else %}
-      <p class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-        {% if linea.cantidad_contada is not None %}
-        Sin movimientos entre el snapshot y el conteo.
-        {% else %}
-        Sin movimientos posteriores al snapshot.
-        {% endif %}
-      </p>
-      {% endif %}
     </div>
+    {% endif %}
+
+    {% if linea.mov_post_conteo and linea.mov_post_conteo != 0 and linea.escenario_despues_etiqueta %}
+    <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+      <p class="font-semibold">{{ linea.escenario_despues_etiqueta }}</p>
+      <p class="mt-0.5">
+        Este neto <strong>no entra</strong> en la diferencia real ni en el stock teórico al conteo.
+      </p>
+    </div>
+    {% endif %}
 
     <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-700">

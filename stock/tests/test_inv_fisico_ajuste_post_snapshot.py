@@ -67,6 +67,15 @@ class FuncionesPurasAjustePostSnapshotTest(SimpleTestCase):
             )
         )
 
+    def test_hay_descuadre_false_si_coincide_con_mov_post(self):
+        self.assertFalse(
+            svc.hay_descuadre(
+                saldo_snapshot=Decimal("640"),
+                ajuste_sistema=Decimal("1293"),
+                saldo_actual_ref=Decimal("2860"),
+                mov_post_conteo=Decimal("927"),
+            )
+        )
     def test_saldo_final_actual_mas_diferencia(self):
         self.assertEqual(
             svc.calcular_saldo_final_post_mstock(
