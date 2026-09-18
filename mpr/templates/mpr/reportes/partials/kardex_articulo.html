@@ -1,4 +1,5 @@
 {% load static %}
+{% load mpr_filters %}
 {# Análisis trazabilidad: narrativa BOM → demanda PED → movimientos (sin producción sugerida). #}
 <form method="get" id="kardex-filtros-form"
       class="mpr-post-loading mb-8 flex flex-wrap items-end gap-3"
@@ -205,6 +206,14 @@
             <p class="mt-1 text-2xl font-semibold tabular-nums {% if meta.saldo_inicial.valor|default:0 < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">
                 {{ meta.saldo_inicial.valor|default:0 }}
             </p>
+            {% if meta.saldo_inicial_etapas_ui %}
+            <div class="mt-2 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
+                {% for et in meta.saldo_inicial_etapas_ui %}
+                <span class="rounded-md bg-white/80 px-2 py-0.5 tabular-nums dark:bg-slate-900/60"><strong>{{ et.label }}:</strong> {{ et.valor|default:0 }}</span>
+                {% endfor %}
+                <span class="rounded-md bg-slate-200/80 px-2 py-0.5 font-semibold tabular-nums dark:bg-slate-700/60"><strong>Consolidado:</strong> {{ meta.saldo_inicial.valor|default:0 }}</span>
+            </div>
+            {% endif %}
             {% if meta.saldo_inicial and not meta.saldo_inicial.calculado_ok %}
             <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">No se pudo calcular con certeza; el corrido puede estar incompleto.</p>
             {% endif %}
@@ -215,6 +224,19 @@
             <p class="mt-1 text-2xl font-semibold tabular-nums {% if kpis.saldo_final|default:0 < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">
                 {{ kpis.saldo_final|default:meta.saldo_inicial.valor|default:0 }}
             </p>
+            {% if meta.saldo_cierre_etapas_ui %}
+            <div class="mt-2 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
+                {% for et in meta.saldo_cierre_etapas_ui %}
+                <span class="rounded-md bg-slate-50 px-2 py-0.5 tabular-nums dark:bg-slate-800/60"><strong>{{ et.label }}:</strong> {{ et.valor|default:0 }}</span>
+                {% endfor %}
+                {% if meta.stock_etapas_ui %}
+                <span class="text-slate-400 dark:text-slate-500">· Stock ref.</span>
+                {% for et in meta.stock_etapas_ui %}
+                <span class="rounded-md border border-slate-200 px-2 py-0.5 tabular-nums dark:border-slate-600"><span class="font-semibold">{{ et.label }} (inv.):</span> {{ et.valor|default:0 }}</span>
+                {% endfor %}
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -240,26 +262,45 @@
                     <th class="sticky top-0 z-30 w-8 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]"></th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Fecha</th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Tipo</th>
+                    {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
+                    <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Etapa</th>
+                    {% endif %}
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Comprobante</th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Qué pasó</th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Conteo</th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Entrada</th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Salida</th>
+                    {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
+                    {% for et in etapas_pipeline|default:meta.deposito.etapas %}
+                    <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">{{ et.label }}</th>
+                    {% endfor %}
+                    <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Consolidado</th>
+                    {% else %}
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 shadow-[0_-16px_0_0_#f8fafc,0_1px_0_0_rgba(15,23,42,0.12)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[0_-16px_0_0_#1e293b,0_1px_0_0_rgba(255,255,255,0.1)]">Saldo</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody class="relative z-0 divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
                 <tr class="bg-slate-50/90 dark:bg-slate-800/50">
                     <td class="px-3 py-2.5"></td>
                     <td class="whitespace-nowrap px-3 py-2.5 text-sm tabular-nums text-slate-500">{{ fecha_desde_display }}</td>
-                    <td class="px-3 py-2.5 text-sm" colspan="3">
+                    <td class="px-3 py-2.5 text-sm" colspan="{% if meta.deposito.tipo_eje == 'pipeline_fabricados' %}4{% else %}3{% endif %}">
                         <span class="inline-flex rounded-md bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">Saldo inicial</span>
                         <span class="ml-2 text-slate-600 dark:text-slate-400">Histórico consolidado antes del rango</span>
                     </td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-slate-400">—</td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-slate-400">—</td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-slate-400">—</td>
+                    {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
+                    {% with ini_etapas=meta.saldo_inicial|dict_get:"por_etapa" %}
+                    {% for et in etapas_pipeline|default:meta.deposito.etapas %}
+                    <td class="px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ ini_etapas|dict_get:et.tipo_mpr|default:0 }}</td>
+                    {% endfor %}
+                    {% endwith %}
                     <td class="px-3 py-2.5 text-right text-sm font-semibold tabular-nums {% if meta.saldo_inicial.valor|default:0 < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">{{ meta.saldo_inicial.valor|default:0 }}</td>
+                    {% else %}
+                    <td class="px-3 py-2.5 text-right text-sm font-semibold tabular-nums {% if meta.saldo_inicial.valor|default:0 < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">{{ meta.saldo_inicial.valor|default:0 }}</td>
+                    {% endif %}
                 </tr>
                 {% for r in filas %}
                 <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
@@ -294,6 +335,15 @@
                         <span class="font-medium text-slate-800 dark:text-slate-200">{{ r.tipo_mov|default:"-" }}</span>
                         {% endif %}
                     </td>
+                    {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
+                    <td class="px-3 py-2.5 text-sm">
+                        {% if r.etapa_label %}
+                        <span class="inline-flex rounded-md bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-900/40 dark:text-sky-100">{{ r.etapa_label }}</span>
+                        {% else %}
+                        <span class="text-slate-400">—</span>
+                        {% endif %}
+                    </td>
+                    {% endif %}
                     <td class="px-3 py-2.5 text-sm">
                         {% if r.codigo_movimiento %}
                         <button type="button"
@@ -317,11 +367,40 @@
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-amber-800 dark:text-amber-300">{% if r.conteo is not None %}{{ r.conteo }}{% else %}—{% endif %}</td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">{% if r.entrada %}{{ r.entrada }}{% else %}—{% endif %}</td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">{% if r.salida %}{{ r.salida }}{% else %}—{% endif %}</td>
+                    {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
+                    {% for et in etapas_pipeline|default:meta.deposito.etapas %}
+                    {% with celda=r|saldo_etapa_celda:et.tipo_mpr %}
+                    <td data-saldo-etapa="{{ et.tipo_mpr }}" class="px-3 py-2.5 text-right text-xs tabular-nums text-slate-800 dark:text-slate-200">
+                        {% if modo_presentacion == 'docenas' and celda.docenas_display %}
+                        <span class="block font-semibold">{{ celda.docenas_display }}</span>
+                        <span class="block text-[10px] text-slate-500">{{ celda.unidades_display }} u.</span>
+                        {% else %}
+                        {{ celda.unidades_display }}
+                        {% endif %}
+                    </td>
+                    {% endwith %}
+                    {% endfor %}
+                    <td data-saldo-etapa="Consolidado" class="px-3 py-2.5 text-right text-sm font-semibold tabular-nums {% if r.saldo_corrido < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">
+                        {% if r.saldo_consolidado_celda %}
+                            {% if modo_presentacion == 'docenas' and r.saldo_consolidado_celda.docenas_display %}
+                            <span class="block font-semibold">{{ r.saldo_consolidado_celda.docenas_display }}</span>
+                            <span class="block text-[10px] text-slate-500">{{ r.saldo_consolidado_celda.unidades_display }} u.</span>
+                            {% elif r.saldo_consolidado_celda.unidades_display %}
+                            {{ r.saldo_consolidado_celda.unidades_display }}
+                            {% else %}
+                            {{ r.saldo_corrido|default:0 }}
+                            {% endif %}
+                        {% else %}
+                        {{ r.saldo_corrido|default:0 }}
+                        {% endif %}
+                    </td>
+                    {% else %}
                     <td class="px-3 py-2.5 text-right text-sm font-semibold tabular-nums {% if r.saldo_corrido < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">{{ r.saldo_corrido|default:0 }}</td>
+                    {% endif %}
                 </tr>
                 {% if r.subfilas_opa %}
                 <tr x-show="expandidos['{{ r.codigo_movimiento }}']" x-cloak class="bg-violet-50/50 dark:bg-violet-950/20">
-                    <td colspan="9" class="px-6 py-3">
+                    <td colspan="{% if meta.deposito.tipo_eje == 'pipeline_fabricados' %}13{% else %}9{% endif %}" class="px-6 py-3">
                         <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-200">Salida de componentes (Semi) en este armado</p>
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-xs">
@@ -353,6 +432,25 @@
                 </tr>
                 {% endif %}
                 {% endfor %}
+                {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
+                <tr class="bg-slate-100 dark:bg-slate-800/80" data-saldo-cierre="1">
+                    <td class="px-3 py-2.5"></td>
+                    <td class="whitespace-nowrap px-3 py-2.5 text-sm tabular-nums text-slate-500">{{ fecha_hasta_display }}</td>
+                    <td class="px-3 py-2.5 text-sm" colspan="4">
+                        <span class="inline-flex rounded-md bg-slate-800 px-2 py-0.5 text-xs font-semibold text-white dark:bg-slate-200 dark:text-slate-900">Saldo final</span>
+                        <span class="ml-2 text-slate-600 dark:text-slate-400">Cierre por etapa / depósito al Hasta</span>
+                    </td>
+                    <td class="px-3 py-2.5 text-right text-sm tabular-nums text-slate-400">—</td>
+                    <td class="px-3 py-2.5 text-right text-sm tabular-nums text-slate-400">—</td>
+                    <td class="px-3 py-2.5 text-right text-sm tabular-nums text-slate-400">—</td>
+                    {% with cierre_etapas=kpis|dict_get:"saldo_final_por_etapa" %}
+                    {% for et in etapas_pipeline|default:meta.deposito.etapas %}
+                    <td data-saldo-cierre-etapa="{{ et.tipo_mpr }}" class="px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{{ cierre_etapas|dict_get:et.tipo_mpr|default:0 }}</td>
+                    {% endfor %}
+                    {% endwith %}
+                    <td data-saldo-cierre-etapa="Consolidado" class="px-3 py-2.5 text-right text-sm font-semibold tabular-nums {% if kpis.saldo_final|default:0 < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">{{ kpis.saldo_final|default:0 }}</td>
+                </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>

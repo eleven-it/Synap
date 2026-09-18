@@ -252,6 +252,56 @@ def _celda_stock_deposito(
     }
 
 
+def preparar_saldos_etapa_kardex(
+    filas: List[Dict[str, Any]],
+    *,
+    modo: str,
+    tipos_etapa: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Docenas/pares para saldos_por_etapa (misma regla que inventario por etapa)."""
+    from stock.services.inventario_tabla import ETAPAS_FABRICADOS
+
+    tipos = (
+        list(tipos_etapa)
+        if tipos_etapa is not None
+        else [t for t, _ in ETAPAS_FABRICADOS]
+    )
+    out: List[Dict[str, Any]] = []
+    for fila in filas or []:
+        if not isinstance(fila, dict):
+            out.append(fila)
+            continue
+        row = dict(fila)
+        saldos = fila.get("saldos_por_etapa") or {}
+        celdas: Dict[str, Dict[str, Any]] = {}
+        for tipo in tipos:
+            celda = _celda_stock_deposito(
+                saldos.get(tipo, 0),
+                modo,
+                clamp_negativos=False,
+            )
+            celdas[tipo] = celda
+        row["saldos_por_etapa_celdas"] = celdas
+        row["saldos_etapa_ui"] = [
+            {
+                "tipo_mpr": tipo,
+                "docenas_display": celdas[tipo].get("docenas_display", ""),
+                "unidades_display": celdas[tipo].get("unidades_display", ""),
+                "saldo": celdas[tipo].get("saldo", 0),
+            }
+            for tipo in tipos
+        ]
+        if "saldo_corrido" not in row:
+            row["saldo_corrido"] = sum(int(saldos.get(tipo, 0) or 0) for tipo in tipos)
+        row["saldo_consolidado_celda"] = _celda_stock_deposito(
+            row.get("saldo_corrido", 0),
+            modo,
+            clamp_negativos=False,
+        )
+        out.append(row)
+    return out
+
+
 def preparar_stock_por_deposito(
     filas_raw: List[Dict[str, Any]],
     modo: str,

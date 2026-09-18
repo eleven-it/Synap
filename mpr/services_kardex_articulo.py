@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from core.mysql_pool import mysql_cursor
 from core.utils.administranet_types import (
@@ -17,6 +18,14 @@ logger = logging.getLogger(__name__)
 ClasificacionKardex = Literal["entrada", "salida", "ignorar"]
 
 MOTIVO_PARTE_PRODUCCION = "Parte producción"
+
+_RE_UUID = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+_RE_DETALLE_OPP_PARTE_UUID = re.compile(
+    r"OPP-parte\s+(" + _RE_UUID.pattern + r")\s+desde\s+MPR",
+    re.IGNORECASE,
+)
 
 # Keywords LIKE sobre movimiento_stock.motivo_movimiento (LOWER … LIKE %kw%).
 MOTIVOS_MSTOCK_MOTIVO_LIKE_KEYWORDS = (
@@ -255,6 +264,7 @@ def _consultar_movimientos_kardex_articulo(
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
+    desglosar_por_deposito: bool = False,
 ) -> List[Dict[str, Any]]:
     """Filas crudas de movimiento_stock+stock para kardex (sin saldo corrido)."""
     from mpr.services import _nombre_tabla
@@ -290,6 +300,9 @@ def _consultar_movimientos_kardex_articulo(
             tbl_stock = _nombre_tabla(cursor, "stock")
             if not tbl_mov or not tbl_stock:
                 return []
+            col_dep = ", s.CodDeposito AS cod_deposito" if desglosar_por_deposito else ""
+            grp_dep = ", s.CodDeposito" if desglosar_por_deposito else ""
+            ord_dep = ", s.CodDeposito ASC" if desglosar_por_deposito else ""
             cursor.execute(
                 f"""
                 SELECT
@@ -301,7 +314,7 @@ def _consultar_movimientos_kardex_articulo(
                     m.detalle,
                     m.id_operario_opt,
                     COALESCE(SUM(s.Entrada), 0) AS total_entrada,
-                    COALESCE(SUM(s.Salida), 0) AS total_salida
+                    COALESCE(SUM(s.Salida), 0) AS total_salida{col_dep}
                 FROM {tbl_mov} m
                 INNER JOIN {tbl_stock} s ON s.CodigoMovimiento = m.codigo_movimiento
                 WHERE s.IDArt = %s
@@ -316,8 +329,8 @@ def _consultar_movimientos_kardex_articulo(
                   {filtros_extra}
                 GROUP BY
                     m.codigo_movimiento, m.fecha, m.tipo_mov, m.motivo_movimiento,
-                    m.nro_comprobante, m.detalle, m.id_operario_opt
-                ORDER BY m.fecha ASC, m.codigo_movimiento ASC
+                    m.nro_comprobante, m.detalle, m.id_operario_opt{grp_dep}
+                ORDER BY m.fecha ASC, m.codigo_movimiento ASC{ord_dep}
                 LIMIT %s
                 """,
                 params,
@@ -355,6 +368,14 @@ def _fetch_nombre_deposito(base_empresa: str, id_deposito: int) -> str:
         return "-"
 
 
+def _extraer_cod_deposito(row: Dict[str, Any]) -> Optional[int]:
+    """Extrae el depósito tolerando variantes de nombre devueltas por MySQL."""
+    for clave in ("cod_deposito", "CodDeposito", "CODDEPOSITO", "codDeposito"):
+        if row.get(clave) is not None:
+            return to_int_or_none(row.get(clave))
+    return None
+
+
 def _normalizar_fila_kardex(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Convierte fila SQL a movimiento kardex con entrada/salida según clasificación.
 
@@ -390,7 +411,7 @@ def _normalizar_fila_kardex(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     cod_mov = to_int_or_none(row.get("codigo_movimiento"))
     operario_id = to_int_or_none(row.get("id_operario_opt"))
-    return {
+    mov = {
         "fecha_display": _fmt_fecha_display_kardex(row.get("fecha")),
         "tipo_mov": str_or_default(row.get("tipo_mov"), "-"),
         "entrada": entrada,
@@ -400,6 +421,10 @@ def _normalizar_fila_kardex(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "detalle": str_or_default(row.get("detalle"), ""),
         "operario": str(operario_id) if operario_id is not None else "-",
     }
+    cod_deposito = _extraer_cod_deposito(row)
+    if cod_deposito is not None:
+        mov["cod_deposito"] = cod_deposito
+    return mov
 
 
 def _consultar_movimientos_stock_rem_fa(
@@ -411,6 +436,7 @@ def _consultar_movimientos_stock_rem_fa(
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
+    desglosar_por_deposito: bool = False,
 ) -> List[Dict[str, Any]]:
     """REM/FA directos en tabla stock (no MSTOCK)."""
     from mpr.services import _nombre_tabla
@@ -445,6 +471,9 @@ def _consultar_movimientos_stock_rem_fa(
             tbl_stock = _nombre_tabla(cursor, "stock")
             if not tbl_stock:
                 return []
+            col_dep = ", s.CodDeposito AS cod_deposito" if desglosar_por_deposito else ""
+            grp_dep = ", s.CodDeposito" if desglosar_por_deposito else ""
+            ord_dep = ", s.CodDeposito ASC" if desglosar_por_deposito else ""
             cursor.execute(
                 f"""
                 SELECT
@@ -456,7 +485,7 @@ def _consultar_movimientos_stock_rem_fa(
                     COALESCE(s.Descripcion, '') AS detalle,
                     s.TipoComp AS tipo_comp,
                     COALESCE(SUM(s.Entrada), 0) AS total_entrada,
-                    COALESCE(SUM(s.Salida), 0) AS total_salida
+                    COALESCE(SUM(s.Salida), 0) AS total_salida{col_dep}
                 FROM {tbl_stock} s
                 WHERE s.IDArt = %s
                   AND s.Comprobante IN ('REM', 'FA')
@@ -464,9 +493,9 @@ def _consultar_movimientos_stock_rem_fa(
                   {filtros_extra}
                 GROUP BY
                     s.CodigoMovimiento, s.Fecha, s.FechaControl,
-                    s.Comprobante, s.NroComprobante, s.Descripcion, s.TipoComp
+                    s.Comprobante, s.NroComprobante, s.Descripcion, s.TipoComp{grp_dep}
                 ORDER BY COALESCE(s.FechaControl, CAST(s.Fecha AS DATETIME)) ASC,
-                         s.CodigoMovimiento ASC
+                         s.CodigoMovimiento ASC{ord_dep}
                 LIMIT %s
                 """,
                 params,
@@ -495,6 +524,7 @@ def _consultar_movimientos_inventario_mstock(
     fecha_desde: Optional[Any] = None,
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
+    desglosar_por_deposito: bool = False,
 ) -> List[Dict[str, Any]]:
     """MSTOCK ingreso depósito: inventario, stock inicial y ajustes por motivo o TipoComp."""
     from mpr.services import _nombre_tabla
@@ -537,6 +567,9 @@ def _consultar_movimientos_inventario_mstock(
             tbl_stock = _nombre_tabla(cursor, "stock")
             if not tbl_mov or not tbl_stock:
                 return []
+            col_dep = ", s.CodDeposito AS cod_deposito" if desglosar_por_deposito else ""
+            grp_dep = ", s.CodDeposito" if desglosar_por_deposito else ""
+            ord_dep = ", s.CodDeposito ASC" if desglosar_por_deposito else ""
             cursor.execute(
                 f"""
                 SELECT
@@ -549,7 +582,7 @@ def _consultar_movimientos_inventario_mstock(
                     s.TipoComp AS tipo_comp,
                     s.Comprobante AS comprobante,
                     COALESCE(SUM(s.Entrada), 0) AS total_entrada,
-                    COALESCE(SUM(s.Salida), 0) AS total_salida
+                    COALESCE(SUM(s.Salida), 0) AS total_salida{col_dep}
                 FROM {tbl_mov} m
                 INNER JOIN {tbl_stock} s ON s.CodigoMovimiento = m.codigo_movimiento
                 WHERE s.IDArt = %s
@@ -564,9 +597,9 @@ def _consultar_movimientos_inventario_mstock(
                   {filtros_extra}
                 GROUP BY
                     m.codigo_movimiento, m.fecha, m.tipo_mov, m.motivo_movimiento,
-                    m.nro_comprobante, m.detalle, s.TipoComp, s.Comprobante, s.FechaControl
+                    m.nro_comprobante, m.detalle, s.TipoComp, s.Comprobante, s.FechaControl{grp_dep}
                 ORDER BY COALESCE(s.FechaControl, CAST(m.fecha AS DATETIME)) ASC,
-                         m.codigo_movimiento ASC
+                         m.codigo_movimiento ASC{ord_dep}
                 LIMIT %s
                 """,
                 params,
@@ -674,7 +707,7 @@ def _normalizar_fila_analisis_stock(
     salida = total_salida if total_salida > 0 else 0
     if clase_ui == "opp" and entrada == 0 and salida == 0:
         entrada = max(total_entrada, total_salida)
-    return {
+    mov = {
         "fecha_sort": row.get("fecha"),
         "fecha_display": _fmt_fecha_display_kardex(row.get("fecha")),
         "tipo_mov": tipo_mov,
@@ -688,6 +721,10 @@ def _normalizar_fila_analisis_stock(
         "afecta_deposito": afecta,
         "fuente": fuente,
     }
+    cod_deposito = _extraer_cod_deposito(row)
+    if cod_deposito is not None:
+        mov["cod_deposito"] = cod_deposito
+    return mov
 
 
 def _normalizar_fila_analisis_mstock(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -703,41 +740,358 @@ def _normalizar_fila_analisis_mstock(row: Dict[str, Any]) -> Optional[Dict[str, 
         tipo_comp=row.get("tipo_comp"),
         fuente=str_or_default(row.get("fuente"), "mstock"),
     )
-    return {
+    mov = {
         **fila_k,
         "fecha_sort": row.get("fecha"),
         "clase_ui": clase_ui,
         "afecta_deposito": afecta,
         "fuente": str_or_default(row.get("fuente"), "mstock"),
     }
+    cod_deposito = _extraer_cod_deposito(row)
+    if cod_deposito is not None:
+        mov["cod_deposito"] = cod_deposito
+    return mov
+
+
+def _mapa_deposito_etapa(etapas: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
+    out: Dict[int, Dict[str, Any]] = {}
+    for et in etapas or []:
+        dep = to_int_or_none(et.get("id_deposito"))
+        if dep is not None:
+            out[dep] = et
+    return out
+
+
+def _tipos_mpr_pipeline_desde_etapas(etapas: List[Dict[str, Any]]) -> List[str]:
+    from mpr.services import TIPOS_MPR_PIPELINE_FABRICADOS
+
+    presentes = {str(e.get("tipo_mpr") or "") for e in (etapas or [])}
+    return [t for t in TIPOS_MPR_PIPELINE_FABRICADOS if t in presentes]
+
+
+def _saldos_vacios_por_etapa(tipos: List[str]) -> Dict[str, int]:
+    return {t: 0 for t in tipos}
+
+
+def _enriquecer_impacto_etapa(
+    mov: Dict[str, Any],
+    mapa_dep: Dict[int, Dict[str, Any]],
+    advertencias: List[str],
+) -> Optional[Dict[str, Any]]:
+    """Resuelve etapa por cod_deposito; descarta impactos fuera del mapa."""
+    dep = to_int_or_none(mov.get("cod_deposito"))
+    if dep is None:
+        return mov
+    et = mapa_dep.get(dep)
+    if not et:
+        advertencias.append(
+            f"Impacto en depósito {dep} excluido del pipeline (no está en etapas activas)."
+        )
+        return None
+    mov = dict(mov)
+    mov["etapa"] = {
+        "tipo_mpr": et.get("tipo_mpr"),
+        "label": et.get("label"),
+        "orden": et.get("orden"),
+    }
+    mov["etapa_label"] = str_or_default(et.get("label"), "")
+    return mov
+
+
+def _clave_dedupe_movimiento(mov: Dict[str, Any]) -> tuple:
+    cod = to_int_or_none(mov.get("codigo_movimiento"))
+    dep = to_int_or_none(mov.get("cod_deposito"))
+    return (cod if cod is not None else -1, dep)
+
+
+def _orden_impacto_sort_key(mov: Dict[str, Any]) -> tuple:
+    etapa = mov.get("etapa") or {}
+    return (
+        str(mov.get("fecha_sort") or ""),
+        to_int_or_none(mov.get("codigo_movimiento")) or 0,
+        int(mov.get("orden_impacto") if mov.get("orden_impacto") is not None else 99),
+        int(etapa.get("orden") if etapa.get("orden") is not None else 99),
+        to_int_or_none(mov.get("cod_deposito")) or 0,
+    )
 
 
 def _deduplicar_movimientos(movimientos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Clave codigo_movimiento; preferir MSTOCK sobre mpr_parte."""
-    por_codigo: Dict[int, Dict[str, Any]] = {}
+    """Clave (codigo_movimiento, cod_deposito); preferir MSTOCK sobre mpr_parte."""
+    por_clave: Dict[tuple, Dict[str, Any]] = {}
     sin_codigo: List[Dict[str, Any]] = []
     for mov in movimientos or []:
         cod = to_int_or_none(mov.get("codigo_movimiento"))
         if cod is None:
             sin_codigo.append(mov)
             continue
-        prev = por_codigo.get(cod)
+        clave = _clave_dedupe_movimiento(mov)
+        prev = por_clave.get(clave)
         if prev is None:
-            por_codigo[cod] = mov
+            por_clave[clave] = mov
             continue
         fuente_prev = str_or_default(prev.get("fuente"), "zz")
         fuente_new = str_or_default(mov.get("fuente"), "zz")
         rank_prev = PRIORIDAD_FUENTE_DEDUPE.get(fuente_prev, 99)
         rank_new = PRIORIDAD_FUENTE_DEDUPE.get(fuente_new, 99)
         if rank_new < rank_prev:
-            por_codigo[cod] = mov
-    return sorted(
-        list(por_codigo.values()) + sin_codigo,
-        key=lambda m: (
-            str(m.get("fecha_sort") or ""),
-            to_int_or_none(m.get("codigo_movimiento")) or 0,
-        ),
+            por_clave[clave] = mov
+    return sorted(list(por_clave.values()) + sin_codigo, key=_orden_impacto_sort_key)
+
+
+def _marcar_transferencias_internas(
+    movimientos: List[Dict[str, Any]],
+    *,
+    mapa_dep: Dict[int, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """OPP/transferencias entre depósitos pipeline: salida antes que entrada."""
+    por_mov: Dict[int, List[Dict[str, Any]]] = {}
+    for mov in movimientos or []:
+        cod = to_int_or_none(mov.get("codigo_movimiento"))
+        if cod is None:
+            continue
+        por_mov.setdefault(cod, []).append(mov)
+
+    resultado: List[Dict[str, Any]] = []
+    for mov in movimientos or []:
+        fila = dict(mov)
+        cod = to_int_or_none(fila.get("codigo_movimiento"))
+        grupo = por_mov.get(cod or -1, [])
+        deps = {
+            to_int_or_none(m.get("cod_deposito"))
+            for m in grupo
+            if to_int_or_none(m.get("cod_deposito")) is not None
+        }
+        if len(deps) >= 2 and cod is not None:
+            salida = int(fila.get("salida") or 0)
+            entrada = int(fila.get("entrada") or 0)
+            es_salida = salida > 0 and entrada <= 0
+            es_entrada = entrada > 0 and salida <= 0
+            fila["es_transferencia_interna"] = True
+            fila["orden_impacto"] = 0 if es_salida else (1 if es_entrada else 0)
+            contrapartes = [
+                m for m in grupo
+                if to_int_or_none(m.get("cod_deposito")) != to_int_or_none(fila.get("cod_deposito"))
+            ]
+            if contrapartes:
+                otro = contrapartes[0]
+                et_otro = (otro.get("etapa") or {})
+                sentido = "salida" if es_salida else ("entrada" if es_entrada else "")
+                fila["contraparte"] = {
+                    "tipo_mpr": et_otro.get("tipo_mpr"),
+                    "label": et_otro.get("label"),
+                    "sentido": sentido,
+                }
+        else:
+            fila.setdefault("es_transferencia_interna", False)
+            fila.setdefault("orden_impacto", 0)
+        resultado.append(fila)
+
+    vistos_primer_impacto: set[int] = set()
+    for fila in sorted(resultado, key=_orden_impacto_sort_key):
+        cod = to_int_or_none(fila.get("codigo_movimiento"))
+        if cod is None:
+            fila["es_primer_impacto"] = True
+            continue
+        if cod not in vistos_primer_impacto:
+            fila["es_primer_impacto"] = True
+            vistos_primer_impacto.add(cod)
+        else:
+            fila["es_primer_impacto"] = False
+    return sorted(resultado, key=_orden_impacto_sort_key)
+
+
+def _calcular_saldo_corrido_por_etapa(
+    movimientos: List[Dict[str, Any]],
+    *,
+    saldo_inicial_por_etapa: Dict[str, int],
+    tipos_etapa: List[str],
+    mapa_dep: Optional[Dict[int, Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    saldos = dict(saldo_inicial_por_etapa)
+    for t in tipos_etapa:
+        saldos.setdefault(t, 0)
+    resultado: List[Dict[str, Any]] = []
+    for mov in sorted(movimientos or [], key=_orden_impacto_sort_key):
+        entrada = int(to_int_or_none(mov.get("entrada")) or 0)
+        salida = int(to_int_or_none(mov.get("salida")) or 0)
+        dep = to_int_or_none(mov.get("cod_deposito"))
+        etapa_mapa = (mapa_dep or {}).get(dep, {}) if dep is not None else {}
+        tipo = etapa_mapa.get("tipo_mpr") or (mov.get("etapa") or {}).get("tipo_mpr")
+        if mov.get("afecta_deposito", True) and tipo:
+            if tipo not in saldos:
+                saldos.setdefault(tipo, 0)
+            saldos[tipo] += entrada - salida
+        fila = dict(mov)
+        # Contrato UI/CSV: solo etapas del pipeline (orden de tipos_etapa).
+        snapshot = {t: int(saldos.get(t, 0)) for t in tipos_etapa}
+        fila["saldos_por_etapa"] = snapshot
+        fila["saldos_etapa_ui"] = [
+            {"tipo_mpr": t, "saldo": snapshot.get(t, 0)}
+            for t in tipos_etapa
+        ]
+        fila["saldo_corrido"] = sum(snapshot.values())
+        if fila.get("clase_ui") == "inventario" and tipo in snapshot:
+            fila["conteo"] = snapshot[tipo]
+        elif fila.get("clase_ui") == "inventario":
+            fila["conteo"] = fila["saldo_corrido"]
+        else:
+            fila["conteo"] = mov.get("conteo")
+        resultado.append(fila)
+    return resultado
+
+
+def _calcular_saldo_inicial_por_etapa(
+    *,
+    pre_periodo_movimientos: Optional[List[Dict[str, Any]]] = None,
+    stock_por_etapa: Optional[Dict[str, int]] = None,
+    neto_periodo_por_etapa: Optional[Dict[str, int]] = None,
+    tipos_etapa: List[str],
+    mapa_dep: Optional[Dict[int, Dict[str, Any]]] = None,
+) -> tuple[Dict[str, int], bool]:
+    vacio = _saldos_vacios_por_etapa(tipos_etapa)
+    if pre_periodo_movimientos is not None:
+        saldos = dict(vacio)
+        for mov in pre_periodo_movimientos:
+            if not mov.get("afecta_deposito", True):
+                continue
+            dep = to_int_or_none(mov.get("cod_deposito"))
+            etapa_mapa = (mapa_dep or {}).get(dep, {}) if dep is not None else {}
+            tipo = etapa_mapa.get("tipo_mpr") or (mov.get("etapa") or {}).get("tipo_mpr")
+            if not tipo:
+                continue
+            saldos.setdefault(tipo, 0)
+            entrada = int(to_int_or_none(mov.get("entrada")) or 0)
+            salida = int(to_int_or_none(mov.get("salida")) or 0)
+            saldos[tipo] += entrada - salida
+        return saldos, True
+
+    if stock_por_etapa is not None and neto_periodo_por_etapa is not None:
+        inicial = dict(vacio)
+        for t in tipos_etapa:
+            inicial[t] = int(stock_por_etapa.get(t, 0)) - int(neto_periodo_por_etapa.get(t, 0))
+        return inicial, True
+
+    return vacio, False
+
+
+def _fetch_stock_por_etapa_pipeline(
+    base_empresa: str,
+    id_articulo: int,
+    etapas: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    """Stock actual por tipo_mpr (paridad inventario fabricados, sin inventario_tabla)."""
+    from mpr.services import TIPOS_MPR_PIPELINE_FABRICADOS, _nombre_tabla
+
+    id_art = to_int_or_none(id_articulo)
+    tipos = _tipos_mpr_pipeline_desde_etapas(etapas) or list(TIPOS_MPR_PIPELINE_FABRICADOS)
+    vacio = _saldos_vacios_por_etapa(tipos)
+    dep_ids = [
+        d for d in (to_int_or_none(e.get("id_deposito")) for e in (etapas or [])) if d is not None
+    ]
+    if not (base_empresa or "").strip() or id_art is None or not dep_ids:
+        return vacio
+    placeholders = ",".join(["%s"] * len(dep_ids))
+    mapa_dep_tipo = {
+        to_int_or_none(e.get("id_deposito")): str(e.get("tipo_mpr") or "")
+        for e in (etapas or [])
+        if to_int_or_none(e.get("id_deposito")) is not None
+    }
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            if not tbl_sd:
+                return vacio
+            cursor.execute(
+                f"""
+                SELECT sd.id_deposito, COALESCE(SUM(sd.saldo), 0) AS saldo
+                FROM {tbl_sd} sd
+                WHERE sd.id_articulo = %s AND sd.id_deposito IN ({placeholders})
+                GROUP BY sd.id_deposito
+                """,
+                [id_art, *dep_ids],
+            )
+            rows = cursor.fetchall() or []
+    except Exception as exc:
+        logger.warning(
+            "_fetch_stock_por_etapa_pipeline error base=%s art=%s: %s",
+            base_empresa,
+            id_articulo,
+            exc,
+        )
+        return vacio
+
+    totales = dict(vacio)
+    for row in rows:
+        dep = to_int_or_none(row.get("id_deposito"))
+        tipo = mapa_dep_tipo.get(dep or -1)
+        if not tipo or tipo not in totales:
+            continue
+        totales[tipo] += int(round(float(row.get("saldo") or 0)))
+    return totales
+
+
+def _neto_periodo_por_etapa(
+    movimientos: List[Dict[str, Any]],
+    tipos_etapa: List[str],
+) -> Dict[str, int]:
+    neto = _saldos_vacios_por_etapa(tipos_etapa)
+    for mov in movimientos or []:
+        if not mov.get("afecta_deposito", True):
+            continue
+        tipo = (mov.get("etapa") or {}).get("tipo_mpr")
+        if tipo not in neto:
+            continue
+        neto[tipo] += int(mov.get("entrada") or 0) - int(mov.get("salida") or 0)
+    return neto
+
+
+def _conciliar_cierre_por_etapa(
+    *,
+    saldo_final_por_etapa: Dict[str, int],
+    stock_por_etapa: Dict[str, int],
+    etapas: List[Dict[str, Any]],
+    hasta_date: Optional[date],
+    hoy: date,
+    calculado_ok: bool,
+    advertencias: List[str],
+) -> tuple[bool, Dict[str, Dict[str, int]]]:
+    conciliacion: Dict[str, Dict[str, int]] = {}
+    estricta = (
+        calculado_ok
+        and hasta_date is not None
+        and hasta_date >= hoy
     )
+    if not estricta:
+        return False, conciliacion
+
+    difs: List[str] = []
+    for et in etapas or []:
+        tipo = str(et.get("tipo_mpr") or "")
+        label = str_or_default(et.get("label"), tipo)
+        kardex = int(saldo_final_por_etapa.get(tipo, 0))
+        inv = int(stock_por_etapa.get(tipo, 0))
+        conciliacion[tipo] = {
+            "kardex": kardex,
+            "inventario": inv,
+            "diferencia": kardex - inv,
+        }
+        if kardex != inv:
+            difs.append(f"{label}: kardex {kardex} vs inventario {inv}")
+
+    if difs:
+        advertencias.append(
+            "El saldo reconstruido al cierre no coincide con el inventario por etapa: "
+            + "; ".join(difs)
+        )
+    return True, conciliacion
+
+
+def _contar_movimientos_distintos(movimientos: List[Dict[str, Any]]) -> int:
+    return len({
+        to_int_or_none(m.get("codigo_movimiento"))
+        for m in (movimientos or [])
+        if to_int_or_none(m.get("codigo_movimiento")) is not None
+    })
 
 
 def _calcular_saldo_corrido_analisis(
@@ -913,6 +1267,141 @@ def _fetch_stock_reserva_articulo(base_empresa: str, id_articulo: int) -> int:
         return 0
 
 
+def _clave_fecha_turno_parte(parte: Any) -> Optional[Tuple[Any, int]]:
+    from mpr.services import _fecha_parte_date
+
+    fp = _fecha_parte_date(parte)
+    tid = to_int_or_none(
+        getattr(parte, "turno_id", None) or getattr(parte, "id_mpr_turno", None)
+    )
+    if fp is None or tid is None:
+        return None
+    return (fp, tid)
+
+
+def _humanizar_detalle_movimiento(
+    detalle: str,
+    *,
+    partes_por_uuid: Optional[Dict[str, Any]] = None,
+    id_articulo: Optional[int] = None,
+    fecha_movimiento: Optional[Any] = None,
+    incluir_hora: bool = False,
+) -> str:
+    """Quita UUID de 'Qué pasó' y arma Parte · turno · OPT · operario."""
+    from mpr.services import texto_detalle_parte_produccion
+
+    texto = str_or_default(detalle, "")
+    if "Ajuste físico OPP-parte" in texto:
+        return "Ajuste de parte de producción"
+    match = _RE_DETALLE_OPP_PARTE_UUID.search(texto)
+    if match:
+        parte = (partes_por_uuid or {}).get(match.group(1).lower())
+        if parte is not None:
+            return texto_detalle_parte_produccion(
+                parte,
+                fecha_movimiento=fecha_movimiento,
+                incluir_hora=incluir_hora,
+                id_articulo=id_articulo,
+            )
+        return "Parte"
+    if _RE_UUID.search(texto):
+        return _RE_UUID.sub("", texto).replace("  ", " ").strip(" ·-")
+    return texto
+
+
+def _resolver_partes_kardex_por_uuid(
+    base_empresa: str,
+    uuids: List[str],
+) -> Dict[str, Any]:
+    """Carga cabeceras mpr_parte desde MySQL empresa (no el ORM Django)."""
+    from mpr.repositories.parte import obtener_parte_por_pk
+
+    partes_por_uuid: Dict[str, Any] = {}
+    base = (base_empresa or "").strip()
+    if not base:
+        return partes_por_uuid
+    vistos: set[str] = set()
+    for uid in uuids:
+        clave = (uid or "").strip().lower()
+        if not clave or clave in vistos:
+            continue
+        vistos.add(clave)
+        try:
+            parte = obtener_parte_por_pk(base, uid, with_relations=True)
+        except Exception:
+            logger.debug(
+                "No se pudo resolver parte MPR %s en %s", uid, base, exc_info=True
+            )
+            continue
+        if parte is not None:
+            partes_por_uuid[clave] = parte
+    return partes_por_uuid
+
+
+def _conteo_partes_mismo_turno(
+    base_empresa: str,
+    partes: List[Any],
+) -> Dict[Tuple[Any, int], int]:
+    """Cuántos partes hay por (fecha_produccion, turno) entre los resueltos y en MySQL."""
+    from collections import Counter
+
+    from mpr.repositories.parte import contar_partes_fecha_turno
+
+    locales = Counter()
+    for parte in partes:
+        clave = _clave_fecha_turno_parte(parte)
+        if clave is not None:
+            locales[clave] += 1
+    out: Dict[Tuple[Any, int], int] = dict(locales)
+    base = (base_empresa or "").strip()
+    if not base:
+        return out
+    for clave in list(out.keys()):
+        fp, tid = clave
+        try:
+            n_db = contar_partes_fecha_turno(base, fp, tid)
+        except Exception:
+            n_db = 0
+        if n_db > out[clave]:
+            out[clave] = n_db
+    return out
+
+
+def _enriquecer_detalles_opp_parte(
+    movimientos: List[Dict[str, Any]],
+    *,
+    id_articulo: Optional[int] = None,
+    base_empresa: str = "",
+) -> List[Dict[str, Any]]:
+    uuids: List[str] = []
+    for mov in movimientos or []:
+        match = _RE_DETALLE_OPP_PARTE_UUID.search(str(mov.get("detalle") or ""))
+        if match:
+            uuids.append(match.group(1))
+    partes_por_uuid = _resolver_partes_kardex_por_uuid(base_empresa, uuids)
+    conteos_turno = _conteo_partes_mismo_turno(
+        base_empresa, list(partes_por_uuid.values())
+    )
+    out: List[Dict[str, Any]] = []
+    for mov in movimientos or []:
+        fila = dict(mov)
+        detalle_orig = str(fila.get("detalle") or "")
+        match = _RE_DETALLE_OPP_PARTE_UUID.search(detalle_orig)
+        parte = (
+            partes_por_uuid.get(match.group(1).lower()) if match else None
+        )
+        clave = _clave_fecha_turno_parte(parte) if parte is not None else None
+        fila["detalle"] = _humanizar_detalle_movimiento(
+            detalle_orig,
+            partes_por_uuid=partes_por_uuid,
+            id_articulo=id_articulo,
+            fecha_movimiento=fila.get("fecha_sort") or fila.get("fecha"),
+            incluir_hora=bool(clave and conteos_turno.get(clave, 0) > 1),
+        )
+        out.append(fila)
+    return out
+
+
 def _recolectar_movimientos_analisis(
     base_empresa: str,
     id_articulo: int,
@@ -923,6 +1412,9 @@ def _recolectar_movimientos_analisis(
     fecha_hasta: Optional[Any] = None,
     limit: int = 500,
     solo_pre_periodo: bool = False,
+    desglosar_por_deposito: bool = False,
+    mapa_dep_etapa: Optional[Dict[int, Dict[str, Any]]] = None,
+    advertencias: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Unifica MSTOCK OPP/OPA, REM/FA, inventario y eventos MPR."""
     from datetime import date as date_type, datetime as datetime_type, timedelta
@@ -944,10 +1436,22 @@ def _recolectar_movimientos_analisis(
         q_hasta = fecha_hasta
 
     movs: List[Dict[str, Any]] = []
+    avisos = advertencias if advertencias is not None else []
     filtro_dep = {
         "id_deposito": id_deposito,
         "ids_deposito": ids_deposito,
+        "desglosar_por_deposito": desglosar_por_deposito,
     }
+    mapa = mapa_dep_etapa or {}
+
+    def _agregar(fila: Optional[Dict[str, Any]]) -> None:
+        if not fila:
+            return
+        if desglosar_por_deposito and mapa:
+            fila = _enriquecer_impacto_etapa(fila, mapa, avisos)
+            if fila is None:
+                return
+        movs.append(fila)
 
     for row in _consultar_movimientos_kardex_articulo(
         base_empresa,
@@ -957,9 +1461,7 @@ def _recolectar_movimientos_analisis(
         limit=limit,
         **filtro_dep,
     ):
-        fila = _normalizar_fila_analisis_mstock(row)
-        if fila:
-            movs.append(fila)
+        _agregar(_normalizar_fila_analisis_mstock(row))
 
     for row in _consultar_movimientos_stock_rem_fa(
         base_empresa,
@@ -969,9 +1471,7 @@ def _recolectar_movimientos_analisis(
         limit=limit,
         **filtro_dep,
     ):
-        fila = _normalizar_fila_analisis_stock(row, fuente="stock")
-        if fila:
-            movs.append(fila)
+        _agregar(_normalizar_fila_analisis_stock(row, fuente="stock"))
 
     for row in _consultar_movimientos_inventario_mstock(
         base_empresa,
@@ -981,14 +1481,16 @@ def _recolectar_movimientos_analisis(
         limit=limit,
         **filtro_dep,
     ):
-        fila = _normalizar_fila_analisis_mstock(row)
-        if fila:
-            movs.append(fila)
+        _agregar(_normalizar_fila_analisis_mstock(row))
 
     # Los eventos MPR (envío/parte/clasificación) no mueven stock_deposito; van en
     # ``eventos_mpr`` para timeline, no en el kardex de saldo (paridad Excel).
 
-    return _deduplicar_movimientos(movs)
+    return _enriquecer_detalles_opp_parte(
+        _deduplicar_movimientos(movs),
+        id_articulo=id_articulo,
+        base_empresa=base_empresa,
+    )
 
 
 def _texto_explicativo_brecha(p_ped: int, terminado: int, ped_urgente: int) -> str:
@@ -1022,12 +1524,14 @@ def construir_analisis_trazabilidad_articulo(
 
     from mpr.services import (
         ETIQUETA_EJE_PIPELINE_FABRICADOS,
+        TIPOS_MPR_PIPELINE_FABRICADOS,
         _fetch_descripciones_articulo,
         calcular_max_packs_armado_1ra,
         get_bom_detalle,
         get_deposito_semi_elaborado_mpr,
         get_deposito_terminado_mpr,
         get_depositos_pipeline_fabricados_mpr,
+        get_etapas_pipeline_fabricados_mpr,
         get_id_en_abm_por_articulo,
         listar_demanda_ped_por_articulo,
     )
@@ -1083,17 +1587,42 @@ def construir_analisis_trazabilidad_articulo(
     dep_ids: Optional[List[int]] = None
     es_pipeline_fabricados = False
     dep_default_canonico = False
+    etapas_pipeline: List[Dict[str, Any]] = []
+    desglosar_por_deposito = False
+    mapa_dep_etapa: Dict[int, Dict[str, Any]] = {}
+    tipos_etapa: List[str] = list(TIPOS_MPR_PIPELINE_FABRICADOS)
+
     if dep_id is None:
         if es_pack:
             dep_canon = get_deposito_terminado_mpr(base_empresa)
             dep_id = to_int_or_none(dep_canon)
         else:
-            dep_ids = get_depositos_pipeline_fabricados_mpr(base_empresa)
-            es_pipeline_fabricados = bool(dep_ids)
-            if len(dep_ids) == 1:
-                dep_id = dep_ids[0]
-                dep_ids = None
-                es_pipeline_fabricados = False
+            etapas_pipeline = get_etapas_pipeline_fabricados_mpr(base_empresa)
+            if etapas_pipeline:
+                dep_ids = [
+                    d for d in (to_int_or_none(e.get("id_deposito")) for e in etapas_pipeline)
+                    if d is not None
+                ]
+                if len(dep_ids) >= 2:
+                    es_pipeline_fabricados = True
+                    desglosar_por_deposito = True
+                    mapa_dep_etapa = _mapa_deposito_etapa(etapas_pipeline)
+                    tipos_etapa = _tipos_mpr_pipeline_desde_etapas(etapas_pipeline)
+                elif len(dep_ids) == 1:
+                    dep_id = dep_ids[0]
+                    dep_ids = None
+            if not es_pipeline_fabricados and dep_id is None:
+                dep_ids = get_depositos_pipeline_fabricados_mpr(base_empresa)
+                if not etapas_pipeline and dep_ids:
+                    advertencias.append(
+                        "No se encontraron etapas pipeline con suma_stock=Si; "
+                        "se usa el listado legacy de depósitos sin desglose por etapa."
+                    )
+                es_pipeline_fabricados = bool(dep_ids) and len(dep_ids) >= 2
+                if len(dep_ids) == 1:
+                    dep_id = dep_ids[0]
+                    dep_ids = None
+                    es_pipeline_fabricados = False
         dep_default_canonico = dep_id is not None or bool(dep_ids)
     deposito: Optional[Dict[str, Any]] = None
     if es_pipeline_fabricados and dep_ids:
@@ -1103,6 +1632,7 @@ def construir_analisis_trazabilidad_articulo(
             "nombre": ETIQUETA_EJE_PIPELINE_FABRICADOS,
             "es_default_canonico": dep_default_canonico,
             "tipo_eje": "pipeline_fabricados",
+            "etapas": etapas_pipeline,
         }
     elif dep_id is not None:
         deposito = {
@@ -1118,16 +1648,29 @@ def construir_analisis_trazabilidad_articulo(
         filtro_eje["ids_deposito"] = dep_ids
     elif dep_id is not None:
         filtro_eje["id_deposito"] = dep_id
+    if desglosar_por_deposito:
+        filtro_eje["desglosar_por_deposito"] = True
+        filtro_eje["mapa_dep_etapa"] = mapa_dep_etapa
+        filtro_eje["advertencias"] = advertencias
+
+    limite_efectivo = limit
+    if es_pipeline_fabricados and etapas_pipeline:
+        limite_efectivo = min(max(1, int(limit or 2000)) * max(1, len(etapas_pipeline)), 5000)
 
     demanda_filas = listar_demanda_ped_por_articulo(base_empresa, id_art, limit=limit)
     p_ped = sum(int(to_int_or_none(f.get("cantidad_pendiente_prod")) or 0) for f in demanda_filas)
 
-    stock_terminado = _fetch_stock_terminado_analisis(
-        base_empresa,
-        id_art,
-        id_deposito=dep_id if not dep_ids else None,
-        ids_deposito=dep_ids,
-    )
+    stock_por_etapa: Dict[str, int] = {}
+    if es_pipeline_fabricados and etapas_pipeline:
+        stock_por_etapa = _fetch_stock_por_etapa_pipeline(base_empresa, id_art, etapas_pipeline)
+        stock_terminado = sum(stock_por_etapa.values())
+    else:
+        stock_terminado = _fetch_stock_terminado_analisis(
+            base_empresa,
+            id_art,
+            id_deposito=dep_id if not dep_ids else None,
+            ids_deposito=dep_ids,
+        )
     if stock_terminado is None:
         if es_pipeline_fabricados:
             advertencias.append(
@@ -1150,37 +1693,66 @@ def construir_analisis_trazabilidad_articulo(
         id_art,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
-        limit=limit,
+        limit=limite_efectivo,
         solo_pre_periodo=True,
         **filtro_eje,
     )
     pre_movs_stock = [m for m in pre_movs if m.get("afecta_deposito", True)]
-    if len(pre_movs) >= limit:
+    if es_pipeline_fabricados:
+        pre_movs_stock = _marcar_transferencias_internas(
+            pre_movs_stock, mapa_dep=mapa_dep_etapa
+        )
+    if _contar_movimientos_distintos(pre_movs) >= limit:
         advertencias.append(
             "El historial anterior al Desde puede estar incompleto (límite de movimientos). "
             "El saldo inicial histórico podría no reflejar todo el stock previo."
         )
-    saldo_inicial, calculado_ok = _calcular_saldo_inicial_terminado(
-        pre_periodo_movimientos=pre_movs_stock,
-    )
+
+    saldo_inicial_por_etapa: Dict[str, int] = {}
+    if es_pipeline_fabricados:
+        saldo_inicial_por_etapa, calculado_ok = _calcular_saldo_inicial_por_etapa(
+            pre_periodo_movimientos=pre_movs_stock,
+            tipos_etapa=tipos_etapa,
+            mapa_dep=mapa_dep_etapa,
+        )
+        saldo_inicial = sum(saldo_inicial_por_etapa.values())
+    else:
+        saldo_inicial, calculado_ok = _calcular_saldo_inicial_terminado(
+            pre_periodo_movimientos=pre_movs_stock,
+        )
+
     if not calculado_ok and stock_terminado is not None:
         movs_crudos = _recolectar_movimientos_analisis(
             base_empresa,
             id_art,
             fecha_desde=fecha_desde,
             fecha_hasta=fecha_hasta,
-            limit=limit,
+            limit=limite_efectivo,
             **filtro_eje,
         )
-        neto = sum(
-            (int(m.get("entrada") or 0) - int(m.get("salida") or 0))
-            for m in movs_crudos
-            if m.get("afecta_deposito", True)
-        )
-        saldo_inicial, calculado_ok = _calcular_saldo_inicial_terminado(
-            stock_terminado_actual=stock_terminado,
-            neto_periodo=neto,
-        )
+        if es_pipeline_fabricados:
+            movs_crudos = [m for m in movs_crudos if m.get("afecta_deposito", True)]
+            movs_crudos = _marcar_transferencias_internas(
+                movs_crudos, mapa_dep=mapa_dep_etapa
+            )
+            neto_etapa = _neto_periodo_por_etapa(movs_crudos, tipos_etapa)
+            saldo_inicial_por_etapa, calculado_ok = _calcular_saldo_inicial_por_etapa(
+                stock_por_etapa=stock_por_etapa,
+                neto_periodo_por_etapa=neto_etapa,
+                tipos_etapa=tipos_etapa,
+                mapa_dep=mapa_dep_etapa,
+            )
+            saldo_inicial = sum(saldo_inicial_por_etapa.values())
+        else:
+            neto = sum(
+                (int(m.get("entrada") or 0) - int(m.get("salida") or 0))
+                for m in movs_crudos
+                if m.get("afecta_deposito", True)
+            )
+            saldo_inicial, calculado_ok = _calcular_saldo_inicial_terminado(
+                stock_terminado_actual=stock_terminado,
+                neto_periodo=neto,
+            )
     if not calculado_ok:
         advertencias.append(
             "No se pudo determinar el saldo inicial histórico al inicio del período; "
@@ -1192,16 +1764,27 @@ def construir_analisis_trazabilidad_articulo(
         id_art,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
-        limit=limit,
+        limit=limite_efectivo,
         **filtro_eje,
     )
-    if len(movimientos) >= limit:
+    if _contar_movimientos_distintos(movimientos) >= limit:
         advertencias.append(
             "Se alcanzó el límite de movimientos del período; la historia listada puede estar truncada."
         )
     # Solo movimientos que mueven stock Terminado (p. ej. FA se omite).
     movimientos = [m for m in movimientos if m.get("afecta_deposito", True)]
-    movimientos = _unificar_y_saldo_corrido(movimientos, saldo_inicial=saldo_inicial)
+    if es_pipeline_fabricados:
+        movimientos = _marcar_transferencias_internas(
+            movimientos, mapa_dep=mapa_dep_etapa
+        )
+        movimientos = _calcular_saldo_corrido_por_etapa(
+            movimientos,
+            saldo_inicial_por_etapa=saldo_inicial_por_etapa,
+            tipos_etapa=tipos_etapa,
+            mapa_dep=mapa_dep_etapa,
+        )
+    else:
+        movimientos = _unificar_y_saldo_corrido(movimientos, saldo_inicial=saldo_inicial)
 
     eventos_mpr = _consultar_eventos_mpr_articulo(
         base_empresa,
@@ -1211,8 +1794,12 @@ def construir_analisis_trazabilidad_articulo(
     )
 
     saldo_final = saldo_inicial
+    saldo_final_por_etapa: Dict[str, int] = dict(saldo_inicial_por_etapa)
     if movimientos:
         saldo_final = int(movimientos[-1].get("saldo_corrido") or saldo_inicial)
+        if es_pipeline_fabricados:
+            ult = movimientos[-1].get("saldos_por_etapa") or {}
+            saldo_final_por_etapa = {t: int(ult.get(t, 0)) for t in tipos_etapa}
 
     # Conciliación: con Hasta ≥ hoy sobre el eje elegido, el corrido debe cerrar.
     hasta_str = to_date_or_none(fecha_hasta)
@@ -1223,19 +1810,32 @@ def construir_analisis_trazabilidad_articulo(
         except (ValueError, TypeError):
             hasta_date = None
     hoy = date_type.today()
-    etiqueta_eje_stock = (deposito or {}).get("nombre") or "depósito del análisis"
-    if (
-        calculado_ok
-        and hasta_date is not None
-        and hasta_date >= hoy
-        and saldo_final != stock_terminado
-    ):
-        advertencias.append(
-            f"El saldo reconstruido al cierre ({saldo_final}) no coincide con "
-            f"el stock actual del eje ({stock_terminado} en {etiqueta_eje_stock}). "
-            "Puede haber movimientos no capturados, truncado por límite o un depósito "
-            "distinto al eje del análisis."
+    conciliacion_estricta = False
+    conciliacion_por_etapa: Dict[str, Dict[str, int]] = {}
+    if es_pipeline_fabricados:
+        conciliacion_estricta, conciliacion_por_etapa = _conciliar_cierre_por_etapa(
+            saldo_final_por_etapa=saldo_final_por_etapa,
+            stock_por_etapa=stock_por_etapa,
+            etapas=etapas_pipeline,
+            hasta_date=hasta_date,
+            hoy=hoy,
+            calculado_ok=calculado_ok,
+            advertencias=advertencias,
         )
+    else:
+        etiqueta_eje_stock = (deposito or {}).get("nombre") or "depósito del análisis"
+        if (
+            calculado_ok
+            and hasta_date is not None
+            and hasta_date >= hoy
+            and saldo_final != stock_terminado
+        ):
+            advertencias.append(
+                f"El saldo reconstruido al cierre ({saldo_final}) no coincide con "
+                f"el stock actual del eje ({stock_terminado} en {etiqueta_eje_stock}). "
+                "Puede haber movimientos no capturados, truncado por límite o un depósito "
+                "distinto al eje del análisis."
+            )
 
     dep_semi = dep_id
     if es_pack and dep_id is None:
@@ -1279,6 +1879,7 @@ def construir_analisis_trazabilidad_articulo(
             "terminado": stock_terminado,
             "semi_componentes": [],
             "negativo": stock_terminado < 0,
+            **({"por_etapa": stock_por_etapa} if es_pipeline_fabricados else {}),
         },
         "brechas": {
             "ped_urgente": ped_urgente,
@@ -1307,11 +1908,26 @@ def construir_analisis_trazabilidad_articulo(
             "deposito_ids": (deposito or {}).get("ids") or [],
             "deposito_nombre": (deposito or {}).get("nombre"),
             "tipo_eje": (deposito or {}).get("tipo_eje"),
+            **(
+                {
+                    "saldo_final_por_etapa": saldo_final_por_etapa,
+                    "stock_por_etapa": stock_por_etapa,
+                    "etapas": [
+                        {"tipo_mpr": e.get("tipo_mpr"), "label": e.get("label")}
+                        for e in etapas_pipeline
+                    ],
+                    "conciliacion_estricta": conciliacion_estricta,
+                    "conciliacion_por_etapa": conciliacion_por_etapa,
+                }
+                if es_pipeline_fabricados
+                else {}
+            ),
         },
         "saldo_inicial": {
             "valor": saldo_inicial,
             "calculado_ok": calculado_ok,
             "origen": "historico_pre_periodo",
+            **({"por_etapa": saldo_inicial_por_etapa} if es_pipeline_fabricados else {}),
         },
         "deposito": deposito,
         "advertencias": advertencias,

@@ -26,6 +26,12 @@ def _parse_datetime(val: Any) -> datetime:
         return val
     if val is None:
         return datetime.now()
+    if isinstance(val, str) and val.strip():
+        raw = val.strip().replace("Z", "+00:00").replace(" ", "T", 1)
+        try:
+            return datetime.fromisoformat(raw[:19])
+        except ValueError:
+            pass
     return datetime.now()
 
 
@@ -130,6 +136,30 @@ def opp_acumulado_por_pack(
             if aid is not None and total is not None:
                 acum[aid] = acum.get(aid, Decimal("0")) + total
     return acum
+
+
+def contar_partes_fecha_turno(
+    base_empresa: str,
+    fecha: date,
+    id_mpr_turno: int,
+) -> int:
+    """Cuántas cabeceras mpr_parte hay para esa fecha de producción y turno."""
+    base = (base_empresa or "").strip()
+    tid = to_int_or_none(id_mpr_turno)
+    fp = to_date_or_none(fecha)
+    if not base or not fp or tid is None:
+        return 0
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM mpr_parte
+            WHERE fecha_produccion = %s AND id_mpr_turno = %s
+            """,
+            [fp, tid],
+        )
+        row = cursor.fetchone() or {}
+        return to_int_or_none(row.get("n")) or 0
 
 
 def obtener_parte_por_pk(

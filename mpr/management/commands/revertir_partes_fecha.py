@@ -402,27 +402,37 @@ class Command(BaseCommand):
 
         # Movimientos OPP-parte ligados por UUID en detalle
         self.stdout.write("")
-        self.stdout.write(self.style.MIGRATE_HEADING("2. movimiento_stock OPP-parte (detalle con UUID)"))
+        self.stdout.write(self.style.MIGRATE_HEADING("2. movimiento_stock de parte (UUID legado o texto legible)"))
         movimientos: list[dict[str, Any]] = []
         codigos_opp: list[int] = []
         if not tbl_mov:
             self.stdout.write(self.style.WARNING("  Tabla movimiento_stock no encontrada."))
-        elif not uuids:
-            self.stdout.write("  (sin UUID de partes para cruzar)")
         else:
             cursor.execute(
                 f"""
                 SELECT codigo_movimiento, detalle, fecha, tipo_mov, motivo_movimiento, anulado
                 FROM `{tbl_mov}`
-                WHERE detalle LIKE %s
+                WHERE (
+                    detalle LIKE %s
+                    OR detalle LIKE %s
+                    OR detalle LIKE %s
+                    OR detalle LIKE %s
+                )
                   AND COALESCE(anulado, 'No') <> 'Si'
                 ORDER BY codigo_movimiento
                 """,
-                ["%OPP-parte%"],
+                [
+                    "%OPP-parte%",
+                    "Parte de producción%",
+                    "Parte ·%",
+                    "Ajuste de parte de producción%",
+                ],
             )
             for row in cursor.fetchall() or []:
                 detalle = str_or_blank(_row_val(row, "detalle"))
-                if not any(u in detalle for u in uuids):
+                if not _es_movimiento_parte_del_dia(
+                    detalle, _row_val(row, "fecha"), fecha_iso, uuids
+                ):
                     continue
                 movimientos.append(
                     {
@@ -438,7 +448,7 @@ class Command(BaseCommand):
                     codigos_opp.append(cm)
 
             if not movimientos:
-                self.stdout.write("  (sin movimientos OPP-parte ligados a los UUID del día)")
+                self.stdout.write("  (sin movimientos de parte del día)")
             else:
                 self.stdout.write(
                     f"  {'Código':>8}  {'Fecha':12}  {'Tipo':6}  Detalle"
@@ -690,21 +700,33 @@ class Command(BaseCommand):
                 conn.commit()
             return
 
-        # OPP-parte por UUID
+        # OPP-parte: UUID legado o texto "Parte de producción" del día
         codigos_opp: list[int] = []
-        if tbl_mov and uuids:
+        if tbl_mov:
             cursor.execute(
                 f"""
-                SELECT codigo_movimiento, detalle
+                SELECT codigo_movimiento, detalle, fecha
                 FROM `{tbl_mov}`
-                WHERE detalle LIKE %s
+                WHERE (
+                    detalle LIKE %s
+                    OR detalle LIKE %s
+                    OR detalle LIKE %s
+                    OR detalle LIKE %s
+                )
                   AND COALESCE(anulado, 'No') <> 'Si'
                 """,
-                ["%OPP-parte%"],
+                [
+                    "%OPP-parte%",
+                    "Parte de producción%",
+                    "Parte ·%",
+                    "Ajuste de parte de producción%",
+                ],
             )
             for row in cursor.fetchall() or []:
                 detalle = str_or_blank(_row_val(row, "detalle"))
-                if not any(u in detalle for u in uuids):
+                if not _es_movimiento_parte_del_dia(
+                    detalle, _row_val(row, "fecha"), fecha_iso, uuids
+                ):
                     continue
                 cm = to_int_or_none(_row_val(row, "codigo_movimiento"))
                 if cm and cm not in codigos_opp:
@@ -897,6 +919,26 @@ class Command(BaseCommand):
                 f"Post-apply {fecha_es}: aún quedan {quedan} partes (rollback manual requerido)."
             )
         self.stdout.write(self.style.SUCCESS(f"  OK {fecha_es}: 0 partes residuales."))
+
+
+def _es_movimiento_parte_del_dia(
+    detalle: str,
+    fecha_row: Any,
+    fecha_iso: str,
+    uuids: List[str],
+) -> bool:
+    """Legacy: UUID en detalle. Nuevo: 'Parte ·…' / 'Parte de producción…' o ajuste del día."""
+    det = str_or_blank(detalle)
+    if uuids and any(u in det for u in uuids):
+        return True
+    fecha_mov = str(fecha_row or "")[:10]
+    if fecha_mov != str(fecha_iso or "")[:10]:
+        return False
+    return (
+        det.startswith("Parte ·")
+        or det.startswith("Parte de producción")
+        or det.startswith("Ajuste de parte de producción")
+    )
 
 
 def str_or_blank(value: Any) -> str:

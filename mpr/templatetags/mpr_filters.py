@@ -62,7 +62,28 @@ def dict_get(d, key):
     """
     if d is None:
         return None
+    if not isinstance(d, dict):
+        return None
     return d.get(key)
+
+
+@register.filter
+def saldo_etapa_celda(fila, tipo):
+    """Celda de saldo por tipo_mpr (presentación o crudo). Nunca None."""
+    vacio = {"saldo": 0, "unidades_display": "0", "docenas_display": ""}
+    if not isinstance(fila, dict):
+        return vacio
+    celdas = fila.get("saldos_por_etapa_celdas") or {}
+    if isinstance(celdas, dict):
+        celda = celdas.get(tipo)
+        if isinstance(celda, dict):
+            return celda
+    saldos = fila.get("saldos_por_etapa") or {}
+    try:
+        valor = int(saldos.get(tipo, 0) or 0) if isinstance(saldos, dict) else 0
+    except (TypeError, ValueError):
+        valor = 0
+    return {"saldo": valor, "unidades_display": str(valor), "docenas_display": ""}
 
 
 @register.filter
