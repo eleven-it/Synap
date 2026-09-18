@@ -4741,9 +4741,43 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                 meta["a_producir"] = data.get("a_producir") or meta["a_producir"]
                 meta["saldo_inicial"] = data.get("saldo_inicial") or meta["saldo_inicial"]
                 meta["eventos_mpr"] = data.get("eventos_mpr") or []
+                dep_k = meta.get("deposito") or {}
+                if dep_k.get("tipo_eje") == "pipeline_fabricados":
+                    et_list = dep_k.get("etapas") or []
+                    pe_ini = (meta.get("saldo_inicial") or {}).get("por_etapa") or {}
+                    pe_cierre = (data.get("kpis") or {}).get("saldo_final_por_etapa") or {}
+                    pe_stock = (meta.get("stock") or {}).get("por_etapa") or {}
+                    meta["saldo_inicial_etapas_ui"] = [
+                        {"label": e.get("label"), "valor": pe_ini.get(e.get("tipo_mpr"), 0)}
+                        for e in et_list
+                    ]
+                    meta["saldo_cierre_etapas_ui"] = [
+                        {"label": e.get("label"), "valor": pe_cierre.get(e.get("tipo_mpr"), 0)}
+                        for e in et_list
+                    ]
+                    meta["stock_etapas_ui"] = [
+                        {"label": e.get("label"), "valor": pe_stock.get(e.get("tipo_mpr"), 0)}
+                        for e in et_list
+                    ]
                 if data.get("articulo"):
                     kpis = data.get("kpis") or {}
                     filas = data.get("movimientos") or []
+                    if dep_k.get("tipo_eje") == "pipeline_fabricados":
+                        from mpr.reportes_presentacion import (
+                            preparar_saldos_etapa_kardex,
+                            resolver_modo_presentacion_reporte,
+                        )
+
+                        tipos_etapa = [
+                            str(e.get("tipo_mpr"))
+                            for e in (dep_k.get("etapas") or [])
+                            if e.get("tipo_mpr")
+                        ]
+                        filas = preparar_saldos_etapa_kardex(
+                            filas,
+                            modo=resolver_modo_presentacion_reporte(self.request),
+                            tipos_etapa=tipos_etapa,
+                        )
                     opp_rows = [
                         m for m in filas if int(m.get("entrada") or 0) > 0
                     ]
@@ -4755,6 +4789,8 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                     )
                     for mov in filas:
                         if mov.get("clase_ui") != "opa":
+                            continue
+                        if mov.get("es_primer_impacto") is False:
                             continue
                         cm = mov.get("codigo_movimiento")
                         if cm is None:
@@ -4840,6 +4876,22 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                 "totales": totales,
                 "meta": meta,
             }
+            if grupo == "trazabilidad" and reporte == "kardex_articulo":
+                dep_meta = (meta or {}).get("deposito") or {}
+                if dep_meta.get("tipo_eje") == "pipeline_fabricados":
+                    from mpr.reportes_presentacion import preparar_saldos_etapa_kardex
+
+                    tipos_etapa = [
+                        str(e.get("tipo_mpr"))
+                        for e in (dep_meta.get("etapas") or [])
+                        if e.get("tipo_mpr")
+                    ]
+                    reporte_ctx["filas"] = preparar_saldos_etapa_kardex(
+                        reporte_ctx.get("filas") or [],
+                        modo=modo_presentacion,
+                        tipos_etapa=tipos_etapa,
+                    )
+                    reporte_ctx["etapas_pipeline"] = dep_meta.get("etapas") or []
             reporte_ctx = aplicar_presentacion_reporte(
                 reporte_ctx, modo_presentacion, base_empresa
             )

@@ -842,12 +842,216 @@ class TestKardexArticuloUIRender(SimpleTestCase):
         self.assertNotIn("Afecta depósito", html)
         self.assertIn("reporte=kardex_articulo", html)
         self.assertIn("id_articulo=963", html)
+
+    def test_pipeline_muestra_etapa_y_cuatro_saldos_en_columnas_correctas(self):
+        from mpr.reportes_presentacion import preparar_saldos_etapa_kardex
+
+        etapas = [
+            {"tipo_mpr": "Produccion", "label": "Producción"},
+            {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado"},
+            {"tipo_mpr": "2daSeleccion", "label": "2da Selección"},
+        ]
+        filas = preparar_saldos_etapa_kardex(
+            [
+                {
+                    "fecha_display": "17/09/2026",
+                    "tipo_mov": "INV",
+                    "clase_ui": "inventario",
+                    "etapa_label": "Semi elaborado",
+                    "entrada": 28,
+                    "salida": 0,
+                    "saldo_corrido": 28,
+                    "saldos_por_etapa": {
+                        "SemiElaborado": 28,
+                        "2daSeleccion": 0,
+                        "Produccion": 0,
+                    },
+                }
+            ],
+            modo="docenas",
+            tipos_etapa=[etapa["tipo_mpr"] for etapa in etapas],
+        )
+        html = self._render_partial(
+            self._base_ctx(
+                meta={
+                    "id_articulo": 1115,
+                    "articulo": {
+                        "id": 1115,
+                        "codigo": "COMP-1115",
+                        "descripcion": "Componente pipeline",
+                        "es_pack": False,
+                    },
+                    "deposito": {
+                        "tipo_eje": "pipeline_fabricados",
+                        "etapas": etapas,
+                    },
+                    "demanda_ped": {"filas": [], "totales": {"p_ped": 0}},
+                    "stock": {"terminado": 28, "por_etapa": {"SemiElaborado": 28}},
+                    "brechas": {"ped_urgente": 0, "tot_urgente": 0, "reserva": 0},
+                    "a_producir": {"cantidad": 0, "capacidad_semi": 0},
+                    "saldo_inicial": {"valor": 0, "calculado_ok": True},
+                    "eventos_mpr": [],
+                    "advertencias": [],
+                },
+                etapas_pipeline=etapas,
+                filas=filas,
+            )
+        )
+
+        self.assertIn(">Etapa<", html)
+        self.assertIn('data-saldo-etapa="Produccion"', html)
+        self.assertIn('data-saldo-etapa="SemiElaborado"', html)
+        self.assertIn('data-saldo-etapa="2daSeleccion"', html)
+        self.assertIn('data-saldo-etapa="Consolidado"', html)
+        self.assertIn("Semi elaborado", html)
+        self.assertRegex(
+            html,
+            r'data-saldo-etapa="Produccion"[^>]*>(?:(?!</td>)[\s\S])*?>0<(?:(?!</td>)[\s\S])*</td>',
+        )
+        self.assertRegex(
+            html,
+            r'data-saldo-etapa="SemiElaborado"[^>]*>(?:(?!</td>)[\s\S])*?>2<(?:(?!</td>)[\s\S])*?>4 u\.<(?:(?!</td>)[\s\S])*</td>',
+        )
+        self.assertRegex(
+            html,
+            r'data-saldo-etapa="Consolidado"[^>]*>[\s\S]*?>2<[\s\S]*?>4 u\.<',
+        )
         self.assertNotIn("reporte=timeline", html)
         self.assertNotIn("alert(", html)
         self.assertNotIn("window.confirm", html)
         self.assertNotIn('name="id_deposito"', html)
         self.assertIn("sincronizarPeriodoShell", html)
         self.assertIn('@submit="sincronizarPeriodoShell()"', html)
+        self.assertIn("Saldo final", html)
+        self.assertIn('data-saldo-cierre="1"', html)
+
+    def test_pipeline_sin_celda_consolidada_no_revienta_template(self):
+        """Fila cruda del backend (sin preparar_saldos) no debe 500 por VariableDoesNotExist."""
+        etapas = [
+            {"tipo_mpr": "Produccion", "label": "Producción"},
+            {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado"},
+            {"tipo_mpr": "2daSeleccion", "label": "2da Selección"},
+        ]
+        html = self._render_partial(
+            self._base_ctx(
+                meta={
+                    "id_articulo": 1115,
+                    "articulo": {
+                        "id": 1115,
+                        "codigo": "COMP-1115",
+                        "descripcion": "Componente pipeline",
+                        "es_pack": False,
+                    },
+                    "deposito": {
+                        "tipo_eje": "pipeline_fabricados",
+                        "etapas": etapas,
+                    },
+                    "demanda_ped": {"filas": [], "totales": {"p_ped": 0}},
+                    "stock": {"terminado": 28, "por_etapa": {"SemiElaborado": 28}},
+                    "brechas": {"ped_urgente": 0, "tot_urgente": 0, "reserva": 0},
+                    "a_producir": {"cantidad": 0, "capacidad_semi": 0},
+                    "saldo_inicial": {"valor": 0, "calculado_ok": True},
+                    "eventos_mpr": [],
+                    "advertencias": [],
+                },
+                etapas_pipeline=etapas,
+                filas=[
+                    {
+                        "fecha_display": "18/08/2026",
+                        "tipo_mov": "MSTOCK",
+                        "clase_ui": "inventario",
+                        "etapa_label": "Semi elaborado",
+                        "entrada": 28,
+                        "salida": 0,
+                        "saldo_corrido": 28,
+                        "saldos_por_etapa": {
+                            "Produccion": 0,
+                            "SemiElaborado": 28,
+                            "2daSeleccion": 0,
+                        },
+                    }
+                ],
+            )
+        )
+        self.assertIn('data-saldo-etapa="Consolidado"', html)
+        self.assertRegex(
+            html,
+            r'data-saldo-etapa="SemiElaborado"[^>]*>[\s\S]*?\b28\b',
+        )
+        self.assertRegex(
+            html,
+            r'data-saldo-etapa="Produccion"[^>]*>[\s\S]*?\b0\b',
+        )
+
+    def test_pipeline_muestra_saldo_final_por_etapa(self):
+        etapas = [
+            {"tipo_mpr": "Produccion", "label": "Producción"},
+            {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado"},
+            {"tipo_mpr": "2daSeleccion", "label": "2da Selección"},
+        ]
+        html = self._render_partial(
+            self._base_ctx(
+                meta={
+                    "id_articulo": 1115,
+                    "articulo": {
+                        "id": 1115,
+                        "descripcion": "Componente pipeline",
+                        "es_pack": False,
+                    },
+                    "deposito": {
+                        "tipo_eje": "pipeline_fabricados",
+                        "etapas": etapas,
+                    },
+                    "demanda_ped": {"filas": [], "totales": {"p_ped": 0}},
+                    "stock": {"terminado": 107, "por_etapa": {"Produccion": 79, "SemiElaborado": 28}},
+                    "brechas": {"ped_urgente": 0, "tot_urgente": 0, "reserva": 0},
+                    "a_producir": {"cantidad": 0, "capacidad_semi": 0},
+                    "saldo_inicial": {
+                        "valor": 0,
+                        "calculado_ok": True,
+                        "por_etapa": {"Produccion": 0, "SemiElaborado": 0, "2daSeleccion": 0},
+                    },
+                    "eventos_mpr": [],
+                    "advertencias": [],
+                },
+                etapas_pipeline=etapas,
+                kpis={
+                    "saldo_final": 107,
+                    "saldo_final_por_etapa": {
+                        "Produccion": 79,
+                        "SemiElaborado": 28,
+                        "2daSeleccion": 0,
+                    },
+                },
+                filas=[
+                    {
+                        "fecha_display": "18/08/2026",
+                        "clase_ui": "inventario",
+                        "etapa_label": "Semi elaborado",
+                        "entrada": 28,
+                        "saldos_por_etapa": {
+                            "Produccion": 79,
+                            "SemiElaborado": 28,
+                            "2daSeleccion": 0,
+                        },
+                        "saldo_corrido": 107,
+                    }
+                ],
+            )
+        )
+        self.assertIn("Saldo final", html)
+        self.assertRegex(
+            html,
+            r'data-saldo-cierre-etapa="Produccion"[^>]*>[\s\S]*?\b79\b',
+        )
+        self.assertRegex(
+            html,
+            r'data-saldo-cierre-etapa="SemiElaborado"[^>]*>[\s\S]*?\b28\b',
+        )
+        self.assertRegex(
+            html,
+            r'data-saldo-cierre-etapa="Consolidado"[^>]*>[\s\S]*?\b107\b',
+        )
 
     def test_kpi_strip_kardex_brecha_pack(self):
         from django.template.loader import render_to_string

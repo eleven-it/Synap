@@ -46,6 +46,7 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [DOCENAS_CLASIFICACION_OPERARIO_MPR.md](DOCENAS_CLASIFICACION_OPERARIO_MPR.md) | **Docenas operativas** + **control de calidad por operario fabricante**; impacto en tablero, parte, CC y reportes. |
 | [REPORTES_MPR.md](REPORTES_MPR.md) | **Hub reportes** `/mpr/reportes/`: resumen diario, por operario, cadena pipeline, pendientes; modelo envío → parte → CC → armado. |
 | [PLAN_TRAZABILIDAD_ANALISIS_COMPLETO.md](PLAN_TRAZABILIDAD_ANALISIS_COMPLETO.md) | Plan: unificar Kardex/Línea de tiempo en análisis PED+OPA/REM+saldo+brechas (change `mpr-trazabilidad-analisis-completo`). |
+| [AF_TRAZABILIDAD_MOVIMIENTOS_POR_ETAPA.md](AF_TRAZABILIDAD_MOVIMIENTOS_POR_ETAPA.md) | **Kardex pipeline:** saldos por etapa (Producción / Semi / 2.ª) + Qué pasó de parte (`Parte · turno · OPT · operario`, sin UUID). |
 | [DISENO_ARMADO_TABLERO_PCP.md](DISENO_ARMADO_TABLERO_PCP.md) | Vista tabla armado PCP (resta armar, 1er fecha entrega, terminado pack). |
 | [ACCIONES_LOTE_TABLERO.md](ACCIONES_LOTE_TABLERO.md) | **Etapa 9 + 10** — Acciones de lote (supersedido por clasificación global E10). Ver también clasificación única desde Producción. |
 | [NAVIGACION_MPR_ETAPA11.md](NAVIGACION_MPR_ETAPA11.md) | **Etapa 11** — Hub de navegación: tablero consolidado como operación diaria; ventana pack/wizard como trazabilidad OPT avanzada; menú, CTAs y `crear_opp_url` → parte de producción. |
