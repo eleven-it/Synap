@@ -3,10 +3,12 @@ from django.test import RequestFactory, SimpleTestCase
 
 from mpr.reportes_hub import columnas_csv_para_modo
 from mpr.reportes_presentacion import (
+    _celda_stock_deposito,
     aplicar_presentacion_reporte,
     enriquecer_fila_cantidades,
     formatear_cantidad_reporte,
     parse_modo_presentacion,
+    preparar_saldos_etapa_kardex,
     preparar_stock_por_deposito,
 )
 from mpr.views import ReportesMPRView
@@ -165,6 +167,67 @@ class PrepararStockPorDepositoTest(SimpleTestCase):
         fila = ctx["filas"][0]
         self.assertEqual(fila["codigo_manual"], "M-001")
         self.assertEqual(fila["codigo_articulo"], "M-001")
+
+
+class PrepararSaldosEtapaKardexTest(SimpleTestCase):
+    def test_misma_celda_que_inventario_y_consolidado(self):
+        fila = {
+            "saldos_por_etapa": {
+                "Produccion": 0,
+                "SemiElaborado": 28,
+                "2daSeleccion": 0,
+            },
+            "saldo_corrido": 28,
+        }
+
+        preparada = preparar_saldos_etapa_kardex([fila], modo="docenas")[0]
+
+        self.assertEqual(
+            preparada["saldos_por_etapa_celdas"]["SemiElaborado"],
+            _celda_stock_deposito(28, "docenas", clamp_negativos=False),
+        )
+        self.assertEqual(
+            preparada["saldo_consolidado_celda"],
+            _celda_stock_deposito(28, "docenas", clamp_negativos=False),
+        )
+        self.assertEqual(
+            [celda["saldo"] for celda in preparada["saldos_etapa_ui"]],
+            [0, 28, 0],
+        )
+
+    def test_siempre_expone_celda_consolidada(self):
+        preparada = preparar_saldos_etapa_kardex(
+            [{"saldos_por_etapa": {"SemiElaborado": 28}}],
+            modo="docenas",
+        )[0]
+        self.assertIn("saldo_consolidado_celda", preparada)
+        self.assertEqual(preparada["saldo_corrido"], 28)
+        self.assertEqual(
+            preparada["saldo_consolidado_celda"],
+            _celda_stock_deposito(28, "docenas", clamp_negativos=False),
+        )
+
+    def test_respeta_orden_pipeline_y_completa_etapa_faltante(self):
+        fila = {
+            "saldos_por_etapa": {"SemiElaborado": 28},
+            "saldo_corrido": 28,
+        }
+        tipos = ["2daSeleccion", "Produccion", "SemiElaborado"]
+
+        preparada = preparar_saldos_etapa_kardex(
+            [fila],
+            modo="docenas",
+            tipos_etapa=tipos,
+        )[0]
+
+        self.assertEqual(
+            [celda["tipo_mpr"] for celda in preparada["saldos_etapa_ui"]],
+            tipos,
+        )
+        self.assertEqual(
+            [celda["saldo"] for celda in preparada["saldos_etapa_ui"]],
+            [0, 0, 28],
+        )
 
 
 class ColumnasCsvModoTest(SimpleTestCase):

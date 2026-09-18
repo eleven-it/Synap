@@ -222,6 +222,70 @@ class TestTimelineDelegacionAnalisis(SimpleTestCase):
         self.assertEqual(ctx["reporte"], "kardex_articulo")
         mock_analisis.assert_called_once()
 
+    def test_pipeline_prepara_saldos_semi_sin_desplazarlos_a_produccion(self):
+        analisis = _payload_analisis_timeline()
+        analisis["deposito"] = {
+            "tipo_eje": "pipeline_fabricados",
+            "etapas": [
+                {"tipo_mpr": "Produccion", "label": "Producción"},
+                {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado"},
+                {"tipo_mpr": "2daSeleccion", "label": "2da Selección"},
+            ],
+        }
+        analisis["saldo_inicial"] = {
+            "valor": 0,
+            "calculado_ok": True,
+            "por_etapa": {
+                "Produccion": 0,
+                "SemiElaborado": 0,
+                "2daSeleccion": 0,
+            },
+        }
+        analisis["stock"] = {
+            "terminado": 28,
+            "por_etapa": {
+                "Produccion": 0,
+                "SemiElaborado": 28,
+                "2daSeleccion": 0,
+            },
+        }
+        analisis["movimientos"] = [
+            {
+                "fecha_display": "17/09/2026",
+                "tipo_mov": "INV",
+                "clase_ui": "inventario",
+                "etapa_label": "Semi elaborado",
+                "entrada": 28,
+                "salida": 0,
+                "saldo_corrido": 28,
+                "saldos_por_etapa": {
+                    "Produccion": 0,
+                    "SemiElaborado": 28,
+                    "2daSeleccion": 0,
+                },
+            }
+        ]
+
+        ctx, _ = self._get_context(
+            {
+                "grupo": "trazabilidad",
+                "reporte": "kardex_articulo",
+                "id_articulo": "1398",
+                "desde": "2026-09-01",
+                "hasta": "2026-09-17",
+                "presentacion": "docenas",
+            },
+            analisis,
+        )
+
+        fila = ctx["filas"][0]
+        self.assertEqual(fila["etapa_label"], "Semi elaborado")
+        self.assertEqual(
+            [celda["saldo"] for celda in fila["saldos_etapa_ui"]],
+            [0, 28, 0],
+        )
+        self.assertEqual(fila["saldo_consolidado_celda"]["saldo"], 28)
+
 
 class TestTimelinePartialDeepLink(SimpleTestCase):
     """PR3 — deep-link kardex #timeline preserva filtros (REQ-TRAZ-06)."""
@@ -271,3 +335,36 @@ class TestExportAnalisisTrazabilidadCsv(SimpleTestCase):
         self.assertIn("EVENTOS MPR", body)
         self.assertIn("Cliente CSV", body)
         self.assertIn("Armado (OPA)", body)
+
+    def test_csv_pipeline_incluye_etapas_y_seccion_saldos(self):
+        analisis = _payload_analisis_timeline()
+        analisis["deposito"] = {
+            "tipo_eje": "pipeline_fabricados",
+            "etapas": [
+                {"tipo_mpr": "Produccion", "label": "Producción"},
+                {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado"},
+            ],
+        }
+        analisis["movimientos"] = [
+            {
+                "fecha_display": "01/08/2026",
+                "tipo_mov": "OPP",
+                "etapa_label": "Producción",
+                "cod_deposito": 3,
+                "saldos_por_etapa": {"Produccion": 79, "SemiElaborado": 28},
+                "saldo_corrido": 107,
+                "entrada": 0,
+                "salida": 0,
+                "nro_comprobante": "-",
+                "detalle": "",
+                "afecta_deposito": True,
+                "operario": "-",
+            }
+        ]
+        analisis["saldo_inicial"] = {"por_etapa": {"Produccion": 70, "SemiElaborado": 20}}
+        analisis["kpis"]["saldo_final_por_etapa"] = {"Produccion": 79, "SemiElaborado": 28}
+        analisis["stock"]["por_etapa"] = {"Produccion": 79, "SemiElaborado": 28}
+        body = analisis_trazabilidad_a_csv(analisis, modo="docenas").decode("utf-8-sig")
+        self.assertIn("Etapa", body)
+        self.assertIn("SALDOS POR ETAPA", body)
+        self.assertIn("Saldo Producción", body)

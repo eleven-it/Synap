@@ -5741,6 +5741,59 @@ def get_depositos_pipeline_fabricados_mpr(base_empresa: str) -> List[int]:
     return ids
 
 
+def get_etapas_pipeline_fabricados_mpr(base_empresa: str) -> List[Dict[str, Any]]:
+    """Etapas pipeline fabricados con paridad inventario (anulado=No, suma_stock=Si).
+
+    Devuelve ``[{id_deposito, tipo_mpr, label, orden}]`` en orden Producción → Semi → 2.ª.
+    """
+    from stock.services.inventario_tabla import ETAPAS_FABRICADOS
+
+    if not (base_empresa or "").strip():
+        return []
+    orden_tipo = {tipo: idx for idx, (tipo, _lbl) in enumerate(ETAPAS_FABRICADOS)}
+    labels = {tipo: lbl for tipo, lbl in ETAPAS_FABRICADOS}
+    placeholders = ",".join(["%s"] * len(TIPOS_MPR_PIPELINE_FABRICADOS))
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "deposito")
+            if not tbl:
+                return []
+            cursor.execute(
+                f"""
+                SELECT CodDeposito AS id_deposito,
+                       TRIM(COALESCE(tipo_mpr, '')) AS tipo_mpr
+                FROM {tbl}
+                WHERE TRIM(COALESCE(tipo_mpr, '')) IN ({placeholders})
+                  AND COALESCE(anulado, 'No') = 'No'
+                  AND COALESCE(suma_stock, 'Si') = 'Si'
+                """,
+                list(TIPOS_MPR_PIPELINE_FABRICADOS),
+            )
+            rows = cursor.fetchall() or []
+    except Exception as e:
+        logger.warning(
+            "get_etapas_pipeline_fabricados_mpr error base=%s: %s",
+            base_empresa,
+            e,
+        )
+        return []
+
+    etapas: List[Dict[str, Any]] = []
+    for row in rows:
+        tipo = str_or_default(row.get("tipo_mpr"), "").strip()
+        dep_id = to_int_or_none(row.get("id_deposito"))
+        if dep_id is None or tipo not in orden_tipo:
+            continue
+        etapas.append({
+            "id_deposito": dep_id,
+            "tipo_mpr": tipo,
+            "label": labels.get(tipo, tipo),
+            "orden": orden_tipo[tipo],
+        })
+    etapas.sort(key=lambda e: (e.get("orden", 99), e.get("id_deposito") or 0))
+    return etapas
+
+
 def get_deposito_planchado_mpr(base_empresa: str) -> Optional[int]:
     """Depósito de planchado (tipo_mpr=Planchado): etapa de inspección aprobatoria desde Producción."""
     return _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_PLANCHADO)
@@ -18922,6 +18975,113 @@ def obtener_parte(
 # Etapa 5: Transiciones por lote + desmontaje de automatismos
 # =============================================================================
 
+def _fecha_parte_date(parte: Any) -> Optional[date]:
+    fp = getattr(parte, "fecha_produccion", None)
+    if isinstance(fp, datetime):
+        return fp.date()
+    if isinstance(fp, date):
+        return fp
+    iso = to_date_or_none(fp)
+    if not iso:
+        return None
+    try:
+        return date.fromisoformat(str(iso)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _fecha_movimiento_date(fecha_movimiento: Any) -> Optional[date]:
+    if fecha_movimiento is None:
+        return None
+    if isinstance(fecha_movimiento, datetime):
+        return fecha_movimiento.date()
+    if isinstance(fecha_movimiento, date):
+        return fecha_movimiento
+    iso = to_date_or_none(fecha_movimiento)
+    if not iso:
+        return None
+    try:
+        return date.fromisoformat(str(iso)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _hora_parte_hhmm(parte: Any) -> str:
+    reg = getattr(parte, "registrado_en", None)
+    if isinstance(reg, datetime):
+        return reg.strftime("%H:%M")
+    if isinstance(reg, str) and reg.strip():
+        raw = reg.strip().replace("Z", "+00:00").replace(" ", "T", 1)
+        try:
+            return datetime.fromisoformat(raw[:19]).strftime("%H:%M")
+        except ValueError:
+            return ""
+    return ""
+
+
+def texto_operarios_parte(parte: Any, id_articulo: Optional[int] = None) -> str:
+    """Nombres de operario del parte; si hay id_articulo, solo esa línea."""
+    nombres: List[str] = []
+    vistos: set[str] = set()
+    try:
+        lineas = list(parte.lineas.all())
+    except Exception:
+        return ""
+    id_art = to_int_or_none(id_articulo)
+    for lin in lineas:
+        if id_art is not None and to_int_or_none(getattr(lin, "id_articulo", None)) != id_art:
+            continue
+        nom = str_or_default(getattr(lin, "operario_nombre", None), "").strip()
+        if not nom or nom == "-" or nom in vistos:
+            continue
+        vistos.add(nom)
+        nombres.append(nom)
+    if not nombres:
+        return ""
+    if len(nombres) == 1:
+        return nombres[0]
+    if len(nombres) == 2:
+        return f"{nombres[0]}, {nombres[1]}"
+    return f"{nombres[0]} y {len(nombres) - 1} más"
+
+
+def texto_detalle_parte_produccion(
+    parte: Any,
+    *,
+    fecha_movimiento: Optional[Any] = None,
+    incluir_hora: bool = False,
+    id_articulo: Optional[int] = None,
+) -> str:
+    """Detalle de Qué pasó: Parte · turno · OPT · operario (sin UUID ni comprobante).
+
+    Fecha solo si fecha_produccion ≠ fecha del movimiento. Hora solo si
+    ``incluir_hora`` (más de un parte en el mismo turno).
+    """
+    bits = ["Parte"]
+    fp = _fecha_parte_date(parte)
+    fm = _fecha_movimiento_date(fecha_movimiento)
+    if fp and fm is not None and fp != fm:
+        bits.append(fp.strftime("%d/%m/%Y"))
+    if incluir_hora:
+        hora = _hora_parte_hhmm(parte)
+        if hora:
+            bits.append(hora)
+    turno = ""
+    try:
+        turno = str_or_default(getattr(getattr(parte, "turno", None), "nombre", None), "").strip()
+    except Exception:
+        turno = ""
+    if turno:
+        bits.append(f"turno {turno}")
+    opt = to_int_or_none(getattr(parte, "id_lista_produccion", None))
+    if opt:
+        bits.append(f"OPT {opt}")
+    operarios = texto_operarios_parte(parte, id_articulo)
+    if operarios:
+        bits.append(operarios)
+    return " · ".join(bits)
+
+
 def _registrar_asiento_fisico_opp_parte(
     base_empresa: str,
     id_usuario: int,
@@ -18974,7 +19134,23 @@ def _registrar_asiento_fisico_opp_parte(
     id_ref_movstock = 1
     id_pv = 1
     fecha_mov = date.today().isoformat()
-    detalle_mov = f"OPP-parte {parte.pk} desde MPR"
+    incluir_hora = False
+    try:
+        from mpr.repositories.parte import contar_partes_fecha_turno
+
+        fp = _fecha_parte_date(parte)
+        tid = to_int_or_none(
+            getattr(parte, "turno_id", None) or getattr(parte, "id_mpr_turno", None)
+        )
+        if fp is not None and tid is not None:
+            incluir_hora = contar_partes_fecha_turno(base_empresa, fp, tid) > 1
+    except Exception:
+        incluir_hora = False
+    detalle_mov = texto_detalle_parte_produccion(
+        parte,
+        fecha_movimiento=date.today(),
+        incluir_hora=incluir_hora,
+    )
 
     with get_connection(base_empresa) as conn:
         conn.autocommit(False)
@@ -19165,7 +19341,7 @@ def _registrar_delta_stock_ajuste(
     id_ref_movstock = 1
     id_pv = 1
     fecha_mov = date.today().isoformat()
-    detalle_mov = f"Ajuste físico OPP-parte art.{id_articulo} desde MPR"
+    detalle_mov = "Ajuste de parte de producción"
 
     with get_connection(base_empresa) as conn:
         conn.autocommit(False)

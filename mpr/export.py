@@ -62,6 +62,7 @@ def analisis_trazabilidad_a_csv(
     modo: str = "docenas",
     fecha_desde_display: str = "",
     fecha_hasta_display: str = "",
+    etapas: Optional[List[Dict[str, Any]]] = None,
 ) -> bytes:
     """
     CSV multi-sección del análisis trazabilidad artículo (UTF-8 BOM).
@@ -136,9 +137,13 @@ def analisis_trazabilidad_a_csv(
     writer.writerow(["Reserva", brechas.get("reserva", 0)])
     writer.writerow(["Texto explicativo", brechas.get("texto_explicativo") or ""])
 
+    deposito = analisis.get("deposito") or {}
+    es_pipeline = deposito.get("tipo_eje") == "pipeline_fabricados"
+    etapas_csv = etapas or deposito.get("etapas") or []
+
     mov_filas = []
     for mov in movimientos:
-        mov_filas.append({
+        fila = {
             "fecha_display": mov.get("fecha_display") or "-",
             "tipo_mov": mov.get("tipo_mov") or mov.get("clase_ui") or "-",
             "nro_comprobante": mov.get("nro_comprobante") or "-",
@@ -148,23 +153,63 @@ def analisis_trazabilidad_a_csv(
             "saldo_corrido": mov.get("saldo_corrido", ""),
             "afecta_deposito": mov.get("afecta_deposito"),
             "operario": mov.get("operario") or "-",
-        })
-    _escribir_seccion_csv(
-        writer,
-        "MOVIMIENTOS",
-        [
-            ("fecha_display", "Fecha"),
-            ("tipo_mov", "Tipo"),
-            ("nro_comprobante", "Comprobante"),
-            ("detalle", "Detalle"),
-            ("entrada", "Entrada"),
-            ("salida", "Salida"),
-            ("saldo_corrido", "Saldo corrido"),
-            ("afecta_deposito", "Afecta depósito"),
-            ("operario", "Operario"),
-        ],
-        mov_filas,
-    )
+        }
+        if es_pipeline:
+            saldos = mov.get("saldos_por_etapa") or {}
+            fila["etapa_label"] = mov.get("etapa_label") or ""
+            fila["cod_deposito"] = mov.get("cod_deposito", "")
+            for et in etapas_csv:
+                tipo = et.get("tipo_mpr")
+                label = et.get("label") or tipo
+                if tipo:
+                    fila[f"saldo_{tipo}"] = saldos.get(tipo, "")
+        mov_filas.append(fila)
+
+    columnas_mov = [
+        ("fecha_display", "Fecha"),
+        ("tipo_mov", "Tipo"),
+        ("nro_comprobante", "Comprobante"),
+        ("detalle", "Detalle"),
+        ("entrada", "Entrada"),
+        ("salida", "Salida"),
+        ("saldo_corrido", "Saldo corrido"),
+        ("afecta_deposito", "Afecta depósito"),
+        ("operario", "Operario"),
+    ]
+    if es_pipeline:
+        columnas_mov.extend([
+            ("etapa_label", "Etapa"),
+            ("cod_deposito", "Cód. depósito"),
+        ])
+        for et in etapas_csv:
+            tipo = et.get("tipo_mpr")
+            label = et.get("label") or tipo
+            if tipo:
+                columnas_mov.append((f"saldo_{tipo}", f"Saldo {label}"))
+
+    _escribir_seccion_csv(writer, "MOVIMIENTOS", columnas_mov, mov_filas)
+
+    if es_pipeline and etapas_csv:
+        writer.writerow([])
+        writer.writerow(["SALDOS POR ETAPA"])
+        writer.writerow(["Concepto", "Valor"])
+        saldo_ini = analisis.get("saldo_inicial") or {}
+        por_ini = saldo_ini.get("por_etapa") or {}
+        kpis = analisis.get("kpis") or {}
+        por_cierre = kpis.get("saldo_final_por_etapa") or {}
+        stock_pe = (analisis.get("stock") or {}).get("por_etapa") or {}
+        for et in etapas_csv:
+            tipo = et.get("tipo_mpr")
+            label = et.get("label") or tipo
+            if not tipo:
+                continue
+            writer.writerow([f"Inicial {label}", por_ini.get(tipo, 0)])
+            writer.writerow([f"Cierre {label}", por_cierre.get(tipo, 0)])
+            writer.writerow([f"Stock actual {label}", stock_pe.get(tipo, 0)])
+            writer.writerow([
+                f"Diferencia {label}",
+                int(por_cierre.get(tipo, 0)) - int(stock_pe.get(tipo, 0)),
+            ])
 
     evento_filas = []
     for ev in eventos:

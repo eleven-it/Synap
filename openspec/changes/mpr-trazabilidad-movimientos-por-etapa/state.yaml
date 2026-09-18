@@ -1,0 +1,75 @@
+change: mpr-trazabilidad-movimientos-por-etapa
+status: verify-complete-with-gaps
+created: 2026-09-17
+phase: verify
+depends_on: []
+artifacts:
+  exploration: complete
+  proposal: complete
+  design: complete
+  spec: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+verify:
+  human_verdict: pass-with-gaps
+  envelope_verdict: fail
+  envelope_note: "fail = 2 UNTESTED scenarios in strict matrix; 0 blockers; suite green"
+  test_exit_code: 0
+  tests_run: 83
+  requirements_implemented: 12
+  scenarios_with_evidence: 13
+  scenarios_partial: 3
+  scenarios_untested: 2
+  report: openspec/changes/mpr-trazabilidad-movimientos-por-etapa/verify-report.md
+  blockers: 0
+delivery:
+  strategy: ask-on-risk
+  max_changed_lines: 400
+  review_budget_note: "Evolution kardex multi-etapa; corte PR1 backend+tests / PR2 UI+CSV+docs (payload aditivo)"
+session_preflight:
+  execution_mode: auto
+  artifact_store: hybrid
+  delivery_strategy: ask-on-risk
+  review_budget_lines: 400
+product_constraints:
+  parity_inventario_fabricados: true
+  scope_pipeline_fabricados: true
+  exclude_opt_timeline: true
+  exclude_inventario_fisico: true
+  no_native_browser_dialogs: true
+  no_change_inventario_etapa_semantics: true
+  pack_terminado_wave1: excluded
+  reconciliation_strict: hasta_gte_hoy_only
+functional_source: docs/mpr/AF_TRAZABILIDAD_MOVIMIENTOS_POR_ETAPA.md
+product_decisions_propose:
+  ui_mvp: columna_etapa_kpis_cabecera_saldos_por_etapa_backend
+  transferencias_pipeline: dos_renglones
+  corrido_multi_etapa: backend_only
+  packs_terminado: fuera_oleada_1
+  conciliacion: estricta_si_hasta_gte_hoy
+design_decisions:
+  adr_01_explosion: sql_group_by_coddeposito_flag_desglosar
+  adr_02_eje_pipeline: helper_nuevo_get_etapas_pipeline_filtros_paridad_inventario
+  adr_03_dedupe_key: codigo_movimiento_mas_cod_deposito
+  adr_04_transferencias: dos_renglones_salida_primero_es_primer_impacto
+  adr_05_corrido: saldos_por_etapa_dict_consolidado_derivado
+  adr_06_stock_actual: consulta_propia_mpr_inventario_tabla_solo_oraculo_tests
+  adr_07_conciliacion: por_etapa_una_advertencia_reemplaza_consolidada
+  adr_08_ui: columna_etapa_mas_3_saldos_una_fila_thead
+  adr_09_presentacion: reusar_celda_stock_deposito_sin_tocar_campos_cantidad
+  adr_10_csv: columnas_dinamicas_pack_byte_identico
+  adr_11_limite: limit_por_impacto_truncado_por_movimientos_distintos
+  adr_12_conteo: conteo_inventario_por_etapa
+design_open_questions:
+  - bloque_conciliacion_visible_no_solo_aviso
+  - rf_08_filtro_por_etapa_oleada_2
+verify_gaps_non_blocking:
+  - task_4_5_ui_assertContains_pipeline_opcional
+  - test_descuadre_una_etapa_ausente
+  - test_suma_stock_no_exclusion_ausente
+  - paridad_sin_oraculo_consultar_inventario_tabla
+next: sdd-archive
+pr_split:
+  pr1: "backend + tests (1.x, 2.x)"
+  pr2: "UI + CSV/presentación + docs (3.x, 4.x, 5.x)"

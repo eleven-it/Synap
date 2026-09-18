@@ -57,6 +57,12 @@ Validación: `max_packs = floor(saldo_final_semi / 2)` coherente con auditoría 
 
 Tests automatizados: `mpr.tests.test_kardex_articulo.TestKardexPack90794402Semi`.
 
+## Pipeline fabricados y Qué pasó (oleada 1)
+
+Para `tipo_eje == pipeline_fabricados` el análisis expone `saldos_por_etapa` (Producción, Semi elaborado, 2.ª selección) y consolidado. Ver [AF_TRAZABILIDAD_MOVIMIENTOS_POR_ETAPA.md](AF_TRAZABILIDAD_MOVIMIENTOS_POR_ETAPA.md).
+
+**Qué pasó (OPP de parte):** `Parte · turno {nombre} · OPT {n} · {operario}`. Fecha de producción solo si difiere de la fecha del movimiento; hora (`HH:mm` de `registrado_en`) solo si ese turno tiene más de un parte. Sin UUID y sin copiar el comprobante. Filas legado `OPP-parte {uuid}` se rehidratan desde `mpr_parte` (MySQL empresa).
+
 ## UI
 
 - Partial: `mpr/reportes/partials/kardex_articulo.html`

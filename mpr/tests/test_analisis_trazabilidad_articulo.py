@@ -279,6 +279,274 @@ class TestConsultarInventarioMstockParams(SimpleTestCase):
         self.assertEqual(sql.count("LIKE %s"), n_likes)
 
 
+class TestDedupeOppDosDepositos(SimpleTestCase):
+    """ADR-03: OPP con dos cod_deposito debe sobrevivir al dedupe."""
+
+    def test_dos_impactos_mismo_movimiento_distinto_deposito(self):
+        movs = [
+            {
+                "codigo_movimiento": 8801,
+                "cod_deposito": 3,
+                "fuente": "mstock",
+                "fecha_sort": "2026-08-01",
+                "entrada": 0,
+                "salida": 12,
+                "etapa": {"tipo_mpr": "Produccion", "label": "Producción", "orden": 0},
+            },
+            {
+                "codigo_movimiento": 8801,
+                "cod_deposito": 5,
+                "fuente": "mstock",
+                "fecha_sort": "2026-08-01",
+                "entrada": 12,
+                "salida": 0,
+                "etapa": {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado", "orden": 1},
+            },
+        ]
+        out = _deduplicar_movimientos(movs)
+        self.assertEqual(len(out), 2)
+
+
+class TestSqlDesglosePorDeposito(SimpleTestCase):
+    @patch("mpr.services_kardex_articulo.mysql_cursor")
+    @patch("mpr.services._nombre_tabla", side_effect=lambda _c, t: t)
+    def test_flag_on_incluye_coddeposito(self, _nt, mock_cursor_ctx):
+        from mpr.services_kardex_articulo import _consultar_movimientos_kardex_articulo
+
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _cm(*_a, **_k):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _cm
+        _consultar_movimientos_kardex_articulo(
+            "empresa92",
+            1115,
+            ids_deposito=[3, 5, 7],
+            desglosar_por_deposito=True,
+            limit=50,
+        )
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("s.CodDeposito", sql)
+        self.assertIn("GROUP BY", sql)
+
+    @patch("mpr.services_kardex_articulo.mysql_cursor")
+    @patch("mpr.services._nombre_tabla", side_effect=lambda _c, t: t)
+    def test_flag_off_sin_coddeposito(self, _nt, mock_cursor_ctx):
+        from mpr.services_kardex_articulo import _consultar_movimientos_kardex_articulo
+
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _cm(*_a, **_k):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _cm
+        _consultar_movimientos_kardex_articulo("empresa92", 1115, limit=50)
+        sql = cursor.execute.call_args[0][0]
+        self.assertNotIn("CodDeposito", sql)
+
+
+class TestEtapasPipelineFabricados(SimpleTestCase):
+    @patch("mpr.services.mysql_cursor")
+    @patch("mpr.services._nombre_tabla", return_value="deposito")
+    def test_consulta_excluye_suma_stock_no(self, _nombre_tabla, mock_cursor_ctx):
+        from mpr.services import get_etapas_pipeline_fabricados_mpr
+
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {"id_deposito": 3, "tipo_mpr": "Produccion"},
+            {"id_deposito": 5, "tipo_mpr": "SemiElaborado"},
+        ]
+
+        @contextmanager
+        def _cm(*_args, **_kwargs):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _cm
+        etapas = get_etapas_pipeline_fabricados_mpr("empresa92")
+
+        sql = cursor.execute.call_args.args[0]
+        self.assertIn("COALESCE(suma_stock, 'Si') = 'Si'", sql)
+        self.assertEqual(
+            [etapa["tipo_mpr"] for etapa in etapas],
+            ["Produccion", "SemiElaborado"],
+        )
+
+
+class TestOrdenOppTransferencia(SimpleTestCase):
+    def test_salida_origen_antes_entrada_destino(self):
+        from mpr.services_kardex_articulo import (
+            _calcular_saldo_corrido_por_etapa,
+            _marcar_transferencias_internas,
+        )
+
+        mapa = {
+            3: {"tipo_mpr": "Produccion", "label": "Producción", "orden": 0},
+            5: {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado", "orden": 1},
+        }
+        movs = [
+            {
+                "codigo_movimiento": 8801,
+                "cod_deposito": 5,
+                "fecha_sort": "2026-08-01",
+                "entrada": 12,
+                "salida": 0,
+                "afecta_deposito": True,
+                "etapa": mapa[5],
+            },
+            {
+                "codigo_movimiento": 8801,
+                "cod_deposito": 3,
+                "fecha_sort": "2026-08-01",
+                "entrada": 0,
+                "salida": 12,
+                "afecta_deposito": True,
+                "etapa": mapa[3],
+            },
+        ]
+        marcados = _marcar_transferencias_internas(movs, mapa_dep=mapa)
+        out = _calcular_saldo_corrido_por_etapa(
+            marcados,
+            saldo_inicial_por_etapa={"Produccion": 91, "SemiElaborado": 16, "2daSeleccion": 0},
+            tipos_etapa=["Produccion", "SemiElaborado", "2daSeleccion"],
+        )
+        self.assertEqual(out[0]["cod_deposito"], 3)
+        self.assertEqual(out[0]["salida"], 12)
+        self.assertEqual(out[1]["entrada"], 12)
+        self.assertEqual(out[0]["saldo_corrido"], 95)
+        self.assertEqual(out[1]["saldo_corrido"], 107)
+
+
+class TestImpactoInventarioSemi(SimpleTestCase):
+    def test_cod_deposito_legacy_acredita_semi_por_mapa(self):
+        from mpr.services_kardex_articulo import _calcular_saldo_corrido_por_etapa
+
+        mapa = {
+            3: {"tipo_mpr": "Produccion", "label": "Producción", "orden": 0},
+            5: {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado", "orden": 1},
+        }
+        movimiento = _normalizar_fila_analisis_mstock(
+            {
+                "fecha": date(2026, 9, 17),
+                "codigo_movimiento": 9002,
+                "tipo_mov": "",
+                "motivo_movimiento": "Inventario",
+                "tipo_comp": "inventario",
+                "total_entrada": 28,
+                "total_salida": 0,
+                "CodDeposito": 5,
+            }
+        )
+        self.assertEqual(movimiento["cod_deposito"], 5)
+        movimiento["etapa"] = mapa[3]
+
+        out = _calcular_saldo_corrido_por_etapa(
+            [movimiento],
+            saldo_inicial_por_etapa={"Produccion": 0, "SemiElaborado": 0},
+            tipos_etapa=["Produccion", "SemiElaborado"],
+            mapa_dep=mapa,
+        )
+
+        self.assertEqual(out[0]["saldos_por_etapa"]["Produccion"], 0)
+        self.assertEqual(out[0]["saldos_por_etapa"]["SemiElaborado"], 28)
+
+    def test_entrada_semi_no_se_acumula_en_produccion(self):
+        from mpr.services_kardex_articulo import (
+            _calcular_saldo_corrido_por_etapa,
+            _enriquecer_impacto_etapa,
+        )
+
+        mapa = {
+            3: {"tipo_mpr": "Produccion", "label": "Producción", "orden": 0},
+            5: {"tipo_mpr": "SemiElaborado", "label": "Semi elaborado", "orden": 1},
+            7: {"tipo_mpr": "2daSeleccion", "label": "2da Selección", "orden": 2},
+        }
+        movimiento = _enriquecer_impacto_etapa(
+            {
+                "codigo_movimiento": 9001,
+                "cod_deposito": 5,
+                "fecha_sort": "2026-09-17",
+                "entrada": 28,
+                "salida": 0,
+                "afecta_deposito": True,
+                "clase_ui": "inventario",
+            },
+            mapa,
+            [],
+        )
+        out = _calcular_saldo_corrido_por_etapa(
+            [movimiento],
+            saldo_inicial_por_etapa={
+                "Produccion": 0,
+                "SemiElaborado": 0,
+                "2daSeleccion": 0,
+            },
+            tipos_etapa=["Produccion", "SemiElaborado", "2daSeleccion"],
+        )
+
+        self.assertEqual(out[0]["etapa_label"], "Semi elaborado")
+        self.assertEqual(
+            out[0]["saldos_por_etapa"],
+            {"Produccion": 0, "SemiElaborado": 28, "2daSeleccion": 0},
+        )
+        self.assertEqual(out[0]["saldo_corrido"], 28)
+
+
+class TestInvarianteSaldoPorEtapa(SimpleTestCase):
+    def test_saldo_corrido_es_suma_etapas(self):
+        from mpr.services_kardex_articulo import _calcular_saldo_corrido_por_etapa
+
+        tipos = ["Produccion", "SemiElaborado", "2daSeleccion"]
+        movs = [
+            {
+                "fecha_sort": "2026-08-01",
+                "codigo_movimiento": 1,
+                "cod_deposito": 3,
+                "entrada": 5,
+                "salida": 0,
+                "afecta_deposito": True,
+                "etapa": {"tipo_mpr": "Produccion", "orden": 0},
+                "orden_impacto": 0,
+            },
+        ]
+        out = _calcular_saldo_corrido_por_etapa(
+            movs,
+            saldo_inicial_por_etapa={"Produccion": 10, "SemiElaborado": 0, "2daSeleccion": 0},
+            tipos_etapa=tipos,
+        )
+        sp = out[0]["saldos_por_etapa"]
+        self.assertEqual(out[0]["saldo_corrido"], sum(sp.values()))
+
+    def test_fa_no_mueve_etapas(self):
+        from mpr.services_kardex_articulo import _calcular_saldo_corrido_por_etapa
+
+        tipos = ["Produccion", "SemiElaborado", "2daSeleccion"]
+        inicial = {"Produccion": 20, "SemiElaborado": 5, "2daSeleccion": 0}
+        movs = [
+            {
+                "fecha_sort": "2026-08-01",
+                "codigo_movimiento": 9,
+                "entrada": 3,
+                "salida": 0,
+                "afecta_deposito": False,
+                "clase_ui": "fa",
+                "etapa": {"tipo_mpr": "Produccion", "orden": 0},
+                "orden_impacto": 0,
+            },
+        ]
+        out = _calcular_saldo_corrido_por_etapa(
+            movs,
+            saldo_inicial_por_etapa=dict(inicial),
+            tipos_etapa=tipos,
+        )
+        self.assertEqual(out[0]["saldos_por_etapa"], inicial)
+        self.assertEqual(out[0]["saldo_corrido"], sum(inicial.values()))
+
+
 class TestDeduplicarMovimientos(SimpleTestCase):
     def test_prefiere_mstock_sobre_mpr_parte(self):
         movs = [
@@ -558,7 +826,8 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
         self.assertEqual(len(fa_rows), 0)
         self.assertEqual(payload["movimientos"], [])
 
-    @patch("mpr.services.get_depositos_pipeline_fabricados_mpr", return_value=[5, 3, 4])
+    @patch("mpr.services.get_etapas_pipeline_fabricados_mpr", return_value=[])
+    @patch("mpr.services.get_depositos_pipeline_fabricados_mpr", return_value=[5])
     @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
     @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
@@ -612,9 +881,8 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
         self.assertEqual(payload["movimientos"][0]["codigo_movimiento"], 2)
         self.assertEqual(payload["movimientos"][0]["saldo_corrido"], 80)
         self.assertEqual(payload["kpis"]["saldo_final"], 80)
-        # Eje pipeline fabricados por defecto para componentes.
-        self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("ids_deposito"), [5, 3, 4])
-        self.assertIsNone(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"))
+        self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"), 5)
+        self.assertIsNone(mock_recolectar.call_args_list[0].kwargs.get("ids_deposito"))
 
 
 class TestEventosMprNoAlteranSaldoKardex(SimpleTestCase):
@@ -641,6 +909,13 @@ class TestEventosMprNoAlteranSaldoKardex(SimpleTestCase):
 
 
 class TestComponenteUsaPipelineFabricadosPorDefecto(SimpleTestCase):
+    _ETAPAS = [
+        {"id_deposito": 5, "tipo_mpr": "Produccion", "label": "Producción", "orden": 0},
+        {"id_deposito": 3, "tipo_mpr": "SemiElaborado", "label": "Semi elaborado", "orden": 1},
+        {"id_deposito": 4, "tipo_mpr": "2daSeleccion", "label": "2da Selección", "orden": 2},
+    ]
+
+    @patch("mpr.services.get_etapas_pipeline_fabricados_mpr")
     @patch("mpr.services.get_depositos_pipeline_fabricados_mpr", return_value=[5, 3, 4])
     @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
@@ -648,6 +923,10 @@ class TestComponenteUsaPipelineFabricadosPorDefecto(SimpleTestCase):
     @patch("mpr.services.get_bom_detalle", return_value=None)
     @patch("mpr.services.get_id_en_abm_por_articulo", return_value=None)
     @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
+    @patch(
+        "mpr.services_kardex_articulo._fetch_stock_por_etapa_pipeline",
+        return_value={"Produccion": 50, "SemiElaborado": 50, "2daSeleccion": 50},
+    )
     @patch("mpr.services_kardex_articulo._fetch_stock_terminado_analisis", return_value=150)
     @patch("mpr.services_kardex_articulo._fetch_stock_reserva_articulo", return_value=0)
     @patch(
@@ -660,9 +939,18 @@ class TestComponenteUsaPipelineFabricadosPorDefecto(SimpleTestCase):
         mock_recolectar,
         mock_desc,
         mock_reserva,
-        mock_fetch_stock,
-        *_mocks,
+        mock_fetch_terminado,
+        mock_fetch_por_etapa,
+        mock_listar,
+        mock_id_abm,
+        mock_bom,
+        mock_capacidad,
+        mock_eventos,
+        mock_dep_terminado,
+        mock_get_depositos,
+        mock_get_etapas,
     ):
+        mock_get_etapas.return_value = self._ETAPAS
         payload = construir_analisis_trazabilidad_articulo(
             "empresa92",
             1401,
@@ -674,9 +962,10 @@ class TestComponenteUsaPipelineFabricadosPorDefecto(SimpleTestCase):
         self.assertEqual(payload["deposito"]["tipo_eje"], "pipeline_fabricados")
         self.assertIn("Pipeline fabricados", payload["deposito"]["nombre"])
         self.assertEqual(payload["stock"]["terminado"], 150)
-        mock_fetch_stock.assert_called_once()
-        self.assertEqual(mock_fetch_stock.call_args.kwargs.get("ids_deposito"), [5, 3, 4])
+        mock_get_etapas.assert_called()
+        mock_fetch_terminado.assert_not_called()
         self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("ids_deposito"), [5, 3, 4])
+        self.assertTrue(mock_recolectar.call_args_list[0].kwargs.get("desglosar_por_deposito"))
         self.assertIsNone(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"))
 
 
@@ -895,4 +1184,137 @@ class TestArticulo340StockInicialRemSobrante(SimpleTestCase):
         self.assertEqual(payload["kpis"]["saldo_final"], 167)
         self.assertFalse(
             any("no coincide" in a.lower() for a in payload.get("advertencias", []))
+        )
+
+
+class TestDetalleParteProduccionLegible(SimpleTestCase):
+    def _parte(self, *, con_linea=True):
+        from datetime import date as date_type, datetime as datetime_type
+
+        parte = MagicMock()
+        parte.fecha_produccion = date_type(2026, 8, 24)
+        parte.turno.nombre = "Tarde"
+        parte.turno_id = 2
+        parte.id_lista_produccion = 181
+        parte.registrado_en = datetime_type(2026, 8, 24, 16, 40)
+        if con_linea:
+            linea = MagicMock()
+            linea.id_articulo = 1115
+            linea.operario_nombre = "Juan Pérez"
+            parte.lineas.all.return_value = [linea]
+        else:
+            parte.lineas.all.return_value = []
+        return parte
+
+    def test_texto_compacto_mismo_dia_sin_fecha(self):
+        from datetime import date as date_type
+
+        from mpr.services import texto_detalle_parte_produccion
+
+        parte = self._parte(con_linea=False)
+        texto = texto_detalle_parte_produccion(
+            parte, fecha_movimiento=date_type(2026, 8, 24)
+        )
+        self.assertEqual(texto, "Parte · turno Tarde · OPT 181")
+        self.assertNotIn("24/08/2026", texto)
+        self.assertNotIn("38e41d41", texto)
+        self.assertNotIn("desde MPR", texto)
+
+    def test_texto_agrega_fecha_si_produccion_distinta_al_movimiento(self):
+        from datetime import date as date_type
+
+        from mpr.services import texto_detalle_parte_produccion
+
+        parte = self._parte(con_linea=False)
+        texto = texto_detalle_parte_produccion(
+            parte, fecha_movimiento=date_type(2026, 8, 25)
+        )
+        self.assertEqual(texto, "Parte · 24/08/2026 · turno Tarde · OPT 181")
+
+    def test_texto_agrega_hora_si_hay_varios_partes_del_turno(self):
+        from datetime import date as date_type
+
+        from mpr.services import texto_detalle_parte_produccion
+
+        parte = self._parte()
+        texto = texto_detalle_parte_produccion(
+            parte,
+            fecha_movimiento=date_type(2026, 8, 24),
+            incluir_hora=True,
+            id_articulo=1115,
+        )
+        self.assertEqual(texto, "Parte · 16:40 · turno Tarde · OPT 181 · Juan Pérez")
+
+    def test_humaniza_uuid_legacy_con_parte(self):
+        from datetime import date as date_type
+
+        from mpr.services_kardex_articulo import _humanizar_detalle_movimiento
+
+        uid = "38e41d41-58bc-4674-9b45-02fd2f39d52a"
+        parte = self._parte()
+        texto = _humanizar_detalle_movimiento(
+            f"OPP-parte {uid} desde MPR",
+            partes_por_uuid={uid: parte},
+            id_articulo=1115,
+            fecha_movimiento=date_type(2026, 8, 24),
+        )
+        self.assertEqual(texto, "Parte · turno Tarde · OPT 181 · Juan Pérez")
+        self.assertNotIn(uid, texto)
+
+    def test_humaniza_uuid_sin_parte_queda_generico(self):
+        from mpr.services_kardex_articulo import _humanizar_detalle_movimiento
+
+        uid = "38e41d41-58bc-4674-9b45-02fd2f39d52a"
+        texto = _humanizar_detalle_movimiento(f"OPP-parte {uid} desde MPR")
+        self.assertEqual(texto, "Parte")
+        self.assertNotIn(uid, texto)
+
+    def test_enriquecer_resuelve_parte_desde_mysql_empresa(self):
+        from datetime import date as date_type
+
+        from mpr.services_kardex_articulo import _enriquecer_detalles_opp_parte
+
+        uid = "38e41d41-58bc-4674-9b45-02fd2f39d52a"
+        parte = self._parte()
+        movs = [
+            {
+                "detalle": f"OPP-parte {uid} desde MPR",
+                "fecha_sort": date_type(2026, 8, 24),
+            }
+        ]
+        with patch(
+            "mpr.repositories.parte.obtener_parte_por_pk", return_value=parte
+        ), patch(
+            "mpr.repositories.parte.contar_partes_fecha_turno", return_value=1
+        ):
+            out = _enriquecer_detalles_opp_parte(
+                movs, id_articulo=1115, base_empresa="administranet1"
+            )
+        self.assertEqual(out[0]["detalle"], "Parte · turno Tarde · OPT 181 · Juan Pérez")
+        self.assertNotIn(uid, out[0]["detalle"])
+
+    def test_enriquecer_agrega_hora_si_el_turno_tiene_varios_partes(self):
+        from datetime import date as date_type
+
+        from mpr.services_kardex_articulo import _enriquecer_detalles_opp_parte
+
+        uid = "38e41d41-58bc-4674-9b45-02fd2f39d52a"
+        parte = self._parte()
+        movs = [
+            {
+                "detalle": f"OPP-parte {uid} desde MPR",
+                "fecha_sort": date_type(2026, 8, 24),
+            }
+        ]
+        with patch(
+            "mpr.repositories.parte.obtener_parte_por_pk", return_value=parte
+        ), patch(
+            "mpr.repositories.parte.contar_partes_fecha_turno", return_value=2
+        ):
+            out = _enriquecer_detalles_opp_parte(
+                movs, id_articulo=1115, base_empresa="administranet1"
+            )
+        self.assertEqual(
+            out[0]["detalle"],
+            "Parte · 16:40 · turno Tarde · OPT 181 · Juan Pérez",
         )
