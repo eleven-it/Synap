@@ -32,8 +32,8 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 | I | Precio | `stock.PrecioVentaxU` (predescuento de cabecera) |
 | J | Bonificacion | `pordesc_bonif` si ≠0, si no `PorDesc` de línea; si ambos 0 → % pie `(SubTotal1−SubtotalDesc)/SubTotal1×100` (`PorDesc1`/`ImpDesc1`) |
 | K | ImporteBonificacion | `PrecioVentaxU × bonif% / 100` |
-| L | Importe | `Cantidad × PrecioNetoxU × (SubtotalDesc/SubTotal1)` (neto post pie) |
-| M | Iva | `Cantidad × PrecioIVAxU × (SubtotalDesc/SubTotal1)` |
+| L | Importe | `Cantidad × PrecioNetoxU × (SubtotalDesc/SubTotal1)`, redondeado a 2 decimales |
+| M | Iva | `Cantidad × PrecioIVAxU × (SubtotalDesc/SubTotal1)`, redondeado a 2 decimales. Si la FA pasa la validación, el residuo contra `ImporteVenta` se suma al IVA de la última línea |
 | N | TotalGravado | `cuentacliente.SubtotalDesc` (neto post descuento al pie; no `SubTotal1`) |
 | O–P | (vacías) | — |
 | Q | Total | `cuentacliente.ImporteVenta` (cabecera FA) |
@@ -77,11 +77,12 @@ En el dashboard **no** se lista cada alarma (puede ser muy extensa): solo el ban
 
 Validación Σ por FA **antes** de expansión multi-remito:
 
-- Σ `Cantidad×PrecioNetoxU` vs `SubTotal1` (ambos **predescuento** de cabecera)
-- Σ `Cantidad×(PrecioNetoxU+PrecioIVAxU) × (SubtotalDesc/SubTotal1)` vs `ImporteVenta`
-  - Las líneas de `stock` conservan precios predescuento; `ImporteVenta` ya aplica el descuento de cabecera (`PorDesc1`/`ImpDesc1`, etc.) y el IVA recalculado sobre la base descontada
+- Σ `Cantidad×PrecioNetoxU` vs `SubTotal1` (ambos **predescuento** de cabecera). Tolerancia: `max(0.05, 0.01 × n_lineas)`
+- Σ `Cantidad×(PrecioNetoxU+PrecioIVAxU) × (SubtotalDesc/SubTotal1)` vs `ImporteVenta`. Tolerancia: `max(0.05, 0.02 × n_lineas)`
+  - Las líneas de `stock` conservan precios predescuento; `ImporteVenta` ya aplica el descuento de cabecera (`PorDesc1`/`ImpDesc1`, etc.) y el IVA recalculado a 2 decimales sobre la base descontada
+  - `PrecioIVAxU` tiene 8 decimales: por cantidad, el residuo frente al IVA de cabecera ronda $0,02 por renglón
   - Si no hay descuento, `SubtotalDesc = SubTotal1` y el factor es 1
-- Tolerancia: `max(0.05, 0.01 × n_lineas)`
+  - Si el bruto entra en la tolerancia, el residuo en centavos se suma al `Iva` de la última línea para que `Σ (Importe + Iva)` de los renglones únicos coincida con `ImporteVenta`. Cada copia por remito lleva el mismo importe. Si la validación falla, el residuo no se absorbe
 
 ## Archivo export
 
