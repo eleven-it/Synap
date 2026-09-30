@@ -21,6 +21,8 @@ from reports.services.dabra_consolidado_remitos import (
     bonificacion_efectiva,
     bonificacion_linea,
     calcular_tolerancia,
+    calcular_tolerancia_bruto,
+    cerrar_iva_ultima_linea,
     factor_descuento_cabecera,
     format_comprobante_string,
     format_numero_legal_mask,
@@ -131,6 +133,72 @@ class TestToleranciaSigma(unittest.TestCase):
     def test_tolerancia_formula(self):
         self.assertEqual(calcular_tolerancia(1), Decimal("0.05"))
         self.assertEqual(calcular_tolerancia(10), Decimal("0.10"))
+        self.assertEqual(calcular_tolerancia_bruto(1), Decimal("0.05"))
+        self.assertEqual(calcular_tolerancia_bruto(10), Decimal("0.20"))
+        self.assertEqual(calcular_tolerancia_bruto(36), Decimal("0.72"))
+
+    def test_bruto_residuo_iva_36_lineas_ok(self):
+        """$0,70 de IVA en 36 renglones entra en $0,02 por línea ($0,72)."""
+        lineas = [
+            {
+                "codigo_movimiento": 15744,
+                "cantidad": Decimal("1"),
+                "precio_netox_u": Decimal("100"),
+                "precio_ivax_u": Decimal("21"),
+            }
+            for _ in range(36)
+        ]
+        errs = validar_totales_fa(lineas, Decimal("3600"), Decimal("4356.70"))
+        self.assertEqual(errs, [])
+
+    def test_bruto_fuera_de_tolerancia_sigue_error(self):
+        lineas = [
+            {
+                "codigo_movimiento": 15744,
+                "cantidad": Decimal("1"),
+                "precio_netox_u": Decimal("100"),
+                "precio_ivax_u": Decimal("21"),
+            }
+            for _ in range(36)
+        ]
+        errs = validar_totales_fa(lineas, Decimal("3600"), Decimal("4358"))
+        self.assertEqual(len(errs), 1)
+        self.assertIn("tolerancia 0.72", errs[0])
+
+    def test_neto_sigue_en_un_centavo_por_linea(self):
+        lineas = [
+            {
+                "codigo_movimiento": 15744,
+                "cantidad": Decimal("1"),
+                "precio_netox_u": Decimal("10"),
+                "precio_ivax_u": Decimal("2.1"),
+            }
+            for _ in range(10)
+        ]
+        errs = validar_totales_fa(lineas, Decimal("100.50"), Decimal("121"))
+        self.assertEqual(len(errs), 1)
+        self.assertIn("SubTotal1", errs[0])
+
+    def test_cierre_iva_en_ultima_linea(self):
+        imps, ivas = cerrar_iva_ultima_linea(
+            [Decimal("100"), Decimal("100")],
+            [Decimal("21"), Decimal("21.004")],
+            Decimal("242.02"),
+            aplicar_residuo=True,
+        )
+        self.assertEqual(imps, [Decimal("100.00"), Decimal("100.00")])
+        self.assertEqual(ivas, [Decimal("21.00"), Decimal("21.02")])
+        self.assertEqual(sum(imps) + sum(ivas), Decimal("242.02"))
+
+    def test_cierre_no_absorbe_si_la_validacion_fallo(self):
+        imps, ivas = cerrar_iva_ultima_linea(
+            [Decimal("100")],
+            [Decimal("21")],
+            Decimal("200"),
+            aplicar_residuo=False,
+        )
+        self.assertEqual(ivas, [Decimal("21.00")])
+        self.assertEqual(imps[0] + ivas[0], Decimal("121.00"))
 
     def test_mismatch_genera_errores(self):
         lineas = [
@@ -420,6 +488,71 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
         self.assertEqual(fila["importe_iva"], 16.8)  # 2 × 10.5 × 0.8
         self.assertEqual(fila["total_gravado"], 80.0)  # SubtotalDesc
         self.assertEqual(out["totales_facturas"][0]["imp_neto"], 80.0)
+
+    @patch("reports.services.dabra_consolidado_remitos.get_mysql_pool")
+    def test_residuo_iva_se_cierra_en_ultima_linea(self, mock_pool):
+        """Importe+Iva de los renglones cierran con ImporteVenta al centavo."""
+        desc_lineas = [
+            ("codigo_movimiento_fa",),
+            ("fa_nro_comprobante",),
+            ("fa_tipo",),
+            ("fa_fecha",),
+            ("fe_cae",),
+            ("fe_vto_cae",),
+            ("SubTotal1",),
+            ("SubtotalDesc",),
+            ("ImporteVenta",),
+            ("id_stock",),
+            ("Cantidad",),
+            ("PrecioVentaxU",),
+            ("PrecioNetoxU",),
+            ("PrecioIVAxU",),
+            ("pordesc_bonif",),
+            ("PorDesc",),
+            ("imp_alicuota_iva",),
+            ("NombreArticulo",),
+            ("CodArtProv",),
+            ("categoria_nombre",),
+        ]
+        # Σ bruto 242.004 vs ImporteVenta 242.02 (dentro de $0,05). El residuo va a la 2.ª línea.
+        filas_sql = [
+            (
+                15744, "0008-00015744", "FA", "2026-09-15", "x", "2026-09-25",
+                Decimal("200"), Decimal("200"), Decimal("242.02"),
+                1, Decimal("1"), Decimal("121"), Decimal("100"), Decimal("21"),
+                Decimal("0"), Decimal("0"), Decimal("21"),
+                "Art A", "950058-01 T110", None,
+            ),
+            (
+                15744, "0008-00015744", "FA", "2026-09-15", "x", "2026-09-25",
+                Decimal("200"), Decimal("200"), Decimal("242.02"),
+                2, Decimal("1"), Decimal("121"), Decimal("100"), Decimal("21.004"),
+                Decimal("0"), Decimal("0"), Decimal("21"),
+                "Art B", "950058-02 T120", None,
+            ),
+        ]
+
+        def execute_side_effect(sql, params):
+            if "INNER JOIN stock" in sql:
+                self.mock_cursor.description = desc_lineas
+                self.mock_cursor.fetchall.return_value = filas_sql
+            elif "datosempresa" in sql:
+                self.mock_cursor.description = [("CUIT",)]
+                self.mock_cursor.fetchall.return_value = [("30-69074961-7",)]
+            else:
+                self.mock_cursor.description = []
+                self.mock_cursor.fetchall.return_value = []
+
+        self.mock_cursor.execute.side_effect = execute_side_effect
+        mock_pool.return_value.get_connection.return_value = self.mock_cm
+
+        out = get_dabra_consolidado_remitos("emp_test", mes=9, anio=2026)
+        self.assertEqual(out["errores"], [])
+        self.assertEqual(len(out["filas"]), 2)
+        self.assertEqual(f"{out['filas'][0]['importe_iva']:.2f}", "21.00")
+        self.assertEqual(f"{out['filas'][1]['importe_iva']:.2f}", "21.02")
+        suma = sum(f["importe"] + f["importe_iva"] for f in out["filas"])
+        self.assertEqual(f"{suma:.2f}", "242.02")
 
     @patch("reports.services.dabra_consolidado_remitos.get_mysql_pool")
     def test_excluye_fa_con_nc_vinculada(self, mock_pool):

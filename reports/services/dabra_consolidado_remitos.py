@@ -11,7 +11,7 @@ import calendar
 import logging
 import re
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from core.utils.administranet_types import (
@@ -155,10 +155,51 @@ def bonificacion_efectiva(
     return porcentaje_descuento_cabecera(subtotal1, subtotal_desc)
 
 
+_CENTAVO = Decimal("0.01")
+
+
+def _q2(value: Decimal) -> Decimal:
+    """Importe de factura a 2 decimales (half up, como AdministraNET)."""
+    return value.quantize(_CENTAVO, rounding=ROUND_HALF_UP)
+
+
 def calcular_tolerancia(n_lineas: int) -> Decimal:
-    """Tolerancia Σ: max(0.05, 0.01×n_lineas)."""
+    """Tolerancia Σ neto: max(0.05, 0.01×n_lineas)."""
     n = max(n_lineas, 0)
     return max(Decimal("0.05"), Decimal("0.01") * Decimal(n))
+
+
+def calcular_tolerancia_bruto(n_lineas: int) -> Decimal:
+    """Tolerancia Σ bruto: max(0.05, 0.02×n_lineas).
+
+    ``PrecioIVAxU`` (8 decimales) por cantidad no reproduce el IVA de cabecera,
+    recalculado a 2 decimales sobre el neto ya descontado. El residuo ronda
+    $0,02 por renglón.
+    """
+    n = max(n_lineas, 0)
+    return max(Decimal("0.05"), Decimal("0.02") * Decimal(n))
+
+
+def cerrar_iva_ultima_linea(
+    importes: Sequence[Decimal],
+    ivas: Sequence[Decimal],
+    importe_venta: Any,
+    *,
+    aplicar_residuo: bool,
+) -> Tuple[List[Decimal], List[Decimal]]:
+    """Redondea Importe e Iva a 2 decimales.
+
+    Con ``aplicar_residuo``, el IVA de la última línea absorbe la diferencia
+    contra ``ImporteVenta`` para que la suma de renglones cierre al centavo.
+    No se aplica si la factura ya falló la validación: el desvío queda visible.
+    """
+    imp_q = [_q2(x) for x in importes]
+    iva_q = [_q2(x) for x in ivas]
+    if aplicar_residuo and iva_q:
+        suma = sum(imp_q, Decimal("0")) + sum(iva_q, Decimal("0"))
+        residuo = _q2(_dec(importe_venta)) - suma
+        iva_q[-1] = iva_q[-1] + residuo
+    return imp_q, iva_q
 
 
 def resolver_categoria(nombre_categoria: Any) -> str:
@@ -221,16 +262,18 @@ def validar_totales_fa(
     cab_bruto = _dec(importe_venta)
     factor_desc = factor_descuento_cabecera(subtotal1, subtotal_desc)
     sum_bruto_desc = sum_bruto * factor_desc
-    tol = calcular_tolerancia(len(lineas))
-    if abs(sum_neto - cab_neto) > tol:
+    n = len(lineas)
+    tol_neto = calcular_tolerancia(n)
+    tol_bruto = calcular_tolerancia_bruto(n)
+    if abs(sum_neto - cab_neto) > tol_neto:
         errores.append(
             f"FA {lineas[0].get('codigo_movimiento')}: Σ neto líneas ({sum_neto}) "
-            f"≠ SubTotal1 ({cab_neto}); tolerancia {tol}."
+            f"≠ SubTotal1 ({cab_neto}); tolerancia {tol_neto}."
         )
-    if abs(sum_bruto_desc - cab_bruto) > tol:
+    if abs(sum_bruto_desc - cab_bruto) > tol_bruto:
         errores.append(
             f"FA {lineas[0].get('codigo_movimiento')}: Σ bruto líneas descontado "
-            f"({sum_bruto_desc}) ≠ ImporteVenta ({cab_bruto}); tolerancia {tol}."
+            f"({sum_bruto_desc}) ≠ ImporteVenta ({cab_bruto}); tolerancia {tol_bruto}."
         )
     return errores
 
@@ -360,6 +403,8 @@ def _materializar_fila_export(
     linea: Dict[str, Any],
     remito: Optional[Dict[str, Any]],
     entrega: str,
+    importe_linea: Optional[Decimal] = None,
+    importe_iva_linea: Optional[Decimal] = None,
 ) -> Dict[str, Any]:
     pv_fa, nl_fa = parse_nro_comprobante(fa.get("fa_nro_comprobante"))
     factor_desc = factor_descuento_cabecera(fa.get("SubTotal1"), fa.get("SubtotalDesc"))
@@ -374,8 +419,11 @@ def _materializar_fila_export(
     precio_neto_u = _dec(linea.get("PrecioNetoxU"))
     precio_iva_u = _dec(linea.get("PrecioIVAxU"))
     # Precios de stock son predescuento de cabecera; importes post pie de FA.
-    importe = cant * precio_neto_u * factor_desc
-    importe_iva = cant * precio_iva_u * factor_desc
+    # Si vienen cerrados a 2 decimales, se respetan (incluye el residuo de IVA).
+    importe = importe_linea if importe_linea is not None else cant * precio_neto_u * factor_desc
+    importe_iva = (
+        importe_iva_linea if importe_iva_linea is not None else cant * precio_iva_u * factor_desc
+    )
     importe_bonif_u = precio_venta_u * bonif / Decimal("100")
     total_gravado = to_decimal_or_none(fa.get("SubtotalDesc"))
     if total_gravado is None:
@@ -532,13 +580,25 @@ def get_dabra_consolidado_remitos(
             }
             for ln in raw_lineas
         ]
-        errores.extend(
-            validar_totales_fa(
-                lineas_val,
-                fa.get("SubTotal1"),
-                fa.get("ImporteVenta"),
-                fa.get("SubtotalDesc"),
-            )
+        errs_fa = validar_totales_fa(
+            lineas_val,
+            fa.get("SubTotal1"),
+            fa.get("ImporteVenta"),
+            fa.get("SubtotalDesc"),
+        )
+        errores.extend(errs_fa)
+        factor_desc = factor_descuento_cabecera(fa.get("SubTotal1"), fa.get("SubtotalDesc"))
+        importes_raw: List[Decimal] = []
+        ivas_raw: List[Decimal] = []
+        for ln in raw_lineas:
+            cant_ln = _dec(ln.get("Cantidad"))
+            importes_raw.append(cant_ln * _dec(ln.get("PrecioNetoxU")) * factor_desc)
+            ivas_raw.append(cant_ln * _dec(ln.get("PrecioIVAxU")) * factor_desc)
+        importes_q, ivas_q = cerrar_iva_ultima_linea(
+            importes_raw,
+            ivas_raw,
+            fa.get("ImporteVenta"),
+            aplicar_residuo=not errs_fa,
         )
 
         cae = str_or_default(fa.get("fe_cae"), "").strip()
@@ -566,7 +626,9 @@ def get_dabra_consolidado_remitos(
         else:
             bloques_remito = [None]
 
-        for ln in raw_lineas:
+        for idx_ln, ln in enumerate(raw_lineas):
+            importe_ln = importes_q[idx_ln] if idx_ln < len(importes_q) else None
+            iva_ln = ivas_q[idx_ln] if idx_ln < len(ivas_q) else None
             for rem in bloques_remito:
                 if rem:
                     entrega = str_or_default(rem.get("NroCalle"), "").strip()
@@ -590,6 +652,8 @@ def get_dabra_consolidado_remitos(
                         linea=ln,
                         remito=rem,
                         entrega=entrega,
+                        importe_linea=importe_ln,
+                        importe_iva_linea=iva_ln,
                     )
                 )
 
