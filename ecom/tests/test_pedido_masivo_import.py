@@ -17,6 +17,7 @@ from ecom.services.pedido_masivo_import import (
     HOJA_META,
     MARKER_CODIGO,
     MARKER_IDART,
+    _territorio,
     generar_plantilla_excel,
     importar_matriz_excel,
 )
@@ -141,6 +142,28 @@ def _draft(**kwargs):
     )
     defaults.update(kwargs)
     return EcomPedidoMasivoDraft.objects.create(**defaults)
+
+
+class TestTerritorioPedidoMasivo(TestCase):
+    @patch(
+        "ecom.services.pedido_masivo_import.marcas_asignadas_viajante_cliente",
+        return_value=[5, 8, 13],
+    )
+    @patch(
+        "ecom.services.pedido_masivo_import.listar_sucursales_cliente",
+        return_value=[SUC_A, SUC_B],
+    )
+    def test_aplica_todas_las_marcas_globales_a_todas_las_sucursales(
+        self, mock_sucursales, mock_marcas
+    ):
+        draft = _draft()
+
+        sucursales, marcas_map = _territorio(draft)
+
+        self.assertEqual(sucursales, [SUC_A, SUC_B])
+        self.assertEqual(marcas_map, {10: {5, 8, 13}, 20: {5, 8, 13}})
+        mock_sucursales.assert_called_once_with("emp_m", 368, None)
+        mock_marcas.assert_called_once_with("emp_m", 30, None)
 
 
 class TestImportarMatrizExcel(TestCase):

@@ -8,7 +8,7 @@ v3 (sin columna IDArt): se desambigua por nombre / CodArtProv y se prioriza
 Hoja oculta ``_Synap`` identifica cliente y vendedor.
 
 Modo: **reemplazo total** del borrador (se vacían celdas y queda solo el Excel).
-Validación de territorio: cuaterna VCM vendedor → cliente → sucursal → marca.
+Validación de territorio: marcas globales asignadas al vendedor.
 """
 
 from __future__ import annotations
@@ -358,10 +358,12 @@ def consultar_articulos_por_ids(
 def _territorio(
     draft: EcomPedidoMasivoDraft,
 ) -> Tuple[List[Dict[str, Any]], Dict[int, Set[int]]]:
+    # En pedidos masivos, todas las sucursales del cliente comparten las marcas
+    # globales del vendedor. No se restringen por las cuaternas VCM.
     sucursales = listar_sucursales_cliente(
         draft.base_empresa,
         draft.id_cliente,
-        draft.cod_viajante,
+        None,
     )
     sucursales = sorted(sucursales, key=_clave_orden_nro_sucursal)
     if draft.modo == EcomPedidoMasivoDraft.MODO_SIMPLE:
@@ -374,26 +376,27 @@ def _territorio(
             ]
     marcas_map: Dict[int, Set[int]] = {}
     cv = to_int_or_none(draft.cod_viajante)
+    marcas_vendedor = (
+        set(
+            marcas_asignadas_viajante_cliente(
+                draft.base_empresa,
+                cv,
+                None,
+            )
+        )
+        if cv is not None
+        else set()
+    )
     for s in sucursales:
         idd = to_int_or_none(s.get("id_cliente_domicilio"))
         if idd is None:
             continue
-        if cv is None:
-            marcas_map[idd] = set()
-            continue
-        marcas_map[idd] = set(
-            marcas_asignadas_viajante_cliente(
-                draft.base_empresa,
-                cv,
-                draft.id_cliente,
-                id_cliente_domicilio=idd,
-            )
-        )
+        marcas_map[idd] = set(marcas_vendedor)
     return sucursales, marcas_map
 
 
 def listar_articulos_plantilla_vcm(draft: EcomPedidoMasivoDraft) -> List[Dict[str, Any]]:
-    """Artículos Terminado/ecommerce de la unión de marcas VCM (sin precio ni stock)."""
+    """Artículos Terminado/ecommerce de las marcas globales del vendedor."""
     _sucursales, marcas_map = _territorio(draft)
     marcas: Set[int] = set()
     for ms in marcas_map.values():
@@ -1570,7 +1573,7 @@ def importar_matriz_excel(
             if marca is None or marca not in permitidas:
                 errores.append(
                     _err(
-                        "La marca del artículo no está asignada a esta sucursal para el vendedor.",
+                        "La marca del artículo no está asignada al vendedor.",
                         code="marca_fuera_territorio",
                         fila=fila,
                         columna=letra,
