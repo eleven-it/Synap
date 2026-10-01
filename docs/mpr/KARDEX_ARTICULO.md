@@ -4,6 +4,8 @@
 
 Reporte de trazabilidad por artículo y depósito basado en movimientos MSTOCK (OPP/OPA) de AdministraNET.
 
+El eje lo define `articulo.tipo_art_fab`: Terminado/Tercero → depósito Terminado; Fabricado/Fabricado 2da → pipeline (Producción + Semi + 2.ª). Sin tipo, el fallback es pack → Terminado y resto → pipeline.
+
 ## Acceso
 
 - **Ruta hub:** `/mpr/reportes/?grupo=trazabilidad&reporte=kardex_articulo`

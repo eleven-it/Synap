@@ -50,6 +50,7 @@ class TestParidadKardexInventarioEtapa(SimpleTestCase):
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
     @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
     @patch("mpr.services.get_bom_detalle", return_value=None)
+    @patch("mpr.services.obtener_tipo_art_fab_articulo", return_value="Fabricado")
     @patch("mpr.services.get_id_en_abm_por_articulo", return_value=None)
     @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
     @patch(
@@ -89,6 +90,7 @@ class TestParidadKardexInventarioEtapa(SimpleTestCase):
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
     @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
     @patch("mpr.services.get_bom_detalle", return_value=None)
+    @patch("mpr.services.obtener_tipo_art_fab_articulo", return_value="Fabricado")
     @patch("mpr.services.get_id_en_abm_por_articulo", return_value=None)
     @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
     @patch(

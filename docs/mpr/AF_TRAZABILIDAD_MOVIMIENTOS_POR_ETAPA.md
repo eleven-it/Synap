@@ -84,15 +84,17 @@ El consolidado cuadra, pero **no se puede auditar** “cómo llegaron a 79 en Pr
 - Depósito aparece solo en subfilas OPA (componentes de armado), no en el corrido principal del componente.
 - CSV: sin columna depósito/etapa.
 
-### Distinción pack vs componente (as-is)
+### Distinción de eje (tipo_art_fab)
 
-| Tipo artículo | Eje | `tipo_eje` |
-|---------------|-----|------------|
-| Pack (tiene ABM pack) | Depósito Terminado | `terminado` |
-| Componente, ≥2 depósitos pipeline | Producción + Semi + 2da | `pipeline_fabricados` |
-| Componente, 1 depósito pipeline | Ese depósito | `semi` |
+El eje del kardex lo define ``articulo.tipo_art_fab`` (misma semántica que inventario por etapa), no si el artículo es pack:
 
-Este AF apunta al caso **`pipeline_fabricados`**.
+| `tipo_art_fab` | Eje | `tipo_eje` |
+|----------------|-----|------------|
+| Terminado, Tercero | Depósito Terminado | `terminado` |
+| Fabricado, Fabricado 2da | Producción + Semi + 2da | `pipeline_fabricados` |
+| Sin tipo (fallback) | Pack → Terminado; resto → pipeline | `terminado` / `pipeline_fabricados` |
+
+Un terminado vendible sin BOM pack (p. ej. IDArt 1666) **MUST** usar Terminado. Este AF apunta al caso **`pipeline_fabricados`**.
 
 ---
 
