@@ -10,6 +10,7 @@ from django.test import SimpleTestCase
 from mpr.services import eje_kardex_por_tipo_art_fab, listar_demanda_ped_por_articulo
 from mpr.services_kardex_articulo import (
     _eje_default_es_terminado,
+    _anclar_saldo_inicial_a_inventario,
     _afecta_deposito_terminado,
     _calcular_saldo_corrido_analisis,
     _calcular_saldo_inicial_terminado,
@@ -82,8 +83,21 @@ class TestAfectaDepositoTerminado(SimpleTestCase):
     def test_rem_afecta_deposito(self):
         self.assertTrue(_afecta_deposito_terminado("REM"))
 
-    def test_fa_no_afecta_deposito(self):
-        self.assertFalse(_afecta_deposito_terminado("FA"))
+    def test_fa_sin_flag_mueve_deposito(self):
+        self.assertTrue(_afecta_deposito_terminado("FA"))
+
+    def test_fa_no_entregada_no_afecta_deposito(self):
+        self.assertFalse(_afecta_deposito_terminado("FA", "Si"))
+
+    def test_fa_entregada_afecta_deposito(self):
+        self.assertTrue(_afecta_deposito_terminado("FA", "No"))
+
+    def test_nca_y_fb_afectan_deposito_si_entregaron(self):
+        self.assertTrue(_afecta_deposito_terminado("NCA"))
+        self.assertTrue(_afecta_deposito_terminado("FB", "No"))
+
+    def test_fb_no_entregada_no_afecta_deposito(self):
+        self.assertFalse(_afecta_deposito_terminado("FB", "Si"))
 
 
 class TestClasificarMovimientoAnalisis(SimpleTestCase):
@@ -113,13 +127,52 @@ class TestClasificarMovimientoAnalisis(SimpleTestCase):
         self.assertEqual(clase, "rem")
         self.assertTrue(afecta)
 
-    def test_fa_clase_ui_sin_efecto_deposito(self):
+    def test_fa_clase_ui_sin_efecto_si_no_entregada(self):
         clase, afecta = _clasificar_movimiento_analisis(
             tipo_mov="FA",
             motivo_movimiento="",
             comprobante="FA",
+            no_entregado_fact="Si",
         )
         self.assertEqual(clase, "fa")
+        self.assertFalse(afecta)
+
+    def test_fa_entregada_mueve_terminado(self):
+        clase, afecta = _clasificar_movimiento_analisis(
+            tipo_mov="FA",
+            motivo_movimiento="",
+            comprobante="FA",
+            no_entregado_fact="No",
+        )
+        self.assertEqual(clase, "fa")
+        self.assertTrue(afecta)
+
+    def test_nca_y_fb_mueven_terminado_si_entregaron(self):
+        clase_nc, afecta_nc = _clasificar_movimiento_analisis(
+            tipo_mov="NCA",
+            motivo_movimiento="",
+            comprobante="NCA",
+            no_entregado_fact="No",
+        )
+        clase_fb, afecta_fb = _clasificar_movimiento_analisis(
+            tipo_mov="FB",
+            motivo_movimiento="",
+            comprobante="FB",
+            no_entregado_fact="No",
+        )
+        self.assertEqual(clase_nc, "nc")
+        self.assertTrue(afecta_nc)
+        self.assertEqual(clase_fb, "fb")
+        self.assertTrue(afecta_fb)
+
+    def test_fb_factura_remito_no_mueve(self):
+        clase, afecta = _clasificar_movimiento_analisis(
+            tipo_mov="FB",
+            motivo_movimiento="",
+            comprobante="FB",
+            no_entregado_fact="Si",
+        )
+        self.assertEqual(clase, "fb")
         self.assertFalse(afecta)
 
     def test_inventario_por_motivo(self):
@@ -235,6 +288,40 @@ class TestNormalizarMstockAjuste(SimpleTestCase):
         self.assertEqual(mov["clase_ui"], "ajuste")
 
 
+class TestNormalizarFaFbSegunNoEntregado(SimpleTestCase):
+    def test_fa_no_entregada_no_afecta(self):
+        mov = _normalizar_fila_analisis_stock(
+            {
+                "fecha": date(2026, 8, 5),
+                "codigo_movimiento": 200,
+                "comprobante": "FA",
+                "tipo_mov": "FA",
+                "total_entrada": 0,
+                "total_salida": 12,
+                "no_entregado_fact": "Si",
+            }
+        )
+        self.assertIsNotNone(mov)
+        self.assertFalse(mov["afecta_deposito"])
+        self.assertEqual(mov["clase_ui"], "fa")
+
+    def test_fb_entregada_afecta(self):
+        mov = _normalizar_fila_analisis_stock(
+            {
+                "fecha": date(2026, 8, 6),
+                "codigo_movimiento": 201,
+                "comprobante": "FB",
+                "tipo_mov": "FB",
+                "total_entrada": 0,
+                "total_salida": 6,
+                "no_entregado_fact": "No",
+            }
+        )
+        self.assertIsNotNone(mov)
+        self.assertTrue(mov["afecta_deposito"])
+        self.assertEqual(mov["clase_ui"], "fb")
+
+
 class TestConsultarInventarioMstockParams(SimpleTestCase):
     """Regresión: orden de binds IDArt + LIKE motivos + filtros + LIMIT."""
 
@@ -278,6 +365,28 @@ class TestConsultarInventarioMstockParams(SimpleTestCase):
         self.assertEqual(params[3 + n_likes], 100)
         self.assertIn("LOWER(COALESCE(s.TipoComp, '')) IN", sql)
         self.assertEqual(sql.count("LIKE %s"), n_likes)
+
+
+class TestConsultarStockRemFaNoEntregado(SimpleTestCase):
+    @patch("mpr.services_kardex_articulo.mysql_cursor")
+    @patch("mpr.services._nombre_tabla", side_effect=lambda _c, t: t)
+    def test_filtra_factura_sin_entrega_si_existe_columna(self, _nt, mock_cursor_ctx):
+        from mpr.services_kardex_articulo import _consultar_movimientos_stock_rem_fa
+
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {"Field": "no_entregado_fact"}
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _cm(*_a, **_k):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _cm
+        _consultar_movimientos_stock_rem_fa("empresa92", 1666, limit=50)
+        sql = cursor.execute.call_args_list[-1][0][0]
+        self.assertIn("no_entregado_fact", sql)
+        self.assertIn("s.Comprobante = 'REM'", sql)
+        self.assertIn("<> 'si'", sql.lower())
 
 
 class TestDedupeOppDosDepositos(SimpleTestCase):
@@ -802,6 +911,7 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
                 "detalle": "Factura",
                 "total_entrada": 0,
                 "total_salida": 5,
+                "no_entregado_fact": "Si",
             }
         ],
     )
@@ -826,6 +936,50 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
         fa_rows = [m for m in payload["movimientos"] if m.get("clase_ui") == "fa"]
         self.assertEqual(len(fa_rows), 0)
         self.assertEqual(payload["movimientos"], [])
+
+    @patch("mpr.services_kardex_articulo._fetch_nombre_deposito", return_value="Terminado")
+    @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
+    @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
+    @patch("mpr.services_kardex_articulo._consultar_movimientos_inventario_mstock", return_value=[])
+    @patch(
+        "mpr.services_kardex_articulo._consultar_movimientos_stock_rem_fa",
+        return_value=[
+            {
+                "codigo_movimiento": 201,
+                "fecha": date(2026, 8, 5),
+                "comprobante": "FA",
+                "tipo_mov": "FA",
+                "nro_comprobante": "0001-FA-002",
+                "detalle": "Factura con entrega",
+                "total_entrada": 0,
+                "total_salida": 5,
+                "no_entregado_fact": "No",
+            }
+        ],
+    )
+    @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=10)
+    @patch("mpr.services.get_bom_detalle", return_value=None)
+    @patch("mpr.services.get_id_en_abm_por_articulo", return_value=None)
+    @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
+    @patch("mpr.services_kardex_articulo._fetch_stock_terminado_analisis", return_value=50)
+    @patch("mpr.services_kardex_articulo._fetch_stock_reserva_articulo", return_value=0)
+    @patch("mpr.services_kardex_articulo._consultar_movimientos_kardex_articulo", return_value=[])
+    @patch(
+        "mpr.services._fetch_descripciones_articulo",
+        return_value={615: ("907944-02", "Pack prueba")},
+    )
+    def test_fa_entregada_aparece_y_mueve_stock(self, *_mocks):
+        payload = construir_analisis_trazabilidad_articulo(
+            "empresa92",
+            615,
+            fecha_desde="2026-08-01",
+            fecha_hasta="2026-08-31",
+        )
+        fa_rows = [m for m in payload["movimientos"] if m.get("clase_ui") == "fa"]
+        self.assertEqual(len(fa_rows), 1)
+        self.assertEqual(fa_rows[0]["salida"], 5)
+        self.assertEqual(payload["kpis"]["saldo_final"], 50)
+        self.assertEqual(payload["saldo_inicial"]["valor"], 55)
 
     @patch("mpr.services.get_etapas_pipeline_fabricados_mpr", return_value=[])
     @patch("mpr.services.get_depositos_pipeline_fabricados_mpr", return_value=[5])
@@ -877,7 +1031,7 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
         )
         self.assertTrue(payload["saldo_inicial"]["calculado_ok"])
         self.assertEqual(payload["saldo_inicial"]["valor"], 100)
-        self.assertEqual(payload["saldo_inicial"]["origen"], "historico_pre_periodo")
+        self.assertEqual(payload["saldo_inicial"]["origen"], "inventario_menos_neto_periodo")
         self.assertEqual(len(payload["movimientos"]), 1)
         self.assertEqual(payload["movimientos"][0]["codigo_movimiento"], 2)
         self.assertEqual(payload["movimientos"][0]["saldo_corrido"], 80)
@@ -1074,6 +1228,70 @@ class TestTerminadoSinPackUsaEjeTerminado(SimpleTestCase):
         )
         self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"), 6)
         self.assertIsNone(mock_recolectar.call_args_list[0].kwargs.get("ids_deposito"))
+        self.assertEqual(payload["kpis"]["saldo_final"], 1542)
+        self.assertEqual(payload["saldo_inicial"]["valor"], 1542)
+        self.assertEqual(payload["saldo_inicial"]["origen"], "inventario_menos_neto_periodo")
+        self.assertFalse(
+            any("no coincide" in a.lower() for a in payload.get("advertencias", []))
+        )
+
+
+class TestCierreKardexTerminadoIgualInventario(SimpleTestCase):
+    """El cierre del eje Terminado MUST coincidir con stock_deposito."""
+
+    def test_ancla_inicial_para_cerrar_en_inventario(self):
+        self.assertEqual(_anclar_saldo_inicial_a_inventario(674, 255), 419)
+        self.assertEqual(_anclar_saldo_inicial_a_inventario(1542, 1558), -16)
+
+    @patch("mpr.services_kardex_articulo._fetch_nombre_deposito", return_value="Terminado")
+    @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
+    @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
+    @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
+    @patch("mpr.services.get_bom_detalle", return_value=None)
+    @patch("mpr.services.obtener_tipo_art_fab_articulo", return_value="Terminado")
+    @patch("mpr.services.get_id_en_abm_por_articulo", return_value=None)
+    @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
+    @patch("mpr.services_kardex_articulo._fetch_stock_terminado_analisis", return_value=674)
+    @patch("mpr.services_kardex_articulo._fetch_stock_reserva_articulo", return_value=0)
+    @patch(
+        "mpr.services._fetch_descripciones_articulo",
+        return_value={1666: ("37453", "Boxer Levi's BW")},
+    )
+    @patch("mpr.services_kardex_articulo._recolectar_movimientos_analisis")
+    def test_cierre_igual_stock_aunque_el_neto_no_explique_todo(
+        self, mock_recolectar, *_mocks
+    ):
+        def _side_effect(*_args, **kwargs):
+            if kwargs.get("solo_pre_periodo"):
+                return []
+            return [
+                {
+                    "fecha_sort": date(2026, 7, 27),
+                    "fecha_display": "27/07/2026",
+                    "codigo_movimiento": 1260,
+                    "entrada": 255,
+                    "salida": 0,
+                    "afecta_deposito": True,
+                    "clase_ui": "rem",
+                    "nro_comprobante": "0001-00007670",
+                    "fuente": "stock",
+                }
+            ]
+
+        mock_recolectar.side_effect = _side_effect
+        payload = construir_analisis_trazabilidad_articulo(
+            "administranet1",
+            1666,
+            fecha_desde="2026-07-01",
+            fecha_hasta="2026-10-31",
+        )
+        self.assertEqual(payload["stock"]["terminado"], 674)
+        self.assertEqual(payload["kpis"]["saldo_final"], 674)
+        self.assertEqual(payload["saldo_inicial"]["valor"], 419)
+        self.assertEqual(payload["movimientos"][-1]["saldo_corrido"], 674)
+        self.assertFalse(
+            any("no coincide" in a.lower() for a in payload.get("advertencias", []))
+        )
 
 
 class TestGoldenSampleKardex610Blanco(SimpleTestCase):
