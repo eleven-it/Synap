@@ -96,7 +96,7 @@ El eje del kardex lo define ``articulo.tipo_art_fab`` (misma semántica que inve
 
 Un terminado vendible sin BOM pack (p. ej. IDArt 1666) **MUST** usar Terminado. Este AF apunta al caso **`pipeline_fabricados`**.
 
-**Cierre eje Terminado:** el saldo inicial es la suma de movimientos que mueven depósito **antes** del Desde (0 si no hay; origen `historico_pre_periodo`). El cierre es inicial + neto del rango. El inventario (`stock_deposito`) se muestra aparte; si no coincide se advierte, **MUST NOT** inventarse el inicial. FA/FB/NC mueven el corrido solo si `stock.no_entregado_fact <> 'Si'`. REM siempre mueve, **incluido** el renglón `Anulado=Si` (se netea con el contra-asiento Anul Remito).
+**Cierre eje Terminado:** el saldo inicial es la suma de movimientos que mueven depósito **antes** del Desde (0 si no hay; origen `historico_pre_periodo`). El cierre es inicial + neto del rango. El inventario (`stock_deposito`) se muestra aparte; si no coincide se advierte, **MUST NOT** inventarse el inicial. FA/FB/NC mueven el corrido solo si `stock.no_entregado_fact <> 'Si'`. REM siempre mueve, **incluido** el renglón `Anulado=Si` (se netea con el contra-asiento Anul Remito). Las tarjetas de saldo inicial/cierre **MUST NOT** solaparse con el encabezado de la grilla.
 
 ---
 
