@@ -7,8 +7,9 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
-from mpr.services import listar_demanda_ped_por_articulo
+from mpr.services import eje_kardex_por_tipo_art_fab, listar_demanda_ped_por_articulo
 from mpr.services_kardex_articulo import (
+    _eje_default_es_terminado,
     _afecta_deposito_terminado,
     _calcular_saldo_corrido_analisis,
     _calcular_saldo_inicial_terminado,
@@ -921,6 +922,7 @@ class TestComponenteUsaPipelineFabricadosPorDefecto(SimpleTestCase):
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
     @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
     @patch("mpr.services.get_bom_detalle", return_value=None)
+    @patch("mpr.services.obtener_tipo_art_fab_articulo", return_value="Fabricado")
     @patch("mpr.services.get_id_en_abm_por_articulo", return_value=None)
     @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
     @patch(
@@ -943,6 +945,7 @@ class TestComponenteUsaPipelineFabricadosPorDefecto(SimpleTestCase):
         mock_fetch_por_etapa,
         mock_listar,
         mock_id_abm,
+        mock_tipo,
         mock_bom,
         mock_capacidad,
         mock_eventos,
@@ -975,6 +978,7 @@ class TestPackUsaTerminadoPorDefecto(SimpleTestCase):
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
     @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
     @patch("mpr.services.get_bom_detalle", return_value=None)
+    @patch("mpr.services.obtener_tipo_art_fab_articulo", return_value="Terminado")
     @patch("mpr.services.get_id_en_abm_por_articulo", return_value=24)
     @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
     @patch("mpr.services_kardex_articulo._fetch_stock_terminado_analisis", return_value=10)
@@ -1007,6 +1011,69 @@ class TestPackUsaTerminadoPorDefecto(SimpleTestCase):
             ids_deposito=None,
         )
         self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"), 6)
+
+
+class TestEjeKardexPorTipoArtFab(SimpleTestCase):
+    def test_mapeo_tipo_art_fab(self):
+        self.assertEqual(eje_kardex_por_tipo_art_fab("Terminado"), "terminado")
+        self.assertEqual(eje_kardex_por_tipo_art_fab("tercero"), "terminado")
+        self.assertEqual(eje_kardex_por_tipo_art_fab("Fabricado"), "pipeline_fabricados")
+        self.assertEqual(eje_kardex_por_tipo_art_fab("Fabricado 2da"), "pipeline_fabricados")
+        self.assertIsNone(eje_kardex_por_tipo_art_fab(""))
+        self.assertIsNone(eje_kardex_por_tipo_art_fab(None))
+
+    def test_fallback_pack_solo_si_no_hay_tipo(self):
+        self.assertTrue(_eje_default_es_terminado("Terminado", es_pack=False))
+        self.assertFalse(_eje_default_es_terminado("Fabricado", es_pack=True))
+        self.assertTrue(_eje_default_es_terminado(None, es_pack=True))
+        self.assertFalse(_eje_default_es_terminado(None, es_pack=False))
+
+
+class TestTerminadoSinPackUsaEjeTerminado(SimpleTestCase):
+    """Regresión 1666: Terminado vendible sin BOM pack no debe ir al pipeline."""
+
+    @patch("mpr.services_kardex_articulo._fetch_nombre_deposito", return_value="Terminado")
+    @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
+    @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
+    @patch("mpr.services.calcular_max_packs_armado_1ra", return_value=0)
+    @patch("mpr.services.get_bom_detalle", return_value=None)
+    @patch("mpr.services.obtener_tipo_art_fab_articulo", return_value="Terminado")
+    @patch("mpr.services.get_id_en_abm_por_articulo", return_value=None)
+    @patch("mpr.services.listar_demanda_ped_por_articulo", return_value=[])
+    @patch("mpr.services_kardex_articulo._fetch_stock_terminado_analisis", return_value=1542)
+    @patch("mpr.services_kardex_articulo._fetch_stock_reserva_articulo", return_value=0)
+    @patch(
+        "mpr.services._fetch_descripciones_articulo",
+        return_value={1666: ("37453", "Boxer Levi's BW")},
+    )
+    @patch("mpr.services_kardex_articulo._recolectar_movimientos_analisis", return_value=[])
+    def test_terminado_sin_pack_usa_deposito_terminado(
+        self,
+        mock_recolectar,
+        mock_desc,
+        mock_reserva,
+        mock_fetch_stock,
+        *_mocks,
+    ):
+        payload = construir_analisis_trazabilidad_articulo(
+            "administranet1",
+            1666,
+            fecha_desde="2026-07-01",
+            fecha_hasta="2026-10-31",
+        )
+        self.assertEqual(payload["deposito"]["id"], 6)
+        self.assertEqual(payload["deposito"]["tipo_eje"], "terminado")
+        self.assertEqual(payload["articulo"]["tipo_art_fab"], "Terminado")
+        self.assertFalse(payload["articulo"]["es_pack"])
+        self.assertEqual(payload["stock"]["terminado"], 1542)
+        mock_fetch_stock.assert_called_once_with(
+            "administranet1",
+            1666,
+            id_deposito=6,
+            ids_deposito=None,
+        )
+        self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"), 6)
+        self.assertIsNone(mock_recolectar.call_args_list[0].kwargs.get("ids_deposito"))
 
 
 class TestGoldenSampleKardex610Blanco(SimpleTestCase):

@@ -41,6 +41,28 @@ ESTADO_ARMADO_ANULADO = "anulado"
 
 TIPO_ART_FAB_TERMINADO = "Terminado"
 TIPO_ART_FAB_FABRICADO = "Fabricado"
+TIPO_ART_FAB_TERCERO = "Tercero"
+TIPO_ART_FAB_FABRICADO_2DA = "Fabricado 2da"
+
+# Eje de kardex/trazabilidad: paridad con inventario por etapa (ámbito Terminados vs Fabricados).
+TIPOS_ART_FAB_EJE_TERMINADO = frozenset(
+    {TIPO_ART_FAB_TERMINADO.lower(), TIPO_ART_FAB_TERCERO.lower()}
+)
+TIPOS_ART_FAB_EJE_FABRICADOS = frozenset(
+    {TIPO_ART_FAB_FABRICADO.lower(), TIPO_ART_FAB_FABRICADO_2DA.lower()}
+)
+
+
+def eje_kardex_por_tipo_art_fab(tipo_art_fab: Optional[str]) -> Optional[str]:
+    """Eje del análisis: ``terminado`` | ``pipeline_fabricados`` | None si no se puede decidir."""
+    tipo = str_or_default(tipo_art_fab, "").strip().lower()
+    if not tipo:
+        return None
+    if tipo in TIPOS_ART_FAB_EJE_TERMINADO:
+        return "terminado"
+    if tipo in TIPOS_ART_FAB_EJE_FABRICADOS:
+        return "pipeline_fabricados"
+    return None
 
 # lista_produccion_detalle: codigo_movimiento_pedido = 0 indica demanda sintética por reserva (no existe fila en comp_ped).
 COD_MOV_PEDIDO_DEMANDA_RESERVA = 0
@@ -6202,6 +6224,40 @@ def get_bom_detalle(
             return {"cabecera": cabecera, "componentes": componentes}
     except Exception as e:
         logger.warning("Error al obtener detalle lista de materiales id_en_abm=%s en %s: %s", id_en_abm, base_empresa, e, exc_info=True)
+        return None
+
+
+def obtener_tipo_art_fab_articulo(base_empresa: str, id_articulo: int) -> Optional[str]:
+    """``articulo.tipo_art_fab`` normalizado, o None si no hay dato."""
+    id_art = to_int_or_none(id_articulo)
+    if not (base_empresa or "").strip() or id_art is None:
+        return None
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl:
+                return None
+            cursor.execute(
+                f"""
+                SELECT COALESCE(TRIM(tipo_art_fab), '') AS tipo_art_fab
+                FROM {tbl}
+                WHERE IDArt = %s
+                LIMIT 1
+                """,
+                [id_art],
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            tipo = str_or_default(row.get("tipo_art_fab"), "").strip()
+            return tipo or None
+    except Exception:
+        logger.debug(
+            "obtener_tipo_art_fab_articulo error art=%s base=%s",
+            id_art,
+            base_empresa,
+            exc_info=True,
+        )
         return None
 
 

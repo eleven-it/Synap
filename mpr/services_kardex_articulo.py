@@ -102,6 +102,18 @@ def _clausula_filtro_depositos(
     return "", []
 
 
+def _eje_default_es_terminado(tipo_art_fab: Optional[str], es_pack: bool) -> bool:
+    """Terminado/Tercero → eje Terminado. Fabricado → pipeline. Sin tipo, pack → Terminado."""
+    from mpr.services import eje_kardex_por_tipo_art_fab
+
+    eje = eje_kardex_por_tipo_art_fab(tipo_art_fab)
+    if eje == "terminado":
+        return True
+    if eje == "pipeline_fabricados":
+        return False
+    return bool(es_pack)
+
+
 def _afecta_deposito_terminado(comprobante: Optional[str]) -> bool:
     """FA se lista pero no mueve saldo corrido Terminado (paridad _gen_kardex_610_t6)."""
     return (comprobante or "").upper() != "FA"
@@ -1534,6 +1546,7 @@ def construir_analisis_trazabilidad_articulo(
         get_etapas_pipeline_fabricados_mpr,
         get_id_en_abm_por_articulo,
         listar_demanda_ped_por_articulo,
+        obtener_tipo_art_fab_articulo,
     )
 
     id_art = to_int_or_none(id_articulo)
@@ -1580,9 +1593,12 @@ def construir_analisis_trazabilidad_articulo(
     codigo, descripcion = desc_map[id_art]
     id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_art)
     es_pack = id_en_abm is not None
+    tipo_art_fab = obtener_tipo_art_fab_articulo(base_empresa, id_art)
+    usar_eje_terminado = _eje_default_es_terminado(tipo_art_fab, es_pack)
     bom = get_bom_detalle(base_empresa, id_en_abm) if id_en_abm else None
 
-    # Eje por defecto según tipo de artículo (pack → Terminado; componente → pipeline fabricados).
+    # Eje por defecto: tipo_art_fab Terminado/Tercero → Terminado; Fabricado → pipeline.
+    # Sin tipo_art_fab, se conserva el fallback pack → Terminado / resto → pipeline.
     dep_id = to_int_or_none(id_deposito)
     dep_ids: Optional[List[int]] = None
     es_pipeline_fabricados = False
@@ -1593,7 +1609,7 @@ def construir_analisis_trazabilidad_articulo(
     tipos_etapa: List[str] = list(TIPOS_MPR_PIPELINE_FABRICADOS)
 
     if dep_id is None:
-        if es_pack:
+        if usar_eje_terminado:
             dep_canon = get_deposito_terminado_mpr(base_empresa)
             dep_id = to_int_or_none(dep_canon)
         else:
@@ -1640,7 +1656,7 @@ def construir_analisis_trazabilidad_articulo(
             "ids": [dep_id],
             "nombre": _fetch_nombre_deposito(base_empresa, dep_id),
             "es_default_canonico": dep_default_canonico,
-            "tipo_eje": "terminado" if es_pack else "semi",
+            "tipo_eje": "terminado" if usar_eje_terminado else "semi",
         }
 
     filtro_eje: Dict[str, Any] = {}
@@ -1865,6 +1881,7 @@ def construir_analisis_trazabilidad_articulo(
             "descripcion": descripcion,
             "es_pack": es_pack,
             "id_en_abm": id_en_abm,
+            "tipo_art_fab": tipo_art_fab,
         },
         "demanda_ped": {
             "filas": demanda_filas,
