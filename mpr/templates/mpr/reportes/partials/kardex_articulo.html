@@ -201,8 +201,8 @@
 
     <div class="mb-4 grid gap-3 sm:grid-cols-2">
         <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
-            <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Saldo inicial histórico</p>
-            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Al {{ fecha_desde_display }} (lo anterior no se lista)</p>
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Saldo inicial</p>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Reconstruido con movimientos anteriores al {{ fecha_desde_display }}</p>
             <p class="mt-1 text-2xl font-semibold tabular-nums {% if meta.saldo_inicial.valor|default:0 < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">
                 {{ meta.saldo_inicial.valor|default:0 }}
             </p>
@@ -286,7 +286,7 @@
                     <td class="whitespace-nowrap px-3 py-2.5 text-sm tabular-nums text-slate-500">{{ fecha_desde_display }}</td>
                     <td class="px-3 py-2.5 text-sm" colspan="{% if meta.deposito.tipo_eje == 'pipeline_fabricados' %}4{% else %}3{% endif %}">
                         <span class="inline-flex rounded-md bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">Saldo inicial</span>
-                        <span class="ml-2 text-slate-600 dark:text-slate-400">Histórico consolidado antes del rango</span>
+                        <span class="ml-2 text-slate-600 dark:text-slate-400">{% if meta.saldo_inicial.valor|default:0 == 0 %}Sin movimientos anteriores al Desde{% else %}Reconstruido antes del rango{% endif %}</span>
                     </td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-slate-400">—</td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-slate-400">—</td>
@@ -323,6 +323,9 @@
                         <span class="inline-flex rounded-md bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-900 dark:bg-violet-900/40 dark:text-violet-100">OPA</span>
                         {% elif r.clase_ui == "rem" %}
                         <span class="inline-flex rounded-md bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-900/40 dark:text-sky-100">REM</span>
+                        {% if r.anulado %}
+                        <span class="ml-1 inline-flex rounded-md bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-900/40 dark:text-rose-100">Anulado</span>
+                        {% endif %}
                         {% elif r.clase_ui == "inventario" %}
                         <span class="inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">INV</span>
                         {% elif r.clase_ui == "stock_inicial" %}
