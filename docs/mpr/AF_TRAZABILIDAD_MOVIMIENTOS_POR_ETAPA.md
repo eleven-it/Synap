@@ -96,6 +96,8 @@ El eje del kardex lo define ``articulo.tipo_art_fab`` (misma semántica que inve
 
 Un terminado vendible sin BOM pack (p. ej. IDArt 1666) **MUST** usar Terminado. Este AF apunta al caso **`pipeline_fabricados`**.
 
+**Cierre eje Terminado:** el saldo al Hasta **MUST** coincidir con el inventario Terminado (`stock_deposito` del depósito). El saldo inicial es `inventario − neto del período` (origen `inventario_menos_neto_periodo`). FA/FB/NC mueven el corrido solo si `stock.no_entregado_fact <> 'Si'` (paridad AdministraNET: `cuentacliente.remite_factura_art='Si'`). Factura remito o “Afecta stock=No” no se listan. REM siempre mueve.
+
 ---
 
 ## Situación objetivo (to-be)
@@ -181,7 +183,7 @@ En trazabilidad (mismo artículo, rango que cubra “hoy”):
 
 ## Reglas de negocio a preservar (contexto para el arquitecto)
 
-- FA puede listarse pero **no mueve** saldo de depósito en el corrido actual (`afecta_deposito=False`) — confirmar si se mantiene.
+- FA/FB/NC: `afecta_deposito` según `stock.no_entregado_fact` (`Si` = no mueve; `No`/vacío = mueve). Info_Stock de AdministraNET usa el mismo filtro.
 - Presentación Pares/Docenas afecta solo visualización/factor de conversión, no la existencia de etapas.
 - Pipeline MPR fabricados: `TIPOS_MPR_PIPELINE_FABRICADOS` = `Produccion`, `SemiElaborado`, `2daSeleccion` (`mpr/services.py`).
 - Inventario fabricados no incluye Terminado en el consolidado de ese ámbito.

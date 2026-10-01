@@ -150,12 +150,18 @@ Este change MUST NOT modificar columnas, fórmulas, filtros ni significado de `c
 - CUANDO se invoca inventario Fabricados con los mismos parámetros que antes
 - ENTONCES los valores y nombres de columnas MUST ser idénticos en semántica al baseline pre-change
 
-### Requirement: Movimientos que no afectan depósito (FA)
+### Requirement: Movimientos que no afectan depósito (FA/FB/NC)
 
-Los movimientos marcados como no afectantes de depósito en el corrido actual (p. ej. FA con `afecta_deposito=False`) MUST NOT alterar `saldos_por_etapa` ni el saldo corrido consolidado. MAY listarse en la grilla; la columna Etapa MUST reflejar que no hubo impacto de stock por etapa según reglas definidas en diseño.
+Los renglones FA/FB/NC con `stock.no_entregado_fact='Si'` (factura remito o “Afecta stock=No” en `cuentacliente.remite_factura_art`) MUST NOT alterar `saldos_por_etapa` ni el saldo corrido. MUST NOT listarse en el kardex de stock. FA/FB/NC con `no_entregado_fact <> 'Si'` MUST mover depósito como REM. REM siempre mueve.
 
-#### Scenario: FA no mueve saldos por etapa
+#### Scenario: FA no entregada no mueve saldos por etapa
 
-- DADO un movimiento FA excluido del corrido de depósito en el comportamiento actual
-- CUANDO se procesa en modo `pipeline_fabricados`
-- ENTONCES `saldos_por_etapa` y saldo consolidado corrido permanecen iguales a la fila anterior
+- DADO un movimiento FA/FB/NC con `no_entregado_fact='Si'`
+- CUANDO se procesa en modo `pipeline_fabricados` o `terminado`
+- ENTONCES no aparece en la grilla y `saldos_por_etapa` / saldo consolidado permanecen iguales a la fila anterior
+
+#### Scenario: FA entregada mueve depósito
+
+- DADO un movimiento FA con `no_entregado_fact='No'`
+- CUANDO se procesa en eje Terminado
+- ENTONCES se lista, `afecta_deposito=True` y el corrido descuenta la salida
