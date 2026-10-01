@@ -833,7 +833,7 @@ class TestKardexArticuloUIRender(SimpleTestCase):
         self.assertIn("Lista de materiales (BOM)", html)
         self.assertIn("Demanda de pedidos", html)
         self.assertIn("Movimientos", html)
-        self.assertIn("Saldo inicial histórico", html)
+        self.assertIn("Saldo inicial", html)
         self.assertIn("mpr-post-loading", html)
         self.assertIn("@keydown.arrow-down.prevent", html)
         self.assertIn("focoSugerencia", html)

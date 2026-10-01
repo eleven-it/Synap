@@ -491,6 +491,7 @@ def _consultar_movimientos_stock_rem_fa(
 
     FA/FB/NC con ``no_entregado_fact='Si'`` no descontaron depósito (factura remito
     o “Afecta stock=No”); se omiten como Info_Stock de AdministraNET.
+    Los REM con ``Anulado='Si'`` sí se listan para netearse con el Anul Remito.
     """
     from mpr.services import _nombre_tabla
 
@@ -549,12 +550,16 @@ def _consultar_movimientos_stock_rem_fa(
                     s.NroComprobante AS nro_comprobante,
                     COALESCE(s.Descripcion, '') AS detalle,
                     s.TipoComp AS tipo_comp,
+                    MAX(COALESCE(s.Anulado, 'No')) AS anulado,
                     COALESCE(SUM(s.Entrada), 0) AS total_entrada,
                     COALESCE(SUM(s.Salida), 0) AS total_salida{col_flag}{col_dep}
                 FROM {tbl_stock} s
                 WHERE s.IDArt = %s
                   AND s.Comprobante IN ('REM', 'FA', 'FB', 'NCA', 'NCB', 'NC')
-                  AND COALESCE(s.Anulado, 'No') <> 'Si'
+                  AND (
+                    COALESCE(s.Anulado, 'No') <> 'Si'
+                    OR s.Comprobante = 'REM'
+                  )
                   {filtro_factura_remito}
                   {filtros_extra}
                 GROUP BY
@@ -778,6 +783,11 @@ def _normalizar_fila_analisis_stock(
     salida = total_salida if total_salida > 0 else 0
     if clase_ui == "opp" and entrada == 0 and salida == 0:
         entrada = max(total_entrada, total_salida)
+    anulado = str_or_default(row.get("anulado"), "No").strip().lower() == "si"
+    detalle = str_or_default(row.get("detalle"), "")
+    tipo_comp = str_or_default(row.get("tipo_comp"), "")
+    if tipo_comp and tipo_comp.lower() not in detalle.lower():
+        detalle = f"{tipo_comp} · {detalle}" if detalle else tipo_comp
     mov = {
         "fecha_sort": row.get("fecha"),
         "fecha_display": _fmt_fecha_display_kardex(row.get("fecha")),
@@ -786,10 +796,11 @@ def _normalizar_fila_analisis_stock(
         "salida": salida,
         "codigo_movimiento": to_int_or_none(row.get("codigo_movimiento")),
         "nro_comprobante": str_or_default(row.get("nro_comprobante"), "-"),
-        "detalle": str_or_default(row.get("detalle"), ""),
+        "detalle": detalle,
         "operario": "-",
         "clase_ui": clase_ui,
         "afecta_deposito": afecta,
+        "anulado": anulado,
         "fuente": fuente,
     }
     cod_deposito = _extraer_cod_deposito(row)
@@ -1188,18 +1199,11 @@ def _calcular_saldo_corrido_analisis(
     return resultado
 
 
-def _anclar_saldo_inicial_a_inventario(stock_inventario: int, neto_periodo: int) -> int:
-    """Saldo al Desde para que el cierre del rango coincida con el inventario."""
-    return int(stock_inventario) - int(neto_periodo)
-
-
 def _calcular_saldo_inicial_terminado(
     *,
     pre_periodo_movimientos: Optional[List[Dict[str, Any]]] = None,
-    stock_terminado_actual: Optional[int] = None,
-    neto_periodo: Optional[int] = None,
 ) -> tuple[int, bool]:
-    """Stock real al inicio de ``desde`` vía movimientos previos o delta stock_deposito."""
+    """Stock al Desde: solo movimientos anteriores. No se inventa desde el inventario."""
     if pre_periodo_movimientos is not None:
         saldo = 0
         for mov in pre_periodo_movimientos:
@@ -1209,10 +1213,6 @@ def _calcular_saldo_inicial_terminado(
             salida = int(to_int_or_none(mov.get("salida")) or 0)
             saldo += entrada - salida
         return saldo, True
-
-    if stock_terminado_actual is not None and neto_periodo is not None:
-        return int(stock_terminado_actual) - int(neto_periodo), True
-
     return 0, False
 
 
@@ -1592,10 +1592,11 @@ def construir_analisis_trazabilidad_articulo(
     """
     Análisis completo: PED, stock, BOM, movimientos del rango con saldo corrido.
 
-    Historia reconstruida: en eje Terminado el cierre coincide con el inventario
-    (``stock_deposito``). El saldo inicial es inventario − neto del período.
-    En el rango se listan movimientos que mueven stock (``afecta_deposito``).
-    FA/FB/NC mueven solo si ``no_entregado_fact <> 'Si'``. REM siempre mueve.
+    Historia reconstruida: el saldo inicial es la suma de movimientos que mueven
+    depósito **antes** del Desde (0 si no hay). El cierre es inicial + neto del
+    rango. El inventario (``stock_deposito``) se muestra aparte; si no coincide
+    se advierte, no se inventa el inicial. FA/FB/NC mueven solo si
+    ``no_entregado_fact <> 'Si'``. REM siempre mueve.
     """
     from datetime import date as date_type, datetime as datetime_type
 
@@ -1825,15 +1826,8 @@ def construir_analisis_trazabilidad_articulo(
             )
             saldo_inicial = sum(saldo_inicial_por_etapa.values())
         else:
-            neto = sum(
-                (int(m.get("entrada") or 0) - int(m.get("salida") or 0))
-                for m in movs_crudos
-                if m.get("afecta_deposito", True)
-            )
-            saldo_inicial, calculado_ok = _calcular_saldo_inicial_terminado(
-                stock_terminado_actual=stock_terminado,
-                neto_periodo=neto,
-            )
+            saldo_inicial = 0
+            calculado_ok = False
     if not calculado_ok:
         advertencias.append(
             "No se pudo determinar el saldo inicial histórico al inicio del período; "
@@ -1866,16 +1860,9 @@ def construir_analisis_trazabilidad_articulo(
             mapa_dep=mapa_dep_etapa,
         )
     else:
-        # Eje Terminado: el cierre MUST ser el inventario (stock_deposito).
-        # inicial = inventario − neto del período; el corrido termina en el stock.
-        if stock_terminado is not None:
-            neto_periodo = sum(
-                (int(to_int_or_none(m.get("entrada")) or 0) - int(to_int_or_none(m.get("salida")) or 0))
-                for m in movimientos
-            )
-            saldo_inicial = _anclar_saldo_inicial_a_inventario(stock_terminado, neto_periodo)
-            calculado_ok = True
-            origen_saldo_inicial = "inventario_menos_neto_periodo"
+        # Eje Terminado: el corrido es el libro (inicial histórico + neto).
+        # No se ancla al inventario: un desvío se informa, no se esconde.
+        origen_saldo_inicial = "historico_pre_periodo"
         movimientos = _unificar_y_saldo_corrido(movimientos, saldo_inicial=saldo_inicial)
 
     eventos_mpr = _consultar_eventos_mpr_articulo(

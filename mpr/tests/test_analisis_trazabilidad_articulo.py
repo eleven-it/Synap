@@ -10,7 +10,6 @@ from django.test import SimpleTestCase
 from mpr.services import eje_kardex_por_tipo_art_fab, listar_demanda_ped_por_articulo
 from mpr.services_kardex_articulo import (
     _eje_default_es_terminado,
-    _anclar_saldo_inicial_a_inventario,
     _afecta_deposito_terminado,
     _calcular_saldo_corrido_analisis,
     _calcular_saldo_inicial_terminado,
@@ -19,6 +18,7 @@ from mpr.services_kardex_articulo import (
     _deduplicar_movimientos,
     _es_motivo_ingreso_deposito,
     _normalizar_fila_analisis_mstock,
+    _normalizar_fila_analisis_stock,
     _unificar_y_saldo_corrido,
     construir_analisis_trazabilidad_articulo,
 )
@@ -387,6 +387,74 @@ class TestConsultarStockRemFaNoEntregado(SimpleTestCase):
         self.assertIn("no_entregado_fact", sql)
         self.assertIn("s.Comprobante = 'REM'", sql)
         self.assertIn("<> 'si'", sql.lower())
+        self.assertIn("OR s.Comprobante = 'REM'", sql)
+
+    @patch("mpr.services_kardex_articulo.mysql_cursor")
+    @patch("mpr.services._nombre_tabla", side_effect=lambda _c, t: t)
+    def test_incluye_remitos_anulados(self, _nt, mock_cursor_ctx):
+        from mpr.services_kardex_articulo import _consultar_movimientos_stock_rem_fa
+
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {"Field": "no_entregado_fact"}
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _cm(*_a, **_k):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _cm
+        _consultar_movimientos_stock_rem_fa("empresa92", 1666, limit=50)
+        sql = cursor.execute.call_args_list[-1][0][0]
+        self.assertIn("OR s.Comprobante = 'REM'", sql)
+        self.assertIn("Anulado", sql)
+
+
+class TestRemitoAnuladoNeteaConAnulRemito(SimpleTestCase):
+    def test_normaliza_rem_anulado_con_salida(self):
+        mov = _normalizar_fila_analisis_stock(
+            {
+                "fecha": date(2026, 8, 31),
+                "codigo_movimiento": 13603,
+                "comprobante": "REM",
+                "tipo_mov": "REM",
+                "tipo_comp": "Remito Salida",
+                "total_entrada": 0,
+                "total_salida": 5,
+                "anulado": "Si",
+                "no_entregado_fact": "No",
+                "detalle": "Boxer",
+            }
+        )
+        self.assertIsNotNone(mov)
+        self.assertTrue(mov["afecta_deposito"])
+        self.assertTrue(mov["anulado"])
+        self.assertEqual(mov["salida"], 5)
+        self.assertIn("Remito Salida", mov["detalle"])
+
+    def test_par_anulado_y_contraasiento_netean_cero(self):
+        movs = [
+            {
+                "fecha_sort": date(2026, 8, 31),
+                "codigo_movimiento": 13603,
+                "entrada": 0,
+                "salida": 5,
+                "afecta_deposito": True,
+                "anulado": True,
+                "clase_ui": "rem",
+            },
+            {
+                "fecha_sort": date(2026, 8, 31),
+                "codigo_movimiento": 13620,
+                "entrada": 5,
+                "salida": 0,
+                "afecta_deposito": True,
+                "anulado": False,
+                "clase_ui": "rem",
+            },
+        ]
+        out = _unificar_y_saldo_corrido(movs, saldo_inicial=1321)
+        self.assertEqual(out[0]["saldo_corrido"], 1316)
+        self.assertEqual(out[1]["saldo_corrido"], 1321)
 
 
 class TestDedupeOppDosDepositos(SimpleTestCase):
@@ -978,8 +1046,9 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
         fa_rows = [m for m in payload["movimientos"] if m.get("clase_ui") == "fa"]
         self.assertEqual(len(fa_rows), 1)
         self.assertEqual(fa_rows[0]["salida"], 5)
-        self.assertEqual(payload["kpis"]["saldo_final"], 50)
-        self.assertEqual(payload["saldo_inicial"]["valor"], 55)
+        self.assertEqual(payload["kpis"]["saldo_final"], -5)
+        self.assertEqual(payload["saldo_inicial"]["valor"], 0)
+        self.assertEqual(payload["saldo_inicial"]["origen"], "historico_pre_periodo")
 
     @patch("mpr.services.get_etapas_pipeline_fabricados_mpr", return_value=[])
     @patch("mpr.services.get_depositos_pipeline_fabricados_mpr", return_value=[5])
@@ -1031,7 +1100,7 @@ class TestConstruirAnalisisTrazabilidadArticulo(SimpleTestCase):
         )
         self.assertTrue(payload["saldo_inicial"]["calculado_ok"])
         self.assertEqual(payload["saldo_inicial"]["valor"], 100)
-        self.assertEqual(payload["saldo_inicial"]["origen"], "inventario_menos_neto_periodo")
+        self.assertEqual(payload["saldo_inicial"]["origen"], "historico_pre_periodo")
         self.assertEqual(len(payload["movimientos"]), 1)
         self.assertEqual(payload["movimientos"][0]["codigo_movimiento"], 2)
         self.assertEqual(payload["movimientos"][0]["saldo_corrido"], 80)
@@ -1228,20 +1297,16 @@ class TestTerminadoSinPackUsaEjeTerminado(SimpleTestCase):
         )
         self.assertEqual(mock_recolectar.call_args_list[0].kwargs.get("id_deposito"), 6)
         self.assertIsNone(mock_recolectar.call_args_list[0].kwargs.get("ids_deposito"))
-        self.assertEqual(payload["kpis"]["saldo_final"], 1542)
-        self.assertEqual(payload["saldo_inicial"]["valor"], 1542)
-        self.assertEqual(payload["saldo_inicial"]["origen"], "inventario_menos_neto_periodo")
-        self.assertFalse(
+        self.assertEqual(payload["kpis"]["saldo_final"], 0)
+        self.assertEqual(payload["saldo_inicial"]["valor"], 0)
+        self.assertEqual(payload["saldo_inicial"]["origen"], "historico_pre_periodo")
+        self.assertTrue(
             any("no coincide" in a.lower() for a in payload.get("advertencias", []))
         )
 
 
-class TestCierreKardexTerminadoIgualInventario(SimpleTestCase):
-    """El cierre del eje Terminado MUST coincidir con stock_deposito."""
-
-    def test_ancla_inicial_para_cerrar_en_inventario(self):
-        self.assertEqual(_anclar_saldo_inicial_a_inventario(674, 255), 419)
-        self.assertEqual(_anclar_saldo_inicial_a_inventario(1542, 1558), -16)
+class TestCierreKardexNoInventaInicial(SimpleTestCase):
+    """El inicial es el libro previo; el inventario no se usa para fabricar el arranque."""
 
     @patch("mpr.services_kardex_articulo._fetch_nombre_deposito", return_value="Terminado")
     @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
@@ -1258,7 +1323,7 @@ class TestCierreKardexTerminadoIgualInventario(SimpleTestCase):
         return_value={1666: ("37453", "Boxer Levi's BW")},
     )
     @patch("mpr.services_kardex_articulo._recolectar_movimientos_analisis")
-    def test_cierre_igual_stock_aunque_el_neto_no_explique_todo(
+    def test_sin_pre_periodo_inicial_cero_y_aviso_si_no_cierra(
         self, mock_recolectar, *_mocks
     ):
         def _side_effect(*_args, **kwargs):
@@ -1286,10 +1351,11 @@ class TestCierreKardexTerminadoIgualInventario(SimpleTestCase):
             fecha_hasta="2026-10-31",
         )
         self.assertEqual(payload["stock"]["terminado"], 674)
-        self.assertEqual(payload["kpis"]["saldo_final"], 674)
-        self.assertEqual(payload["saldo_inicial"]["valor"], 419)
-        self.assertEqual(payload["movimientos"][-1]["saldo_corrido"], 674)
-        self.assertFalse(
+        self.assertEqual(payload["saldo_inicial"]["valor"], 0)
+        self.assertEqual(payload["saldo_inicial"]["origen"], "historico_pre_periodo")
+        self.assertEqual(payload["kpis"]["saldo_final"], 255)
+        self.assertEqual(payload["movimientos"][-1]["saldo_corrido"], 255)
+        self.assertTrue(
             any("no coincide" in a.lower() for a in payload.get("advertencias", []))
         )
 
