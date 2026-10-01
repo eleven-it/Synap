@@ -114,9 +114,27 @@ def _eje_default_es_terminado(tipo_art_fab: Optional[str], es_pack: bool) -> boo
     return bool(es_pack)
 
 
-def _afecta_deposito_terminado(comprobante: Optional[str]) -> bool:
-    """FA se lista pero no mueve saldo corrido Terminado (paridad _gen_kardex_610_t6)."""
-    return (comprobante or "").upper() != "FA"
+# Comprobantes de tabla ``stock`` que el eje Terminado debe leer.
+# FA/FB/NC mueven depósito solo si stock.no_entregado_fact <> 'Si'
+# (paridad AdministraNET / Info_Stock: factura remito o “Afecta stock=No”).
+COMPROBANTES_STOCK_EJE_TERMINADO = ("REM", "FA", "FB", "NCA", "NCB", "NC")
+COMPROBANTES_FACTURA_NC = frozenset({"FA", "FB", "NCA", "NCB", "NC"})
+
+
+def _factura_mueve_deposito(no_entregado_fact: Optional[str] = None) -> bool:
+    """True si el renglón FA/FB/NC descontó stock_deposito (no_entregado_fact <> Si)."""
+    return str_or_default(no_entregado_fact, "No").strip().lower() != "si"
+
+
+def _afecta_deposito_terminado(
+    comprobante: Optional[str],
+    no_entregado_fact: Optional[str] = None,
+) -> bool:
+    """REM siempre mueve. FA/FB/NC según no_entregado_fact (Si = no mueve)."""
+    comp = (comprobante or "").strip().upper()
+    if comp in COMPROBANTES_FACTURA_NC:
+        return _factura_mueve_deposito(no_entregado_fact)
+    return True
 
 
 def _es_motivo_inventario(
@@ -181,14 +199,21 @@ def _clasificar_movimiento_analisis(
     comprobante: Optional[str] = None,
     tipo_comp: Optional[str] = None,
     fuente: str = "mstock",
+    no_entregado_fact: Optional[str] = None,
 ) -> tuple[str, bool]:
     """Extiende clasificación kardex → opa|opp|rem|fa|inventario|mpr_*."""
     comp = (comprobante or "").strip().upper()
     tipo = (tipo_mov or "").strip().upper()
 
-    if comp in ("REM", "FA"):
-        clase = "rem" if comp == "REM" else "fa"
-        return clase, _afecta_deposito_terminado(comp)
+    if comp in COMPROBANTES_STOCK_EJE_TERMINADO:
+        afecta = _afecta_deposito_terminado(comp, no_entregado_fact)
+        if comp == "REM":
+            return "rem", True
+        if comp == "FA":
+            return "fa", afecta
+        if comp == "FB":
+            return "fb", afecta
+        return "nc", afecta
 
     if fuente.startswith("mpr_"):
         return fuente.replace("mpr_", "mpr_"), True
@@ -439,6 +464,18 @@ def _normalizar_fila_kardex(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return mov
 
 
+def _stock_tiene_columna_no_entregado_fact(cursor, tbl_stock: str) -> bool:
+    """True si stock.no_entregado_fact existe (AdministraNET)."""
+    tabla = (tbl_stock or "").replace("`", "")
+    if not tabla:
+        return False
+    try:
+        cursor.execute(f"SHOW COLUMNS FROM `{tabla}` LIKE %s", ["no_entregado_fact"])
+        return bool(cursor.fetchone())
+    except Exception:
+        return False
+
+
 def _consultar_movimientos_stock_rem_fa(
     base_empresa: str,
     id_articulo: int,
@@ -450,7 +487,11 @@ def _consultar_movimientos_stock_rem_fa(
     limit: int = 500,
     desglosar_por_deposito: bool = False,
 ) -> List[Dict[str, Any]]:
-    """REM/FA directos en tabla stock (no MSTOCK)."""
+    """REM/FA/FB/NC* directos en tabla stock (no MSTOCK).
+
+    FA/FB/NC con ``no_entregado_fact='Si'`` no descontaron depósito (factura remito
+    o “Afecta stock=No”); se omiten como Info_Stock de AdministraNET.
+    """
     from mpr.services import _nombre_tabla
 
     id_art = to_int_or_none(id_articulo)
@@ -486,6 +527,18 @@ def _consultar_movimientos_stock_rem_fa(
             col_dep = ", s.CodDeposito AS cod_deposito" if desglosar_por_deposito else ""
             grp_dep = ", s.CodDeposito" if desglosar_por_deposito else ""
             ord_dep = ", s.CodDeposito ASC" if desglosar_por_deposito else ""
+            tiene_no_entregado = _stock_tiene_columna_no_entregado_fact(cursor, tbl_stock)
+            col_flag = (
+                ", MAX(COALESCE(s.no_entregado_fact, 'No')) AS no_entregado_fact"
+                if tiene_no_entregado
+                else ""
+            )
+            filtro_factura_remito = ""
+            if tiene_no_entregado:
+                filtro_factura_remito = (
+                    " AND (s.Comprobante = 'REM'"
+                    " OR LOWER(TRIM(COALESCE(s.no_entregado_fact, 'No'))) <> 'si')"
+                )
             cursor.execute(
                 f"""
                 SELECT
@@ -497,11 +550,12 @@ def _consultar_movimientos_stock_rem_fa(
                     COALESCE(s.Descripcion, '') AS detalle,
                     s.TipoComp AS tipo_comp,
                     COALESCE(SUM(s.Entrada), 0) AS total_entrada,
-                    COALESCE(SUM(s.Salida), 0) AS total_salida{col_dep}
+                    COALESCE(SUM(s.Salida), 0) AS total_salida{col_flag}{col_dep}
                 FROM {tbl_stock} s
                 WHERE s.IDArt = %s
-                  AND s.Comprobante IN ('REM', 'FA')
+                  AND s.Comprobante IN ('REM', 'FA', 'FB', 'NCA', 'NCB', 'NC')
                   AND COALESCE(s.Anulado, 'No') <> 'Si'
+                  {filtro_factura_remito}
                   {filtros_extra}
                 GROUP BY
                     s.CodigoMovimiento, s.Fecha, s.FechaControl,
@@ -515,6 +569,10 @@ def _consultar_movimientos_stock_rem_fa(
             rows = list(cursor.fetchall() or [])
             for row in rows:
                 row["fuente"] = "stock"
+                if not tiene_no_entregado:
+                    # Sin columna: FA se trata como factura remito (no mueve).
+                    comp = str_or_default(row.get("comprobante"), "").strip().upper()
+                    row["no_entregado_fact"] = "Si" if comp == "FA" else "No"
             return rows
     except Exception as exc:
         logger.warning(
@@ -710,6 +768,7 @@ def _normalizar_fila_analisis_stock(
         comprobante=comprobante,
         tipo_comp=row.get("tipo_comp"),
         fuente=fuente,
+        no_entregado_fact=row.get("no_entregado_fact"),
     )
     total_entrada = int(float(row.get("total_entrada") or 0))
     total_salida = int(float(row.get("total_salida") or 0))
@@ -1111,7 +1170,7 @@ def _calcular_saldo_corrido_analisis(
     *,
     saldo_inicial: int = 0,
 ) -> List[Dict[str, Any]]:
-    """Saldo corrido respetando afecta_deposito (FA excluido del acumulado)."""
+    """Saldo corrido respetando afecta_deposito (factura remito excluida)."""
     saldo = int(saldo_inicial)
     resultado: List[Dict[str, Any]] = []
     for mov in movimientos or []:
@@ -1127,6 +1186,11 @@ def _calcular_saldo_corrido_analisis(
             fila["conteo"] = None
         resultado.append(fila)
     return resultado
+
+
+def _anclar_saldo_inicial_a_inventario(stock_inventario: int, neto_periodo: int) -> int:
+    """Saldo al Desde para que el cierre del rango coincida con el inventario."""
+    return int(stock_inventario) - int(neto_periodo)
 
 
 def _calcular_saldo_inicial_terminado(
@@ -1528,9 +1592,10 @@ def construir_analisis_trazabilidad_articulo(
     """
     Análisis completo: PED, stock, BOM, movimientos del rango con saldo corrido.
 
-    Historia reconstruida: movimientos anteriores a ``fecha_desde`` se consolidan
-    en ``saldo_inicial`` (no se listan). En el rango solo se listan movimientos
-    que mueven stock Terminado (``afecta_deposito``).
+    Historia reconstruida: en eje Terminado el cierre coincide con el inventario
+    (``stock_deposito``). El saldo inicial es inventario − neto del período.
+    En el rango se listan movimientos que mueven stock (``afecta_deposito``).
+    FA/FB/NC mueven solo si ``no_entregado_fact <> 'Si'``. REM siempre mueve.
     """
     from datetime import date as date_type, datetime as datetime_type
 
@@ -1787,8 +1852,9 @@ def construir_analisis_trazabilidad_articulo(
         advertencias.append(
             "Se alcanzó el límite de movimientos del período; la historia listada puede estar truncada."
         )
-    # Solo movimientos que mueven stock Terminado (p. ej. FA se omite).
+    # Solo movimientos que mueven stock (FA/FB/NC con no_entregado_fact='Si' se omiten).
     movimientos = [m for m in movimientos if m.get("afecta_deposito", True)]
+    origen_saldo_inicial = "historico_pre_periodo"
     if es_pipeline_fabricados:
         movimientos = _marcar_transferencias_internas(
             movimientos, mapa_dep=mapa_dep_etapa
@@ -1800,6 +1866,16 @@ def construir_analisis_trazabilidad_articulo(
             mapa_dep=mapa_dep_etapa,
         )
     else:
+        # Eje Terminado: el cierre MUST ser el inventario (stock_deposito).
+        # inicial = inventario − neto del período; el corrido termina en el stock.
+        if stock_terminado is not None:
+            neto_periodo = sum(
+                (int(to_int_or_none(m.get("entrada")) or 0) - int(to_int_or_none(m.get("salida")) or 0))
+                for m in movimientos
+            )
+            saldo_inicial = _anclar_saldo_inicial_a_inventario(stock_terminado, neto_periodo)
+            calculado_ok = True
+            origen_saldo_inicial = "inventario_menos_neto_periodo"
         movimientos = _unificar_y_saldo_corrido(movimientos, saldo_inicial=saldo_inicial)
 
     eventos_mpr = _consultar_eventos_mpr_articulo(
@@ -1839,13 +1915,15 @@ def construir_analisis_trazabilidad_articulo(
             advertencias=advertencias,
         )
     else:
-        etiqueta_eje_stock = (deposito or {}).get("nombre") or "depósito del análisis"
-        if (
+        if stock_terminado is not None and saldo_final == stock_terminado:
+            conciliacion_estricta = True
+        elif (
             calculado_ok
             and hasta_date is not None
             and hasta_date >= hoy
             and saldo_final != stock_terminado
         ):
+            etiqueta_eje_stock = (deposito or {}).get("nombre") or "depósito del análisis"
             advertencias.append(
                 f"El saldo reconstruido al cierre ({saldo_final}) no coincide con "
                 f"el stock actual del eje ({stock_terminado} en {etiqueta_eje_stock}). "
@@ -1943,7 +2021,7 @@ def construir_analisis_trazabilidad_articulo(
         "saldo_inicial": {
             "valor": saldo_inicial,
             "calculado_ok": calculado_ok,
-            "origen": "historico_pre_periodo",
+            "origen": origen_saldo_inicial,
             **({"por_etapa": saldo_inicial_por_etapa} if es_pipeline_fabricados else {}),
         },
         "deposito": deposito,
