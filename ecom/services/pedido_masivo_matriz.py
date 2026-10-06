@@ -369,44 +369,19 @@ def lineas_con_precio_cero(
 def marcas_asignadas_viajante_cliente(
     base_empresa: str,
     cod_viajante: int,
-    id_cliente: Optional[int],
+    id_cliente: int,
     id_cliente_domicilio: Optional[int] = None,
 ) -> List[int]:
     """
-    CodMarca activos para un vendedor.
+    CodMarca activos de la cuaterna (vendedor, cliente[, sucursal]).
 
-    Si ``id_cliente`` es None: asignación global de ``vendedores_marcas_asignacion``.
-    Si tiene valor: cuaterna VCM (vendedor, cliente[, sucursal]).
+    Si ``id_cliente_domicilio`` es None o 0: unión de marcas en todas las sucursales del par.
+    Si > 0: solo marcas de esa sucursal.
     """
     cv = to_int_or_none(cod_viajante)
     idc = to_int_or_none(id_cliente)
-    if cv is None:
+    if cv is None or idc is None:
         return []
-    if idc is None:
-        sql = """
-            SELECT DISTINCT vma.id_marca
-            FROM vendedores_marcas_asignacion vma
-            INNER JOIN marca m ON m.CodMarca = vma.id_marca
-            WHERE vma.id_vendedor = %s
-              AND COALESCE(m.anulado, 'No') = 'No'
-            ORDER BY vma.id_marca ASC
-        """
-        try:
-            pool = get_mysql_pool()
-            with pool.get_connection(base_empresa.strip()) as conn:
-                cursor = conn.cursor()
-                try:
-                    cursor.execute(sql, [cv])
-                    return [
-                        int(r[0])
-                        for r in cursor.fetchall()
-                        if r and to_int_or_none(r[0]) is not None
-                    ]
-                finally:
-                    cursor.close()
-        except Exception as e:
-            logger.warning("marcas_asignadas_viajante_cliente global: %s", e)
-            return []
     idd = to_int_or_none(id_cliente_domicilio)
     where = [
         "CodViajante = %s",
