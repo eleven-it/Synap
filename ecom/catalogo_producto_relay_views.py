@@ -288,6 +288,7 @@ class CatalogoArticulosListadoRelayAPIView(APIView):
         if filtros_previo.get("marcas"):
             filtros["marcas"] = filtros_previo["marcas"]
         filtros = aplicar_restricciones_a_filtros(filtros, base, _session_pv_activo(request))
+        filtros["solo_vendibles_pedido"] = True
         pagina = to_int_or_none(body.get("pagina")) or 1
         tam = to_int_or_none(body.get("tam")) or 20
 

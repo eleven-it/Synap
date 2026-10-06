@@ -48,8 +48,26 @@ class TestGuardarCelda(TestCase):
         )
         self._p_desc.start()
         self._p_precio.start()
+        self._p_articulo = patch(
+            "ecom.services.pedido_masivo_matriz.obtener_articulo_row_precio",
+            return_value={"IDArt": 5},
+        )
+        self.mock_articulo = self._p_articulo.start()
         self.addCleanup(self._p_desc.stop)
         self.addCleanup(self._p_precio.stop)
+        self.addCleanup(self._p_articulo.stop)
+
+    def test_rechaza_articulo_no_vendible_por_id(self):
+        self.mock_articulo.return_value = None
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m", id_usuario=1, id_cliente=10
+        )
+        ok, msg, _ = guardar_celda(
+            d, id_articulo=5, id_cliente_domicilio=3, cantidad_packs=1
+        )
+        self.assertFalse(ok)
+        self.assertIn("no está disponible", msg)
+        self.assertEqual(d.celdas.count(), 0)
 
     @patch(
         "ecom.services.pedido_masivo_matriz._multiplos_articulos",
@@ -431,6 +449,7 @@ class TestCatalogoFiltrado(TestCase):
         sql = cur.execute.call_args[0][0]
         self.assertIn("tipo_art_fab", sql)
         self.assertIn("Terminado", sql)
+        self.assertIn("Tercero", sql)
         self.assertIn("ecommerce = 'Si'", sql)
         self.assertIn("Discontinuo = 'No'", sql)
         self.assertIn("Precio1V", sql)
@@ -682,10 +701,11 @@ class TestSerializarMatriz(TestCase):
 
 
 class TestApiCelda(TestCase):
+    @patch("ecom.services.pedido_masivo_matriz.obtener_articulo_row_precio", return_value={"IDArt": 8})
     @patch("ecom.services.pedido_masivo_matriz.asegurar_precio_fila_articulo")
     @patch("ecom.services.pedido_masivo_matriz.asegurar_descuento_fila_articulo")
     @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")
-    def test_post_guarda(self, _b, _d, _p):
+    def test_post_guarda(self, _b, _d, _p, _art):
         d = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_m",
             id_usuario=55,
@@ -711,6 +731,7 @@ class TestApiCelda(TestCase):
 
 
 class TestDescuentosMasivo(TestCase):
+    @patch("ecom.services.pedido_masivo_matriz.obtener_articulo_row_precio", return_value={"IDArt": 7})
     @patch("ecom.services.pedido_masivo_matriz.asegurar_precio_fila_articulo")
     @patch(
         "ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo",
@@ -720,7 +741,7 @@ class TestDescuentosMasivo(TestCase):
             "lista_id": 1,
         },
     )
-    def test_precarga_desc_renglon_al_celda(self, _ctx, _p):
+    def test_precarga_desc_renglon_al_celda(self, _ctx, _p, _art):
         d = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_m",
             id_usuario=1,

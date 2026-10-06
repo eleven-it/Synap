@@ -17,6 +17,7 @@ from ecom.services.pedido_masivo_import import (
     HOJA_META,
     MARKER_CODIGO,
     MARKER_IDART,
+    _articulo_vendible,
     generar_plantilla_excel,
     importar_matriz_excel,
 )
@@ -144,6 +145,12 @@ def _draft(**kwargs):
 
 
 class TestImportarMatrizExcel(TestCase):
+    def test_tipos_vendibles_para_pedido(self):
+        for tipo in ("Tercero", "Terminado"):
+            self.assertTrue(_articulo_vendible({**ART_OK, "tipo_art_fab": tipo}))
+        for tipo in ("2da", "Fabricacion", ""):
+            self.assertFalse(_articulo_vendible({**ART_OK, "tipo_art_fab": tipo}))
+
     def setUp(self):
         self.p_suc = patch(
             "ecom.services.pedido_masivo_import.listar_sucursales_cliente",

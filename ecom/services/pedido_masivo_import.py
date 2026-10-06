@@ -28,6 +28,10 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
+from ecom.services.catalogo_producto import (
+    SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO,
+    es_tipo_articulo_vendible_pedido,
+)
 from ecom.services.multiplo_empaque import (
     cantidad_respeta_multiplo,
     mensaje_multiplo_invalido,
@@ -61,7 +65,7 @@ COL_PRIMERA_SUCURSAL_V5 = 5
 COL_PRIMERA_SUCURSAL_V4 = 4
 MAX_BYTES = 8 * 1024 * 1024
 MAX_ERRORES = 200
-MAX_ARTICULOS_PLANTILLA = 5000  # red de seguridad; administranet prod 13/08/2026: 310 ecommerce Terminado
+MAX_ARTICULOS_PLANTILLA = 5000  # límite de seguridad para la plantilla vendible
 
 _FILL_ID = PatternFill("solid", fgColor="E2E8F0")
 _FILL_HDR = PatternFill("solid", fgColor="0F172A")
@@ -393,7 +397,7 @@ def _territorio(
 
 
 def listar_articulos_plantilla_vcm(draft: EcomPedidoMasivoDraft) -> List[Dict[str, Any]]:
-    """Artículos Terminado/ecommerce de la unión de marcas VCM (sin precio ni stock)."""
+    """Artículos vendibles/ecommerce de la unión de marcas VCM (sin precio ni stock)."""
     _sucursales, marcas_map = _territorio(draft)
     marcas: Set[int] = set()
     for ms in marcas_map.values():
@@ -410,7 +414,7 @@ def listar_articulos_plantilla_vcm(draft: EcomPedidoMasivoDraft) -> List[Dict[st
         FROM articulo
         WHERE articulo.Discontinuo = 'No'
           AND articulo.ecommerce = 'Si'
-          AND COALESCE(TRIM(articulo.tipo_art_fab), '') = 'Terminado'
+          AND {SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO}
           AND articulo.CodigoMarca IN ({ph})
         ORDER BY articulo.NombreArticulo, articulo.IDArt
         LIMIT %s
@@ -1088,8 +1092,11 @@ def _norm_txt(val: Any) -> str:
 def _articulo_vendible(art: Dict[str, Any]) -> bool:
     disc = str_or_default(art.get("discontinuo"), "No").strip().lower()
     ecom = str_or_default(art.get("ecommerce"), "No").strip().lower()
-    tipo = str_or_default(art.get("tipo_art_fab"), "").strip()
-    return disc in ("no", "") and ecom in ("si", "sí") and tipo == "Terminado"
+    return (
+        disc in ("no", "")
+        and ecom in ("si", "sí")
+        and es_tipo_articulo_vendible_pedido(art.get("tipo_art_fab"))
+    )
 
 
 def _tokens_busqueda(val: str) -> Set[str]:
@@ -1245,7 +1252,7 @@ def _elegir_articulo(
     if not _articulo_vendible(elegido):
         errores.append(
             _err(
-                "El artículo no está activo para venta (Terminado / ecommerce).",
+                "El artículo no está activo para venta (Tercero o Terminado / ecommerce).",
                 code="articulo_inactivo",
                 fila=fila,
                 columna="A",

@@ -13,7 +13,11 @@ from core.utils.administranet_types import str_or_default, to_decimal_or_none, t
 from mpr.services import get_deposito_terminado_mpr
 from self_checkout.services.stock_service import StockService
 from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
-from ecom.services.catalogo_producto import resolver_precio_articulo
+from ecom.services.catalogo_producto import (
+    SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO,
+    obtener_articulo_row_precio,
+    resolver_precio_articulo,
+)
 from ecom.services.price_rules_engine import (
     calcular_precio_articulo_row,
     resolver_reglas_precio_map,
@@ -724,7 +728,7 @@ def buscar_articulos_filtrados_ternas(
     """
     Autocomplete liviano para la matriz masiva.
 
-    Solo artículos que el motor de precios/carrito puede resolver: Terminado,
+    Solo artículos que el motor de precios/carrito puede resolver: Tercero o Terminado,
     Discontinuo=No, ecommerce=Si y marcas de terna. Así no se ofrecen
     sugerencias que luego fallarían en preview/confirm con «no encontrado o inactivo».
     Incluye ``stock_disponible_packs`` (depósito Terminado MPR, bulk). Precios/reglas en lote.
@@ -760,7 +764,7 @@ def buscar_articulos_filtrados_ternas(
     where = [
         "articulo.Discontinuo = 'No'",
         "articulo.ecommerce = 'Si'",
-        "COALESCE(TRIM(articulo.tipo_art_fab), '') = 'Terminado'",
+        SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO,
     ]
     params: List[Any] = []
     placeholders = ",".join(["%s"] * len(marcas))
@@ -1380,6 +1384,8 @@ def guardar_celda(
         return False, "La cantidad no puede ser negativa.", None
 
     if qty > 0:
+        if obtener_articulo_row_precio(draft.base_empresa, aid) is None:
+            return False, "El artículo no está disponible para pedidos.", None
         multiplos = _multiplos_articulos(draft.base_empresa, [aid])
         info = multiplos.get(aid) or {}
         multiplo = int(info.get("multiplo_empaque") or 1)
