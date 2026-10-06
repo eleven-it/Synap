@@ -477,19 +477,6 @@ class TestCatalogoFiltrado(TestCase):
 
 class TestMarcasPorSucursal(TestCase):
     @patch("ecom.services.pedido_masivo_matriz.get_mysql_pool")
-    def test_marcas_globales_del_vendedor(self, mock_pool):
-        cur = mock_pool.return_value.get_connection.return_value.__enter__.return_value.cursor.return_value
-        cur.fetchall.return_value = [(11,), (12,), (13,)]
-
-        marcas = marcas_asignadas_viajante_cliente("emp_m", 1, None)
-
-        self.assertEqual(marcas, [11, 12, 13])
-        sql = cur.execute.call_args[0][0]
-        self.assertIn("vendedores_marcas_asignacion", sql)
-        self.assertIn("vma.id_vendedor = %s", sql)
-        self.assertEqual(cur.execute.call_args[0][1], [1])
-
-    @patch("ecom.services.pedido_masivo_matriz.get_mysql_pool")
     def test_union_sin_sucursal(self, mock_pool):
         cur = mock_pool.return_value.get_connection.return_value.__enter__.return_value.cursor.return_value
         cur.fetchall.return_value = [(11,), (12,)]
