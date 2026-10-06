@@ -919,6 +919,32 @@ def _nombre_tabla(cursor, nombre_lower: str) -> Optional[str]:
     return None
 
 
+def _filtro_movimiento_efectivo_deposito(cursor, tbl_stock: str, alias: str = "s") -> str:
+    """Condición SQL (con ``AND`` inicial) de filas de ``stock`` que movieron stock_deposito.
+
+    Misma regla que el kardex (mpr.services_kardex_articulo):
+    - Anulado='Si' se excluye, salvo REM: el remito anulado sí movió el depósito
+      cuando se emitió y su reversa es la fila 'Anul Remito' (Anulado='No'); incluir
+      ambas netea a cero en la ventana.
+    - FA/FB/NC con no_entregado_fact='Si' no mueven depósito (el remito ya lo hizo).
+    """
+    from mpr.services_kardex_articulo import (
+        COMPROBANTES_FACTURA_NC,
+        _stock_tiene_columna_no_entregado_fact,
+    )
+
+    filtro = (
+        f" AND (COALESCE({alias}.Anulado, 'No') <> 'Si' OR {alias}.Comprobante = 'REM')"
+    )
+    if _stock_tiene_columna_no_entregado_fact(cursor, tbl_stock):
+        comps = ", ".join(f"'{c}'" for c in sorted(COMPROBANTES_FACTURA_NC))
+        filtro += (
+            f" AND ({alias}.Comprobante NOT IN ({comps})"
+            f" OR LOWER(TRIM(COALESCE({alias}.no_entregado_fact, 'No'))) <> 'si')"
+        )
+    return filtro + " "
+
+
 def _fetch_deposito(cursor, id_deposito: int) -> Optional[Dict[str, Any]]:
     tbl = _nombre_tabla(cursor, "deposito")
     if not tbl:
@@ -1698,6 +1724,7 @@ def calcular_ajuste_post_snapshot_desglose(
                     f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
                 )
                 detalle_expr = "COALESCE(ms.detalle, '')"
+            filtro_efecto = _filtro_movimiento_efectivo_deposito(cursor, tbl_stock)
             filtro_hasta = ""
             params: List[Any] = [*depositos, fecha_snapshot]
             if corte is not None:
@@ -1714,7 +1741,7 @@ def calcular_ajuste_post_snapshot_desglose(
                 f"WHERE s.CodDeposito IN ({ph}) "
                 f"AND s.FechaControl >= %s "
                 f"{filtro_hasta}"
-                f"AND COALESCE(s.Anulado, 'No') <> 'Si' "
+                f"{filtro_efecto}"
                 f"GROUP BY s.IDArt, s.CodDeposito, s.Comprobante, s.TipoComp, {detalle_expr}",
                 params,
             )
@@ -1788,6 +1815,7 @@ def listar_movimientos_post_snapshot(
                 tms = tbl_ms.replace("`", "``")
                 join_ms = f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
                 select_detalle = "COALESCE(ms.detalle, '') AS detalle"
+            filtro_efecto = _filtro_movimiento_efectivo_deposito(cursor, tbl_stock)
             cursor.execute(
                 f"SELECT s.id_stock, s.FechaControl, s.Fecha, "
                 f"COALESCE(s.Entrada, 0) AS Entrada, COALESCE(s.Salida, 0) AS Salida, "
@@ -1798,7 +1826,7 @@ def listar_movimientos_post_snapshot(
                 f"FROM `{ts}` s "
                 f"{join_ms}"
                 f"WHERE s.IDArt = %s AND s.CodDeposito = %s "
-                f"AND s.FechaControl >= %s AND COALESCE(s.Anulado, 'No') <> 'Si' "
+                f"AND s.FechaControl >= %s {filtro_efecto}"
                 f"ORDER BY s.FechaControl, s.id_stock",
                 [id_art, id_dep, campana["fecha_snapshot"]],
             )
@@ -1991,6 +2019,7 @@ def _cargar_movimientos_post_snapshot_campana(
         tms = tbl_ms.replace("`", "``")
         join_ms = f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
         select_detalle = "COALESCE(ms.detalle, '') AS detalle"
+    filtro_efecto = _filtro_movimiento_efectivo_deposito(cursor, tbl_stock)
     cursor.execute(
         f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, s.FechaControl, "
         f"COALESCE(s.Entrada, 0) AS Entrada, COALESCE(s.Salida, 0) AS Salida, "
@@ -2003,7 +2032,7 @@ def _cargar_movimientos_post_snapshot_campana(
         f"INNER JOIN inv_fisico_linea l "
         f"  ON l.id_campana = %s AND l.id_articulo = s.IDArt AND l.id_deposito = s.CodDeposito "
         f"WHERE s.CodDeposito IN ({ph}) "
-        f"AND s.FechaControl >= %s AND COALESCE(s.Anulado, 'No') <> 'Si' "
+        f"AND s.FechaControl >= %s {filtro_efecto}"
         f"ORDER BY s.IDArt, s.CodDeposito, s.FechaControl, s.id_stock",
         [id_campana, *depositos, fecha_snapshot],
     )
@@ -2903,6 +2932,7 @@ def listar_movimientos_post_snapshot_campana(
                 join_ms = f"LEFT JOIN `{tms}` ms ON ms.codigo_movimiento = s.CodigoMovimiento "
                 select_detalle = "COALESCE(ms.detalle, '') AS detalle"
             ph = ",".join(["%s"] * len(depositos))
+            filtro_efecto = _filtro_movimiento_efectivo_deposito(cursor, tbl_stock)
             cursor.execute(
                 f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, "
                 f"s.FechaControl AS fecha_control, "
@@ -2920,7 +2950,7 @@ def listar_movimientos_post_snapshot_campana(
                 f"INNER JOIN `{ta}` a ON a.IDArt = s.IDArt "
                 f"{join_ms}"
                 f"WHERE s.CodDeposito IN ({ph}) "
-                f"AND s.FechaControl >= %s AND COALESCE(s.Anulado, 'No') <> 'Si' "
+                f"AND s.FechaControl >= %s {filtro_efecto}"
                 f"ORDER BY s.FechaControl, s.id_stock",
                 [cid, *depositos, campana["fecha_snapshot"]],
             )

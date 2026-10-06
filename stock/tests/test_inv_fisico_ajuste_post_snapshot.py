@@ -695,3 +695,46 @@ class ListarMovimientosPostSnapshotFiltroTest(SimpleTestCase):
 
         self.assertEqual(len(movs), 1)
         self.assertEqual(movs[0]["fase"], svc.FASE_HASTA_CONTEO)
+
+
+class FiltroMovimientoEfectivoDepositoTest(SimpleTestCase):
+    def _cursor(self, tiene_columna: bool):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {"Field": "no_entregado_fact"} if tiene_columna else None
+        return cursor
+
+    def test_excluye_fa_fb_nc_no_entregado_y_conserva_rem_anulado(self):
+        filtro = svc._filtro_movimiento_efectivo_deposito(self._cursor(True), "stock")
+        self.assertTrue(filtro.startswith(" AND "))
+        # REM anulado se conserva (netea con su 'Anul Remito').
+        self.assertIn("OR s.Comprobante = 'REM'", filtro)
+        # FA/FB/NC* con no_entregado_fact='Si' quedan fuera.
+        for comp in ("FA", "FB", "NC", "NCA", "NCB"):
+            self.assertIn(f"'{comp}'", filtro)
+        self.assertIn("s.Comprobante NOT IN (", filtro)
+        self.assertIn("no_entregado_fact", filtro)
+        self.assertIn("<> 'si'", filtro)
+
+    def test_sin_columna_no_entregado_solo_regla_anulado(self):
+        filtro = svc._filtro_movimiento_efectivo_deposito(self._cursor(False), "stock")
+        self.assertIn("OR s.Comprobante = 'REM'", filtro)
+        self.assertNotIn("no_entregado_fact", filtro)
+
+    def test_alias_personalizado(self):
+        filtro = svc._filtro_movimiento_efectivo_deposito(self._cursor(False), "stock", alias="x")
+        self.assertIn("x.Anulado", filtro)
+        self.assertNotIn("s.", filtro.replace("stock", ""))
+
+    @patch("stock.services.inventario_fisico._nombre_tabla")
+    def test_cargar_movimientos_campana_incluye_filtro_en_sql(self, mock_tabla):
+        mock_tabla.side_effect = lambda cur, nombre: {"stock": "stock"}.get(nombre)
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {"Field": "no_entregado_fact"}
+        cursor.fetchall.return_value = []
+        svc._cargar_movimientos_post_snapshot_campana(
+            cursor, 1, datetime(2026, 1, 1), [5]
+        )
+        sqls = [c.args[0] for c in cursor.execute.call_args_list]
+        sql = next(s for s in sqls if "FROM `stock` s" in s)
+        self.assertIn("OR s.Comprobante = 'REM'", sql)
+        self.assertIn("s.Comprobante NOT IN (", sql)
