@@ -161,9 +161,13 @@ class TestConstruirWhereCatalogo(unittest.TestCase):
     def test_busqueda_tpv_mantiene_ecommerce_y_campos_tpv(self):
         from ecom.services.catalogo_producto import _construir_where_catalogo
 
-        where, params = _construir_where_catalogo({"busqueda_tpv": True, "q": "ma"})
+        where, params = _construir_where_catalogo(
+            {"busqueda_tpv": True, "q": "ma", "solo_vendibles_pedido": True}
+        )
         self.assertIn("ecommerce = 'Si'", where)
         self.assertIn("Discontinuo = 'No'", where)
+        self.assertIn("tipo_art_fab", where)
+        self.assertIn("'Tercero', 'Terminado'", where)
         self.assertIn("NroCodBarra", where)
         self.assertEqual(len(params), 6)
 
@@ -180,6 +184,7 @@ class TestConstruirWhereCatalogo(unittest.TestCase):
         where, params = _construir_where_catalogo({"q": "ma"})
         self.assertIn("ecommerce = 'Si'", where)
         self.assertIn("Discontinuo = 'No'", where)
+        self.assertNotIn("tipo_art_fab", where)
         self.assertEqual(len(params), 3)
 
 
@@ -214,6 +219,7 @@ class TestCatalogoListadoBusquedaTpv(TestCase):
         mock_restricciones.assert_called_once()
         filtros = mock_listar.call_args.kwargs["filtros"]
         self.assertTrue(filtros.get("busqueda_tpv"))
+        self.assertTrue(filtros.get("solo_vendibles_pedido"))
         self.assertEqual(filtros.get("marcas"), [5, 7])
 
 

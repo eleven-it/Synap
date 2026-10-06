@@ -19,6 +19,15 @@ from ecom.services.promocion_etiqueta import etiqueta_promocion_linea
 from ecom.services.presentacion_articulo import opciones_presentacion_articulo
 from self_checkout.services.stock_service import StockService
 
+TIPOS_ARTICULO_VENDIBLES_PEDIDO = ("Tercero", "Terminado")
+SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO = (
+    "COALESCE(TRIM(articulo.tipo_art_fab), '') IN ('Tercero', 'Terminado')"
+)
+
+
+def es_tipo_articulo_vendible_pedido(tipo: Any) -> bool:
+    return str_or_default(tipo, "").strip() in TIPOS_ARTICULO_VENDIBLES_PEDIDO
+
 
 @contextmanager
 def _mysql_conn(base_empresa: str, external: Any = None):
@@ -131,8 +140,14 @@ _PRESENTACION_DEFECTO_BUSQUEDA = {
 def _construir_where_catalogo(filtros: Dict[str, Any]) -> tuple:
     """Construye el WHERE parametrizado del catálogo ecommerce (compartido listado/export)."""
     busqueda_tpv = bool(filtros.get("busqueda_tpv"))
-    where_clauses = ["articulo.Discontinuo = 'No'", "articulo.ecommerce = 'Si'"]
+    where_clauses = [
+        "articulo.Discontinuo = 'No'",
+        "articulo.ecommerce = 'Si'",
+    ]
     params: List[Any] = []
+
+    if filtros.get("solo_vendibles_pedido"):
+        where_clauses.append(SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO)
 
     if filtros.get("rubro") is not None:
         where_clauses.append("articulo.CodigoRubro = %s")
@@ -438,6 +453,7 @@ def obtener_articulo_row_precio(
         LEFT JOIN iva ON iva.ID = articulo.Alicuota
         WHERE articulo.Discontinuo = 'No'
           AND articulo.ecommerce = 'Si'
+          AND {SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO}
           AND articulo.IDArt = %s
         LIMIT 1
     """
@@ -514,7 +530,10 @@ def obtener_detalle_articulo(
     if idart is None and codigo is None:
         return None
 
-    where_clause = "articulo.Discontinuo = 'No' AND articulo.ecommerce = 'Si'"
+    where_clause = (
+        "articulo.Discontinuo = 'No' AND articulo.ecommerce = 'Si' "
+        f"AND {SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO}"
+    )
     params: List[Any] = []
 
     if idart is not None:

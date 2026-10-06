@@ -1898,7 +1898,7 @@ function pedidoMasivoCore() {
       await this._fetchArticulos({ q, todos: false, tam: 20 });
     },
     /**
-     * Catálogo completo filtrado (Terminado + e-commerce + marcas territorio).
+     * Catálogo completo filtrado (Tercero/Terminado + e-commerce + marcas territorio).
      * Disparado por flecha abajo / botón «ver todos» en desktop y móvil.
      */
     async listarTodosArticulos() {
