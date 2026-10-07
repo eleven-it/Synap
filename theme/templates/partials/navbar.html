@@ -138,7 +138,7 @@
     
     <!-- Izquierda: hamburguesa (mobile) + logo -->
     <div class="flex items-center gap-2">
-      <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700 transition" aria-label="Menú">
+      <button @click="userMenuOpen = false; mobileMenuOpen = !mobileMenuOpen" class="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700 transition" aria-label="Menú">
         <svg x-show="!mobileMenuOpen" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
         <svg x-show="mobileMenuOpen" x-cloak class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
       </button>
@@ -215,10 +215,10 @@
       {% endif %}
 
       <div class="relative">
-        <button @click="userMenuOpen = !userMenuOpen" class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition shadow-sm" aria-label="Menú de usuario">
+        <button @click="mobileMenuOpen = false; userMenuOpen = !userMenuOpen" class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition shadow-sm" aria-label="Menú de usuario" :aria-expanded="userMenuOpen.toString()">
           <span class="material-icons text-sm">person</span>
         </button>
-        <div x-show="userMenuOpen" @click.away="userMenuOpen = false" x-transition class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+        <div x-show="userMenuOpen" x-cloak @click.away="userMenuOpen = false" x-transition class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[70]">
           <div class="px-4 py-3 border-b border-gray-200">
             <p class="text-xs font-medium text-gray-900">{% if session_user.nombre_completo %}{{ session_user.nombre_completo }}{% elif session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}{{ request.user.nombre|default:request.user.email }}{% endif %}</p>
             <p class="text-xs text-gray-500 truncate">{% if session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}{{ request.user.email|default:"" }}{% endif %}</p>
