@@ -179,6 +179,28 @@ def confirmar(
                     conn.rollback()
                     return False, "Falta configurar la alícuota de IVA 0 %.", None
 
+            id_dom = to_int_or_none(datos.id_cliente_domicilio)
+            id_transporte = None
+            if tipo in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO) and (
+                str_or_default(datos.forma_entrega, "").strip().casefold() == "transporte"
+            ):
+                if id_dom is None:
+                    conn.rollback()
+                    return False, "Seleccioná un domicilio de entrega para usar Transporte.", None
+                cur.execute(
+                    """
+                    SELECT id_transporte FROM cliente_domicilio
+                    WHERE id_cliente_domicilio = %s AND id_cliente = %s AND anulado = 'No'
+                    LIMIT 1
+                    """,
+                    [id_dom, int(cart.idcliente)],
+                )
+                domicilio = cur.fetchone()
+                if not domicilio:
+                    conn.rollback()
+                    return False, "El domicilio de entrega no pertenece al cliente o está anulado.", None
+                id_transporte = to_int_or_none(domicilio.get("id_transporte"))
+
             credito_unificado = credito_pedidos_activo(cart.base_empresa)
             if not credito_unificado:
                 autorizacion, _dias = evaluar_autorizacion(
@@ -243,9 +265,11 @@ def confirmar(
                 """
                 INSERT INTO cliente_datos_adicionales
                     (fechaEntrega, id_deposito_despacho, Fentrega, origen_pedido,
-                     TipoComprobante, id_cliente, CodigoMovimiento, id_cliente_domicilio, id_ruta)
+                     TipoComprobante, id_cliente, CodigoMovimiento, id_cliente_domicilio, id_ruta,
+                     id_transporte)
                 VALUES (%(fechaEntrega)s, %(id_dep)s, %(fentrega)s, 'Web',
-                        %(tipo)s, %(id_cliente)s, %(cod_mov)s, %(id_dom)s, %(id_ruta)s)
+                        %(tipo)s, %(id_cliente)s, %(cod_mov)s, %(id_dom)s, %(id_ruta)s,
+                        %(id_transporte)s)
                 """,
                 {
                     "fechaEntrega": fecha_entrega,
@@ -254,8 +278,9 @@ def confirmar(
                     "tipo": tipo,
                     "id_cliente": int(cart.idcliente),
                     "cod_mov": cod_mov,
-                    "id_dom": to_int_or_none(datos.id_cliente_domicilio),
+                    "id_dom": id_dom,
                     "id_ruta": to_int_or_none(datos.id_ruta),
+                    "id_transporte": id_transporte,
                 },
             )
 

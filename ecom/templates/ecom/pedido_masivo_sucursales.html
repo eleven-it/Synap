@@ -166,6 +166,16 @@
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
+        <div class="pm-field-row" x-show="tipo === 'PED'" x-cloak>
+          <label class="pm-label-inline" for="pm-forma-entrega">Forma de entrega</label>
+          <select id="pm-forma-entrega" x-model="formaEntrega"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <option value="">Sin especificar</option>
+            <option value="Retira">Retira</option>
+            <option value="Transporte">Transporte</option>
+          </select>
+        </div>
+
         <div class="pm-field-row" x-show="cabecera && tipo === 'PED'" x-cloak>
           <label class="pm-label-inline" for="pm-fecha-entrega">Fecha entrega <span class="text-rose-600" aria-hidden="true">*</span></label>
           <input id="pm-fecha-entrega" type="date" required

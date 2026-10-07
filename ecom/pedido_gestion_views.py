@@ -313,6 +313,7 @@ class CompraMayoristaContextoAPIView(APIView):
                 "puntos_venta": puntos,
                 "idcliente": idcliente,
                 "cliente": cliente,
+                "domicilios_cliente": bag.get("domicilios_cliente") or [],
                 "autoriza_credito": autoriza_credito,
                 "credito_pedidos_activo": credito_pedidos_activo(base),
                 "credito_precheck_url": reverse("ecom:credito_precheck"),

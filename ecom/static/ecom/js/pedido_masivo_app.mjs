@@ -149,6 +149,7 @@ function pedidoMasivoCore() {
     condicionesVenta: [],
     listasPrecio: [],
     tipo: 'PED',
+    formaEntrega: '',
     // Contexto comercial compacto por defecto para reservar alto a la matriz.
     contextoAbierto: false,
     // ── Pedido simple (masivo 1 columna) ──
@@ -2525,6 +2526,7 @@ function pedidoMasivoCore() {
           {
             draft_id: this.draftId,
             desc_pie_pct: this.descPiePct,
+            forma_entrega: this.formaEntrega,
             stream: true,
             ...this._payloadCabecera(),
           },

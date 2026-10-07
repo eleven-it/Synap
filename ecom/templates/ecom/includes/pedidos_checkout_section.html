@@ -28,8 +28,20 @@
           <input id="pedidos-forma-entrega"
                  type="text"
                  x-model="formaEntrega"
-                 placeholder="Retira / Envío"
+                 list="pedidos-formas-entrega"
+                 placeholder="Retira / Transporte"
                  class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+          <datalist id="pedidos-formas-entrega"><option value="Retira"></option><option value="Transporte"></option></datalist>
+        </div>
+        <div>
+          <label for="pedidos-domicilio-entrega" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Domicilio de entrega</label>
+          <select id="pedidos-domicilio-entrega" x-model.number="idClienteDomicilio"
+                  class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none">
+            <option value="">Seleccioná un domicilio</option>
+            <template x-for="d in domiciliosCliente" :key="d.idDom">
+              <option :value="d.idDom" x-text="[d.Calle, d.NroCalle, d.Dpto].filter(Boolean).join(' ') || `Domicilio ${d.idDom}`"></option>
+            </template>
+          </select>
         </div>
       </div>
       <div>

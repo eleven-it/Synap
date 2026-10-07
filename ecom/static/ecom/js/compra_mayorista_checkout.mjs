@@ -32,6 +32,8 @@ export function compraMayoristaCheckoutMixin() {
   return {
     pv: null,
     formaEntrega: '',
+    idClienteDomicilio: null,
+    domiciliosCliente: [],
     observaciones: '',
     confirmando: false,
     pedidosRecientes: [],
@@ -175,6 +177,10 @@ export function compraMayoristaCheckoutMixin() {
       const { ok, data } = await this.api(this.urls.compra_contexto, 'GET');
       if (!ok || !data) return;
       this.puntosVenta = data.puntos_venta || [];
+      this.domiciliosCliente = Array.isArray(data.domicilios_cliente) ? data.domicilios_cliente : [];
+      if (!this.domiciliosCliente.some((d) => Number(d.idDom) === Number(this.idClienteDomicilio))) {
+        this.idClienteDomicilio = null;
+      }
       if (data.id_punto_venta_default) this.pv = data.id_punto_venta_default;
       this.puedeEditarCabecera = !!data.puede_editar_cabecera;
       this.creditoPedidosActivo = !!data.credito_pedidos_activo;
@@ -377,11 +383,16 @@ export function compraMayoristaCheckoutMixin() {
     },
 
     async confirmar() {
+      if (['PED', 'PRE'].includes(this.tipo) && this.formaEntrega.trim().toLowerCase() === 'transporte' && !this.idClienteDomicilio) {
+        this.flash('Seleccioná un domicilio de entrega para usar Transporte.', false);
+        return;
+      }
       this.confirmando = true;
       this.mensaje = '';
       const body = {
         tipo: this.tipo,
         forma_entrega: this.formaEntrega,
+        id_cliente_domicilio: this.idClienteDomicilio,
         observaciones: this.observaciones,
         ...this._payloadCabeceraConfirmar(),
       };

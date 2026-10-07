@@ -143,6 +143,7 @@ export function compraMayoristaPedidoMixin() {
         }));
       }
       if (cab.forma_entrega) this.formaEntrega = cab.forma_entrega;
+      if (cab.id_cliente_domicilio) this.idClienteDomicilio = Number(cab.id_cliente_domicilio);
       if (cab.observaciones) this.observaciones = cab.observaciones;
       return true;
     },
@@ -207,6 +208,7 @@ export function compraMayoristaPedidoMixin() {
           }));
         }
         if (cab.forma_entrega) this.formaEntrega = cab.forma_entrega;
+        if (cab.id_cliente_domicilio) this.idClienteDomicilio = Number(cab.id_cliente_domicilio);
         if (cab.observaciones) this.observaciones = cab.observaciones;
 
         if (anulado || estado.toLowerCase() !== 'pendiente') {
@@ -379,6 +381,10 @@ export function compraMayoristaPedidoMixin() {
     },
 
     async _confirmarCambiosPendiente() {
+      if (this.formaEntrega.trim().toLowerCase() === 'transporte' && !this.idClienteDomicilio) {
+        this.flash('Seleccioná un domicilio de entrega para usar Transporte antes de reemplazar el pedido.', false);
+        return;
+      }
       this.confirmando = true;
       const motivo = `Edición Synap: reemplazo PED ${this.cabeceraPedido?.nro_comprobante || this.codMov}`;
       const anular = await this.api(this.urls.anular, 'POST', {
@@ -395,6 +401,7 @@ export function compraMayoristaPedidoMixin() {
       const body = {
         tipo: this.tipo,
         forma_entrega: this.formaEntrega,
+        id_cliente_domicilio: this.idClienteDomicilio,
         observaciones: this.observaciones,
       };
       if (this.esCliente) body.es_cliente = true;

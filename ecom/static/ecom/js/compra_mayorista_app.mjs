@@ -158,6 +158,8 @@ function compraMayoristaCore() {
 
     _limpiarClienteUi() {
       this.clienteActivo = null;
+      this.idClienteDomicilio = null;
+      this.domiciliosCliente = [];
       this.clienteActivoLabel = '';
       this.creditoWidget = null;
       this.listaPrecio = '';

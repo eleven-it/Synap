@@ -37,6 +37,12 @@ class FakeCursor:
             self._last = self.state.get("talonario", {"Nro": 57, "PV": 3})
         elif "from iva" in low and "alicuota = 0" in low:
             self._last = self.state.get("iva_cero", {"ID": 4})
+        elif "from cliente_domicilio" in low:
+            self.state["domicilio_query_params"] = params
+            self._last = self.state.get("domicilio", {"id_transporte": 77})
+        elif "insert into cliente_datos_adicionales" in low:
+            self.state["datos_adicionales_sql"] = sql
+            self.state["datos_adicionales_params"] = params
         elif "from usuarios" in low:
             self._last = {"agente_percep": self.state.get("agente_percep", "No")}
         elif "from cotizacion" in low:
@@ -223,6 +229,65 @@ class CheckoutTestBase(TestCase):
 
 
 class TestCheckoutPedido(CheckoutTestBase):
+    def test_transporte_copia_id_del_domicilio_del_cliente(self):
+        conn = FakeConn({"domicilio": {"id_transporte": 123}})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PED", id_punto_venta=3,
+                              forma_entrega=" Transporte ", id_cliente_domicilio=19),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["domicilio_query_params"], [19, 10])
+        self.assertEqual(conn.state["datos_adicionales_params"]["id_dom"], 19)
+        self.assertEqual(conn.state["datos_adicionales_params"]["id_transporte"], 123)
+
+    def test_sin_transporte_no_copia_id_habitual(self):
+        conn = FakeConn({"domicilio": {"id_transporte": 123}})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PED", id_punto_venta=3,
+                              forma_entrega="Retira", id_cliente_domicilio=19),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        self.assertNotIn("domicilio_query_params", conn.state)
+        self.assertIsNone(conn.state["datos_adicionales_params"]["id_transporte"])
+
+    def test_transporte_requiere_domicilio_del_cliente(self):
+        for id_dom, domicilio in ((None, {"id_transporte": 123}), (19, None)):
+            with self.subTest(id_dom=id_dom):
+                conn = FakeConn({"domicilio": domicilio})
+                cart = self._cart(tipo="PED")
+                with self._with_patches(conn):
+                    ok, err, _ = checkout_svc.confirmar(
+                        cart,
+                        CheckoutInput(tipo="PED", id_punto_venta=3,
+                                      forma_entrega="Transporte", id_cliente_domicilio=id_dom),
+                        id_usuario=5,
+                    )
+                self.assertFalse(ok)
+                self.assertTrue(err)
+                self.assertTrue(conn.rolled_back)
+                self.assertNotIn("comp_ped_count", conn.state)
+
+    def test_presupuesto_transporte_copia_id_habitual(self):
+        conn = FakeConn({"domicilio": {"id_transporte": 42}})
+        cart = self._cart(tipo="PRE")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PRE", id_punto_venta=3,
+                              forma_entrega="Transporte", id_cliente_domicilio=19),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["datos_adicionales_params"]["id_transporte"], 42)
+
     def test_tipo_confirmado_pedido_aplica_categoria_9_aun_con_borrador_dev(self):
         conn = FakeConn({"codmov": 1000, "iva_cero": {"ID": 4}})
         cart = self._cart(tipo="DEV")
