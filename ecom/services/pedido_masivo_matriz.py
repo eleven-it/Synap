@@ -19,6 +19,7 @@ from ecom.services.catalogo_producto import (
     resolver_precio_articulo,
 )
 from ecom.services.cliente_iva_pedido import es_cliente_iva_no_responsable
+from ecom.services.mayorista_credito import dias_atraso
 from ecom.services.price_rules_engine import (
     calcular_precio_articulo_row,
     resolver_reglas_precio_map,
@@ -561,7 +562,7 @@ def credito_cliente_masivo(base_empresa: str, id_cliente: int) -> Dict[str, Any]
     en días (``cliente.credito_limite_dias``). No consulta autorización por pedido.
     """
     idc = to_int_or_none(id_cliente)
-    vacio = {"saldo": 0.0, "credito_cupo": 0.0, "credito_limite_dias": 0}
+    vacio = {"saldo": 0.0, "credito_cupo": 0.0, "credito_limite_dias": 0, "dias_vencidos": 0}
     if idc is None:
         return vacio
     sql = """
@@ -582,10 +583,16 @@ def credito_cliente_masivo(base_empresa: str, id_cliente: int) -> Dict[str, Any]
                 row = cursor.fetchone()
                 if not row:
                     return vacio
+                try:
+                    atraso = dias_atraso(cursor, idc) or 0
+                except Exception:
+                    logger.warning("credito_cliente_masivo: no se pudo calcular mora", exc_info=True)
+                    atraso = 0
                 return {
                     "saldo": float(_dec(row[0])),
                     "credito_cupo": float(_dec(row[1])),
                     "credito_limite_dias": int(to_int_or_none(row[2]) or 0),
+                    "dias_vencidos": int(atraso),
                 }
             finally:
                 cursor.close()
@@ -716,6 +723,56 @@ def _stock_disponible_packs_map(
     return out
 
 
+def filtros_articulos_filtrados_ternas(
+    base_empresa: str, *, cod_viajante: int, id_cliente: int,
+    id_cliente_domicilio: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Opciones de marca/rubro/subrubro del mismo catálogo autorizado para el pedido."""
+    marcas = marcas_asignadas_viajante_cliente(
+        base_empresa, cod_viajante, id_cliente, id_cliente_domicilio
+    )
+    if not marcas:
+        return {"marcas": [], "rubros": [], "subrubros": [], "sin_marcas": True}
+    placeholders = ",".join(["%s"] * len(marcas))
+    sql = f"""
+        SELECT DISTINCT articulo.CodigoMarca, COALESCE(marca.NombreMarca, ''),
+            articulo.CodigoRubro, COALESCE(rubro.NombreRubro, ''),
+            articulo.IDSubRubro, COALESCE(subrubro.NombreSubRubro, '')
+        FROM articulo
+        LEFT JOIN marca ON marca.CodMarca = articulo.CodigoMarca
+        LEFT JOIN rubro ON rubro.CodigoRubro = articulo.CodigoRubro
+        LEFT JOIN subrubro ON subrubro.IDSubRubro = articulo.IDSubRubro
+        WHERE articulo.Discontinuo = 'No' AND articulo.ecommerce = 'Si'
+          AND {SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO}
+          AND articulo.CodigoMarca IN ({placeholders})
+    """
+    pool = get_mysql_pool()
+    with pool.get_connection(base_empresa.strip()) as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(sql, marcas)
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+    marcas_op, rubros_op, subrubros_op = {}, {}, {}
+    for marca_id, marca, rubro_id, rubro, subrubro_id, subrubro in rows:
+        if marca_id is not None:
+            marcas_op[int(marca_id)] = {"id": int(marca_id), "nombre": str(marca or marca_id)}
+        if rubro_id is not None:
+            rubros_op[int(rubro_id)] = {"id": int(rubro_id), "nombre": str(rubro or rubro_id)}
+        if subrubro_id is not None:
+            subrubros_op[int(subrubro_id)] = {
+                "id": int(subrubro_id), "rubro_id": int(rubro_id or 0),
+                "nombre": str(subrubro or subrubro_id),
+            }
+    def ordenar(items):
+        return sorted(items.values(), key=lambda item: item["nombre"].casefold())
+    return {
+        "marcas": ordenar(marcas_op), "rubros": ordenar(rubros_op),
+        "subrubros": ordenar(subrubros_op), "sin_marcas": False,
+    }
+
+
 def buscar_articulos_filtrados_ternas(
     base_empresa: str,
     *,
@@ -730,6 +787,9 @@ def buscar_articulos_filtrados_ternas(
     iva_incluido: bool = True,
     descuento_cliente: Decimal = Decimal("0"),
     listar_todos: bool = False,
+    marca_id: Optional[int] = None,
+    rubro_id: Optional[int] = None,
+    subrubro_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Autocomplete liviano para la matriz masiva.
@@ -777,6 +837,15 @@ def buscar_articulos_filtrados_ternas(
     placeholders = ",".join(["%s"] * len(marcas))
     where.append(f"articulo.CodigoMarca IN ({placeholders})")
     params.extend(marcas)
+    for columna, valor in (
+        ("articulo.CodigoMarca", marca_id),
+        ("articulo.CodigoRubro", rubro_id),
+        ("articulo.IDSubRubro", subrubro_id),
+    ):
+        id_filtro = to_int_or_none(valor)
+        if id_filtro is not None:
+            where.append(f"{columna} = %s")
+            params.append(id_filtro)
 
     if not todos and len(q) < 2:
         return {
@@ -793,14 +862,17 @@ def buscar_articulos_filtrados_ternas(
         where.append(
             "(articulo.id_manual LIKE %s OR articulo.NombreArticulo LIKE %s "
             "OR articulo.CodigoArticuloT LIKE %s OR CAST(articulo.IDArt AS CHAR) LIKE %s "
-            "OR articulo.NroCodBarra = %s OR articulo.NroCodBarra LIKE %s)"
+            "OR articulo.NroCodBarra = %s OR articulo.NroCodBarra LIKE %s "
+            "OR articulo.CodArtProv LIKE %s)"
         )
-        params.extend([like, like, like, like, q, like])
+        params.extend([like, like, like, like, q, like, like])
 
     select_cols = """
             articulo.IDArt,
             COALESCE(articulo.id_manual, '') AS id_manual,
             COALESCE(articulo.NombreArticulo, '') AS nombre,
+            COALESCE(articulo.CodArtProv, '') AS codartprov,
+            articulo.CodigoMarca AS marca_id,
             articulo.Precio1V,
             articulo.Precio2V,
             articulo.Precio3V,
@@ -894,6 +966,10 @@ def buscar_articulos_filtrados_ternas(
                         {
                             "id_articulo": id_art,
                             "id_manual": str_or_default(articulo.get("id_manual"), ""),
+                            "codartprov": str_or_default(articulo.get("codartprov"), ""),
+                            "marca_id": to_int_or_none(articulo.get("marca_id")),
+                            "rubro_id": to_int_or_none(articulo.get("CodigoRubro")),
+                            "subrubro_id": to_int_or_none(articulo.get("IDSubRubro")),
                             "codigo": str_or_default(articulo.get("id_manual"), ""),
                             "nombre": str_or_default(articulo.get("nombre"), ""),
                             "descripcion": str_or_default(articulo.get("nombre"), ""),
@@ -956,7 +1032,8 @@ def _nombres_articulos(
             COALESCE(articulo.id_manual, ''),
             COALESCE(articulo.NombreArticulo, ''),
             COALESCE(iva.Alicuota, 21) AS alic_iva,
-            articulo.multiplo_cantidad_vta
+            articulo.multiplo_cantidad_vta,
+            COALESCE(articulo.CodArtProv, '')
         FROM articulo
         LEFT JOIN iva ON iva.ID = articulo.Alicuota
         WHERE articulo.IDArt IN ({placeholders})
@@ -981,6 +1058,7 @@ def _nombres_articulos(
                     out[id_art] = {
                         "codigo": str_or_default(r[1], ""),
                         "descripcion": str_or_default(r[2], ""),
+                        "codartprov": str_or_default(r[5], ""),
                         "precio_unitario_neto": float(precio or 0),
                         "precio_lista1": float(precio or 0),
                         "alicuota_iva": float(0 if iva_no_responsable else alic if alic is not None else 21),
@@ -1285,6 +1363,7 @@ def serializar_matriz(
         {
             "id_articulo": aid,
             "id_manual": nombres.get(aid, {}).get("codigo", ""),
+            "codartprov": nombres.get(aid, {}).get("codartprov", ""),
             "codigo": nombres.get(aid, {}).get("codigo", ""),
             "nombre": nombres.get(aid, {}).get("descripcion", f"Art. {aid}"),
             "descripcion": nombres.get(aid, {}).get("descripcion", f"Art. {aid}"),

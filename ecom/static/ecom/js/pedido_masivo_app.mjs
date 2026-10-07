@@ -190,6 +190,14 @@ function pedidoMasivoCore() {
     // Catálogo completo en matriz (Mostrar/Ocultar todos).
     catalogoDesplegado: false,
     articulosSeleccionados: {},
+    filtrosAvanzadosAbiertos: false,
+    facetasCatalogo: { marcas: [], rubros: [], subrubros: [] },
+    marcaFiltro: '',
+    rubroFiltro: '',
+    subrubroFiltro: '',
+    cantidadNuevoArticulo: 1,
+    carritoAbierto: false,
+    detallesComercialesAbiertos: false,
     esperaOperacion: false,
     esperaMensaje: 'Procesando…',
     importArchivo: null,
@@ -328,6 +336,18 @@ function pedidoMasivoCore() {
     get cantidadSeleccionados() {
       return Object.keys(this.articulosSeleccionados || {}).length;
     },
+    get subrubrosFiltrados() {
+      return (this.facetasCatalogo.subrubros || []).filter(
+        (s) => !this.rubroFiltro || String(s.rubro_id) === String(this.rubroFiltro),
+      );
+    },
+    get carritoItems() {
+      if (!this.modoSimple || !this.sucursales.length) return [];
+      const domicilio = this.sucursales[0].id_cliente_domicilio;
+      return (this.articulos || []).filter(
+        (art) => Number(this.celda(art.id_articulo, domicilio)) > 0,
+      );
+    },
     get sugerenciasTabla() {
       const q = (this.qTabla || '').trim().toLowerCase();
       if (!q) return [];
@@ -367,18 +387,20 @@ function pedidoMasivoCore() {
       this.idRepartidor = this.repartidores[0]?.id || null;
       this.operadorLogistico = this.operadoresLogisticos[0] || '';
       this.modoSimple = String(boot.modo || '') === 'simple';
+      if (this.modoSimple) this.contextoAbierto = true;
       this.idDomicilioInicial = boot.id_domicilio || null;
       this.readonly = Boolean(boot.readonly);
       this.aprobacionPedidosActiva = Boolean(boot.aprobacion_pedidos_activa);
       try {
         const guardado = sessionStorage.getItem('pm-contexto-abierto');
-        if (guardado === '1') this.contextoAbierto = true;
+        if (!this.modoSimple && guardado === '1') this.contextoAbierto = true;
       } catch { /* sessionStorage no disponible */ }
       this.cargarCarteraVendedor();
       this.buscarClientes();
       // Prioridad: abrir PED (cod_mov) → recuperar borrador → nuevo simple.
       if (boot.cod_mov) {
         this.modoSimple = true;
+        this.contextoAbierto = true;
         const consulta = Boolean(
           boot.consulta || (boot.readonly && boot.cod_mov),
         );
@@ -586,11 +608,23 @@ function pedidoMasivoCore() {
       const id = String(c.id_cliente);
       if (this.abriendo) return;
       if (!this.modoSimple && this.draftId && String(this.idCliente) === id && this.clienteSel === id) return;
+      const cambioClienteSimple = this.modoSimple && String(this.idCliente || '') !== id;
       this.clienteSel = id;
       const nombre = this._nombreClienteVisible(c.nombre || c.etiqueta || '');
       this.clienteNombre = nombre;
       this.qCliente = nombre;
       this._aplicarListaDesdeCliente(c);
+      this.facetasCatalogo = { marcas: [], rubros: [], subrubros: [] };
+      this.marcaFiltro = '';
+      this.rubroFiltro = '';
+      this.subrubroFiltro = '';
+      this.filtrosAvanzadosAbiertos = false;
+      this.carritoAbierto = false;
+      if (cambioClienteSimple) {
+        this.cabecera = null;
+        this.credito = null;
+        this.formaEntrega = '';
+      }
       this.cerrarPanelCli();
       if (this.modoSimple) {
         this.opcionesSucursal = [];
@@ -875,6 +909,7 @@ function pedidoMasivoCore() {
       this.articulos = (m.articulos || []).map(a => ({
         id_articulo: a.id_articulo,
         id_manual: a.id_manual || a.codigo || '',
+        codartprov: a.codartprov || '',
         codigo: a.codigo || a.id_manual || '',
         nombre: a.nombre || a.descripcion || '',
         descripcion: a.descripcion || a.nombre || '',
@@ -896,7 +931,10 @@ function pedidoMasivoCore() {
       this.descPiePct = Number(m.desc_pie_pct || 0);
       this.ultimoError = m.ultimo_error || {};
       // Modo simple + metadata de origen (REQ-PSU-02/03) y crédito hero.
-      if (String(m.modo || '') === 'simple') this.modoSimple = true;
+      if (String(m.modo || '') === 'simple') {
+        this.modoSimple = true;
+        this.contextoAbierto = true;
+      }
       if (this.modoSimple && this.sucursales[0]) {
         this._aplicarSucursal(this.sucursales[0]);
         if (!this.opcionesSucursal.length && this.idCliente) {
@@ -1337,6 +1375,10 @@ function pedidoMasivoCore() {
       return {
         id_articulo: it.id_articulo || it.IDArt,
         id_manual: it.id_manual || '',
+        codartprov: it.codartprov || '',
+        marca_id: it.marca_id || null,
+        rubro_id: it.rubro_id || null,
+        subrubro_id: it.subrubro_id || null,
         codigo: it.id_manual || it.codigo || '',
         nombre: it.nombre || it.descripcion || '',
         descripcion: it.nombre || it.descripcion || '',
@@ -1468,10 +1510,59 @@ function pedidoMasivoCore() {
     toggleSeleccionArticulo(a) {
       const id = this._idArticuloKey(a);
       if (!id) return;
-      const next = { ...(this.articulosSeleccionados || {}) };
-      if (next[id]) delete next[id];
-      else next[id] = this._mapArticuloItem(a);
+      const estaba = Boolean((this.articulosSeleccionados || {})[id]);
+      const next = this.modoSimple ? {} : { ...(this.articulosSeleccionados || {}) };
+      if (!estaba) next[id] = this._mapArticuloItem(a);
+      else if (!this.modoSimple) delete next[id];
       this.articulosSeleccionados = next;
+      if (this.modoSimple) this.cerrarPanelArt();
+    },
+    async agregarArticuloSimple() {
+      const articulo = Object.values(this.articulosSeleccionados || {})[0];
+      const domicilio = this.sucursales[0]?.id_cliente_domicilio;
+      const cantidad = Number(this.cantidadNuevoArticulo);
+      if (!this.modoSimple || !articulo || !domicilio || !this.matrizEditable) return;
+      if (!Number.isFinite(cantidad) || cantidad <= 0) {
+        this.mostrarAviso('Ingresá una cantidad mayor que cero.', 'error');
+        return;
+      }
+      await this.agregarSeleccionados();
+      await this.onCelda(articulo.id_articulo, domicilio, String(cantidad));
+      this.cantidadNuevoArticulo = 1;
+    },
+    async abrirFiltrosAvanzados() {
+      this.filtrosAvanzadosAbiertos = !this.filtrosAvanzadosAbiertos;
+      if (!this.filtrosAvanzadosAbiertos || !this.idCliente || this.facetasCatalogo.marcas.length) return;
+      try {
+        const url = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}&facetas=1`
+          + this.parametroDomicilioCatalogo();
+        const data = await this.getJson(url);
+        if (!data.ok) {
+          this.mostrarAviso(data.error || 'No se pudieron cargar los filtros.', 'error');
+          return;
+        }
+        this.facetasCatalogo = {
+          marcas: data.marcas || [], rubros: data.rubros || [], subrubros: data.subrubros || [],
+        };
+      } catch {
+        this.mostrarAviso('No se pudieron cargar los filtros.', 'error');
+      }
+    },
+    parametrosFiltrosCatalogo() {
+      const params = new URLSearchParams();
+      if (this.marcaFiltro) params.set('marca_id', this.marcaFiltro);
+      if (this.rubroFiltro) params.set('rubro_id', this.rubroFiltro);
+      if (this.subrubroFiltro) params.set('subrubro_id', this.subrubroFiltro);
+      return params.toString();
+    },
+    parametroDomicilioCatalogo() {
+      const id = this.modoSimple ? Number(this.sucursales[0]?.id_cliente_domicilio || 0) : 0;
+      return id > 0 ? `&id_cliente_domicilio=${encodeURIComponent(String(id))}` : '';
+    },
+    async aplicarFiltrosCatalogo() {
+      if (!this.idCliente) return;
+      this.catalogoDesplegado = false;
+      await this._fetchArticulos({ q: this.qArt.trim(), todos: true, tam: 5000 });
     },
     /** Espacio: marca/desmarca el ítem resaltado del dropdown. */
     onSpaceArt() {
@@ -1498,7 +1589,9 @@ function pedidoMasivoCore() {
       try {
         const u = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}`
           + `&lista_id=${encodeURIComponent(String(this.cabecera?.lista_id || this.listaId || 1))}`
-          + '&tam=5000&todos=1';
+          + '&tam=5000&todos=1'
+          + this.parametroDomicilioCatalogo()
+          + (this.parametrosFiltrosCatalogo() ? `&${this.parametrosFiltrosCatalogo()}` : '');
         const data = await this.getJson(u);
         if (!data.ok) {
           this.mostrarAviso(data.error || 'No se pudo cargar el catálogo.', 'error');
@@ -1507,6 +1600,11 @@ function pedidoMasivoCore() {
         if (data.sin_marcas) {
           this.mostrarAviso('No hay marcas asignadas para este cliente en tu territorio.', 'error');
           return;
+        }
+        if (this.modoSimple) {
+          this.articulos = (this.articulos || []).filter(
+            (art) => this._sumaPacksFilaNumerica(art.id_articulo) > 0,
+          );
         }
         const existentes = new Set((this.articulos || []).map((x) => Number(x.id_articulo)));
         const nuevos = [];
@@ -1959,12 +2057,15 @@ function pedidoMasivoCore() {
       let u = this.urls.articulos
         + '?id_cliente=' + this.idCliente
         + '&lista_id=' + (this.cabecera?.lista_id || this.listaId || 1)
-        + '&tam=' + encodeURIComponent(String(tam));
+        + '&tam=' + encodeURIComponent(String(tam))
+        + this.parametroDomicilioCatalogo();
       if (todos) {
         u += '&todos=1';
       } else {
         u += '&q=' + encodeURIComponent(q || '');
       }
+      const filtros = this.parametrosFiltrosCatalogo();
+      if (filtros) u += `&${filtros}`;
       try {
         const data = await this.getJson(u, { signal: abortController.signal });
         if (seq !== this._artBusquedaSeq || abortController.signal.aborted) return;
@@ -2128,6 +2229,10 @@ function pedidoMasivoCore() {
       }
     },
     elegirResaltadoArt() {
+      if (this.modoSimple && this.articulosBusqueda[this.idxArt]) {
+        this.toggleSeleccionArticulo(this.articulosBusqueda[this.idxArt]);
+        return;
+      }
       if (this.cantidadSeleccionados > 0) {
         this.agregarSeleccionados();
         return;

@@ -25,6 +25,7 @@ from ecom.permissions import (
 from ecom.services.pedido_masivo_matriz import (
     anular_borrador_masivo_usuario,
     buscar_articulos_filtrados_ternas,
+    filtros_articulos_filtrados_ternas,
     cod_viajante_sesion,
     credito_cliente_masivo,
     eliminar_fila_articulo,
@@ -779,6 +780,15 @@ class PedidoMasivoArticulosAPIView(APIView):
         idc = to_int_or_none(request.query_params.get("id_cliente"))
         if cv is None or idc is None:
             return _err("Se requieren viajante e id_cliente.")
+        id_domicilio = to_int_or_none(request.query_params.get("id_cliente_domicilio"))
+        if str(request.query_params.get("facetas") or "") == "1":
+            return Response({
+                "ok": True,
+                **filtros_articulos_filtrados_ternas(
+                    base, cod_viajante=cv, id_cliente=idc,
+                    id_cliente_domicilio=id_domicilio,
+                ),
+            })
         lista_id = to_int_or_none(request.query_params.get("lista_id")) or 1
         id_dep = to_int_or_none(request.query_params.get("id_deposito")) or 1
         todos_raw = str(request.query_params.get("todos") or "").strip().lower()
@@ -788,13 +798,16 @@ class PedidoMasivoArticulosAPIView(APIView):
             base,
             cod_viajante=cv,
             id_cliente=idc,
-            id_cliente_domicilio=to_int_or_none(request.query_params.get("id_cliente_domicilio")),
+            id_cliente_domicilio=id_domicilio,
             q=str(request.query_params.get("q") or ""),
             lista_id=lista_id,
             id_deposito=id_dep,
             pagina=to_int_or_none(request.query_params.get("pagina")) or 1,
             tam=to_int_or_none(request.query_params.get("tam")) or tam_default,
             listar_todos=listar_todos,
+            marca_id=to_int_or_none(request.query_params.get("marca_id")),
+            rubro_id=to_int_or_none(request.query_params.get("rubro_id")),
+            subrubro_id=to_int_or_none(request.query_params.get("subrubro_id")),
         )
         return Response({"ok": True, **result})
 

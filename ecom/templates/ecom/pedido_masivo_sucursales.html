@@ -38,13 +38,13 @@
             <span x-show="guardadoChip" x-cloak
                   class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"
                   x-text="guardadoChip"></span>
-            {# Crédito del cliente (modo simple) #}
-            <span x-show="modoSimple && credito && idCliente" x-cloak
-                  class="inline-flex items-center gap-1 rounded-lg bg-slate-700/70 px-2.5 py-1 text-[11px] font-semibold text-slate-200"
-                  :title="'Saldo CC: ' + money(credito ? credito.saldo : 0) + ' · Límite: ' + (credito ? credito.credito_limite_dias : 0) + ' días'">
-              <span class="material-icons text-sm leading-none" aria-hidden="true">account_balance_wallet</span>
-              <span x-text="'Crédito: ' + money(credito ? credito.saldo : 0)"></span>
-            </span>
+            <button type="button" x-show="modoSimple && draftId" x-cloak
+                    @click="carritoAbierto = true"
+                    class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-sky-300/70 bg-sky-900/60 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-800"
+                    aria-label="Abrir carrito del pedido">
+              <span class="material-icons text-base leading-none" aria-hidden="true">shopping_cart</span>
+              Carrito <span class="rounded-full bg-sky-500 px-1.5" x-text="carritoItems.length"></span>
+            </button>
             {# Acciones hero PED: PDF · Mail · Repetir · Anular #}
             <template x-if="pedidoCargado">
               <span class="inline-flex flex-wrap items-center gap-2">
@@ -131,10 +131,12 @@
     <div class="pm-context-card mb-3 flex-shrink-0 rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-2.5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800/90">
       {# Eyebrow + chevron expandir/compactar #}
       <div class="flex items-center justify-between gap-2">
-        <p class="pm-context-eyebrow text-[10px] font-semibold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">
+        <p class="pm-context-eyebrow text-[10px] font-semibold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80"
+           x-text="modoSimple ? 'Encabezado del pedido' : 'Contexto comercial'">
           Contexto comercial
         </p>
         <button type="button"
+                x-show="!modoSimple"
                 @click="toggleContexto()"
                 class="pm-context-toggle inline-flex h-6 w-6 items-center justify-center rounded-md text-sky-700 hover:bg-sky-100/70 dark:text-sky-300 dark:hover:bg-sky-900/40 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
                 :aria-expanded="contextoAbierto"
@@ -158,17 +160,24 @@
 
       {# Filtros densos (visible al expandir) — 2 columnas, label inline #}
       <div x-show="contextoAbierto" x-cloak class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 lg:grid-cols-2">
-        <div class="pm-field-row" x-show="cabecera" x-cloak>
-          <label class="pm-label-inline" for="pm-fecha-pedido">Fecha pedido</label>
+        <div class="pm-field-row" x-show="modoSimple && !cabecera" x-cloak style="order: 1">
+          <span class="pm-label-inline">Fecha</span>
+          <span class="text-xs font-semibold text-slate-700 dark:text-slate-200"
+                x-text="new Date().toLocaleDateString('es-AR')"></span>
+        </div>
+        <div class="pm-field-row" x-show="cabecera" x-cloak :style="modoSimple ? 'order: 1' : ''">
+          <label class="pm-label-inline" for="pm-fecha-pedido" x-text="modoSimple ? 'Fecha' : 'Fecha pedido'">Fecha pedido</label>
           <input id="pm-fecha-pedido" type="date"
                  x-model="cabecera.fecha_pedido"
                  @change="onCabeceraFechaIso('fecha_pedido')"
+                 :disabled="modoSimple"
+                 :title="modoSimple ? 'La fecha del pedido es informativa' : ''"
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
-        <div class="pm-field-row" x-show="tipo === 'PED'" x-cloak>
+        <div class="pm-field-row" x-show="tipo === 'PED'" x-cloak :style="modoSimple ? 'order: 4' : ''">
           <label class="pm-label-inline" for="pm-forma-entrega">Forma de entrega</label>
-          <select id="pm-forma-entrega" x-model="formaEntrega"
+          <select id="pm-forma-entrega" x-model="formaEntrega" :disabled="modoSimple && !sucursalSel"
                   class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
             <option value="">Sin especificar</option>
             <option value="Retira cliente mostrador">Retira cliente mostrador</option>
@@ -181,7 +190,7 @@
             <option value="Operador logistico">Operador logistico</option>
           </select>
         </div>
-        <div class="pm-field-row" x-show="formaEntrega === 'Envia repartidor'" x-cloak>
+        <div class="pm-field-row" x-show="formaEntrega === 'Envia repartidor'" x-cloak :style="modoSimple ? 'order: 5' : ''">
           <label class="pm-label-inline" for="pm-repartidor">Usuario repartidor</label>
           <select id="pm-repartidor" x-model.number="idRepartidor"
                   class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white">
@@ -189,14 +198,14 @@
             <template x-for="u in repartidores" :key="u.id"><option :value="u.id" x-text="u.nombre"></option></template>
           </select>
         </div>
-        <div class="pm-field-row" x-show="formaEntrega === 'Operador logistico'" x-cloak>
+        <div class="pm-field-row" x-show="formaEntrega === 'Operador logistico'" x-cloak :style="modoSimple ? 'order: 5' : ''">
           <label class="pm-label-inline" for="pm-operador-logistico">Operador logístico</label>
           <select id="pm-operador-logistico" x-model="operadorLogistico"
                   class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white">
             <template x-for="o in operadoresLogisticos" :key="o"><option :value="o" x-text="o"></option></template>
           </select>
         </div>
-        <div x-show="formaEntrega === 'Transporte' && sucursales.length" x-cloak class="w-full rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+        <div x-show="formaEntrega === 'Transporte' && sucursales.length" x-cloak :style="modoSimple ? 'order: 5' : ''" class="w-full rounded-lg border border-slate-200 p-2 dark:border-slate-700">
           <p class="text-xs font-semibold mb-2">Transporte por domicilio</p>
           <template x-for="s in sucursales" :key="s.id_cliente_domicilio">
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center mb-2">
@@ -216,7 +225,7 @@
             </div>
           </template>
         </div>
-        <div class="pm-field-row" x-show="tipo === 'PED' && muestraRutaEntrega" x-cloak>
+        <div class="pm-field-row" x-show="tipo === 'PED' && muestraRutaEntrega" x-cloak :style="modoSimple ? 'order: 6' : ''">
           <label class="pm-label-inline" for="pm-ruta-entrega">Ruta logística</label>
           <select id="pm-ruta-entrega" x-model.number="idRuta"
                   class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
@@ -227,7 +236,7 @@
           </select>
         </div>
 
-        <div class="pm-field-row" x-show="cabecera && tipo === 'PED'" x-cloak>
+        <div class="pm-field-row" x-show="cabecera && tipo === 'PED'" x-cloak :style="modoSimple ? 'order: 6' : ''">
           <label class="pm-label-inline" for="pm-fecha-entrega">Fecha entrega <span class="text-rose-600" aria-hidden="true">*</span></label>
           <input id="pm-fecha-entrega" type="date" required
                  x-model="cabecera.fecha_entrega"
@@ -236,7 +245,7 @@
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
-        <div class="pm-field-row" x-show="cabecera" x-cloak>
+        <div class="pm-field-row" x-show="cabecera && (!modoSimple || detallesComercialesAbiertos)" x-cloak :style="modoSimple ? 'order: 22' : ''">
           <label class="pm-label-inline" for="pm-vencimiento">Vencimiento</label>
           <input id="pm-vencimiento" type="date"
                  x-model="cabecera.vencimiento"
@@ -246,8 +255,8 @@
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
-        <div class="pm-field-row" x-show="cabecera" x-cloak>
-          <label class="pm-label-inline" for="pm-lista">Lista</label>
+        <div class="pm-field-row" x-show="cabecera && (!modoSimple || detallesComercialesAbiertos)" x-cloak :style="modoSimple ? 'order: 21' : ''">
+          <label class="pm-label-inline" for="pm-lista" x-text="modoSimple ? 'Lista de precio' : 'Lista'">Lista</label>
           <template x-if="puedeEditarLista">
             <select id="pm-lista" x-model.number="cabecera.lista_id"
                     @change="onCabeceraListaChange()"
@@ -264,7 +273,7 @@
           </template>
         </div>
 
-        <div class="pm-field-row" @click.outside="cerrarPanelCli()">
+        <div class="pm-field-row" :style="modoSimple ? 'order: 2' : ''" @click.outside="cerrarPanelCli()">
           <label class="pm-label-inline" for="pm-cli">Cliente</label>
           <div class="relative min-w-[12rem] flex-1">
             <input id="pm-cli" type="text" autocomplete="off" role="combobox"
@@ -297,8 +306,8 @@
           </div>
         </div>
 
-        <div class="pm-field-row" x-show="modoSimple" x-cloak @click.outside="cerrarPanelSuc()">
-          <label class="pm-label-inline" for="pm-sucursal">Sucursal</label>
+        <div class="pm-field-row" x-show="modoSimple" x-cloak :style="modoSimple ? 'order: 3' : ''" @click.outside="cerrarPanelSuc()">
+          <label class="pm-label-inline" for="pm-sucursal">Sucursal/Domicilio entrega</label>
           <div class="relative min-w-[12rem] flex-1">
             <input id="pm-sucursal" type="text" autocomplete="off" role="combobox"
                    :aria-expanded="panelSuc"
@@ -330,8 +339,8 @@
           </div>
         </div>
 
-        <div class="pm-field-row" x-show="cabecera" x-cloak>
-          <label class="pm-label-inline" for="pm-condicion">Condición</label>
+        <div class="pm-field-row" x-show="cabecera && (!modoSimple || detallesComercialesAbiertos)" x-cloak :style="modoSimple ? 'order: 20' : ''">
+          <label class="pm-label-inline" for="pm-condicion" x-text="modoSimple ? 'Condición de Vta.' : 'Condición'">Condición</label>
           <select id="pm-condicion" x-model.number="cabecera.id_condventa"
                   @change="onCabeceraCondicionChange()"
                   :disabled="!puedeEditarCondicion"
@@ -340,6 +349,22 @@
               <option :value="cv.Codigo" x-text="`${cv.Descripcion} (${cv.Dias} días)`"></option>
             </template>
           </select>
+        </div>
+      </div>
+
+      <div x-show="modoSimple && cabecera" x-cloak class="mt-2 border-t border-sky-200 pt-2 dark:border-sky-900/50">
+        <button type="button" @click="detallesComercialesAbiertos = !detallesComercialesAbiertos"
+                class="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-sky-800 dark:text-sky-300"
+                :aria-expanded="detallesComercialesAbiertos.toString()">
+          <span class="material-icons text-base" x-text="detallesComercialesAbiertos ? 'expand_less' : 'expand_more'"></span>
+          Condición de venta, lista y crédito del cliente
+        </button>
+        <div x-show="detallesComercialesAbiertos" x-cloak
+             class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-700 dark:text-slate-200">
+          <span>Saldo del cliente: <strong x-text="money(credito?.saldo || 0)"></strong></span>
+          <span>Días vencidos: <strong x-text="credito?.dias_vencidos ?? 0"></strong></span>
+          <span>Límite de crédito: <strong x-text="money(credito?.credito_cupo || 0)"></strong></span>
+          <span>Límite de mora: <strong x-text="(credito?.credito_limite_dias || 0) + ' días'"></strong></span>
         </div>
       </div>
 
@@ -434,6 +459,59 @@
       <p class="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400">
         Solo artículos Tercero o Terminado con e-commerce activo · marcas de tu territorio
       </p>
+      <div x-show="modoSimple && draftId" x-cloak
+           class="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" @click="abrirFiltrosAvanzados()"
+                  class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+                  :aria-expanded="filtrosAvanzadosAbiertos.toString()">
+            <span class="material-icons text-base" aria-hidden="true">filter_list</span> Filtros avanzados
+          </button>
+          <button type="button" @click="toggleCatalogo()" :disabled="!puedeToggleCatalogo"
+                  class="inline-flex min-h-9 items-center rounded-lg border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
+                  :class="catalogoDesplegado ? 'border-orange-400 bg-orange-50 text-orange-800 dark:border-orange-600 dark:text-orange-200' : ''"
+                  x-text="catalogoDesplegado ? 'Ocultar artículos sin cantidad' : 'Mostrar artículos de la selección'"></button>
+          <button type="button" @click="carritoAbierto = true"
+                  class="inline-flex min-h-9 items-center gap-1 rounded-lg bg-sky-600 px-3 py-1 text-xs font-semibold text-white hover:bg-sky-500">
+            <span class="material-icons text-base" aria-hidden="true">shopping_cart</span>
+            Ver carrito <span x-text="'(' + carritoItems.length + ')'"></span>
+          </button>
+        </div>
+        <div x-show="cantidadSeleccionados" x-cloak class="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-700">
+          <span class="min-w-[10rem] flex-1 text-xs font-medium text-slate-700 dark:text-slate-200"
+                x-text="Object.values(articulosSeleccionados)[0]?.nombre || 'Artículo seleccionado'"></span>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Cantidad
+            <input type="number" min="0.001" step="0.001" inputmode="decimal" x-model.number="cantidadNuevoArticulo"
+                   class="ml-1 h-9 w-20 rounded-md border border-slate-300 px-2 text-right text-sm dark:border-slate-600 dark:bg-slate-900"
+                   aria-label="Cantidad del artículo nuevo">
+          </label>
+          <button type="button" @click="agregarArticuloSimple()"
+                  class="h-9 rounded-md bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-sky-500">Agregar artículo</button>
+        </div>
+        <div x-show="filtrosAvanzadosAbiertos" x-cloak class="mt-3 grid gap-2 sm:grid-cols-3">
+          <label class="text-xs font-medium text-slate-700 dark:text-slate-200">Marca
+            <select x-model="marcaFiltro" @change="aplicarFiltrosCatalogo()"
+                    class="mt-1 block h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+              <option value="">Todas las marcas</option>
+              <template x-for="m in facetasCatalogo.marcas" :key="m.id"><option :value="m.id" x-text="m.nombre"></option></template>
+            </select>
+          </label>
+          <label class="text-xs font-medium text-slate-700 dark:text-slate-200">Rubro
+            <select x-model="rubroFiltro" @change="subrubroFiltro = ''; aplicarFiltrosCatalogo()"
+                    class="mt-1 block h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+              <option value="">Todos los rubros</option>
+              <template x-for="r in facetasCatalogo.rubros" :key="r.id"><option :value="r.id" x-text="r.nombre"></option></template>
+            </select>
+          </label>
+          <label class="text-xs font-medium text-slate-700 dark:text-slate-200">Subrubro
+            <select x-model="subrubroFiltro" @change="aplicarFiltrosCatalogo()"
+                    class="mt-1 block h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+              <option value="">Todos los subrubros</option>
+              <template x-for="sr in subrubrosFiltrados" :key="sr.id"><option :value="sr.id" x-text="sr.nombre"></option></template>
+            </select>
+          </label>
+        </div>
+      </div>
 
       {# Desktop (lg+): shell de 3 zonas — izq. fija · sucursales scroll-x · der. fija #}
       <div class="pm-matrix-desktop hidden min-h-0 w-full min-w-0 flex-1 flex-col gap-0 lg:flex">
@@ -468,6 +546,7 @@
                       <div class="pm-zhead-art">
                         <span class="pm-zhead-art-label">Artículo</span>
                         <button type="button"
+                                x-show="!modoSimple"
                                 @click="toggleCatalogo()"
                                 :disabled="!puedeToggleCatalogo"
                                 class="pm-chip-catalogo"
@@ -536,9 +615,12 @@
                                      :checked="estaSeleccionado(a)"
                                      :aria-label="'Seleccionar ' + (a.nombre || a.id_manual)"/>
                               <span class="min-w-0 flex-1">
-                                <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
-                                <span class="text-slate-500"> — </span>
-                                <span x-text="a.nombre"></span>
+                                <span x-show="!modoSimple" class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
+                                <span x-show="!modoSimple" class="text-slate-500"> — </span>
+                                <span x-show="!modoSimple" x-text="a.nombre"></span>
+                                <span x-show="modoSimple" class="block font-semibold" x-text="a.nombre"></span>
+                                <span x-show="modoSimple" class="block text-[11px] text-slate-500"
+                                      x-text="'Cód. manual (Super Artículo): ' + (a.id_manual || '—') + ' · Cód. interno: ' + (a.codartprov || '—')"></span>
                                 <span x-show="estaEnTabla(a)" x-cloak
                                       class="ml-1.5 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                                   En tabla
@@ -547,7 +629,7 @@
                             </li>
                           </template>
                         </ul>
-                        <div x-show="cantidadSeleccionados > 0" x-cloak
+                        <div x-show="!modoSimple && cantidadSeleccionados > 0" x-cloak
                              class="pm-art-dropdown-footer">
                           <button type="button"
                                   @mousedown.prevent="agregarSeleccionados()"
@@ -575,6 +657,8 @@
                     <td class="pm-c-art">
                       <div class="pm-cell-art">
                         <p class="pm-art-nombre text-xs font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
+                        <p x-show="modoSimple" class="text-[10px] text-slate-500 dark:text-slate-400"
+                           x-text="'Manual: ' + (art.id_manual || '—') + ' · Interno: ' + (art.codartprov || '—')"></p>
                       </div>
                     </td>
                     <td class="pm-c-precio">
@@ -793,9 +877,12 @@
                            :checked="estaSeleccionado(a)"
                            :aria-label="'Seleccionar ' + (a.nombre || a.id_manual)"/>
                     <span class="min-w-0 flex-1">
-                      <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
-                      <span class="text-slate-500"> — </span>
-                      <span x-text="a.nombre"></span>
+                      <span x-show="!modoSimple" class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
+                      <span x-show="!modoSimple" class="text-slate-500"> — </span>
+                      <span x-show="!modoSimple" x-text="a.nombre"></span>
+                      <span x-show="modoSimple" class="block font-semibold" x-text="a.nombre"></span>
+                      <span x-show="modoSimple" class="block text-[11px] text-slate-500"
+                            x-text="'Cód. manual (Super Artículo): ' + (a.id_manual || '—') + ' · Cód. interno: ' + (a.codartprov || '—')"></span>
                       <span x-show="estaEnTabla(a)" x-cloak
                             class="ml-1.5 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                         En tabla
@@ -804,7 +891,7 @@
                   </li>
                 </template>
               </ul>
-              <div x-show="cantidadSeleccionados > 0" x-cloak
+              <div x-show="!modoSimple && cantidadSeleccionados > 0" x-cloak
                    class="pm-art-dropdown-footer">
                 <button type="button"
                         @mousedown.prevent="agregarSeleccionados()"
@@ -827,6 +914,7 @@
           <div x-show="draftId && sucursales.length" x-cloak
                class="flex flex-wrap items-center gap-2 px-1 lg:hidden">
             <button type="button"
+                    x-show="!modoSimple"
                     @click="toggleCatalogo()"
                     :disabled="!puedeToggleCatalogo"
                     class="pm-chip-catalogo"
@@ -848,6 +936,8 @@
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0 flex-1">
                       <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
+                      <p class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400"
+                         x-text="'Manual: ' + (art.id_manual || '—') + ' · Interno: ' + (art.codartprov || '—')"></p>
                       <p class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400" x-text="stockPacksTexto(art)"></p>
                     </div>
                     <button type="button"
@@ -876,7 +966,7 @@
                       <input type="number" min="0" step="0.001" inputmode="decimal"
                              :id="'pm-qty-simple-' + art.id_articulo"
                              :data-pm-qty="art.id_articulo + ':' + sucursales[0].id_cliente_domicilio"
-                             class="pm-input-dense w-full rounded-md border bg-white px-2 text-right tabular-nums text-slate-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                             class="pm-input-dense w-24 max-w-full rounded-md border bg-white px-2 text-right tabular-nums text-slate-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
                              :class="celdaInvalida(art.id_articulo, sucursales[0].id_cliente_domicilio)
                                ? 'border-amber-500 ring-2 ring-amber-500/40 focus:border-amber-500 focus:ring-amber-500/40 dark:border-amber-500'
                                : 'border-slate-300 focus:border-sky-400 focus:ring-sky-500/40 dark:border-slate-600'"
@@ -1048,8 +1138,59 @@
             <span class="text-base font-bold tabular-nums text-slate-900 dark:text-white" x-text="money(totalesPie.total)"></span>
           </div>
         </div>
+        <button type="button" x-show="modoSimple && !pedidoSoloConsulta" x-cloak
+                @click="confirmarLote()" :disabled="confirmando || previewCargando || !puedeConfirmar"
+                class="inline-flex min-h-10 items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                x-text="confirmando ? 'Confirmando…' : 'Confirmar pedido'"></button>
       </div>
     </div>
+  </div>
+
+  {# Carrito del pedido simple: solo renglones con cantidad, editable sin buscar la fila. #}
+  <div x-show="modoSimple && carritoAbierto" x-cloak
+       @keydown.escape.window="carritoAbierto = false"
+       class="fixed inset-0 z-[100] flex justify-end" role="dialog" aria-modal="true" aria-label="Carrito del pedido">
+    <button type="button" @click="carritoAbierto = false"
+            class="absolute inset-0 bg-slate-950/60" aria-label="Cerrar carrito"></button>
+    <aside class="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-900">
+      <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+        <div><h2 class="text-lg font-bold text-slate-900 dark:text-white">Carrito del pedido</h2>
+          <p class="text-xs text-slate-500" x-text="carritoItems.length + ' artículos con cantidad'"></p></div>
+        <button type="button" @click="carritoAbierto = false" class="inline-flex h-10 w-10 items-center justify-center rounded-lg"
+                aria-label="Cerrar carrito"><span class="material-icons">close</span></button>
+      </div>
+      <div class="flex-1 space-y-2 overflow-y-auto p-4">
+        <p x-show="!carritoItems.length" class="rounded-lg border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
+          El carrito todavía no tiene artículos con cantidad.
+        </p>
+        <template x-for="art in carritoItems" :key="'carrito-' + art.id_articulo">
+          <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+            <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="art.nombre || art.descripcion"></p>
+            <p class="mt-0.5 text-[11px] text-slate-500"
+               x-text="'Manual: ' + (art.id_manual || '—') + ' · Interno: ' + (art.codartprov || '—')"></p>
+            <div class="mt-2 flex items-end gap-2">
+              <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Cantidad
+                <input type="number" min="0" step="0.001" inputmode="decimal"
+                       :value="celda(art.id_articulo, sucursales[0].id_cliente_domicilio)"
+                       @change="onCelda(art.id_articulo, sucursales[0].id_cliente_domicilio, $event.target.value)"
+                       :disabled="!matrizEditable"
+                       class="mt-1 block h-9 w-24 rounded-md border border-slate-300 px-2 text-right text-sm dark:border-slate-600 dark:bg-slate-800">
+              </label>
+              <button type="button" @click="eliminarFila(art.id_articulo)" x-show="matrizEditable"
+                      class="ml-auto inline-flex h-9 items-center gap-1 rounded-md border border-rose-200 px-2 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                <span class="material-icons text-base" aria-hidden="true">delete_outline</span> Quitar
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="border-t border-slate-200 p-4 dark:border-slate-700">
+        <p class="mb-2 flex justify-between text-sm font-semibold"><span>Total estimado</span><span x-text="money(totalesPie.total)"></span></p>
+        <button type="button" @click="carritoAbierto = false; confirmarLote()"
+                :disabled="confirmando || previewCargando || !puedeConfirmar || pedidoSoloConsulta"
+                class="w-full rounded-lg bg-orange-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">Confirmar pedido</button>
+      </div>
+    </aside>
   </div>
 
   {# Modal detalle sucursal (NroCalle + domicilio) #}

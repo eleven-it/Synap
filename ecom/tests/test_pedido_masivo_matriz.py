@@ -17,6 +17,7 @@ from ecom.services.pedido_masivo_matriz import (
     anular_borrador_masivo_usuario,
     asegurar_descuento_fila_articulo,
     buscar_articulos_filtrados_ternas,
+    filtros_articulos_filtrados_ternas,
     eliminar_fila_articulo,
     guardar_celda,
     guardar_descuento_fila,
@@ -441,15 +442,17 @@ class TestCatalogoFiltrado(TestCase):
             "lista_id": 1,
         }
         cur = mock_pool.return_value.get_connection.return_value.__enter__.return_value.cursor.return_value
-        cur.fetchall.return_value = [(9, "2401", "Calcetín Negro")]
-        cur.description = [("IDArt",), ("id_manual",), ("nombre",)]
+        cur.fetchall.return_value = [(9, "2401", "Calcetín Negro", "INT-9")]
+        cur.description = [("IDArt",), ("id_manual",), ("nombre",), ("codartprov",)]
         r = buscar_articulos_filtrados_ternas(
-            "emp_m", cod_viajante=1, id_cliente=2, id_cliente_domicilio=9, q="2401"
+            "emp_m", cod_viajante=1, id_cliente=2, id_cliente_domicilio=9, q="2401",
+            marca_id=11, rubro_id=20, subrubro_id=30,
         )
         self.assertFalse(r["sin_marcas"])
         mock_marcas.assert_called_once_with("emp_m", 1, 2, 9)
         self.assertEqual(r["items"][0]["id_manual"], "2401")
         self.assertEqual(r["items"][0]["nombre"], "Calcetín Negro")
+        self.assertEqual(r["items"][0]["codartprov"], "INT-9")
         self.assertEqual(r["items"][0]["precio_unitario_neto"], 85.0)
         self.assertEqual(r["items"][0]["precio_lista1"], 85.0)
         self.assertEqual(r["items"][0]["stock_disponible_packs"], 12.5)
@@ -462,7 +465,27 @@ class TestCatalogoFiltrado(TestCase):
         self.assertIn("Discontinuo = 'No'", sql)
         self.assertIn("Precio1V", sql)
         self.assertIn("NroCodBarra", sql)
+        self.assertIn("CodArtProv LIKE", sql)
+        self.assertIn("articulo.CodigoMarca = %s", sql)
+        self.assertIn("articulo.CodigoRubro = %s", sql)
+        self.assertIn("articulo.IDSubRubro = %s", sql)
+        self.assertEqual(cur.execute.call_args[0][1][2:5], [11, 20, 30])
         mock_reglas.assert_called_once()
+
+    @patch("ecom.services.pedido_masivo_matriz.marcas_asignadas_viajante_cliente", return_value=[11])
+    @patch("ecom.services.pedido_masivo_matriz.get_mysql_pool")
+    def test_facetas_solo_del_catalogo_autorizado(self, mock_pool, _marcas):
+        cur = mock_pool.return_value.get_connection.return_value.__enter__.return_value.cursor.return_value
+        cur.fetchall.return_value = [(11, "Marca A", 20, "Rubro A", 30, "Subrubro A")]
+        resultado = filtros_articulos_filtrados_ternas(
+            "emp_m", cod_viajante=1, id_cliente=2, id_cliente_domicilio=9,
+        )
+        self.assertEqual(resultado["marcas"], [{"id": 11, "nombre": "Marca A"}])
+        self.assertEqual(resultado["subrubros"], [{"id": 30, "rubro_id": 20, "nombre": "Subrubro A"}])
+        sql, params = cur.execute.call_args[0]
+        self.assertIn("tipo_art_fab", sql)
+        self.assertIn("articulo.CodigoMarca IN", sql)
+        self.assertEqual(params, [11])
 
     @patch("ecom.services.pedido_masivo_matriz._stock_disponible_packs_map", return_value={})
     @patch(
