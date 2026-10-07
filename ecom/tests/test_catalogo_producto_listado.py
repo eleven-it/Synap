@@ -35,6 +35,26 @@ class TestCatalogoArticulosListadoView(TestCase):
         return u
 
     @patch("ecom.catalogo_producto_relay_views.listar_articulos_paginado")
+    @patch("ecom.catalogo_producto_relay_views.vcm_ternas_disponible", return_value=False)
+    def test_categoria_9_muestra_precio_neto_en_pedido(self, _vcm, mock_listar):
+        mock_listar.return_value = {"items": [], "total": 0, "pagina": 1, "tam": 20, "total_paginas": 0}
+        req = _req_post(
+            "/ecom/api/mayoristapp/catalogo/articulos/listado/",
+            {"filtros": {}, "pagina": 1, "tam": 20},
+            {"base_empresa": "emp1", "cliente_cod_lista_precio": 1},
+            {"mayoristapp": {
+                "idcliente": 123,
+                "cliente": [{"Codigo": 123, "IDIva": 9, "descRenglon": 0}],
+                "formulario": "PED",
+                "iva_incluido": "Si",
+            }},
+        )
+        force_authenticate(req, user=self._user())
+        resp = CatalogoArticulosListadoRelayAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(mock_listar.call_args.kwargs["iva_incluido"])
+
+    @patch("ecom.catalogo_producto_relay_views.listar_articulos_paginado")
     @patch("ecom.catalogo_producto_relay_views.lista_precio_relay_json")
     @patch("ecom.catalogo_producto_relay_views.vcm_ternas_disponible", return_value=False)
     def test_listado_ok_con_cliente(self, _vcm, mock_lista_precio, mock_listar):

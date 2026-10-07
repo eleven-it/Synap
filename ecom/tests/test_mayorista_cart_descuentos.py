@@ -19,6 +19,19 @@ from ecom.services import mayorista_cart_service as svc
 from ecom.services.mayoristapp_session import guardar_cliente_seleccion_mayoristapp
 
 
+_patch_iva_no_responsable = patch.object(
+    svc, "es_cliente_iva_no_responsable", return_value=False
+)
+
+
+def setUpModule():
+    _patch_iva_no_responsable.start()
+
+
+def tearDownModule():
+    _patch_iva_no_responsable.stop()
+
+
 def _row(alic="21", impint="0", nombre="Artículo", codigo="C1", idm="M1"):
     return {
         "CodigoArticuloT": codigo,

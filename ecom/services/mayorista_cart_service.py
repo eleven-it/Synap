@@ -18,6 +18,7 @@ from django.db import transaction
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
 from ecom.models import EcomCart, EcomCartItem
 from ecom.services.catalogo_producto import resolver_precio_articulo
+from ecom.services.cliente_iva_pedido import es_cliente_iva_no_responsable
 from ecom.services.promocion_etiqueta import etiqueta_promocion_linea
 from self_checkout.services.stock_service import StockService
 
@@ -332,7 +333,7 @@ def actualizar_lista_precio(
             lista_id=cart.lista_id,
             codigo_cliente=cart.idcliente,
             descuento_cliente=descuento_cliente,
-            iva_incluido=cart.iva_incluido,
+            iva_incluido=False,
         )
         if res is None:
             return False, f"No se pudo calcular el precio del artículo {it.id_articulo}."
@@ -366,18 +367,27 @@ def aplicar_descuento_pie(cart: EcomCart, porcentaje: Any) -> Tuple[bool, Option
 # Totales (paridad Jcart.update_subtotal)
 # --------------------------------------------------------------------------- #
 
-def recalcular_totales(cart: EcomCart) -> None:
+def recalcular_totales(
+    cart: EcomCart, *, iva_no_responsable: Optional[bool] = None
+) -> None:
     """
     Recalcula los totales del carrito con desglose por alícuota (21 / 10,5 / exento),
     impuesto interno y descuento al pie (aplicado sobre el neto por alícuota).
     """
     pie = cart.descuento_pie_pct or Decimal("0")
     factor = (Decimal("100") - pie) / Decimal("100")
+    if iva_no_responsable is None:
+        iva_no_responsable = (
+            cart.tipo_comprobante in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO)
+            and es_cliente_iva_no_responsable(cart.base_empresa, cart.idcliente)
+        )
 
     neto21 = neto105 = exento = neto_otros = Decimal("0")
     iva21 = iva105 = iva_otros = interno_total = Decimal("0")
 
     for item in cart.items.all():
+        if iva_no_responsable and _dec(item.alicuota_iva) != 0:
+            item.alicuota_iva = Decimal("0")
         neto_sin = _dec(item.cantidad) * _dec(item.precio_unitario_neto)
         neto_line = _q2(neto_sin * (Decimal("100") - _dec(item.porcentaje_descuento)) / Decimal("100"))
         alic = _dec(item.alicuota_iva)
@@ -389,7 +399,7 @@ def recalcular_totales(cart: EcomCart) -> None:
         item.neto = neto_line
         item.iva = iva_line_row
         item.total = _q2(neto_line + iva_line_row + interno_line_row)
-        item.save(update_fields=["neto", "iva", "total"])
+        item.save(update_fields=["alicuota_iva", "neto", "iva", "total"])
 
         # Aportes al total del carrito (con descuento al pie)
         neto_pie = _q2(neto_line * factor)
