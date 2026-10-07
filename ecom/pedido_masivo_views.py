@@ -187,11 +187,15 @@ def _resolver_cabecera_masivo(
         bag.get("cant_dias_entrega")
     ) or 0
     parsed = parsear_cabecera_desde_body(data)
+    fecha_pedido = (
+        None if (draft.modo or "").strip().lower() == EcomPedidoMasivoDraft.MODO_SIMPLE
+        else parsed.get("fecha_pedido")
+    )
     return resolver_cabecera_comercial(
         draft.base_empresa,
         draft.id_cliente,
         es_supervisor=flags["es_supervisor"],
-        fecha_pedido=parsed.get("fecha_pedido"),
+        fecha_pedido=fecha_pedido,
         fecha_entrega=parsed.get("fecha_entrega"),
         vencimiento=parsed.get("vencimiento"),
         id_condventa=parsed.get("id_condventa"),
