@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
 from ecom.permissions import EcomMayoristappSessionPermission
 from ecom.services.catalogo_producto import listar_articulos_paginado, obtener_detalle_articulo
+from ecom.services.cliente_iva_pedido import IVA_NO_RESPONSABLE_ID
 from ecom.services.catalogo_restricciones import aplicar_restricciones_a_filtros
 from ecom.services.mayoristapp_session import leer_cliente_seleccionado, leer_idcliente_mayoristapp
 from ecom.services.mayoristapp_sesion_contexto import asegurar_contexto_mayoristapp
@@ -170,6 +171,7 @@ def _obtener_lista_id_y_cliente(request: Request, base_empresa: str) -> tuple[in
     iva_incluido = True
 
     cliente_data = leer_cliente_seleccionado(request)
+    cliente_obj: Dict[str, Any] = {}
     if cliente_data is not None:
         if isinstance(cliente_data, list) and len(cliente_data) > 0:
             cliente_obj = cliente_data[0] if isinstance(cliente_data[0], dict) else {}
@@ -180,6 +182,11 @@ def _obtener_lista_id_y_cliente(request: Request, base_empresa: str) -> tuple[in
     ma = (getattr(request, "session", None) or {}).get("mayoristapp") or {}
     iva_incluido_str = ma.get("iva_incluido", "Si")
     iva_incluido = str(iva_incluido_str).strip().lower() == "si"
+    if (
+        str(ma.get("formulario") or "PED").strip().upper() in ("PED", "PRE")
+        and to_int_or_none(cliente_obj.get("IDIva")) == IVA_NO_RESPONSABLE_ID
+    ):
+        iva_incluido = False
 
     return lista_id, codigo_cliente, descuento_cliente, iva_incluido
 

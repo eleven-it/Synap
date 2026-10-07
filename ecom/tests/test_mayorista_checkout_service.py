@@ -35,6 +35,8 @@ class FakeCursor:
             self._last = {"CodigoMovimiento": self.state.get("codmov", 1000)}
         elif "from talonarios" in low:
             self._last = self.state.get("talonario", {"Nro": 57, "PV": 3})
+        elif "from iva" in low and "alicuota = 0" in low:
+            self._last = self.state.get("iva_cero", {"ID": 4})
         elif "from usuarios" in low:
             self._last = {"agente_percep": self.state.get("agente_percep", "No")}
         elif "from cotizacion" in low:
@@ -189,7 +191,7 @@ class CheckoutTestBase(TestCase):
             },
         }
 
-    def _patch_all(self, conn, cli=None, alic="21", cabecera=None):
+    def _patch_all(self, conn, cli=None, alic="21", cabecera=None, iva_no_responsable=False):
         row = {"alic_iva": alic, "impuesto_interno": "0"}
         cab = cabecera or self._cabecera()
         return [
@@ -207,16 +209,59 @@ class CheckoutTestBase(TestCase):
                 return_value=(cab, None),
             ),
             patch.object(checkout_svc, "pedidos_validan_stock", return_value=True),
+            patch.object(
+                checkout_svc, "es_cliente_iva_no_responsable",
+                return_value=iva_no_responsable,
+            ),
         ]
 
     @contextmanager
     def _with_patches(self, conn, **kwargs):
         patches = self._patch_all(conn, **kwargs)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
             yield
 
 
 class TestCheckoutPedido(CheckoutTestBase):
+    def test_tipo_confirmado_pedido_aplica_categoria_9_aun_con_borrador_dev(self):
+        conn = FakeConn({"codmov": 1000, "iva_cero": {"ID": 4}})
+        cart = self._cart(tipo="DEV")
+        with self._with_patches(conn, iva_no_responsable=True):
+            ok, err, _ = checkout_svc.confirmar(
+                cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["comp_ped_params"]["IVA1"], Decimal("0.00"))
+        self.assertEqual(conn.state["stockp_params"][0]["Alicuota"], 4)
+
+    def test_categoria_9_guarda_iva_cero_en_pedido(self):
+        conn = FakeConn({"codmov": 1000, "iva_cero": {"ID": 4}})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn, iva_no_responsable=True):
+            ok, err, _ = checkout_svc.confirmar(
+                cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5
+            )
+        self.assertTrue(ok, err)
+        comp = conn.state["comp_ped_params"]
+        stockp = conn.state["stockp_params"][0]
+        self.assertEqual(comp["IVA1"], Decimal("0.00"))
+        self.assertEqual(comp["ImporteVenta"], Decimal("200.00"))
+        self.assertEqual(stockp["Alicuota"], 4)
+        self.assertEqual(stockp["imp_alicuota_iva"], Decimal("0"))
+        self.assertEqual(stockp["PrecioIVAxR"], Decimal("0.00"))
+
+    def test_categoria_9_sin_alicuota_cero_no_confirma(self):
+        conn = FakeConn({"iva_cero": None})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn, iva_no_responsable=True):
+            ok, err, _ = checkout_svc.confirmar(
+                cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5
+            )
+        self.assertFalse(ok)
+        self.assertIn("alícuota de IVA 0 %", err)
+        self.assertTrue(conn.rolled_back)
+        self.assertIsNone(conn.state.get("comp_ped_count"))
+
     def test_alta_pedido_ok(self):
         state = {"codmov": 1000, "talonario": {"Nro": 57, "PV": 3}}
         conn = FakeConn(state)
@@ -334,6 +379,18 @@ class TestCheckoutPedido(CheckoutTestBase):
 
 
 class TestCheckoutPresupuesto(CheckoutTestBase):
+    def test_categoria_9_guarda_iva_cero_en_presupuesto(self):
+        conn = FakeConn({"codmov": 2000, "iva_cero": {"ID": 4}})
+        cart = self._cart(tipo="PRE")
+        with self._with_patches(conn, iva_no_responsable=True):
+            ok, err, _ = checkout_svc.confirmar(
+                cart, CheckoutInput(tipo="PRE", id_punto_venta=1), id_usuario=5
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["comp_ped_params"]["IVA1"], Decimal("0.00"))
+        self.assertEqual(conn.state["stockp_params"][0]["Alicuota"], 4)
+        self.assertEqual(conn.state["stockp_params"][0]["PrecioIVAxR"], Decimal("0.00"))
+
     def test_alta_presupuesto_no_toca_stock(self):
         conn = FakeConn({"codmov": 2000, "talonario": {"Nro": 10, "PV": 1}})
         cart = self._cart(tipo="PRE")
@@ -347,6 +404,17 @@ class TestCheckoutPresupuesto(CheckoutTestBase):
 
 
 class TestCheckoutDevolucion(CheckoutTestBase):
+    def test_categoria_9_no_altera_devolucion(self):
+        conn = FakeConn({"codmov": 3000})
+        cart = self._cart(tipo="DEV")
+        with self._with_patches(conn, iva_no_responsable=True):
+            ok, err, _ = checkout_svc.confirmar(
+                cart, CheckoutInput(tipo="DEV", id_punto_venta=2), id_usuario=5
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["comp_ped_params"]["IVA1"], Decimal("42.00"))
+        self.assertEqual(conn.state["stockp_params"][0]["Alicuota"], 1)
+
     def test_alta_devolucion_ok(self):
         conn = FakeConn({"codmov": 3000, "talonario": {"Nro": 20, "PV": 2}})
         cart = self._cart(tipo="DEV")
