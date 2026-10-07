@@ -195,8 +195,16 @@ function pedidoMasivoCore() {
     marcaFiltro: '',
     rubroFiltro: '',
     subrubroFiltro: '',
-    cantidadNuevoArticulo: 1,
     carritoAbierto: false,
+    seleccionSimpleAbierta: false,
+    cantidadesSeleccionadas: {},
+    cantidadesCarrito: {},
+    guardandoCantidadSimple: false,
+    fichaArticuloAbierta: false,
+    fichaArticulo: null,
+    fichaDetalle: null,
+    fichaCargando: false,
+    fichaFotoError: false,
     detallesComercialesAbiertos: false,
     esperaOperacion: false,
     esperaMensaje: 'Procesando…',
@@ -335,6 +343,9 @@ function pedidoMasivoCore() {
     },
     get cantidadSeleccionados() {
       return Object.keys(this.articulosSeleccionados || {}).length;
+    },
+    get seleccionadosSimple() {
+      return Object.values(this.articulosSeleccionados || {});
     },
     get subrubrosFiltrados() {
       return (this.facetasCatalogo.subrubros || []).filter(
@@ -1417,6 +1428,7 @@ function pedidoMasivoCore() {
     },
     _limpiarSeleccionArticulos() {
       this.articulosSeleccionados = {};
+      this.cantidadesSeleccionadas = {};
     },
     estaSeleccionado(a) {
       const id = this._idArticuloKey(a);
@@ -1511,24 +1523,155 @@ function pedidoMasivoCore() {
       const id = this._idArticuloKey(a);
       if (!id) return;
       const estaba = Boolean((this.articulosSeleccionados || {})[id]);
-      const next = this.modoSimple ? {} : { ...(this.articulosSeleccionados || {}) };
+      const next = { ...(this.articulosSeleccionados || {}) };
       if (!estaba) next[id] = this._mapArticuloItem(a);
-      else if (!this.modoSimple) delete next[id];
+      else delete next[id];
       this.articulosSeleccionados = next;
-      if (this.modoSimple) this.cerrarPanelArt();
+      if (this.modoSimple) {
+        if (estaba) delete this.cantidadesSeleccionadas[id];
+        else this.cantidadesSeleccionadas[id] = Number(this.celda(id, this.sucursales[0]?.id_cliente_domicilio)) || 1;
+      }
     },
-    async agregarArticuloSimple() {
-      const articulo = Object.values(this.articulosSeleccionados || {})[0];
+    abrirSeleccionSimple() {
+      if (!this.modoSimple || !this.cantidadSeleccionados) return;
+      this.cerrarPanelArt();
+      this.seleccionSimpleAbierta = true;
+    },
+    abrirCarritoSimple() {
+      if (!this.modoSimple) return;
+      this.cantidadesCarrito = Object.fromEntries(this.carritoItems.map((art) => [
+        String(art.id_articulo),
+        String(this.celda(art.id_articulo, this.sucursales[0].id_cliente_domicilio)),
+      ]));
+      this.carritoAbierto = true;
+    },
+    async agregarArticuloSeleccionadoSimple(articulo) {
       const domicilio = this.sucursales[0]?.id_cliente_domicilio;
-      const cantidad = Number(this.cantidadNuevoArticulo);
-      if (!this.modoSimple || !articulo || !domicilio || !this.matrizEditable) return;
+      const id = this._idArticuloKey(articulo);
+      const cantidad = Number(this.cantidadesSeleccionadas[id]);
+      if (!this.modoSimple || !articulo || !domicilio || !this.matrizEditable) return false;
       if (!Number.isFinite(cantidad) || cantidad <= 0) {
         this.mostrarAviso('Ingresá una cantidad mayor que cero.', 'error');
-        return;
+        return false;
       }
-      await this.agregarSeleccionados();
-      await this.onCelda(articulo.id_articulo, domicilio, String(cantidad));
-      this.cantidadNuevoArticulo = 1;
+      const multiplo = multiploEmpaque(articulo);
+      if (!cantidadOk(cantidad, multiplo)) {
+        this._mostrarModalMultiploCelda(articulo.id_articulo, domicilio, cantidad, multiplo);
+        return false;
+      }
+      if (!this.articulos.some((item) => Number(item.id_articulo) === Number(id))) {
+        this.articulos = [...this.articulos, this._mapArticuloFila(articulo)];
+      }
+      const guardado = await this.onCelda(id, domicilio, String(cantidad));
+      if (guardado) {
+        const next = { ...this.articulosSeleccionados };
+        delete next[id];
+        this.articulosSeleccionados = next;
+        delete this.cantidadesSeleccionadas[id];
+      }
+      return guardado;
+    },
+    async agregarSeleccionadosSimple() {
+      if (!this.modoSimple || this.guardandoCantidadSimple) return;
+      const items = this.seleccionadosSimple;
+      if (!items.length) return;
+      this.guardandoCantidadSimple = true;
+      try {
+        for (const articulo of items) {
+          if (!await this.agregarArticuloSeleccionadoSimple(articulo)) return;
+        }
+        this.seleccionSimpleAbierta = false;
+        this.abrirCarritoSimple();
+      } finally {
+        this.guardandoCantidadSimple = false;
+      }
+    },
+    async agregarUnoSeleccionadoSimple(articulo) {
+      if (this.guardandoCantidadSimple) return;
+      this.guardandoCantidadSimple = true;
+      try {
+        const guardado = await this.agregarArticuloSeleccionadoSimple(articulo);
+        if (guardado && !this.cantidadSeleccionados) {
+          this.seleccionSimpleAbierta = false;
+          this.abrirCarritoSimple();
+        }
+      } finally {
+        this.guardandoCantidadSimple = false;
+      }
+    },
+    async guardarCantidadCarrito(articulo) {
+      if (!this.modoSimple || this.guardandoCantidadSimple || !this.matrizEditable) return false;
+      const id = String(articulo.id_articulo);
+      const domicilio = this.sucursales[0]?.id_cliente_domicilio;
+      const valor = String(this.cantidadesCarrito[id] ?? '').trim();
+      this.guardandoCantidadSimple = true;
+      try {
+        const guardado = await this.onCelda(id, domicilio, valor);
+        if (guardado) this.cantidadesCarrito[id] = String(this.celda(id, domicilio));
+        return guardado;
+      } finally {
+        this.guardandoCantidadSimple = false;
+      }
+    },
+    async confirmarDesdeCarritoSimple() {
+      if (!this.modoSimple || this.guardandoCantidadSimple) return;
+      for (const articulo of [...this.carritoItems]) {
+        const id = String(articulo.id_articulo);
+        const actual = String(this.celda(id, this.sucursales[0].id_cliente_domicilio));
+        if (String(this.cantidadesCarrito[id] ?? actual) !== actual) {
+          if (!await this.guardarCantidadCarrito(articulo)) return;
+        }
+      }
+      this.carritoAbierto = false;
+      await this.confirmarLote();
+    },
+    async abrirFichaArticulo(articulo) {
+      if (!this.modoSimple || !articulo) return;
+      this.fichaArticulo = this._mapArticuloItem(articulo);
+      this.fichaDetalle = null;
+      this.fichaFotoError = false;
+      this.fichaArticuloAbierta = true;
+      this.fichaCargando = true;
+      try {
+        const id = Number(this.fichaArticulo.id_articulo);
+        const url = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}`
+          + `&detalle_id=${encodeURIComponent(id)}`
+          + `&lista_id=${encodeURIComponent(String(this.cabecera?.lista_id || this.listaId || 1))}`
+          + this.parametroDomicilioCatalogo();
+        const data = await this.getJson(url);
+        if (this.fichaArticuloAbierta && Number(this.fichaArticulo?.id_articulo) === id && data?.ok && data.item) {
+          this.fichaDetalle = data.item;
+        }
+      } catch {
+        // La ficha conserva los datos del catálogo del pedido si el detalle no está disponible.
+      } finally {
+        if (!this.fichaDetalle && !this.facetasCatalogo.marcas.length && this.urls.articulos && this.idCliente) {
+          try {
+            const url = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}&facetas=1`
+              + this.parametroDomicilioCatalogo();
+            const datos = await this.getJson(url);
+            if (datos.ok) {
+              this.facetasCatalogo = {
+                marcas: datos.marcas || [], rubros: datos.rubros || [], subrubros: datos.subrubros || [],
+              };
+            }
+          } catch {
+            // Marca y rubro siguen mostrando «—» si no hay catálogo accesible.
+          }
+        }
+        this.fichaCargando = false;
+      }
+    },
+    nombreFaceta(tipo, id) {
+      return (this.facetasCatalogo[tipo] || []).find((item) => String(item.id) === String(id))?.nombre || '—';
+    },
+    precioFinalArticulo(articulo) {
+      return Number(articulo?.precio_unitario_neto || 0) * (1 + Number(articulo?.alicuota_iva || 0) / 100);
+    },
+    stockTotalDepositos() {
+      return (this.fichaDetalle?.stock_depositos || []).reduce(
+        (total, deposito) => total + Math.max(0, Number(deposito.disponible || 0)), 0,
+      );
     },
     async abrirFiltrosAvanzados() {
       this.filtrosAvanzadosAbiertos = !this.filtrosAvanzadosAbiertos;
@@ -1773,7 +1916,7 @@ function pedidoMasivoCore() {
       this.flashGuardado();
     },
     async onCelda(idArt, idDom, raw) {
-      if (this.readonly || !this.matrizEditable) return;
+      if (this.readonly || !this.matrizEditable) return false;
       const key = idArt + ':' + idDom;
       const val = String(raw || '').trim();
       const prev = this.celdas[key] || '';
@@ -1787,7 +1930,7 @@ function pedidoMasivoCore() {
         this.celdas[key] = prev;
         this._mostrarModalMultiploCelda(idArt, idDom, qtyNum, multiplo);
         this.marcarTotalesEstimados();
-        return;
+        return false;
       }
       this._marcarCeldaInvalida(idArt, idDom, false);
       const { data } = await this.postJson(this.urls.celda, {
@@ -1803,15 +1946,20 @@ function pedidoMasivoCore() {
           this._marcarCeldaInvalida(idArt, idDom, true);
           this._mostrarModalMultiploCelda(idArt, idDom, qtyNum, mult);
           this.marcarTotalesEstimados();
-          return;
+          return false;
         }
         this.mostrarAviso(data.error || 'Error al guardar', 'error');
-        return;
+        if (this.modoSimple) {
+          this.celdas[key] = prev;
+          this.marcarTotalesEstimados();
+        }
+        return false;
       }
       if (data.celda && data.celda.eliminada) delete this.celdas[key];
       else if (data.celda) this.celdas[key] = data.celda.cantidad_packs;
       this.flashGuardado();
       this.marcarTotalesEstimados();
+      return true;
     },
     async onPrecioFila(idArt, raw) {
       if (this.readonly || !this.matrizEditable || !this.puedeEditarPrecioLinea) return;

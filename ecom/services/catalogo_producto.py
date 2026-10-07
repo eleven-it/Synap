@@ -11,6 +11,7 @@ import math
 from contextlib import contextmanager
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 from core.mysql_pool import get_connection
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
@@ -50,6 +51,37 @@ def _i(v: Any, default: int = 0) -> int:
 
 def _s(v: Any, default: str = "") -> str:
     return str_or_default(v, default)
+
+
+def _foto_url_articulo(cur: Any, id_articulo: int) -> str:
+    """URL HTTP(S) de la foto principal, si la tabla opcional tiene una."""
+    try:
+        cur.execute(
+            """
+            SELECT url_externo, url_interno
+            FROM articulo_foto
+            WHERE idArt = %s
+            ORDER BY CASE
+                WHEN LOWER(TRIM(COALESCE(foto_principal, ''))) IN ('si', 's', '1', 'true')
+                THEN 0 ELSE 1 END,
+                id_articulo_foto DESC
+            LIMIT 5
+            """,
+            [id_articulo],
+        )
+        rows = cur.fetchall()
+    except Exception:
+        return ""
+    for row in rows:
+        for raw in row:
+            url = _s(raw).strip()
+            try:
+                parsed = urlsplit(url)
+            except ValueError:
+                continue
+            if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
+                return url
+    return ""
 
 
 _SELECT_LISTADO_COLS = """
@@ -559,6 +591,7 @@ def obtener_detalle_articulo(
             articulo.PNOficial,
             articulo.impuesto_interno,
             articulo.CodigoProveedor,
+            articulo.CodigoMarca,
             articulo.CodigoRubro,
             articulo.IDSubRubro,
             articulo.promocion,
@@ -646,6 +679,8 @@ def obtener_detalle_articulo(
                 }
             )
 
+        foto_url = _foto_url_articulo(cur, id_art)
+
         promo_data = None
         if _s(art_dict.get("promocion"), "No").strip().lower() == "si":
             promo_data = {
@@ -659,6 +694,7 @@ def obtener_detalle_articulo(
 
         return {
             "id_articulo": id_art,
+            "codigo_marca": _i(art_dict.get("CodigoMarca"), 0),
             "id_manual": _s(art_dict.get("id_manual"), ""),
             "codigo": _s(art_dict.get("CodigoArticuloT"), ""),
             "nombre": _s(art_dict.get("NombreArticulo"), ""),
@@ -670,6 +706,7 @@ def obtener_detalle_articulo(
             "precio_neto": float(precio_neto),
             "stock_disponible": float(stock_disponible),
             "stock_depositos": stock_depositos,
-            "tiene_foto": False,
+            "tiene_foto": bool(foto_url),
+            "foto_url": foto_url,
             "promocion": promo_data,
         }

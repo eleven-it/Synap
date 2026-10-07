@@ -2062,4 +2062,19 @@
     max-height: calc(100vh - 2rem);
     overflow-y: auto;
   }
+  /* Cantidades del pedido simple: ancho y altura uniformes en selección y carrito. */
+  .pm-matrix-viewport input.pm-simple-qty {
+    box-sizing: border-box;
+    width: 6rem;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-width: 1px;
+  }
+  .pm-matrix-viewport.pm-simple-mode .pm-context-card input,
+  .pm-matrix-viewport.pm-simple-mode .pm-context-card select {
+    box-sizing: border-box;
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
+    border-width: 1px;
+  }
 </style>

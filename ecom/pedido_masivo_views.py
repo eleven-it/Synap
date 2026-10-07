@@ -26,6 +26,8 @@ from ecom.services.pedido_masivo_matriz import (
     anular_borrador_masivo_usuario,
     buscar_articulos_filtrados_ternas,
     filtros_articulos_filtrados_ternas,
+    leer_contexto_cliente_masivo,
+    marcas_asignadas_viajante_cliente,
     cod_viajante_sesion,
     credito_cliente_masivo,
     eliminar_fila_articulo,
@@ -40,6 +42,7 @@ from ecom.services.pedido_masivo_matriz import (
     obtener_o_crear_draft,
     serializar_matriz,
 )
+from ecom.services.catalogo_producto import obtener_detalle_articulo
 from ecom.services.pedido_masivo_import import (
     generar_plantilla_excel,
     importar_matriz_excel,
@@ -785,6 +788,26 @@ class PedidoMasivoArticulosAPIView(APIView):
         if cv is None or idc is None:
             return _err("Se requieren viajante e id_cliente.")
         id_domicilio = to_int_or_none(request.query_params.get("id_cliente_domicilio"))
+        if request.query_params.get("detalle_id") is not None:
+            id_articulo = to_int_or_none(request.query_params.get("detalle_id"))
+            if id_articulo is None or id_articulo <= 0:
+                return _err("Artículo inválido.", "articulo_invalido")
+            marcas = marcas_asignadas_viajante_cliente(base, cv, idc, id_domicilio)
+            if not marcas:
+                return _err("Artículo no disponible para este cliente.", "articulo_no_disponible", 404)
+            contexto = leer_contexto_cliente_masivo(base, idc)
+            detalle = obtener_detalle_articulo(
+                base,
+                idart=id_articulo,
+                lista_id=to_int_or_none(request.query_params.get("lista_id")) or contexto.get("lista_id") or 1,
+                codigo_cliente=idc,
+                descuento_cliente=contexto.get("descRenglon"),
+                iva_incluido=False,
+                id_deposito=to_int_or_none(request.query_params.get("id_deposito")) or 1,
+            )
+            if not detalle or to_int_or_none(detalle.get("codigo_marca")) not in marcas:
+                return _err("Artículo no disponible para este cliente.", "articulo_no_disponible", 404)
+            return Response({"ok": True, "item": detalle})
         if str(request.query_params.get("facetas") or "") == "1":
             return Response({
                 "ok": True,
