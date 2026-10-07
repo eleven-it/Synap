@@ -29,6 +29,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
+import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
 
 import MySQLdb
@@ -74,6 +75,11 @@ def _dec(v: Any, default: str = "0") -> Decimal:
     return r if r is not None else Decimal(default)
 
 
+def _clave_forma_entrega(valor: str) -> str:
+    texto = unicodedata.normalize("NFKD", str_or_default(valor, "").strip().casefold())
+    return "".join(c for c in texto if not unicodedata.combining(c))
+
+
 @dataclass
 class CheckoutInput:
     tipo: str = EcomCart.TIPO_PEDIDO           # 'PED' | 'PRE' | 'DEV'
@@ -81,6 +87,10 @@ class CheckoutInput:
     forma_entrega: str = ""
     id_cliente_domicilio: Optional[int] = None
     id_ruta: Optional[int] = None
+    id_transporte: Optional[int] = None
+    id_repartidor: Optional[int] = None
+    operador_logistico: str = ""
+    nro_seguimiento: str = ""
     observaciones: str = ""
     es_cliente: bool = False                    # alta por el propio cliente (autogestión)
     dias_entrega: int = 0
@@ -179,18 +189,23 @@ def confirmar(
                     conn.rollback()
                     return False, "Falta configurar la alícuota de IVA 0 %.", None
 
+            forma = _clave_forma_entrega(datos.forma_entrega)
             id_dom = to_int_or_none(datos.id_cliente_domicilio)
             id_transporte = None
-            if tipo in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO) and (
-                str_or_default(datos.forma_entrega, "").strip().casefold() == "transporte"
-            ):
+            id_repartidor = None
+            operador_logistico = ""
+            nro_seguimiento = ""
+            if tipo in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO) and forma == "transporte":
                 if id_dom is None:
                     conn.rollback()
                     return False, "Seleccioná un domicilio de entrega para usar Transporte.", None
                 cur.execute(
                     """
-                    SELECT id_transporte FROM cliente_domicilio
-                    WHERE id_cliente_domicilio = %s AND id_cliente = %s AND anulado = 'No'
+                    SELECT tr.id_transporte FROM cliente_domicilio AS cm
+                    LEFT JOIN transporte AS tr ON tr.id_transporte = cm.id_transporte
+                                              AND tr.anulado = 'No'
+                    WHERE cm.id_cliente_domicilio = %s AND cm.id_cliente = %s
+                      AND cm.anulado = 'No'
                     LIMIT 1
                     """,
                     [id_dom, int(cart.idcliente)],
@@ -199,7 +214,60 @@ def confirmar(
                 if not domicilio:
                     conn.rollback()
                     return False, "El domicilio de entrega no pertenece al cliente o está anulado.", None
-                id_transporte = to_int_or_none(domicilio.get("id_transporte"))
+                id_transporte = to_int_or_none(datos.id_transporte) or to_int_or_none(domicilio.get("id_transporte"))
+                if id_transporte is None:
+                    conn.rollback()
+                    return False, "Seleccioná un transporte activo para el domicilio de entrega.", None
+                cur.execute(
+                    "SELECT id_transporte FROM transporte WHERE id_transporte = %s AND anulado = 'No' LIMIT 1",
+                    [id_transporte],
+                )
+                if not cur.fetchone():
+                    conn.rollback()
+                    return False, "El transporte elegido no está activo.", None
+                nro_seguimiento = str_or_default(datos.nro_seguimiento, "").strip()
+
+            if tipo in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO) and forma == "envia repartidor":
+                id_repartidor = to_int_or_none(datos.id_repartidor)
+                if id_repartidor is None:
+                    conn.rollback()
+                    return False, "Seleccioná un usuario repartidor.", None
+                cur.execute(
+                    "SELECT id_usuario FROM usuarios WHERE id_usuario = %s AND baja_usuario = 'No' LIMIT 1",
+                    [id_repartidor],
+                )
+                if not cur.fetchone():
+                    conn.rollback()
+                    return False, "El usuario repartidor elegido no está activo.", None
+
+            if tipo in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO) and forma == "operador logistico":
+                operador_logistico = str_or_default(datos.operador_logistico, "").strip()
+                if operador_logistico not in ("Mercado envio", "Envio Pack", "OCA Envio"):
+                    conn.rollback()
+                    return False, "Seleccioná un operador logístico válido.", None
+
+            id_ruta = to_int_or_none(datos.id_ruta)
+            if forma not in ("envia por despacho", "transporte") or tipo not in (
+                EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO
+            ):
+                id_ruta = None
+            if id_ruta is not None:
+                cur.execute("SELECT activ_logistica FROM configuracion LIMIT 1")
+                configuracion = cur.fetchone() or {}
+                if str(configuracion.get("activ_logistica") or "").strip() != "Si":
+                    id_ruta = None
+            if id_ruta is not None:
+                cur.execute(
+                    """
+                    SELECT id_ruta FROM logi_hoja_ruta
+                    WHERE id_ruta = %s AND COALESCE(anulado, 'No') = 'No'
+                    LIMIT 1
+                    """,
+                    [id_ruta],
+                )
+                if not cur.fetchone():
+                    conn.rollback()
+                    return False, "La ruta logística elegida no está disponible.", None
 
             credito_unificado = credito_pedidos_activo(cart.base_empresa)
             if not credito_unificado:
@@ -266,10 +334,11 @@ def confirmar(
                 INSERT INTO cliente_datos_adicionales
                     (fechaEntrega, id_deposito_despacho, Fentrega, origen_pedido,
                      TipoComprobante, id_cliente, CodigoMovimiento, id_cliente_domicilio, id_ruta,
-                     id_transporte)
+                     id_transporte, id_repartidor, operador_logistico, nro_seguimiento)
                 VALUES (%(fechaEntrega)s, %(id_dep)s, %(fentrega)s, 'Web',
                         %(tipo)s, %(id_cliente)s, %(cod_mov)s, %(id_dom)s, %(id_ruta)s,
-                        %(id_transporte)s)
+                        %(id_transporte)s, %(id_repartidor)s, %(operador_logistico)s,
+                        %(nro_seguimiento)s)
                 """,
                 {
                     "fechaEntrega": fecha_entrega,
@@ -279,8 +348,11 @@ def confirmar(
                     "id_cliente": int(cart.idcliente),
                     "cod_mov": cod_mov,
                     "id_dom": id_dom,
-                    "id_ruta": to_int_or_none(datos.id_ruta),
+                    "id_ruta": id_ruta,
                     "id_transporte": id_transporte,
+                    "id_repartidor": id_repartidor,
+                    "operador_logistico": operador_logistico or None,
+                    "nro_seguimiento": nro_seguimiento or None,
                 },
             )
 
@@ -337,6 +409,9 @@ def confirmar(
                 "Vencimiento": cabecera.vencimiento,
                 "FechaEntrega": fecha_entrega,
                 "FormaEntrega": str_or_default(datos.forma_entrega, ""),
+                "id_transporte": id_transporte,
+                "id_repartidor": id_repartidor,
+                "operador_logistico": operador_logistico or None,
                 "id_deposito_despacho": cart.id_deposito,
                 "CondVenta": str_or_default(cabecera.cond_venta or datos.cond_venta or cli.get("condVenta"), ""),
                 "id_condventa": to_int_or_none(cabecera.id_condventa),
@@ -840,6 +915,9 @@ _SQL_INSERT_COMP_PED = """
         Vencimiento = %(Vencimiento)s,
         FechaEntrega = %(FechaEntrega)s,
         FormaEntrega = %(FormaEntrega)s,
+        id_transporte = %(id_transporte)s,
+        id_repartidor = %(id_repartidor)s,
+        operador_logistico = %(operador_logistico)s,
         id_deposito_despacho = %(id_deposito_despacho)s,
         CondVenta = %(CondVenta)s,
         id_condventa = %(id_condventa)s,

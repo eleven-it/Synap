@@ -117,6 +117,10 @@ class CheckoutConfirmarRelayAPIView(APIView):
             forma_entrega=str(body.get("forma_entrega") or ""),
             id_cliente_domicilio=to_int_or_none(body.get("id_cliente_domicilio")),
             id_ruta=to_int_or_none(body.get("id_ruta")),
+            id_transporte=to_int_or_none(body.get("id_transporte")),
+            id_repartidor=to_int_or_none(body.get("id_repartidor")),
+            operador_logistico=str(body.get("operador_logistico") or ""),
+            nro_seguimiento=str(body.get("nro_seguimiento") or ""),
             observaciones=str(body.get("observaciones") or ""),
             es_cliente=bool(body.get("es_cliente", False)),
             dias_entrega=to_int_or_none(body.get("dias_entrega"))

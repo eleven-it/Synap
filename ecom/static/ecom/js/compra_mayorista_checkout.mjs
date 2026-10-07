@@ -34,6 +34,17 @@ export function compraMayoristaCheckoutMixin() {
     formaEntrega: '',
     idClienteDomicilio: null,
     domiciliosCliente: [],
+    logisticaActiva: false,
+    rutasEntrega: [],
+    idRuta: null,
+    transportes: [],
+    repartidores: [],
+    operadoresLogisticos: [],
+    idTransporte: null,
+    idRepartidor: null,
+    operadorLogistico: '',
+    nroSeguimiento: '',
+    linkSeguimiento: '',
     observaciones: '',
     confirmando: false,
     pedidosRecientes: [],
@@ -50,6 +61,24 @@ export function compraMayoristaCheckoutMixin() {
 
     creditoPedidosActivo: false,
     creditoPrecheckUrl: '',
+
+    get domicilioEntregaSeleccionado() {
+      return this.domiciliosCliente.find((d) => Number(d.idDom) === Number(this.idClienteDomicilio));
+    },
+    get transporteHabitualNombre() {
+      return this.domicilioEntregaSeleccionado?.nombre_transporte || '';
+    },
+    onDomicilioEntregaChange(resetTracking = true) {
+      this.idTransporte = Number(this.domicilioEntregaSeleccionado?.id_transporte) || null;
+      if (resetTracking) {
+        this.nroSeguimiento = '';
+        this.linkSeguimiento = '';
+      }
+    },
+    get muestraRutaEntrega() {
+      const forma = String(this.formaEntrega || '').trim().toLowerCase();
+      return this.logisticaActiva && ['transporte', 'envía por despacho', 'envia por despacho'].includes(forma);
+    },
 
     clienteLabel(c) {
       const cod = c.Codigo != null ? c.Codigo : c.codigo;
@@ -178,9 +207,20 @@ export function compraMayoristaCheckoutMixin() {
       if (!ok || !data) return;
       this.puntosVenta = data.puntos_venta || [];
       this.domiciliosCliente = Array.isArray(data.domicilios_cliente) ? data.domicilios_cliente : [];
-      if (!this.domiciliosCliente.some((d) => Number(d.idDom) === Number(this.idClienteDomicilio))) {
+      this.logisticaActiva = !!data.logistica_activa;
+      this.rutasEntrega = Array.isArray(data.rutas_entrega) ? data.rutas_entrega : [];
+      if (!this.idRuta && this.rutasEntrega.length) this.idRuta = this.rutasEntrega[0].id;
+      this.transportes = Array.isArray(data.transportes) ? data.transportes : [];
+      this.repartidores = Array.isArray(data.repartidores) ? data.repartidores : [];
+      this.operadoresLogisticos = Array.isArray(data.operadores_logisticos) ? data.operadores_logisticos : [];
+      if (!this.formaEntrega) this.formaEntrega = data.forma_entrega_default || '';
+      if (!this.idRepartidor) this.idRepartidor = this.repartidores[0]?.id || null;
+      if (!this.operadorLogistico) this.operadorLogistico = this.operadoresLogisticos[0] || '';
+      if (this.domiciliosCliente.length && !this.domiciliosCliente.some((d) => Number(d.idDom) === Number(this.idClienteDomicilio))) {
         this.idClienteDomicilio = null;
+        this.idTransporte = null;
       }
+      if (this.idClienteDomicilio && !this.idTransporte && this.domiciliosCliente.length) this.onDomicilioEntregaChange(false);
       if (data.id_punto_venta_default) this.pv = data.id_punto_venta_default;
       this.puedeEditarCabecera = !!data.puede_editar_cabecera;
       this.creditoPedidosActivo = !!data.credito_pedidos_activo;
@@ -393,6 +433,12 @@ export function compraMayoristaCheckoutMixin() {
         tipo: this.tipo,
         forma_entrega: this.formaEntrega,
         id_cliente_domicilio: this.idClienteDomicilio,
+        id_ruta: this.muestraRutaEntrega ? this.idRuta : null,
+        id_transporte: this.formaEntrega.trim().toLowerCase() === 'transporte' ? this.idTransporte : null,
+        id_repartidor: this.formaEntrega.trim().toLowerCase().includes('repartidor') ? this.idRepartidor : null,
+        operador_logistico: this.formaEntrega.trim().toLowerCase().startsWith('operador log') ? this.operadorLogistico : '',
+        nro_seguimiento: this.linkSeguimiento
+          ? `${this.nroSeguimiento} - ${this.linkSeguimiento}` : this.nroSeguimiento,
         observaciones: this.observaciones,
         ...this._payloadCabeceraConfirmar(),
       };

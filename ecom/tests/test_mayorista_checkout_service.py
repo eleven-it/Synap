@@ -40,11 +40,19 @@ class FakeCursor:
         elif "from cliente_domicilio" in low:
             self.state["domicilio_query_params"] = params
             self._last = self.state.get("domicilio", {"id_transporte": 77})
+        elif "from transporte" in low:
+            self._last = self.state.get("transporte", {"id_transporte": params[0]})
+        elif "from configuracion" in low:
+            self._last = self.state.get("configuracion", {"activ_logistica": "Si"})
+        elif "from logi_hoja_ruta" in low:
+            self.state["ruta_query_params"] = params
+            self._last = self.state.get("ruta", {"id_ruta": params[0]})
         elif "insert into cliente_datos_adicionales" in low:
             self.state["datos_adicionales_sql"] = sql
             self.state["datos_adicionales_params"] = params
         elif "from usuarios" in low:
-            self._last = {"agente_percep": self.state.get("agente_percep", "No")}
+            self._last = {"agente_percep": self.state.get("agente_percep", "No"),
+                          "id_usuario": params[0] if params else 5}
         elif "from cotizacion" in low:
             self._last = self.state.get(
                 "cotizacion",
@@ -229,6 +237,79 @@ class CheckoutTestBase(TestCase):
 
 
 class TestCheckoutPedido(CheckoutTestBase):
+    def test_guarda_ruta_elegida_sin_forzar_ruta_uno(self):
+        conn = FakeConn({"domicilio": {"id_transporte": 123}})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PED", id_punto_venta=3, forma_entrega="Transporte",
+                              id_cliente_domicilio=19, id_ruta=8),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["ruta_query_params"], [8])
+        self.assertEqual(conn.state["datos_adicionales_params"]["id_ruta"], 8)
+
+    def test_ruta_anulada_no_confirma(self):
+        conn = FakeConn({"ruta": None})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PED", id_punto_venta=3,
+                              forma_entrega="Envía por despacho", id_ruta=8),
+                id_usuario=5,
+            )
+        self.assertFalse(ok)
+        self.assertIn("ruta logística", err)
+        self.assertTrue(conn.rolled_back)
+
+    def test_retira_cliente_despacho_no_guarda_ruta_ni_transporte(self):
+        conn = FakeConn({})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PED", id_punto_venta=3,
+                              forma_entrega="Retira cliente despacho",
+                              id_ruta=8, id_transporte=123),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        datos = conn.state["datos_adicionales_params"]
+        self.assertIsNone(datos["id_ruta"])
+        self.assertIsNone(datos["id_transporte"])
+
+    def test_repartidor_guarda_usuario_en_ambas_tablas(self):
+        conn = FakeConn({})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PED", id_punto_venta=3,
+                              forma_entrega="Envia repartidor", id_repartidor=17),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["datos_adicionales_params"]["id_repartidor"], 17)
+        self.assertEqual(conn.state["comp_ped_params"]["id_repartidor"], 17)
+
+    def test_operador_logistico_guarda_texto_de_lista(self):
+        conn = FakeConn({})
+        cart = self._cart(tipo="PRE")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PRE", id_punto_venta=3,
+                              forma_entrega="Operador logistico",
+                              operador_logistico="OCA Envio"),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["datos_adicionales_params"]["operador_logistico"], "OCA Envio")
+        self.assertEqual(conn.state["comp_ped_params"]["operador_logistico"], "OCA Envio")
+
     def test_transporte_copia_id_del_domicilio_del_cliente(self):
         conn = FakeConn({"domicilio": {"id_transporte": 123}})
         cart = self._cart(tipo="PED")

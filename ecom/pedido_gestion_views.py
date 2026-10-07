@@ -66,6 +66,7 @@ from ecom.services.pedido_plantilla_service import cargar_desde_pedido, preview_
 from core.services.administranet_stock import get_config_unidad_bulto_display
 from ecom.services.presentacion_articulo import _fetch_utiliza_embalaje
 from ecom.services.presupuesto_a_pedido_service import convertir_presupuesto_a_pedido
+from ecom.services.pedido_entrega_catalogos import catalogo_rutas_entrega
 from ecom.services.comprobantes_relay import detalle_pedido_relay
 from ecom.services.recibo_catalogos_service import listar_puntos_venta_usuario
 
@@ -291,6 +292,7 @@ class CompraMayoristaContextoAPIView(APIView):
         lista_payload = (
             _payload_lista_precio_cliente(base, cliente) if cliente else None
         )
+        entrega_catalogo = catalogo_rutas_entrega(base, to_int_or_none(sess_user.get("id_usuario")))
         idcliente = leer_idcliente_mayoristapp(request)
         ctx = ctx_desde_request(request)
         puede_editar = puede_editar_cabecera_comercial(ctx)
@@ -314,6 +316,7 @@ class CompraMayoristaContextoAPIView(APIView):
                 "idcliente": idcliente,
                 "cliente": cliente,
                 "domicilios_cliente": bag.get("domicilios_cliente") or [],
+                **entrega_catalogo,
                 "autoriza_credito": autoriza_credito,
                 "credito_pedidos_activo": credito_pedidos_activo(base),
                 "credito_precheck_url": reverse("ecom:credito_precheck"),

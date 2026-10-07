@@ -171,8 +171,59 @@
           <select id="pm-forma-entrega" x-model="formaEntrega"
                   class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
             <option value="">Sin especificar</option>
-            <option value="Retira">Retira</option>
+            <option value="Retira cliente mostrador">Retira cliente mostrador</option>
+            <option value="Retira cliente despacho">Retira cliente despacho</option>
+            <option value="Envía por despacho">Envía por despacho</option>
+            <option value="Entrega vendedor">Entrega vendedor</option>
             <option value="Transporte">Transporte</option>
+            <option value="Envia repartidor">Envia repartidor</option>
+            <option value="Reservado en depósito">Reservado en depósito</option>
+            <option value="Operador logistico">Operador logistico</option>
+          </select>
+        </div>
+        <div class="pm-field-row" x-show="formaEntrega === 'Envia repartidor'" x-cloak>
+          <label class="pm-label-inline" for="pm-repartidor">Usuario repartidor</label>
+          <select id="pm-repartidor" x-model.number="idRepartidor"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <option value="">Seleccioná un usuario</option>
+            <template x-for="u in repartidores" :key="u.id"><option :value="u.id" x-text="u.nombre"></option></template>
+          </select>
+        </div>
+        <div class="pm-field-row" x-show="formaEntrega === 'Operador logistico'" x-cloak>
+          <label class="pm-label-inline" for="pm-operador-logistico">Operador logístico</label>
+          <select id="pm-operador-logistico" x-model="operadorLogistico"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <template x-for="o in operadoresLogisticos" :key="o"><option :value="o" x-text="o"></option></template>
+          </select>
+        </div>
+        <div x-show="formaEntrega === 'Transporte' && sucursales.length" x-cloak class="w-full rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+          <p class="text-xs font-semibold mb-2">Transporte por domicilio</p>
+          <template x-for="s in sucursales" :key="s.id_cliente_domicilio">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center mb-2">
+              <span class="text-xs" x-text="s.nombre || s.etiqueta"></span>
+              <select :aria-label="`Transporte para ${s.nombre || s.etiqueta}`"
+                      x-model.number="transportesPorDomicilio[String(s.id_cliente_domicilio)]"
+                      class="pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+                <option value="">Seleccioná transporte</option>
+                <template x-for="t in transportes" :key="t.id"><option :value="t.id" x-text="t.nombre"></option></template>
+              </select>
+              <input type="text" :aria-label="`Nro. seguimiento para ${s.nombre || s.etiqueta}`" placeholder="Nro. seguimiento"
+                     x-model="numerosSeguimientoPorDomicilio[String(s.id_cliente_domicilio)]"
+                     class="pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+              <input type="text" :aria-label="`Link seguimiento para ${s.nombre || s.etiqueta}`" placeholder="Link seguimiento"
+                     x-model="linksSeguimientoPorDomicilio[String(s.id_cliente_domicilio)]"
+                     class="pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+            </div>
+          </template>
+        </div>
+        <div class="pm-field-row" x-show="tipo === 'PED' && muestraRutaEntrega" x-cloak>
+          <label class="pm-label-inline" for="pm-ruta-entrega">Ruta logística</label>
+          <select id="pm-ruta-entrega" x-model.number="idRuta"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <option value="">Sin ruta asignada</option>
+            <template x-for="r in rutasEntrega" :key="r.id">
+              <option :value="r.id" x-text="`${r.id} — ${r.nombre || 'Ruta'}${r.fecha_salida ? ' · ' + r.fecha_salida : ''}`"></option>
+            </template>
           </select>
         </div>
 

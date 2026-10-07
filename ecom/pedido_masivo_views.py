@@ -48,6 +48,7 @@ from ecom.services.pedido_cabecera_relay import (
     cabecera_pedido_relay,
     puede_anular_pedido_relay,
 )
+from ecom.services.pedido_entrega_catalogos import catalogo_rutas_entrega
 from ecom.services.pedidos_hub_pipeline import url_pedido_masivo_modo_simple
 from ecom.services.pedido_plantilla_service import cargar_pedido_en_draft_masivo
 from ecom.services.batch_checkout_masivo import (
@@ -266,6 +267,9 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
                     "readonly": readonly_q,
                     "consulta": consulta_q,
                     "aprobacion_pedidos_activa": aprobacion_pedidos_activa(base_sess),
+                    **catalogo_rutas_entrega(
+                        base_sess, to_int_or_none(_sess_user(self.request).get("id_usuario"))
+                    ),
                     "urls": {
                         "hub": reverse("ecom:mayoristapp_pedidos_hub"),
                         "nuevo_simple": url_pedido_masivo_modo_simple(),
@@ -369,6 +373,13 @@ class PedidoMasivoConfirmarAPIView(APIView):
             id_deposito=int(id_dep),
             desc_pie_pct=desc_pie,
             forma_entrega=str(data.get("forma_entrega") or ""),
+            id_ruta=to_int_or_none(data.get("id_ruta")),
+            id_repartidor=to_int_or_none(data.get("id_repartidor")),
+            operador_logistico=str(data.get("operador_logistico") or ""),
+            transportes_por_domicilio=(data.get("transportes_por_domicilio")
+                                       if isinstance(data.get("transportes_por_domicilio"), dict) else {}),
+            seguimientos_por_domicilio=(data.get("seguimientos_por_domicilio")
+                                        if isinstance(data.get("seguimientos_por_domicilio"), dict) else {}),
             observaciones=str(data.get("observaciones") or ""),
             agente_percep=_session_agente_percep(request),
             sess_user=sess,
@@ -648,6 +659,13 @@ class PedidoMasivoAbrirPedidoAPIView(APIView):
             "estado": str(cab.get("estado") or "").strip(),
             "anulado": str(cab.get("anulado") or "").strip(),
             "email_cliente": str(cab.get("email_cliente") or "").strip(),
+            "forma_entrega": str(cab.get("forma_entrega") or "").strip(),
+            "id_ruta": to_int_or_none(cab.get("id_ruta")),
+            "id_repartidor": to_int_or_none(cab.get("id_repartidor")),
+            "operador_logistico": str(cab.get("operador_logistico") or "").strip(),
+            "id_cliente_domicilio": to_int_or_none(cab.get("id_cliente_domicilio")),
+            "id_transporte": to_int_or_none(cab.get("id_transporte")),
+            "nro_seguimiento": str(cab.get("nro_seguimiento") or "").strip(),
             "editable": False if consulta else bool(meta.get("editable")),
             "puede_anular": False if consulta else bool(puede_anular),
             "repetido": repetir,

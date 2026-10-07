@@ -458,8 +458,11 @@ def listar_sucursales_cliente(
             COALESCE(cm.Dpto, '') AS dpto,
             COALESCE(pv.Provincia, '') AS provincia,
             COALESCE(dt.NombreDistrito, '') AS distrito,
-            COALESCE(z.nombre_zona, '') AS zona
+            COALESCE(z.nombre_zona, '') AS zona,
+            tr.id_transporte AS id_transporte,
+            tr.nombre_transporte AS nombre_transporte
         FROM cliente_domicilio AS cm
+        LEFT JOIN transporte AS tr ON tr.id_transporte = cm.id_transporte AND tr.anulado = 'No'
         LEFT JOIN provincia AS pv ON pv.CodProvincia = cm.CodProvincia
         LEFT JOIN distrito AS dt ON dt.IDDistrito = cm.IDDistrito
         LEFT JOIN erp_zona AS z ON z.id_zona = cm.id_zona
@@ -503,6 +506,8 @@ def listar_sucursales_cliente(
                     out.append(
                         {
                             "id_cliente_domicilio": int(r[0]),
+                            "id_transporte": to_int_or_none(r[7]) if len(r) > 7 else None,
+                            "nombre_transporte": str(r[8] or "").strip() if len(r) > 8 else "",
                             "nombre": etiqueta,
                             "etiqueta": etiqueta,
                             "calle": calle,

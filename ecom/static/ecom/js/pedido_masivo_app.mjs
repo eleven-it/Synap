@@ -150,6 +150,21 @@ function pedidoMasivoCore() {
     listasPrecio: [],
     tipo: 'PED',
     formaEntrega: '',
+    logisticaActiva: false,
+    rutasEntrega: [],
+    idRuta: null,
+    transportes: [],
+    repartidores: [],
+    operadoresLogisticos: [],
+    idRepartidor: null,
+    operadorLogistico: '',
+    transportesPorDomicilio: {},
+    numerosSeguimientoPorDomicilio: {},
+    linksSeguimientoPorDomicilio: {},
+    get muestraRutaEntrega() {
+      const forma = String(this.formaEntrega || '').trim().toLowerCase();
+      return this.logisticaActiva && ['transporte', 'envía por despacho', 'envia por despacho'].includes(forma);
+    },
     // Contexto comercial compacto por defecto para reservar alto a la matriz.
     contextoAbierto: false,
     // ── Pedido simple (masivo 1 columna) ──
@@ -342,6 +357,15 @@ function pedidoMasivoCore() {
       const el = document.getElementById('pm-bootstrap');
       const boot = el ? JSON.parse(el.textContent) : {};
       this.urls = boot.urls || {};
+      this.logisticaActiva = !!boot.logistica_activa;
+      this.rutasEntrega = Array.isArray(boot.rutas_entrega) ? boot.rutas_entrega : [];
+      if (!this.idRuta && this.rutasEntrega.length) this.idRuta = this.rutasEntrega[0].id;
+      this.transportes = Array.isArray(boot.transportes) ? boot.transportes : [];
+      this.repartidores = Array.isArray(boot.repartidores) ? boot.repartidores : [];
+      this.operadoresLogisticos = Array.isArray(boot.operadores_logisticos) ? boot.operadores_logisticos : [];
+      this.formaEntrega = boot.forma_entrega_default || '';
+      this.idRepartidor = this.repartidores[0]?.id || null;
+      this.operadorLogistico = this.operadoresLogisticos[0] || '';
       this.modoSimple = String(boot.modo || '') === 'simple';
       this.idDomicilioInicial = boot.id_domicilio || null;
       this.readonly = Boolean(boot.readonly);
@@ -842,6 +866,12 @@ function pedidoMasivoCore() {
       ).trim();
       this.listaId = Number(m.lista_id || 1);
       this.sucursales = this._ordenarSucursalesAsc(m.sucursales || []);
+      for (const s of this.sucursales) {
+        const key = String(s.id_cliente_domicilio);
+        if (this.transportesPorDomicilio[key] === undefined) {
+          this.transportesPorDomicilio[key] = Number(s.id_transporte) || null;
+        }
+      }
       this.articulos = (m.articulos || []).map(a => ({
         id_articulo: a.id_articulo,
         id_manual: a.id_manual || a.codigo || '',
@@ -1167,6 +1197,16 @@ function pedidoMasivoCore() {
     },
     _aplicarPedidoInfo(info, advertencias) {
       const p = info || {};
+      if (p.forma_entrega) this.formaEntrega = p.forma_entrega;
+      if (p.id_ruta) this.idRuta = Number(p.id_ruta);
+      if (p.id_repartidor) this.idRepartidor = Number(p.id_repartidor);
+      if (p.operador_logistico) this.operadorLogistico = p.operador_logistico;
+      if (p.id_cliente_domicilio && p.id_transporte) {
+        this.transportesPorDomicilio[String(p.id_cliente_domicilio)] = Number(p.id_transporte);
+      }
+      if (p.id_cliente_domicilio && p.nro_seguimiento) {
+        this.numerosSeguimientoPorDomicilio[String(p.id_cliente_domicilio)] = p.nro_seguimiento;
+      }
       this.pedidoCodMov = p.cod_mov || null;
       this.pedidoNro = String(p.nro_comprobante || '').trim();
       this.pedidoEstado = String(p.estado || '').trim();
@@ -2303,6 +2343,19 @@ function pedidoMasivoCore() {
       }
       this.error = '';
       this.mensajeOk = '';
+      if (this.formaEntrega === 'Transporte') {
+        const sinTransporte = this._sucursalesConCarga().filter((s) =>
+          !Number(this.transportesPorDomicilio[String(s.id_cliente_domicilio)] || s.id_transporte || 0));
+        if (sinTransporte.length) {
+          this.contextoAbierto = true;
+          this.mostrarAviso(`Seleccioná un transporte para: ${sinTransporte.map((s) => s.nombre || s.etiqueta).join(', ')}.`, 'error');
+          return;
+        }
+      }
+      if (this.formaEntrega === 'Envia repartidor' && !this.idRepartidor) {
+        this.mostrarAviso('Seleccioná un usuario repartidor.', 'error');
+        return;
+      }
       const fe = (
         this.cabecera?.fecha_entrega
         || displayToIso(this.cabecera?.fecha_entrega_display)
@@ -2527,6 +2580,18 @@ function pedidoMasivoCore() {
             draft_id: this.draftId,
             desc_pie_pct: this.descPiePct,
             forma_entrega: this.formaEntrega,
+            id_ruta: this.muestraRutaEntrega ? this.idRuta : null,
+            id_repartidor: this.formaEntrega.trim().toLowerCase() === 'envia repartidor' ? this.idRepartidor : null,
+            operador_logistico: this.formaEntrega.trim().toLowerCase() === 'operador logistico' ? this.operadorLogistico : '',
+            transportes_por_domicilio: this.formaEntrega.trim().toLowerCase() === 'transporte'
+              ? this.transportesPorDomicilio : {},
+            seguimientos_por_domicilio: this.formaEntrega.trim().toLowerCase() === 'transporte'
+              ? Object.fromEntries(this.sucursales.map((s) => {
+                const key = String(s.id_cliente_domicilio);
+                const numero = String(this.numerosSeguimientoPorDomicilio[key] || '').trim();
+                const link = String(this.linksSeguimientoPorDomicilio[key] || '').trim();
+                return [key, link ? `${numero} - ${link}` : numero];
+              })) : {},
             stream: true,
             ...this._payloadCabecera(),
           },
