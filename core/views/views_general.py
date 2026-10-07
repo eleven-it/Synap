@@ -7,6 +7,28 @@ from core.decorators import tiene_permiso, administranet_login_required
 from django.views.generic import TemplateView
 
 
+def pedidos_menu_desde_apps(apps_menu: List[Dict[str, Any]]) -> Dict[str, str]:
+    """URLs de pedidos que ya pasaron los filtros de permisos y menú móvil."""
+    urls: Dict[str, str] = {}
+    ids = {
+        "ecom_compra": "nuevo",
+        "ventas_cb_nuevo_pedido": "nuevo",
+        "ecom_pedidos": "listado",
+        "ventas_cb_pedidos": "listado",
+        "ecom_pedido_masivo": "masivo",
+        "ventas_cb_pedido_masivo": "masivo",
+    }
+    for app in apps_menu:
+        if app.get("id") not in ("ecom", "ventas"):
+            continue
+        for seccion in app.get("submenus") or []:
+            for item in seccion.get("items") or []:
+                clave = ids.get(item.get("menu_item_id"))
+                if clave and item.get("url") and clave not in urls:
+                    urls[clave] = item["url"]
+    return urls
+
+
 def get_dashboard_home_visibility(user, apps_menu: List[Dict[str, Any]]) -> Dict[str, bool]:
     """
     Tarjetas del inicio (/core/dashboard/) alineadas con permisos reales de Reports.
@@ -74,6 +96,7 @@ def dashboard_view(request):
     
     context = permisos_contextuales(request, "*", debug=True)
     context["apps_menu"] = apps_menu
+    context["pedidos_menu"] = pedidos_menu_desde_apps(apps_menu)
     context.update(get_dashboard_home_visibility(request.user, apps_menu))
     return render(request, "core/dashboard.html", context)
 

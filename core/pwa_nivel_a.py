@@ -11,7 +11,12 @@ from typing import Any, Dict, List, Optional
 from django.http import HttpRequest
 
 # IDs de `APPS_MENU` (`app["id"]`) que pueden mostrarse en el menú principal en móvil/PWA.
-PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom", "stock", "mpr", "contabilidad"})
+PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom", "ventas", "stock", "mpr", "contabilidad"})
+
+# El vendedor puede tener Ventas y permisos de pedidos sin el permiso general ecom.ver.
+PWA_VENTAS_PEDIDOS_MENU_ITEM_IDS = frozenset(
+    {"ventas_cb_pedidos", "ventas_cb_nuevo_pedido", "ventas_cb_pedido_masivo"}
+)
 
 # Submenús contabilidad accesibles en Nivel A (cotización dólar).
 PWA_CONTABILIDAD_MENU_ITEM_IDS = frozenset({"contabilidad_cotizacion_dolar"})
@@ -79,14 +84,31 @@ def usuario_tiene_ecom_en_menu(user, request: Optional[HttpRequest] = None) -> b
     return any(a.get("id") == "ecom" for a in apps_visibles_sin_filtro_pwa(user, request))
 
 
+def usuario_tiene_pedidos_ventas_en_menu(user, request: Optional[HttpRequest] = None) -> bool:
+    """El menú Ventas habilita los accesos de pedidos ya permitidos en escritorio."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    from core.utils.utils import apps_visibles_sin_filtro_pwa
+
+    for app in apps_visibles_sin_filtro_pwa(user, request):
+        if app.get("id") != "ventas":
+            continue
+        return any(
+            item.get("menu_item_id") in PWA_VENTAS_PEDIDOS_MENU_ITEM_IDS
+            for section in app.get("submenus") or []
+            for item in section.get("items") or []
+        )
+    return False
+
+
 def tpv_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
     """TPV accesible en móvil: el usuario tiene el módulo activo en menú (no solo PWA)."""
     return usuario_tiene_tpv_en_menu(user, request)
 
 
 def ecom_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
-    """E-com hub+venta accesible en móvil si el módulo está en menú de escritorio."""
-    return usuario_tiene_ecom_en_menu(user, request)
+    """Pedidos accesibles desde E-commerce o desde Ventas, según el menú efectivo."""
+    return usuario_tiene_ecom_en_menu(user, request) or usuario_tiene_pedidos_ventas_en_menu(user, request)
 
 
 def usuario_tiene_mpr_en_menu(user, request: Optional[HttpRequest] = None) -> bool:
@@ -190,6 +212,23 @@ def filtrar_submenus_ecom_para_pwa_movil(
     return resultado
 
 
+def filtrar_submenus_ventas_pedidos_para_pwa_movil(
+    submenus: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """En móvil, Ventas expone solo las pantallas de pedidos habilitadas."""
+    resultado: List[Dict[str, Any]] = []
+    for seccion in submenus or []:
+        items = [
+            item for item in seccion.get("items") or []
+            if item.get("menu_item_id") in PWA_VENTAS_PEDIDOS_MENU_ITEM_IDS
+        ]
+        if items:
+            copia = dict(seccion)
+            copia["items"] = items
+            resultado.append(copia)
+    return resultado
+
+
 def filtrar_submenus_mpr_para_pwa_movil(
     submenus: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -239,6 +278,13 @@ def filtrar_apps_menu_para_pwa_movil(
         if app_id == "contabilidad" and not usuario_tiene_contabilidad_cotizacion_en_menu(usuario, request):
             continue
         app_copy = dict(app)
+        if app_id == "ventas":
+            app_copy["submenus"] = filtrar_submenus_ventas_pedidos_para_pwa_movil(
+                app_copy.get("submenus") or []
+            )
+            if not app_copy["submenus"]:
+                continue
+            app_copy["url"] = app_copy["submenus"][0]["items"][0]["url"]
         if app_id == "ecom" and app_copy.get("submenus"):
             app_copy["submenus"] = filtrar_submenus_ecom_para_pwa_movil(app_copy["submenus"])
         if app_id == "stock" and app_copy.get("submenus"):
@@ -264,7 +310,10 @@ def sidebar_visible_en_pwa(
         return usuario_tiene_tpv_en_menu(usuario, request)
     if current_app_id == "ecom":
         usuario = user or (getattr(request, "user", None) if request else None)
-        return usuario_tiene_ecom_en_menu(usuario, request)
+        return ecom_visible_en_movil(usuario, request)
+    if current_app_id == "ventas":
+        usuario = user or (getattr(request, "user", None) if request else None)
+        return usuario_tiene_pedidos_ventas_en_menu(usuario, request)
     if current_app_id == "stock":
         usuario = user or (getattr(request, "user", None) if request else None)
         return usuario_tiene_conteo_en_menu(usuario, request)

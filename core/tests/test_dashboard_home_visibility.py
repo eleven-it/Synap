@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from core.utils.permissions import user_has_permission
-from core.views.views_general import get_dashboard_home_visibility
+from core.views.views_general import get_dashboard_home_visibility, pedidos_menu_desde_apps
 
 
 class _UserStub:
@@ -43,6 +43,16 @@ class UserHasPermissionTests(SimpleTestCase):
 
 
 class DashboardHomeVisibilityTests(SimpleTestCase):
+    def test_pedidos_desde_ventas_en_movil(self):
+        apps = [{'id': 'ventas', 'submenus': [{'items': [
+            {'menu_item_id': 'ventas_cb_pedidos', 'url': '/ecom/mayoristapp/pedidos/'},
+            {'menu_item_id': 'ventas_cb_nuevo_pedido', 'url': '/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple'},
+        ]}]}]
+        self.assertEqual(pedidos_menu_desde_apps(apps), {
+            'listado': '/ecom/mayoristapp/pedidos/',
+            'nuevo': '/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple',
+        })
+
     def test_sin_gerencial_ni_reports_en_menu(self):
         user = _UserStub(permisos={"reports.ver"})
         vis = get_dashboard_home_visibility(user, [])

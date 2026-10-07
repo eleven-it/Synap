@@ -129,6 +129,14 @@ APPS_MENU = [
                         "menu_item_id": "ventas_cb_pedidos",
                     },
                     {
+                        "label": _("Nuevo pedido"),
+                        "url": "ecom:mayoristapp_pedido_masivo_sucursales",
+                        "url_query": {"modo": "simple"},
+                        "icon": "add_shopping_cart",
+                        "permission": ["ecom.pedidos.crear", "ecom.pedido_masivo.usar"],
+                        "menu_item_id": "ventas_cb_nuevo_pedido",
+                    },
+                    {
                         "label": _("Pedido masivo sucursales"),
                         "url": "ecom:mayoristapp_pedido_masivo_sucursales",
                         "icon": "grid_on",
@@ -695,7 +703,7 @@ APPS_MENU = [
                         "url": "ecom:mayoristapp_pedido_masivo_sucursales",
                         "url_query": {"modo": "simple"},
                         "icon": "shopping_cart",
-                        "permission": "ecom.pedidos.crear",
+                        "permission": ["ecom.pedidos.crear", "ecom.pedido_masivo.usar"],
                         "menu_item_id": "ecom_compra",
                     },
                 ],
