@@ -38,6 +38,7 @@ from core.mysql_pool import get_connection, get_mysql_pool
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
 from ecom.models import EcomCart
 from ecom.services.catalogo_producto import resolver_precio_articulo
+from ecom.services.cliente_iva_pedido import es_cliente_iva_no_responsable
 from ecom.services.aprobacion_pedidos import aplicar_estado_inicial_checkout, evaluar_reglas
 from ecom.services.credito_pedidos.aprobacion import aplicar_estado_credito_checkout
 from ecom.services.credito_pedidos.avisos import disparar_aviso_pedido_bloqueado
@@ -129,6 +130,10 @@ def confirmar(
     cli = _fetch_cliente(cart.base_empresa, int(cart.idcliente))
     if not cli:
         return False, "Cliente no encontrado.", None
+    iva_no_responsable = (
+        tipo in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO)
+        and es_cliente_iva_no_responsable(cart.base_empresa, cart.idcliente)
+    )
 
     cabecera, err_cab = resolver_cabecera_comercial(
         cart.base_empresa,
@@ -152,7 +157,7 @@ def confirmar(
     desc_renglon = _dec(cli.get("descRenglon"), "0")
     if not _reprice_items(cart, items, desc_renglon):
         return False, "No se pudieron recalcular los precios con la lista seleccionada.", None
-    recalcular_totales(cart)
+    recalcular_totales(cart, iva_no_responsable=iva_no_responsable)
     items = list(cart.items.all())
 
     extras = _fetch_articulo_extras(cart.base_empresa, [it.id_articulo for it in items])
@@ -165,6 +170,14 @@ def confirmar(
         try:
             conn.autocommit(False)
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            id_alicuota_cero = None
+            if iva_no_responsable:
+                cur.execute("SELECT ID FROM iva WHERE Alicuota = 0 ORDER BY ID LIMIT 1")
+                row_iva_cero = cur.fetchone()
+                id_alicuota_cero = to_int_or_none((row_iva_cero or {}).get("ID"))
+                if id_alicuota_cero is None:
+                    conn.rollback()
+                    return False, "Falta configurar la alícuota de IVA 0 %.", None
 
             credito_unificado = credito_pedidos_activo(cart.base_empresa)
             if not credito_unificado:
@@ -370,6 +383,7 @@ def confirmar(
                     coti_dolar=coti_dolar,
                     id_cotizacion=id_cotizacion,
                     saldo=saldo_renglon,
+                    id_alicuota_iva_efectiva=id_alicuota_cero,
                 ))
 
             if (
@@ -665,12 +679,17 @@ def _params_stockp(
     coti_dolar: Decimal = Decimal("1"),
     id_cotizacion: int = 1,
     saldo: Decimal = Decimal("0"),
+    id_alicuota_iva_efectiva: Optional[int] = None,
 ) -> Dict[str, Any]:
     cant = _dec(it.cantidad)
     pu = _dec(it.precio_unitario_neto)
     desc = _dec(it.porcentaje_descuento)
     alic_pct = _dec(it.alicuota_iva)
-    id_alic_iva = to_int_or_none(extra.get("Alicuota")) or 0
+    id_alic_iva = (
+        id_alicuota_iva_efectiva
+        if id_alicuota_iva_efectiva is not None
+        else to_int_or_none(extra.get("Alicuota")) or 0
+    )
     id_alic_iibb = to_int_or_none(extra.get("AlicuotaIB")) or 0
     iibb_pct = _dec(extra.get("iibb_pct"), "0")
     neto_u = _q2(pu * (Decimal("100") - desc) / Decimal("100"))

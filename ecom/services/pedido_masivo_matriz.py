@@ -18,6 +18,7 @@ from ecom.services.catalogo_producto import (
     obtener_articulo_row_precio,
     resolver_precio_articulo,
 )
+from ecom.services.cliente_iva_pedido import es_cliente_iva_no_responsable
 from ecom.services.price_rules_engine import (
     calcular_precio_articulo_row,
     resolver_reglas_precio_map,
@@ -757,6 +758,7 @@ def buscar_articulos_filtrados_ternas(
         }
 
     ctx_cli = leer_contexto_cliente_masivo(base_empresa, id_cliente)
+    iva_no_responsable = es_cliente_iva_no_responsable(base_empresa, id_cliente)
     lista_ef = int(lista_id or ctx_cli.get("lista_id") or 1)
     desc_cli = _clamp_pct(descuento_cliente if descuento_cliente else ctx_cli.get("descRenglon"))
 
@@ -892,7 +894,7 @@ def buscar_articulos_filtrados_ternas(
                             "descripcion": str_or_default(articulo.get("nombre"), ""),
                             "precio_unitario_neto": float(precio or 0),
                             "precio_lista1": float(precio or 0),
-                            "alicuota_iva": float(alic if alic is not None else 21),
+                            "alicuota_iva": float(0 if iva_no_responsable else alic if alic is not None else 21),
                             **mult_campos,
                         }
                     )
@@ -941,6 +943,7 @@ def _nombres_articulos(
     ids_clean = [i for i in (to_int_or_none(x) for x in ids) if i is not None]
     if not ids_clean:
         return {}
+    iva_no_responsable = es_cliente_iva_no_responsable(base_empresa, id_cliente)
     placeholders = ",".join(["%s"] * len(ids_clean))
     sql = f"""
         SELECT
@@ -975,7 +978,7 @@ def _nombres_articulos(
                         "descripcion": str_or_default(r[2], ""),
                         "precio_unitario_neto": float(precio or 0),
                         "precio_lista1": float(precio or 0),
-                        "alicuota_iva": float(alic if alic is not None else 21),
+                        "alicuota_iva": float(0 if iva_no_responsable else alic if alic is not None else 21),
                         **campos_multiplo_articulo(r[4]),
                     }
             finally:
@@ -1285,7 +1288,10 @@ def serializar_matriz(
             ),
             "precio_lista": float(nombres.get(aid, {}).get("precio_unitario_neto") or 0),
             "precio_lista1": float(nombres.get(aid, {}).get("precio_lista1") or 0),
-            "alicuota_iva": float(nombres.get(aid, {}).get("alicuota_iva") or 21),
+            "alicuota_iva": float(
+                nombres.get(aid, {}).get("alicuota_iva")
+                if nombres.get(aid, {}).get("alicuota_iva") is not None else 21
+            ),
             "porcentaje_descuento": float(desc_map.get(aid, desc_cli)),
             "multiplo_cantidad_vta": int(nombres.get(aid, {}).get("multiplo_cantidad_vta") or 0),
             "multiplo_empaque": int(

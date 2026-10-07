@@ -34,13 +34,18 @@ def _stock_ok(mock_stock):
 _patch_pedidos_validan_stock = patch(
     "ecom.services.ecom_config_mysql.pedidos_validan_stock", return_value=True
 )
+_patch_iva_no_responsable = patch.object(
+    svc, "es_cliente_iva_no_responsable", return_value=False
+)
 
 
 def setUpModule():
     _patch_pedidos_validan_stock.start()
+    _patch_iva_no_responsable.start()
 
 
 def tearDownModule():
+    _patch_iva_no_responsable.stop()
     _patch_pedidos_validan_stock.stop()
 
 
@@ -220,6 +225,31 @@ class TestTotales(TestCase):
         self.assertEqual(cart.iva_21, Decimal("0.00"))
         self.assertEqual(cart.iva_105, Decimal("0.00"))
         self.assertEqual(cart.total, Decimal("300.00"))
+
+    @patch.object(svc, "es_cliente_iva_no_responsable", return_value=True)
+    @patch.object(svc, "StockService")
+    @patch.object(svc, "resolver_precio_articulo")
+    def test_cliente_categoria_9_anula_iva_del_articulo_en_ped_y_pre(
+        self, mock_precio, mock_stock, mock_iva
+    ):
+        _stock_ok(mock_stock)
+        mock_precio.return_value = (Decimal("100"), _row(alic="21"))
+        for tipo in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO):
+            cart = svc.obtener_o_crear_carrito(
+                "emp1", 5, idcliente=10, lista_id=2, tipo_comprobante=tipo
+            )
+            item, err = svc.agregar_item(cart, 1, 2)
+            self.assertIsNone(err)
+            item.refresh_from_db()
+            cart.refresh_from_db()
+            self.assertEqual(item.alicuota_iva, Decimal("0"))
+            self.assertEqual(item.iva, Decimal("0.00"))
+            self.assertEqual(cart.iva_21, Decimal("0.00"))
+            self.assertEqual(cart.exento, Decimal("200.00"))
+            self.assertEqual(cart.total, Decimal("200.00"))
+            cart.items.all().delete()
+            svc.recalcular_totales(cart)
+        mock_iva.assert_called_with("emp1", 10)
 
     @patch.object(svc, "StockService")
     @patch.object(svc, "resolver_precio_articulo")

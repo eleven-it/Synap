@@ -415,6 +415,14 @@ class TestStockDisponiblePacks(TestCase):
 
 
 class TestCatalogoFiltrado(TestCase):
+    def setUp(self):
+        patcher = patch(
+            "ecom.services.pedido_masivo_matriz.es_cliente_iva_no_responsable",
+            return_value=False,
+        )
+        self.mock_iva_no_responsable = patcher.start()
+        self.addCleanup(patcher.stop)
+
     @patch("ecom.services.pedido_masivo_matriz._stock_disponible_packs_map", return_value={9: 12.5})
     @patch(
         "ecom.services.pedido_masivo_matriz.marcas_asignadas_viajante_cliente",
@@ -455,6 +463,27 @@ class TestCatalogoFiltrado(TestCase):
         self.assertIn("Precio1V", sql)
         self.assertIn("NroCodBarra", sql)
         mock_reglas.assert_called_once()
+
+    @patch("ecom.services.pedido_masivo_matriz._stock_disponible_packs_map", return_value={})
+    @patch(
+        "ecom.services.pedido_masivo_matriz.marcas_asignadas_viajante_cliente",
+        return_value=[11],
+    )
+    @patch("ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo", return_value={})
+    @patch("ecom.services.pedido_masivo_matriz.calcular_precio_articulo_row", return_value=Decimal("100"))
+    @patch("ecom.services.pedido_masivo_matriz.resolver_reglas_precio_map", return_value={})
+    @patch("ecom.services.pedido_masivo_matriz.get_mysql_pool")
+    def test_categoria_9_muestra_alicuota_cero(
+        self, mock_pool, _reglas, _precio, _ctx, _marcas, _stock
+    ):
+        self.mock_iva_no_responsable.return_value = True
+        cur = mock_pool.return_value.get_connection.return_value.__enter__.return_value.cursor.return_value
+        cur.fetchall.return_value = [(9, "2401", "Calcetín", 21)]
+        cur.description = [("IDArt",), ("id_manual",), ("nombre",), ("alic_iva",)]
+        resultado = buscar_articulos_filtrados_ternas(
+            "emp_m", cod_viajante=1, id_cliente=2, q="2401"
+        )
+        self.assertEqual(resultado["items"][0]["alicuota_iva"], 0.0)
 
     @patch(
         "ecom.services.pedido_masivo_matriz.marcas_asignadas_viajante_cliente",
@@ -536,6 +565,7 @@ class TestSerializarMatriz(TestCase):
                 "descripcion": "Art X",
                 "precio_unitario_neto": 85.0,
                 "precio_lista1": 85.0,
+                "alicuota_iva": 0.0,
             }
         }
         d = EcomPedidoMasivoDraft.objects.create(
@@ -556,6 +586,7 @@ class TestSerializarMatriz(TestCase):
         self.assertEqual(m["celdas"]["4:9"], "3")
         self.assertEqual(m["articulos"][0]["codigo"], "X")
         self.assertEqual(m["articulos"][0]["precio_unitario_neto"], 85.0)
+        self.assertEqual(m["articulos"][0]["alicuota_iva"], 0.0)
         self.assertEqual(m["articulos"][0]["stock_disponible_packs"], 3.0)
         self.assertEqual(m["articulos"][0]["porcentaje_descuento"], 10.0)
         self.assertEqual(m["desc_pie_pct"], 5.0)
