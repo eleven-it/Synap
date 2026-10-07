@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.test import RequestFactory, SimpleTestCase
 
 from core.middleware.base_middleware import DeviceDetectionMiddleware
+from core.utils.utils import APPS_MENU, _permiso_menu_ok
 from ecom.menu_config import MENU_CONFIG
 
 from core.pwa_nivel_a import (
@@ -42,6 +43,11 @@ def _req(ua):
 
 
 class FiltrarAppsMenuPwaTests(SimpleTestCase):
+    def test_menu_acepta_permiso_comodin_del_modulo(self):
+        self.assertTrue(_permiso_menu_ok('ecom.ver', {'ecom.*'}))
+        self.assertTrue(_permiso_menu_ok(['ventas.ver', 'ecom.pedidos.crear'], {'ecom.*'}))
+        self.assertFalse(_permiso_menu_ok('stock.ver', {'ecom.*'}))
+
     def test_escritorio_no_reduce_lista(self):
         request = _req(DESKTOP_UA)
         apps = [{'id': 'reports'}, {'id': 'self_checkout'}]
@@ -241,6 +247,17 @@ class SidebarPwaTests(SimpleTestCase):
                 if "pedido-masivo-sucursales" in dl
             )
         )
+
+    def test_menu_venta_usa_permiso_de_captura_y_modo_simple(self):
+        ecom = next(app for app in APPS_MENU if app.get('id') == 'ecom')
+        compra = next(
+            item
+            for section in ecom['submenus']
+            for item in section['items']
+            if item.get('menu_item_id') == 'ecom_compra'
+        )
+        self.assertEqual(compra['permission'], 'ecom.pedidos.crear')
+        self.assertEqual(compra['url_query'], {'modo': 'simple'})
 
 
 class TpvVisibleEnMovilTests(SimpleTestCase):

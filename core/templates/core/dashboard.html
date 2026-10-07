@@ -350,6 +350,31 @@
     {% endif %}
 
     {% for app in apps_menu %}
+      {% if app.id == "ecom" %}
+      <div class="action-card rounded-2xl p-5 sm:p-6 fade-in-up fade-in-up-delay-4">
+        <div class="flex items-start gap-4">
+          <div class="icon-container flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-sky-600 to-sky-700 flex items-center justify-center text-white shadow-lg shadow-sky-500/30">
+            <span class="material-icons" aria-hidden="true">shopping_cart</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">Pedidos</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">Cargá pedidos y consultá los de tus clientes.</p>
+            <div class="flex flex-wrap gap-2">
+              {% for seccion in app.submenus %}
+                {% for item in seccion.items %}
+                  {% if item.menu_item_id == "ecom_compra" %}
+                  <a href="{{ item.url }}" class="inline-flex min-h-11 items-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500">Nuevo pedido</a>
+                  {% elif item.menu_item_id == "ecom_pedidos" %}
+                  <a href="{{ item.url }}" class="inline-flex min-h-11 items-center rounded-lg border border-sky-600 px-4 py-2 text-sm font-semibold text-sky-700 dark:text-sky-300">Ver pedidos</a>
+                  {% endif %}
+                {% endfor %}
+              {% endfor %}
+              <a href="{{ app.url }}" class="inline-flex min-h-11 items-center px-2 py-2 text-sm font-semibold text-sky-700 dark:text-sky-300">Portal mayorista</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
       {% if app.id == "settings" %}
       <!-- Settings Card -->
       <a href="{{ app.url }}" class="action-card card-settings rounded-2xl p-5 sm:p-6 group fade-in-up fade-in-up-delay-4 min-h-[44px]">
@@ -405,6 +430,10 @@
       </a>
       {% endif %}
     {% endfor %}
+  </section>
+  {% else %}
+  <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200" role="status">
+    No hay aplicaciones habilitadas para tu usuario. Solicitá que revisen los permisos de tu puesto y el acceso a E-commerce.
   </section>
   {% endif %}
 
