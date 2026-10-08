@@ -127,7 +127,10 @@
   }
 
   function unidadLabel(unitMode) {
-    return String(unitMode || "").toLowerCase() === "dozens" ? "Docenas" : "Packs";
+    const mode = String(unitMode || "").toLowerCase();
+    if (mode === "dozens") return "Docenas";
+    if (mode === "units") return "Unidades";
+    return "Packs";
   }
 
   function escHtml(value) {

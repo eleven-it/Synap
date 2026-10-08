@@ -19,6 +19,22 @@ from reports.services.ventas_marcas_mensual_rules import (
 )
 logger = logging.getLogger(__name__)
 
+# Seeds/ANET se expresan en docenas por defecto; estos packs se muestran en unidades.
+# Ajuste de presentación por pack_id (sin migración): el valor persistido de
+# ``MonthlyReportingPack.unit_mode`` no cambia.
+UNIT_MODE_UNITS = "units"
+DOZEN_TO_UNITS_FACTOR = Decimal("12")
+PACK_UNIT_MODE_OVERRIDES: dict[str, str] = {"levis_bw": UNIT_MODE_UNITS}
+
+
+def resolve_pack_unit_mode(pack: Any) -> str:
+    """Modo de unidad efectivo del pack: override por pack_id o ``pack.unit_mode``."""
+    pack_id = str_or_default(getattr(pack, "pack_id", ""), "").strip()
+    override = PACK_UNIT_MODE_OVERRIDES.get(pack_id)
+    if override:
+        return override
+    return str_or_default(getattr(pack, "unit_mode", ""), "").strip().lower()
+
 
 @dataclass(frozen=True)
 class AnetSalesRow:
@@ -110,6 +126,9 @@ def parse_anet_sales_row(
     mode = str_or_default(unit_mode, "").strip().lower()
     if mode == "dozens":
         units = to_decimal_or_none(raw.get("docenas_qty")) or Decimal("0")
+    elif mode == UNIT_MODE_UNITS:
+        dozens = to_decimal_or_none(raw.get("docenas_qty")) or Decimal("0")
+        units = dozens * DOZEN_TO_UNITS_FACTOR
     else:
         units = to_decimal_or_none(raw.get("packs_qty")) or Decimal("0")
     amount = to_decimal_or_none(raw.get("facturacion")) or Decimal("0")
@@ -194,7 +213,7 @@ def fetch_anet_sales(
             raw = dict(zip(cols, record))
             row = parse_anet_sales_row(
                 raw,
-                unit_mode=pack.unit_mode,
+                unit_mode=resolve_pack_unit_mode(pack),
                 classify_genero=classify_genero,
             )
             if include_superart and row.superart and classify_genero:

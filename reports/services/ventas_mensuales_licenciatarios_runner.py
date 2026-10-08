@@ -23,6 +23,7 @@ from reports.services.ventas_mensuales_licenciatarios_merger import (
 from reports.services.ventas_mensuales_licenciatarios_query import (
     AnetSalesRow,
     fetch_anet_sales,
+    resolve_pack_unit_mode,
 )
 
 CUTOVER_DATE = date(2026, 7, 22)
@@ -254,7 +255,7 @@ def run_ventas_mensuales_licenciatarios(
             "pending_clients": merge_result.pending_clients,
             "qa_superarts": qa_all,
             "pack_codigo_salida": pack.codigo_salida,
-            "unit_mode": pack.unit_mode,
+            "unit_mode": resolve_pack_unit_mode(pack),
         }
     )
 

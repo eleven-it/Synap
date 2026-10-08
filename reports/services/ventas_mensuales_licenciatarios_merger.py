@@ -22,6 +22,9 @@ from reports.services.monthly_reporting_client_match_service import (
 )
 from reports.services.monthly_reporting_pack_seed import PUMA_GENDER_PRODUCT_GROUPS
 from reports.services.ventas_mensuales_licenciatarios_query import (
+    DOZEN_TO_UNITS_FACTOR,
+    UNIT_MODE_UNITS,
+    resolve_pack_unit_mode,
     AnetSalesRow,
     aggregate_anet_rows,
     fetch_anet_sales,
@@ -226,15 +229,17 @@ def seed_row_to_merged(
 ) -> MergedClientMonth:
     match = row.match
     meta = match_to_aggregate_row(match, base_empresa)
+    # Las planillas seed vienen en docenas; packs en modo unidades se convierten.
+    factor = DOZEN_TO_UNITS_FACTOR if resolve_pack_unit_mode(pack) == UNIT_MODE_UNITS else Decimal("1")
     return MergedClientMonth(
         identity=meta["identity"],
         display_name=meta["display_name"],
         match_estado=meta["match_estado"],
         month=row.month,
-        units=row.units,
+        units=row.units * factor,
         amount=row.amount,
-        units_men=row.units_men,
-        units_women=row.units_women,
+        units_men=row.units_men * factor,
+        units_women=row.units_women * factor,
         amount_men=row.amount_men,
         amount_women=row.amount_women,
         source="seed",

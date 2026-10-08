@@ -1423,10 +1423,11 @@ class VentasMensualesLicenciatariosMergerIntegrationTests(TestCase):
         self.assertEqual(len(jul_rows), 2)
         seed_jul = next(r for r in jul_rows if r.source == "seed")
         anet_jul = next(r for r in jul_rows if r.source == "anet")
-        self.assertEqual(seed_jul.units, Decimal("7"))
+        # LB (levis_bw) se expresa en unidades: seed (docenas) x 12; ANET ya viene en unidades.
+        self.assertEqual(seed_jul.units, Decimal("7") * 12)
         self.assertEqual(anet_jul.units, Decimal("9"))
         ytd_seed = result.ytd_by_identity[seed_jul.identity]
-        self.assertEqual(ytd_seed["units"], Decimal("1") + Decimal("2") + Decimal("7"))
+        self.assertEqual(ytd_seed["units"], (Decimal("1") + Decimal("2") + Decimal("7")) * 12)
 
 
 class VentasMensualesLicenciatariosOleada2FilterTests(TestCase):
@@ -1630,7 +1631,7 @@ class VentasMensualesLicenciatariosRunnerHybridTests(TestCase):
         jul_rows = [r for r in result.data if r["anio_mes"] == "202607"]
         self.assertEqual(len(jul_rows), 2)
         ytd_values = {r["cliente"]: r["ytd_unidades"] for r in result.data if r["anio_mes"] == "202607"}
-        self.assertEqual(ytd_values["Runner Hybrid"], 5.0)
+        self.assertEqual(ytd_values["Runner Hybrid"], 60.0)  # 5 docenas seed -> 60 unidades (LB)
         self.assertEqual(ytd_values["ANET Runner"], 3.0)
 
     def test_runner_rechaza_rango_cruza_anios(self):
@@ -2478,3 +2479,129 @@ class MonthlyReportingReconciliationTests(TestCase):
         self.assertEqual(coincidencias, 0)
         self.assertGreater(len(discrepancias), 0)
 
+
+
+class PackUnitModeResolutionTests(SimpleTestCase):
+    """LB (levis_bw) se expresa en unidades; el resto conserva su modo."""
+
+    def test_resolve_pack_unit_mode_lb_units_otros_sin_cambio(self):
+        from reports.services.ventas_mensuales_licenciatarios_query import resolve_pack_unit_mode
+
+        self.assertEqual(resolve_pack_unit_mode(Mock(pack_id="levis_bw", unit_mode="dozens")), "units")
+        self.assertEqual(resolve_pack_unit_mode(Mock(pack_id="levis_lw_dz", unit_mode="dozens")), "dozens")
+        self.assertEqual(resolve_pack_unit_mode(Mock(pack_id="puma_bw", unit_mode="packs")), "packs")
+
+    def test_parse_anet_row_units_multiplica_docenas_por_12(self):
+        raw = {
+            "month_start": "2026-08-01",
+            "codigo_cliente": 1,
+            "nombre_cliente": "C",
+            "packs_qty": "30",
+            "docenas_qty": "2.5",
+            "facturacion": "100",
+        }
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="units").units, Decimal("30"))
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="dozens").units, Decimal("2.5"))
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="packs").units, Decimal("30"))
+
+
+class PackUnitModeGridAndExportTests(TestCase):
+    """Grilla (runner/merger) y export Excel: LB en unidades, otros packs en docenas."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        build_all_templates(TEMPLATE_DIR)
+        self.batch_by_pack = {}
+        self.report = ReportDefinition.objects.create(
+            slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG,
+            name="Ventas Mensuales Licenciatarios",
+            category="operational",
+            is_active=True,
+        )
+
+    def _seed(self, pack_id: str, key: str, units: str = "8"):
+        pack = MonthlyReportingPack.objects.get(pack_id=pack_id)
+        match = MonthlyReportingClientMatch.objects.create(
+            seed_key=f"name:{key}",
+            seed_customer_name=f"Cliente {key}",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=901,
+            base_empresa="demo",
+        )
+        batch = MonthlyReportingImportBatch.objects.create(
+            pack=pack,
+            file_name=f"{key}.xlsx",
+            file_format="xlsx",
+            file_sha256=f"sha-{key}",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        MonthlyReportingSeedRow.objects.create(
+            pack=pack,
+            match=match,
+            month=date(2026, 3, 1),
+            units=Decimal(units),
+            amount=Decimal("80"),
+            batch=batch,
+        )
+        return pack
+
+    def _run(self, pack_id: str):
+        return run_ventas_mensuales_licenciatarios(
+            self.report,
+            {
+                "filters": {
+                    "pack_id": pack_id,
+                    "fecha_inicio_facturacion": "2026-01-01",
+                    "fecha_fin_facturacion": "2026-03-31",
+                },
+                "base_empresa": "demo",
+            },
+            Mock(),
+            fetch_anet_fn=lambda **kwargs: [],
+        )
+
+    def test_grilla_lb_en_unidades(self):
+        self._seed("levis_bw", "lb")
+        result = self._run("levis_bw")
+        self.assertEqual(result.meta["extra"]["unit_mode"], "units")
+        self.assertEqual(result.data[0]["unidades"], 96.0)
+        self.assertEqual(result.totals["unidades"], 96.0)
+        self.assertEqual(result.data[0]["ytd_unidades"], 96.0)
+
+    def test_grilla_otro_pack_sigue_en_docenas(self):
+        self._seed("levis_lw_dz", "lw")
+        result = self._run("levis_lw_dz")
+        self.assertEqual(result.meta["extra"]["unit_mode"], "dozens")
+        self.assertEqual(result.data[0]["unidades"], 8.0)
+        self.assertEqual(result.totals["unidades"], 8.0)
+
+    def _exported_units(self, pack_id: str, key: str) -> list:
+        pack = self._seed(pack_id, key)
+        merge = merge_pack_year(
+            pack=pack,
+            year=2026,
+            month_from=1,
+            month_to=3,
+            base_empresa="demo",
+            fetch_anet_fn=lambda **kwargs: [],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "export.xlsx"
+            export_licenciatarios_workbook(
+                out, pack=pack, merge_result=merge, year=2026, month_from=1, month_to=3
+            )
+            wb = openpyxl.load_workbook(out)
+            ws = wb[SHEET_SALES]
+            values = [c.value for row in ws.iter_rows() for c in row if isinstance(c.value, (int, float))]
+            wb.close()
+        return values
+
+    def test_export_lb_escribe_unidades(self):
+        values = self._exported_units("levis_bw", "exp-lb")
+        self.assertIn(96.0, values)
+        self.assertNotIn(8.0, values)
+
+    def test_export_otro_pack_escribe_docenas(self):
+        values = self._exported_units("levis_lw_dz", "exp-lw")
+        self.assertIn(8.0, values)
+        self.assertNotIn(96.0, values)
