@@ -6,12 +6,21 @@
 {% block content %}
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
-<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=2">
 
 <section class="pm-matrix-viewport pm-matrix-viewport--sin-desc flex min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible {% if pm_embed %}h-full{% else %}h-[calc(100dvh-4.5rem)]{% endif %}"
          x-data="pedidoMasivoApp()"
          :class="modoSimple ? 'pm-simple-mode' : ''"
          x-init="init()">
+  {% if not pm_embed %}
+  <template x-teleport="#pm-simple-navbar-cart">
+    <button type="button" x-show="modoSimple" x-cloak @click="abrirCarritoSimple()"
+            class="pm-simple-navbar-cart" aria-label="Abrir carrito del pedido" title="Carrito del pedido">
+      <span class="material-icons" aria-hidden="true">shopping_cart</span>
+      <span x-show="carritoItems.length > 0" class="pm-simple-navbar-count" x-text="carritoItems.length"></span>
+    </button>
+  </template>
+  {% endif %}
   <div class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col px-3 sm:px-4 md:px-6 lg:px-8 max-lg:h-auto">
     <div class="flex-shrink-0">
       {% if not pm_embed %}
@@ -471,40 +480,38 @@
       </p>
       <div x-show="modoSimple && draftId" x-cloak
            class="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="pm-simple-actions" role="group" aria-label="Acciones de artículos">
           <button type="button" @click="abrirFiltrosAvanzados()"
                   class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
                   :aria-expanded="filtrosAvanzadosAbiertos.toString()">
-            <span class="material-icons text-base" aria-hidden="true">filter_list</span> Filtros avanzados
+            <span class="material-icons text-base" aria-hidden="true">filter_list</span> Filtros
           </button>
           <button type="button" @click="toggleCatalogo()" :disabled="!puedeToggleCatalogo"
                    class="inline-flex min-h-9 items-center rounded-lg border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
                    :class="catalogoDesplegado ? 'border-orange-400 bg-orange-50 text-orange-800 dark:border-orange-600 dark:text-orange-200' : ''"
                    :title="catalogoDesplegado ? 'Ocultar artículos sin cantidad' : 'Mostrar artículos de la selección'">
             <span class="material-icons text-base" aria-hidden="true" x-text="catalogoDesplegado ? 'visibility_off' : 'visibility'"></span>
-            <span x-text="catalogoDesplegado ? 'Ocultar' : 'Mostrar todos'"></span>
+            <span x-text="catalogoDesplegado ? 'Ocultar' : 'Artículos'"></span>
           </button>
           <button type="button" @click="abrirCarritoSimple()"
                   class="inline-flex min-h-9 items-center gap-1 rounded-lg bg-sky-600 px-3 py-1 text-xs font-semibold text-white hover:bg-sky-500">
             <span class="material-icons text-base" aria-hidden="true">shopping_cart</span>
             Carrito <span x-text="'(' + carritoItems.length + ')'"></span>
           </button>
-        </div>
-        <div class="pm-simple-view-switch mt-2" role="group" aria-label="Vista de artículos">
           <button type="button" @click="cambiarVistaCatalogoSimple('lista')" :aria-pressed="vistaCatalogoSimple === 'lista'"
                   :class="vistaCatalogoSimple === 'lista' ? 'pm-simple-view-active' : ''">
-            <span class="material-icons" aria-hidden="true">checklist</span> Lista múltiple
+            <span class="material-icons" aria-hidden="true">checklist</span> Lista
           </button>
           <button type="button" @click="cambiarVistaCatalogoSimple('galeria')" :aria-pressed="vistaCatalogoSimple === 'galeria'"
                   :class="vistaCatalogoSimple === 'galeria' ? 'pm-simple-view-active' : ''">
             <span class="material-icons" aria-hidden="true">grid_view</span> Galería
           </button>
+          <button type="button" x-show="cantidadSeleccionados" x-cloak @click="abrirSeleccionSimple()"
+                  class="inline-flex min-h-9 items-center gap-1 rounded-md border border-sky-300 px-3 text-xs font-semibold text-sky-800 dark:text-sky-200">
+            <span class="material-icons text-base" aria-hidden="true">playlist_add_check</span>
+            Revisar <span x-text="cantidadSeleccionados"></span>
+          </button>
         </div>
-        <button type="button" x-show="cantidadSeleccionados" x-cloak @click="abrirSeleccionSimple()"
-                class="mt-2 inline-flex min-h-9 items-center gap-1 rounded-md border border-sky-300 px-3 text-xs font-semibold text-sky-800 dark:text-sky-200">
-          <span class="material-icons text-base" aria-hidden="true">playlist_add_check</span>
-          Revisar <span x-text="cantidadSeleccionados"></span>
-        </button>
         <div x-show="filtrosAvanzadosAbiertos" x-cloak class="mt-3 grid gap-2 sm:grid-cols-3">
           <label class="text-xs font-medium text-slate-700 dark:text-slate-200">Marca
             <select x-model="marcaFiltro" @change="aplicarFiltrosCatalogo()"
@@ -878,9 +885,15 @@
               </button>
             </div>
             <div x-show="panelArt && (!modoSimple || vistaCatalogoSimple === 'lista') && (articulosBusqueda.length || cantidadSeleccionados > 0)" x-cloak
-                x-ref="pmArtDropdownMob"
-                class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800"
-                role="listbox">
+                 x-ref="pmArtDropdownMob"
+                 class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800"
+                 role="listbox">
+              <div x-show="modoSimple && cantidadSeleccionados > 0" x-cloak class="pm-simple-search-review">
+                <button type="button" @mousedown.stop.prevent="null" @click.stop.prevent="abrirSeleccionSimple()">
+                  <span class="material-icons" aria-hidden="true">playlist_add_check</span>
+                  <span x-text="'Revisar ' + cantidadSeleccionados + ' seleccionados'"></span>
+                </button>
+              </div>
               <ul class="pm-art-dropdown-list max-h-56 overflow-y-auto overscroll-contain py-1">
                 <template x-for="(a, i) in articulosBusqueda" :key="'mob-' + a.id_articulo">
                   <li role="option"
@@ -915,7 +928,7 @@
                    </li>
                 </template>
               </ul>
-              <div x-show="cantidadSeleccionados > 0" x-cloak
+              <div x-show="!modoSimple && cantidadSeleccionados > 0" x-cloak
                    class="pm-art-dropdown-footer">
                 <button type="button"
                         @mousedown.prevent="modoSimple ? abrirSeleccionSimple() : agregarSeleccionados()"
@@ -1001,11 +1014,17 @@
                   </div>
                   <small x-text="'Manual ' + (art.id_manual || '—') + ' · Interno ' + (art.codartprov || '—')"></small>
                   <div class="pm-simple-cart-line-edit">
-                    <label>Cantidad <input type="number" min="0" step="0.001" inputmode="decimal"
+                    <label>Cantidad <button type="button" @click="abrirTecladoCantidad(art, 'carrito')"
+                           :disabled="!matrizEditable || guardandoCantidadSimple" :aria-label="'Editar cantidad de ' + art.nombre"
+                           class="pm-simple-inline-qty-trigger"
+                           x-text="cantidadesCarrito[String(art.id_articulo)] ?? celda(art.id_articulo, sucursales[0]?.id_cliente_domicilio)"></button>
+                    <input type="number" min="0" step="0.001" inputmode="decimal"
+                           class="pm-simple-inline-qty-desktop"
                            x-model="cantidadesCarrito[String(art.id_articulo)]"
-                           @keydown.enter.prevent="guardarCantidadCarrito(art)"
+                           @focus="$event.target.select()" @keydown.enter.prevent="guardarCantidadCarrito(art)"
                            :disabled="!matrizEditable || guardandoCantidadSimple" :aria-label="'Cantidad de ' + art.nombre"></label>
-                    <button type="button" @click="guardarCantidadCarrito(art)" :disabled="!matrizEditable || guardandoCantidadSimple" title="Actualizar cantidad"><span class="material-icons" aria-hidden="true">check</span> Aplicar</button>
+                    <button type="button" @click="guardarCantidadCarrito(art)" :disabled="!matrizEditable || guardandoCantidadSimple"
+                            class="pm-simple-save-icon" title="Guardar cantidad" :aria-label="'Guardar cantidad de ' + art.nombre"><span class="material-icons" aria-hidden="true">check</span></button>
                     <button type="button" @click="eliminarFila(art.id_articulo)" x-show="matrizEditable" title="Quitar artículo" :aria-label="'Quitar ' + art.nombre"><span class="material-icons" aria-hidden="true">delete_outline</span></button>
                   </div>
                 </div>
@@ -1210,14 +1229,20 @@
             <button type="button" @click="abrirFichaArticulo(art)" class="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-sky-700 underline dark:text-sky-300"><span class="material-icons text-base" aria-hidden="true">info_outline</span> Ver ficha</button>
             <div class="mt-2 flex flex-wrap items-end gap-2">
               <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Cantidad
+                <button type="button" @click="abrirTecladoCantidad(art, 'seleccion')"
+                        :disabled="!matrizEditable || guardandoCantidadSimple"
+                        class="pm-simple-qty-trigger mt-1 block w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        :aria-label="'Editar cantidad para ' + (art.nombre || art.id_manual)"
+                        x-text="cantidadesSeleccionadas[String(art.id_articulo)] ?? 1"></button>
                 <input type="number" min="0.001" step="0.001" inputmode="decimal"
                        x-model.number="cantidadesSeleccionadas[String(art.id_articulo)]"
+                       @focus="$event.target.select()"
                        :disabled="!matrizEditable || guardandoCantidadSimple"
-                       class="pm-simple-qty mt-1 block w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                       class="pm-simple-qty-desktop mt-1 w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                        :aria-label="'Cantidad para ' + (art.nombre || art.id_manual)">
               </label>
               <button type="button" @click="agregarUnoSeleccionadoSimple(art)" :disabled="guardandoCantidadSimple || !matrizEditable"
-                       class="inline-flex h-10 items-center gap-1 rounded-md bg-sky-600 px-3 text-xs font-semibold text-white disabled:opacity-50"><span class="material-icons text-base" aria-hidden="true">add</span> Agregar</button>
+                       class="pm-simple-add-icon inline-flex h-10 items-center justify-center rounded-md bg-sky-600 px-3 text-white disabled:opacity-50" :aria-label="'Agregar ' + art.nombre" title="Agregar al carrito"><span class="material-icons text-xl" aria-hidden="true">add</span></button>
               <button type="button" @click="toggleSeleccionArticulo(art)" :disabled="guardandoCantidadSimple"
                        class="ml-auto inline-flex h-10 items-center gap-1 rounded-md border border-rose-200 px-2 text-xs font-semibold text-rose-700 disabled:opacity-50 dark:text-rose-300"><span class="material-icons text-base" aria-hidden="true">delete_outline</span> Quitar</button>
             </div>
@@ -1234,6 +1259,33 @@
         </button>
       </div>
     </aside>
+  </div>
+
+  <div x-show="modoSimple && tecladoCantidadAbierto" x-cloak
+       @keydown.escape.window="tecladoCantidadAbierto = false"
+       class="pm-simple-keypad-backdrop" role="dialog" aria-modal="true" aria-label="Ingresar cantidad">
+    <button type="button" class="pm-simple-keypad-shade" @click="tecladoCantidadAbierto = false" aria-label="Cerrar teclado de cantidad"></button>
+    <div class="pm-simple-keypad">
+      <div class="pm-simple-keypad-head">
+        <strong>Cantidad</strong>
+        <button type="button" @click="tecladoCantidadAbierto = false" aria-label="Cerrar"><span class="material-icons" aria-hidden="true">close</span></button>
+      </div>
+      <output x-text="tecladoCantidadValor || '0'"></output>
+      <div class="pm-simple-keypad-grid">
+        <template x-for="digito in ['1','2','3','4','5','6','7','8','9']" :key="digito">
+          <button type="button" @click="teclaCantidad(digito)" x-text="digito"></button>
+        </template>
+        <button type="button" @click="teclaCantidad('.')" aria-label="Coma decimal">,</button>
+        <button type="button" @click="teclaCantidad('0')">0</button>
+        <button type="button" @click="teclaCantidad('borrar')" aria-label="Borrar último dígito"><span class="material-icons" aria-hidden="true">backspace</span></button>
+      </div>
+      <div class="pm-simple-keypad-tools">
+        <button type="button" @click="teclaCantidad('limpiar')">Limpiar</button>
+        <button type="button" @click="ajustarTecladoCantidad(-1)" aria-label="Restar uno"><span class="material-icons" aria-hidden="true">remove</span> 1</button>
+        <button type="button" @click="ajustarTecladoCantidad(1)" aria-label="Sumar uno"><span class="material-icons" aria-hidden="true">add</span> 1</button>
+      </div>
+      <button type="button" class="pm-simple-keypad-accept" @click="aceptarTecladoCantidad()"><span class="material-icons" aria-hidden="true">check</span> Aceptar</button>
+    </div>
   </div>
 
   {# Ficha de producto del pedido simple. Los precios se toman del catálogo de este pedido/cliente. #}
@@ -1300,14 +1352,20 @@
             <button type="button" @click="abrirFichaArticulo(art)" class="mt-1 text-xs font-semibold text-sky-700 underline dark:text-sky-300">Ver ficha del artículo</button>
             <div class="mt-2 flex items-end gap-2">
               <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Cantidad
+                <button type="button" @click="abrirTecladoCantidad(art, 'carrito')"
+                        :disabled="!matrizEditable || guardandoCantidadSimple"
+                        class="pm-simple-qty-trigger mt-1 block w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        :aria-label="'Editar cantidad de ' + art.nombre"
+                        x-text="cantidadesCarrito[String(art.id_articulo)] ?? celda(art.id_articulo, sucursales[0]?.id_cliente_domicilio)"></button>
                 <input type="number" min="0" step="0.001" inputmode="decimal"
                        x-model="cantidadesCarrito[String(art.id_articulo)]"
+                       @focus="$event.target.select()"
                        @keydown.enter.prevent="guardarCantidadCarrito(art)"
                        :disabled="!matrizEditable || guardandoCantidadSimple"
-                       class="pm-simple-qty mt-1 block w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                       class="pm-simple-qty-desktop mt-1 w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
               </label>
               <button type="button" @click="guardarCantidadCarrito(art)" :disabled="!matrizEditable || guardandoCantidadSimple"
-                      class="h-10 rounded-md bg-sky-600 px-3 text-xs font-semibold text-white disabled:opacity-50">Actualizar</button>
+                      class="pm-simple-save-icon h-10 rounded-md px-3 text-white disabled:opacity-50" :aria-label="'Guardar cantidad de ' + art.nombre" title="Guardar cantidad"><span class="material-icons text-xl" aria-hidden="true">check</span></button>
               <button type="button" @click="eliminarFila(art.id_articulo)" x-show="matrizEditable"
                       class="ml-auto inline-flex h-9 items-center gap-1 rounded-md border border-rose-200 px-2 text-xs font-semibold text-rose-700 dark:text-rose-300">
                 <span class="material-icons text-base" aria-hidden="true">delete_outline</span> Quitar
@@ -1452,5 +1510,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple47"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple48"></script>
 {% endblock %}

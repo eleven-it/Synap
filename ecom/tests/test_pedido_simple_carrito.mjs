@@ -131,3 +131,16 @@ test('la galería pagina fotos sin perder la selección múltiple', async () => 
   assert.ok(urls[0].includes('fotos=1'));
   assert.ok(urls[1].includes('pagina=2'));
 });
+
+test('el teclado compacto reemplaza la cantidad inicial y conserva la multiselección', () => {
+  const app = appEditable(true);
+  const art = { id_articulo: 10, nombre: 'A' };
+  app.toggleSeleccionArticulo(art);
+  assert.equal(app.cantidadesSeleccionadas['10'], 1);
+  app.abrirTecladoCantidad(art, 'seleccion');
+  app.teclaCantidad('6');
+  app.aceptarTecladoCantidad();
+  assert.equal(app.cantidadesSeleccionadas['10'], 6);
+  assert.equal(app.tecladoCantidadAbierto, false);
+  assert.equal(app.cantidadSeleccionados, 1);
+});

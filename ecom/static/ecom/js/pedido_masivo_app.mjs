@@ -204,6 +204,11 @@ function pedidoMasivoCore() {
     seleccionSimpleAbierta: false,
     cantidadesSeleccionadas: {},
     cantidadesCarrito: {},
+    tecladoCantidadAbierto: false,
+    tecladoCantidadOrigen: '',
+    tecladoCantidadId: '',
+    tecladoCantidadValor: '',
+    tecladoCantidadReemplazar: true,
     guardandoCantidadSimple: false,
     fichaArticuloAbierta: false,
     fichaArticulo: null,
@@ -1571,8 +1576,62 @@ function pedidoMasivoCore() {
     },
     abrirSeleccionSimple() {
       if (!this.modoSimple || !this.cantidadSeleccionados) return;
+      document.activeElement?.blur?.();
       this.cerrarPanelArt();
       this.seleccionSimpleAbierta = true;
+    },
+    abrirTecladoCantidad(articulo, origen) {
+      if (!this.modoSimple || !this.matrizEditable || this.guardandoCantidadSimple) return;
+      const id = this._idArticuloKey(articulo);
+      if (!id || !['seleccion', 'carrito'].includes(origen)) return;
+      document.activeElement?.blur?.();
+      this.tecladoCantidadOrigen = origen;
+      this.tecladoCantidadId = id;
+      this.tecladoCantidadValor = String(origen === 'seleccion'
+        ? this.cantidadesSeleccionadas[id] ?? 1
+        : this.cantidadesCarrito[id] ?? this.celda(id, this.sucursales[0]?.id_cliente_domicilio) ?? 0);
+      this.tecladoCantidadReemplazar = true;
+      this.tecladoCantidadAbierto = true;
+    },
+    teclaCantidad(digito) {
+      if (!this.tecladoCantidadAbierto) return;
+      const tecla = String(digito);
+      if (tecla === 'borrar') {
+        this.tecladoCantidadValor = this.tecladoCantidadReemplazar ? '' : this.tecladoCantidadValor.slice(0, -1);
+        this.tecladoCantidadReemplazar = false;
+        return;
+      }
+      if (tecla === 'limpiar') {
+        this.tecladoCantidadValor = '';
+        this.tecladoCantidadReemplazar = false;
+        return;
+      }
+      if (tecla === '.') {
+        if (this.tecladoCantidadReemplazar) this.tecladoCantidadValor = '0.';
+        else if (!this.tecladoCantidadValor.includes('.')) this.tecladoCantidadValor = (this.tecladoCantidadValor || '0') + '.';
+      } else if (/^[0-9]$/.test(tecla)) {
+        if (this.tecladoCantidadReemplazar) this.tecladoCantidadValor = tecla;
+        else if ((this.tecladoCantidadValor.split('.')[1] || '').length < 3) {
+          this.tecladoCantidadValor = this.tecladoCantidadValor === '0' ? tecla : this.tecladoCantidadValor + tecla;
+        }
+      }
+      this.tecladoCantidadReemplazar = false;
+    },
+    ajustarTecladoCantidad(delta) {
+      const actual = Number(this.tecladoCantidadValor || 0);
+      this.tecladoCantidadValor = String(Math.max(0, Math.round((actual + delta) * 1000) / 1000));
+      this.tecladoCantidadReemplazar = true;
+    },
+    aceptarTecladoCantidad() {
+      const valor = Number(this.tecladoCantidadValor);
+      if (!String(this.tecladoCantidadValor).trim() || !Number.isFinite(valor) || valor < 0
+          || (this.tecladoCantidadOrigen === 'seleccion' && valor === 0)) {
+        this.mostrarAviso('Ingresá una cantidad válida mayor que cero.', 'error');
+        return;
+      }
+      if (this.tecladoCantidadOrigen === 'seleccion') this.cantidadesSeleccionadas[this.tecladoCantidadId] = valor;
+      else this.cantidadesCarrito[this.tecladoCantidadId] = String(valor);
+      this.tecladoCantidadAbierto = false;
     },
     abrirCarritoSimple() {
       if (!this.modoSimple) return;
