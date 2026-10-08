@@ -195,15 +195,20 @@
   }
 
   function seedPartialNoticeHtml(extra) {
+    const scopeHtml = extra?.seed_excluded_by_scope
+      ? '<p class="px-3 py-2 text-xs text-amber-700 dark:text-amber-300 m-0" role="note">' +
+        "Las planillas mensuales (hasta el 21/07/2026) corresponden a PV 1, 8, 9 y 10 y no pueden filtrarse por punto de venta; se excluyen con el filtro actual." +
+        "</p>"
+      : "";
     const partial = Array.isArray(extra?.seed_months_partial) ? extra.seed_months_partial : [];
-    if (!partial.length) return "";
+    if (!partial.length) return scopeHtml;
     const m = String(extra?.cutover_date || "2026-07-22").split("-");
     const cutover = m.length === 3 ? `${m[2]}/${m[1]}/${m[0]}` : "22/07/2026";
     return (
       '<p class="px-3 py-2 text-xs text-amber-700 dark:text-amber-300 m-0" role="note">' +
       `Los meses anteriores al ${escHtml(cutover)} provienen de planillas mensuales y se incluyen completos.` +
       "</p>"
-    );
+    ) + scopeHtml;
   }
 
   function renderMatriz(data, extra) {
@@ -223,6 +228,7 @@
       : filas;
     if (!filas.length) {
       container.innerHTML =
+        seedPartialNoticeHtml(extra) +
         '<p class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">Sin datos para el pack y período seleccionados.</p>';
       return;
     }

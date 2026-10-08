@@ -268,7 +268,12 @@ def run_ventas_mensuales_licenciatarios(
             "unit_mode": resolve_pack_unit_mode(pack),
             "fecha_inicio": d_start.isoformat(),
             "fecha_fin": d_end.isoformat(),
-            "seed_months_partial": seed_months_partially_covered(year, d_start, d_end),
+            "seed_months_partial": (
+                []
+                if merge_result.seed_excluded_by_scope
+                else seed_months_partially_covered(year, d_start, d_end)
+            ),
+            "seed_excluded_by_scope": merge_result.seed_excluded_by_scope,
         }
     )
 
