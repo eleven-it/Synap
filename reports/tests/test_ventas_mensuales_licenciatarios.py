@@ -2490,7 +2490,7 @@ class PackUnitModeResolutionTests(SimpleTestCase):
         self.assertEqual(resolve_pack_unit_mode(Mock(pack_id="levis_lw_dz", unit_mode="dozens")), "dozens")
         self.assertEqual(resolve_pack_unit_mode(Mock(pack_id="puma_bw", unit_mode="packs")), "packs")
 
-    def test_parse_anet_row_units_multiplica_docenas_por_12(self):
+    def test_parse_anet_row_units_usa_packs_qty(self):
         raw = {
             "month_start": "2026-08-01",
             "codigo_cliente": 1,
@@ -2770,16 +2770,21 @@ class ExportWorkbookLabelsAndPeriodTests(TestCase):
         wb = self._export("puma_bw", units="3")
         self.assertIn("Unit: packs", wb[SHEET_SALES]["A1"].value)
 
-    def test_parse_anet_units_prefiere_unidades_qty(self):
+    def test_parse_anet_units_es_packs_facturados_sin_conversion(self):
+        # Artículo P2 (factor 6): 10 packs facturados -> docenas 10/6, LB muestra 10.
         raw = {
             "month_start": "2026-08-01",
             "codigo_cliente": 1,
             "nombre_cliente": "C",
-            "docenas_qty": "0.3333",
-            "unidades_qty": "4",
+            "packs_qty": "10",
+            "docenas_qty": "1.6667",
             "facturacion": "1",
         }
-        self.assertEqual(parse_anet_sales_row(raw, unit_mode="units").units, Decimal("4"))
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="units").units, Decimal("10"))
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="dozens").units, Decimal("1.6667"))
+
+    def test_sql_no_incluye_unidades_qty(self):
+        self.assertNotIn("unidades_qty", build_anet_sales_sql())
 
 
 class PumaGeneroSplitTests(TestCase):
