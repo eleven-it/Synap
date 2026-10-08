@@ -1,6 +1,7 @@
 // Comentario: Controlador básico para dashboards interactivos con gráficos D3.
 
 import { initializeTagsFilter } from "./tags_filter.mjs?v=20260901b";
+import { resolveVmlPvSelection } from "./vml_pv_default.mjs?v=20261008";
 
 function selectedOptionLabels(selectId, emptyLabel) {
   const sel = document.getElementById(selectId);
@@ -6785,11 +6786,17 @@ if (dashboardRoot) {
           const pvSelect = document.getElementById("punto_venta");
           if (pvSelect) {
             pvSelect.innerHTML = "";
+            // Ventas Mensuales Licenciatarios: sin selección guardada, todos los PV salvo el 200.
+            const vmlPvSelected = isVentasMensualesLicenciatariosSlug(reportSlug)
+              ? resolveVmlPvSelection(pvData.puntos_venta, savedFilters)
+              : null;
             pvData.puntos_venta?.forEach((pv) => {
               const option = document.createElement("option");
               option.value = pv.value;
               option.textContent = pv.label;
-              if (savedFilters && savedFilters.punto_venta && Array.isArray(savedFilters.punto_venta)) {
+              if (vmlPvSelected) {
+                option.selected = vmlPvSelected.has(String(pv.value));
+              } else if (savedFilters && savedFilters.punto_venta && Array.isArray(savedFilters.punto_venta)) {
                 if (savedFilters.punto_venta.includes(pv.value)) {
                   option.selected = true;
                 }
@@ -10178,9 +10185,8 @@ if (dashboardRoot) {
         const selectedPVs = Array.from(puntoVentaSelect.selectedOptions)
           .map((opt) => opt.value)
           .filter((v) => v);
-        if (selectedPVs.length > 0) {
-          filters.punto_venta = selectedPVs;
-        }
+        // Siempre se guarda la clave (aunque vacía): distingue "todos" elegido a propósito del default.
+        filters.punto_venta = selectedPVs;
       }
     } else {
       // Filtros genéricos para otros reportes
