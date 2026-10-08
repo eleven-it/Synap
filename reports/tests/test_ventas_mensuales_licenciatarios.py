@@ -2780,3 +2780,148 @@ class ExportWorkbookLabelsAndPeriodTests(TestCase):
             "facturacion": "1",
         }
         self.assertEqual(parse_anet_sales_row(raw, unit_mode="units").units, Decimal("4"))
+
+
+class PumaGeneroSplitTests(TestCase):
+    """Puma: filas separadas por product group de género (+ bucket sin clasificar)."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.pack = MonthlyReportingPack.objects.get(pack_id="puma_bw")
+        self.match_men = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:split-men",
+            seed_customer_name="Cliente Split",
+            seed_product_group="Men BW",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=770,
+            base_empresa="demo",
+        )
+        self.match_women = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:split-women",
+            seed_customer_name="Cliente Split",
+            seed_product_group="Women BW",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=770,
+            base_empresa="demo",
+        )
+        batch = MonthlyReportingImportBatch.objects.create(
+            pack=self.pack,
+            file_name="split.xlsx",
+            file_format="xlsx",
+            file_sha256="sha-split",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        for match, units in ((self.match_men, "10"), (self.match_women, "4")):
+            MonthlyReportingSeedRow.objects.create(
+                pack=self.pack,
+                match=match,
+                month=date(2026, 3, 1),
+                units=Decimal(units),
+                amount=Decimal(units) * 10,
+                batch=batch,
+            )
+        self.report = ReportDefinition.objects.create(
+            slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG,
+            name="Ventas Mensuales Licenciatarios",
+            category="operational",
+            is_active=True,
+        )
+
+    @staticmethod
+    def _anet(genero, units, amount="1"):
+        return AnetSalesRow(
+            codigo_cliente=770,
+            nombre_cliente="Cliente Split",
+            month=date(2026, 8, 1),
+            units=Decimal(units),
+            amount=Decimal(amount),
+            genero=genero,
+        )
+
+    def _fetch(self, **kwargs):
+        if kwargs["date_from"].month != 8:
+            return []
+        return [
+            self._anet("men", "6", "60"),
+            self._anet("women", "3", "30"),
+            self._anet("unclassified", "2", "20"),
+        ]
+
+    def _run(self, fi="2026-03-01", ff="2026-08-31", extra_filters=None):
+        filters = {
+            "pack_id": "puma_bw",
+            "fecha_inicio_facturacion": fi,
+            "fecha_fin_facturacion": ff,
+        }
+        filters.update(extra_filters or {})
+        return run_ventas_mensuales_licenciatarios(
+            self.report,
+            {"filters": filters, "base_empresa": "demo"},
+            Mock(),
+            fetch_anet_fn=self._fetch,
+        )
+
+    def test_parse_asigna_bucket_de_genero(self):
+        lookup = {"SA-M": "men", "SA-W": "women"}
+        classify = lambda sa: lookup.get((sa or "").upper())  # noqa: E731
+        base = {
+            "month_start": "2026-08-01",
+            "codigo_cliente": 1,
+            "nombre_cliente": "C",
+            "packs_qty": "5",
+            "facturacion": "10",
+        }
+        got = {
+            sa: parse_anet_sales_row({**base, "superart": sa}, unit_mode="packs", classify_genero=classify).genero
+            for sa in ("SA-M", "SA-W", "DESCONOCIDO", "")
+        }
+        self.assertEqual(
+            got, {"SA-M": "men", "SA-W": "women", "DESCONOCIDO": "unclassified", "": "unclassified"}
+        )
+        self.assertEqual(parse_anet_sales_row(base, unit_mode="packs").genero, "")
+
+    def test_grilla_filas_separadas_por_product_group(self):
+        result = self._run()
+        by_pg = {}
+        for r in result.data:
+            by_pg.setdefault(r["product_group"], {})[r["anio_mes"]] = r["unidades"]
+        self.assertEqual(set(by_pg), {"Men BW", "Women BW", "Sin clasificar"})
+        self.assertEqual(by_pg["Men BW"], {"202603": 10.0, "202608": 6.0})
+        self.assertEqual(by_pg["Women BW"], {"202603": 4.0, "202608": 3.0})
+        self.assertEqual(by_pg["Sin clasificar"], {"202608": 2.0})
+        identities = {r["identity"] for r in result.data}
+        self.assertEqual(len(identities), 3)
+        # Nada se pierde: total = seed (14) + ANET (11).
+        self.assertEqual(result.totals["unidades"], 25.0)
+
+    def test_exclusion_de_cliente_quita_todas_las_filas_split(self):
+        result = self._run(extra_filters={"clientes_excluidos": ["770"]})
+        self.assertEqual(result.data, [])
+
+    def test_export_escribe_product_group_por_fila(self):
+        result = self._run()
+        merge = result.artifacts["merge_result"]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "puma.xlsx"
+            export_licenciatarios_workbook(
+                out, pack=self.pack, merge_result=merge, year=2026, month_from=3, month_to=8
+            )
+            wb = openpyxl.load_workbook(out)
+            ws = wb[SHEET_SALES]
+            rows = [
+                (ws.cell(row=r, column=1).value, ws.cell(row=r, column=4).value)
+                for r in range(5, 9)
+                if ws.cell(row=r, column=1).value
+            ]
+            wb.close()
+        self.assertEqual(
+            sorted(pg for _, pg in rows), ["Men BW", "Sin clasificar", "Women BW"]
+        )
+        self.assertTrue(all(name == "Cliente Split" for name, _ in rows))
+
+    def test_pack_no_puma_sin_split(self):
+        lb = MonthlyReportingPack.objects.get(pack_id="levis_bw")
+        from reports.services.ventas_mensuales_licenciatarios_merger import _is_gender_split_pack
+
+        self.assertFalse(_is_gender_split_pack(lb))
+        self.assertTrue(_is_gender_split_pack(self.pack))

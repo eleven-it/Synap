@@ -259,7 +259,7 @@ def _client_meta_from_rows(
         bucket["display_name"] = row.display_name
         bucket["match_estado"] = row.match_estado
         bucket["pending"] = row.pending
-        bucket["product_group"] = pack_pg
+        bucket["product_group"] = row.product_group or pack_pg
         if row.city:
             bucket["city"] = row.city
         if row.store_type:
@@ -302,7 +302,10 @@ def _write_levis_sales_sheet(
 
     for identity, months_map in sorted(
         by_client.items(),
-        key=lambda item: client_meta[item[0]]["display_name"].upper(),
+        key=lambda item: (
+            client_meta[item[0]]["display_name"].upper(),
+            client_meta[item[0]]["product_group"],
+        ),
     ):
         meta = client_meta[identity]
         for col_idx, value in (
