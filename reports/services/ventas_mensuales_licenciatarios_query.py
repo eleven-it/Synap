@@ -27,6 +27,48 @@ UNIT_MODE_UNITS = "units"
 PACK_UNIT_MODE_OVERRIDES: dict[str, str] = {"levis_bw": UNIT_MODE_UNITS}
 
 
+# Las planillas seed mensuales (hasta el 21/07/2026) corresponden únicamente a estos
+# puntos de venta (punto_venta.nro_punto_venta). No se pueden dividir por PV.
+SEED_PUNTOS_VENTA_NRO: tuple[int, ...] = (1, 8, 9, 10)
+
+
+def resolve_selected_nro_pv(
+    base_empresa: str,
+    sucursales: Optional[Sequence[int]] = None,
+    puntos_venta: Optional[Sequence[int]] = None,
+) -> Optional[set[int]]:
+    """
+    Números de punto de venta (nro_punto_venta) que alcanza el filtro actual.
+
+    ``puntos_venta`` son ids (cc.id_pv = punto_venta.id_punto_venta); ``sucursales``
+    se traducen a los PV de esas sucursales (punto_venta.id_sucursal). Con ambos
+    filtros se intersectan. Devuelve None si no hay filtro. Lanza si falla la consulta.
+    """
+    suc_ids = _normalize_scope_id_list(sucursales)
+    pv_ids = _normalize_scope_id_list(puntos_venta)
+    if not suc_ids and not pv_ids:
+        return None
+    where: List[str] = []
+    params: List[int] = []
+    if pv_ids:
+        where.append(f"id_punto_venta IN ({','.join(['%s'] * len(pv_ids))})")
+        params.extend(pv_ids)
+    if suc_ids:
+        where.append(f"id_sucursal IN ({','.join(['%s'] * len(suc_ids))})")
+        params.extend(suc_ids)
+    sql = "SELECT nro_punto_venta FROM punto_venta WHERE " + " AND ".join(where)
+    pool = get_mysql_pool()
+    with pool.get_connection(str(base_empresa).strip()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        out: set[int] = set()
+        for record in cursor.fetchall():
+            nro = to_int_or_none(record[0])
+            if nro is not None:
+                out.add(nro)
+        return out
+
+
 def resolve_pack_unit_mode(pack: Any) -> str:
     """Modo de unidad efectivo del pack: override por pack_id o ``pack.unit_mode``."""
     pack_id = str_or_default(getattr(pack, "pack_id", ""), "").strip()

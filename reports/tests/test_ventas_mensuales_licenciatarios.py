@@ -2930,3 +2930,151 @@ class PumaGeneroSplitTests(TestCase):
 
         self.assertFalse(_is_gender_split_pack(lb))
         self.assertTrue(_is_gender_split_pack(self.pack))
+
+
+class SeedScopePuntoVentaTests(TestCase):
+    """El seed (PV 1, 8, 9, 10) solo se incluye si el filtro sucursal/PV lo cubre completo."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.pack = MonthlyReportingPack.objects.get(pack_id="levis_bw")
+        self.match = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:leuru",
+            seed_customer_name="LEURU S.A",
+            estado=MonthlyReportingClientMatch.Estado.PENDING,
+            base_empresa="demo",
+        )
+        batch = MonthlyReportingImportBatch.objects.create(
+            pack=self.pack,
+            file_name="scope.xlsx",
+            file_format="xlsx",
+            file_sha256="sha-scope",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        MonthlyReportingSeedRow.objects.create(
+            pack=self.pack,
+            match=self.match,
+            month=date(2026, 3, 1),
+            units=Decimal("7"),
+            amount=Decimal("70"),
+            batch=batch,
+        )
+        self.report = ReportDefinition.objects.create(
+            slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG,
+            name="Ventas Mensuales Licenciatarios",
+            category="operational",
+            is_active=True,
+        )
+
+    def _merge(self, resolver, **kw):
+        return merge_pack_year(
+            pack=self.pack,
+            year=2026,
+            month_from=1,
+            month_to=6,
+            base_empresa="demo",
+            fetch_anet_fn=lambda **k: [],
+            seed_scope_resolver=resolver,
+            **kw,
+        )
+
+    def test_sin_filtro_incluye_seed(self):
+        def boom(*a, **k):
+            raise AssertionError("no debe consultar sin filtro")
+
+        res = self._merge(boom)
+        self.assertEqual(len(res.rows), 1)
+        self.assertEqual(res.seed_excluded_by_scope, "")
+
+    def test_filtro_que_cubre_pv_del_seed_incluye(self):
+        res = self._merge(lambda *a: {1, 8, 9, 10, 200}, puntos_venta=[1, 2, 3, 4, 5])
+        self.assertEqual(len(res.rows), 1)
+        self.assertEqual(res.seed_excluded_by_scope, "")
+
+    def test_solo_pv_200_excluye_seed_disjoint(self):
+        res = self._merge(lambda *a: {200}, puntos_venta=[5])
+        self.assertEqual(res.rows, [])
+        self.assertEqual(res.pending_clients, [])
+        self.assertEqual(res.seed_excluded_by_scope, "disjoint")
+
+    def test_pv_parcial_excluye_seed_partial(self):
+        res = self._merge(lambda *a: {1}, puntos_venta=[1])
+        self.assertEqual(res.rows, [])
+        self.assertEqual(res.pending_clients, [])
+        self.assertEqual(res.seed_excluded_by_scope, "partial")
+
+    def test_sucursal_deriva_pvs(self):
+        seen = {}
+
+        def resolver(base, suc, pv):
+            seen["args"] = (list(suc or []), list(pv or []))
+            return {1, 8, 9, 10}
+
+        res = self._merge(resolver, sucursales=[3])
+        self.assertEqual(seen["args"], ([3], []))
+        self.assertEqual(len(res.rows), 1)
+
+    def test_falla_mapeo_incluye_seed(self):
+        def boom(*a, **k):
+            raise RuntimeError("db down")
+
+        with self.assertLogs("reports.services.ventas_mensuales_licenciatarios_merger", "WARNING"):
+            res = self._merge(boom, puntos_venta=[5])
+        self.assertEqual(len(res.rows), 1)
+        self.assertEqual(res.seed_excluded_by_scope, "")
+
+    def test_seed_scope_status_unitario(self):
+        from reports.services.ventas_mensuales_licenciatarios_merger import seed_scope_status
+
+        self.assertEqual(seed_scope_status(None), "")
+        self.assertEqual(seed_scope_status({1, 8, 9, 10}), "")
+        self.assertEqual(seed_scope_status({1, 9}), "partial")
+        self.assertEqual(seed_scope_status({200}), "disjoint")
+        self.assertEqual(seed_scope_status(set()), "disjoint")
+
+    def test_runner_expone_flag_y_sin_meses_parciales(self):
+        with patch(
+            "reports.services.ventas_mensuales_licenciatarios_merger.resolve_selected_nro_pv",
+            return_value={200},
+        ):
+            result = run_ventas_mensuales_licenciatarios(
+                self.report,
+                {
+                    "filters": {
+                        "pack_id": "levis_bw",
+                        "fecha_inicio_facturacion": "2026-03-10",
+                        "fecha_fin_facturacion": "2026-03-20",
+                        "punto_venta": [5],
+                    },
+                    "base_empresa": "demo",
+                },
+                Mock(),
+                fetch_anet_fn=lambda **k: [],
+            )
+        self.assertEqual(result.meta["extra"]["seed_excluded_by_scope"], "disjoint")
+        self.assertEqual(result.meta["extra"]["seed_months_partial"], [])
+        self.assertEqual(result.data, [])
+
+    def test_export_agrega_nota_de_alcance(self):
+        merge = MergeResult(rows=[], ytd_by_identity={}, pending_clients=[], qa_superarts=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "x.xlsx"
+            export_licenciatarios_workbook(
+                out,
+                pack=self.pack,
+                merge_result=merge,
+                year=2026,
+                month_from=3,
+                month_to=3,
+                fecha_inicio="2026-03-10",
+                fecha_fin="2026-03-20",
+                seed_months_partial=["2026-03"],
+                seed_excluded_by_scope="partial",
+            )
+            wb = openpyxl.load_workbook(out)
+            a2 = wb[SHEET_SALES]["A2"].value
+            notas = [r[1].value for r in wb[SHEET_FILTROS].iter_rows(min_row=2) if r[0].value == "Nota"]
+            wb.close()
+        self.assertIn("cover PV 1, 8, 9 and 10", a2)
+        self.assertIn("come from monthly spreadsheets", a2)
+        self.assertEqual(len(notas), 2)

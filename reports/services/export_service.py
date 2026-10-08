@@ -1334,6 +1334,7 @@ class ExportService:
             fecha_inicio=extra.get("fecha_inicio"),
             fecha_fin=extra.get("fecha_fin"),
             seed_months_partial=extra.get("seed_months_partial") or [],
+            seed_excluded_by_scope=extra.get("seed_excluded_by_scope") or "",
         )
         logger.info("Excel ventas-mensuales-licenciatarios (plantilla + QA): %s", file_path)
 
