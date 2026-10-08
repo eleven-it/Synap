@@ -1423,11 +1423,10 @@ class VentasMensualesLicenciatariosMergerIntegrationTests(TestCase):
         self.assertEqual(len(jul_rows), 2)
         seed_jul = next(r for r in jul_rows if r.source == "seed")
         anet_jul = next(r for r in jul_rows if r.source == "anet")
-        # LB (levis_bw) se expresa en unidades: seed (docenas) x 12; ANET ya viene en unidades.
-        self.assertEqual(seed_jul.units, Decimal("7") * 12)
+        self.assertEqual(seed_jul.units, Decimal("7"))
         self.assertEqual(anet_jul.units, Decimal("9"))
         ytd_seed = result.ytd_by_identity[seed_jul.identity]
-        self.assertEqual(ytd_seed["units"], (Decimal("1") + Decimal("2") + Decimal("7")) * 12)
+        self.assertEqual(ytd_seed["units"], Decimal("1") + Decimal("2") + Decimal("7"))
 
 
 class VentasMensualesLicenciatariosOleada2FilterTests(TestCase):
@@ -1631,7 +1630,7 @@ class VentasMensualesLicenciatariosRunnerHybridTests(TestCase):
         jul_rows = [r for r in result.data if r["anio_mes"] == "202607"]
         self.assertEqual(len(jul_rows), 2)
         ytd_values = {r["cliente"]: r["ytd_unidades"] for r in result.data if r["anio_mes"] == "202607"}
-        self.assertEqual(ytd_values["Runner Hybrid"], 60.0)  # 5 docenas seed -> 60 unidades (LB)
+        self.assertEqual(ytd_values["Runner Hybrid"], 5.0)
         self.assertEqual(ytd_values["ANET Runner"], 3.0)
 
     def test_runner_rechaza_rango_cruza_anios(self):
@@ -2564,9 +2563,10 @@ class PackUnitModeGridAndExportTests(TestCase):
         self._seed("levis_bw", "lb")
         result = self._run("levis_bw")
         self.assertEqual(result.meta["extra"]["unit_mode"], "units")
-        self.assertEqual(result.data[0]["unidades"], 96.0)
-        self.assertEqual(result.totals["unidades"], 96.0)
-        self.assertEqual(result.data[0]["ytd_unidades"], 96.0)
+        # Seed de LB ya está en unidades: se usa tal cual (sin x12).
+        self.assertEqual(result.data[0]["unidades"], 8.0)
+        self.assertEqual(result.totals["unidades"], 8.0)
+        self.assertEqual(result.data[0]["ytd_unidades"], 8.0)
 
     def test_grilla_otro_pack_sigue_en_docenas(self):
         self._seed("levis_lw_dz", "lw")
@@ -2598,10 +2598,99 @@ class PackUnitModeGridAndExportTests(TestCase):
 
     def test_export_lb_escribe_unidades(self):
         values = self._exported_units("levis_bw", "exp-lb")
-        self.assertIn(96.0, values)
-        self.assertNotIn(8.0, values)
+        self.assertIn(8.0, values)
 
     def test_export_otro_pack_escribe_docenas(self):
         values = self._exported_units("levis_lw_dz", "exp-lw")
         self.assertIn(8.0, values)
-        self.assertNotIn(96.0, values)
+
+
+class ExactDayRangeTests(TestCase):
+    """Rango exacto de días: ANET acotado; seed por mes completo + aviso."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.pack = MonthlyReportingPack.objects.get(pack_id="levis_bw")
+        self.report = ReportDefinition.objects.create(
+            slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG,
+            name="Ventas Mensuales Licenciatarios",
+            category="operational",
+            is_active=True,
+        )
+        match = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:exact",
+            seed_customer_name="Cliente Exact",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=950,
+            base_empresa="demo",
+        )
+        batch = MonthlyReportingImportBatch.objects.create(
+            pack=self.pack,
+            file_name="exact.xlsx",
+            file_format="xlsx",
+            file_sha256="sha-exact",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        for month in (6, 7):
+            MonthlyReportingSeedRow.objects.create(
+                pack=self.pack,
+                match=match,
+                month=date(2026, month, 1),
+                units=Decimal("10"),
+                amount=Decimal("100"),
+                batch=batch,
+            )
+
+    def _calls(self, fi: str, ff: str):
+        calls = []
+
+        def _fetch(**kwargs):
+            calls.append((kwargs["date_from"], kwargs["date_to"]))
+            return []
+
+        result = run_ventas_mensuales_licenciatarios(
+            self.report,
+            {
+                "filters": {
+                    "pack_id": "levis_bw",
+                    "fecha_inicio_facturacion": fi,
+                    "fecha_fin_facturacion": ff,
+                },
+                "base_empresa": "demo",
+            },
+            Mock(),
+            fetch_anet_fn=_fetch,
+        )
+        return calls, result
+
+    def test_anet_clamp_dias_exactos_agosto_septiembre(self):
+        calls, _ = self._calls("2026-08-15", "2026-09-10")
+        self.assertEqual(
+            calls,
+            [(date(2026, 8, 15), date(2026, 8, 31)), (date(2026, 9, 1), date(2026, 9, 10))],
+        )
+
+    def test_cutover_25_31_julio_anet_y_seed_julio(self):
+        calls, result = self._calls("2026-07-25", "2026-07-31")
+        self.assertEqual(calls, [(date(2026, 7, 25), date(2026, 7, 31))])
+        # Seed de julio incluido completo.
+        self.assertEqual(result.totals["unidades"], 10.0)
+        self.assertEqual(result.meta["extra"]["seed_months_partial"], ["2026-07"])
+
+    def test_rango_antes_del_cutover_no_consulta_anet(self):
+        calls, result = self._calls("2026-06-10", "2026-06-20")
+        self.assertEqual(calls, [])
+        self.assertEqual(result.totals["unidades"], 10.0)
+        self.assertEqual(result.meta["extra"]["seed_months_partial"], ["2026-06"])
+
+    def test_sin_aviso_cuando_rango_cubre_meses_seed_completos(self):
+        calls, result = self._calls("2026-06-01", "2026-07-31")
+        self.assertEqual(calls, [(date(2026, 7, 22), date(2026, 7, 31))])
+        self.assertEqual(result.meta["extra"]["seed_months_partial"], [])
+
+    def test_anet_range_for_month_clamp_vacio(self):
+        self.assertIsNone(anet_range_for_month(2026, 8, date(2026, 9, 1), date(2026, 9, 10)))
+        self.assertEqual(
+            anet_range_for_month(2026, 7, date(2026, 7, 1), date(2026, 7, 25)),
+            (date(2026, 7, 22), date(2026, 7, 25)),
+        )
