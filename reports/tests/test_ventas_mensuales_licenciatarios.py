@@ -82,6 +82,7 @@ from reports.services.ventas_mensuales_licenciatarios_query import (
 from reports.services.ventas_mensuales_licenciatarios_merger import (
     CUTOVER_DATE,
     MergedClientMonth,
+    MergeResult,
     _normalize_customer_name,
     anet_range_for_month,
     compare_dz_pk_parity,
@@ -248,7 +249,7 @@ class LicenciatariosExportServiceArtifactsTests(SimpleTestCase):
         captured = {}
 
         def _fake_export_wb(
-            path, *, pack, merge_result, year, month_from, month_to, filter_lines=None
+            path, *, pack, merge_result, year, month_from, month_to, filter_lines=None, **_kw
         ):
             captured["merge"] = merge_result
             captured["year"] = year
@@ -434,7 +435,7 @@ class MonthlyReportingPackFixtureTests(TestCase):
                 wb.close()
 
     def test_directorio_plantillas_repo(self):
-        build_all_templates(TEMPLATE_DIR)
+        # Solo verifica (no regenera): los tests no deben mutar plantillas versionadas.
         for filename in MONTHLY_REPORTING_TEMPLATE_FILES.values():
             self.assertTrue((TEMPLATE_DIR / filename).exists(), msg=filename)
 
@@ -1701,7 +1702,6 @@ class VentasMensualesLicenciatariosExportTests(TestCase):
 
     def setUp(self):
         seed_monthly_reporting_packs(MonthlyReportingPack)
-        build_all_templates(TEMPLATE_DIR)
         self.pack = MonthlyReportingPack.objects.get(pack_id="levis_bw")
         self.match = MonthlyReportingClientMatch.objects.create(
             seed_key="name:export-test",
@@ -2478,3 +2478,303 @@ class MonthlyReportingReconciliationTests(TestCase):
         self.assertEqual(coincidencias, 0)
         self.assertGreater(len(discrepancias), 0)
 
+
+
+class PackUnitModeResolutionTests(SimpleTestCase):
+    """LB (levis_bw) se expresa en unidades; el resto conserva su modo."""
+
+    def test_resolve_pack_unit_mode_lb_units_otros_sin_cambio(self):
+        from reports.services.ventas_mensuales_licenciatarios_query import resolve_pack_unit_mode
+
+        self.assertEqual(resolve_pack_unit_mode(Mock(pack_id="levis_bw", unit_mode="dozens")), "units")
+        self.assertEqual(resolve_pack_unit_mode(Mock(pack_id="levis_lw_dz", unit_mode="dozens")), "dozens")
+        self.assertEqual(resolve_pack_unit_mode(Mock(pack_id="puma_bw", unit_mode="packs")), "packs")
+
+    def test_parse_anet_row_units_multiplica_docenas_por_12(self):
+        raw = {
+            "month_start": "2026-08-01",
+            "codigo_cliente": 1,
+            "nombre_cliente": "C",
+            "packs_qty": "30",
+            "docenas_qty": "2.5",
+            "facturacion": "100",
+        }
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="units").units, Decimal("30"))
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="dozens").units, Decimal("2.5"))
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="packs").units, Decimal("30"))
+
+
+class PackUnitModeGridAndExportTests(TestCase):
+    """Grilla (runner/merger) y export Excel: LB en unidades, otros packs en docenas."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.batch_by_pack = {}
+        self.report = ReportDefinition.objects.create(
+            slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG,
+            name="Ventas Mensuales Licenciatarios",
+            category="operational",
+            is_active=True,
+        )
+
+    def _seed(self, pack_id: str, key: str, units: str = "8"):
+        pack = MonthlyReportingPack.objects.get(pack_id=pack_id)
+        match = MonthlyReportingClientMatch.objects.create(
+            seed_key=f"name:{key}",
+            seed_customer_name=f"Cliente {key}",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=901,
+            base_empresa="demo",
+        )
+        batch = MonthlyReportingImportBatch.objects.create(
+            pack=pack,
+            file_name=f"{key}.xlsx",
+            file_format="xlsx",
+            file_sha256=f"sha-{key}",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        MonthlyReportingSeedRow.objects.create(
+            pack=pack,
+            match=match,
+            month=date(2026, 3, 1),
+            units=Decimal(units),
+            amount=Decimal("80"),
+            batch=batch,
+        )
+        return pack
+
+    def _run(self, pack_id: str):
+        return run_ventas_mensuales_licenciatarios(
+            self.report,
+            {
+                "filters": {
+                    "pack_id": pack_id,
+                    "fecha_inicio_facturacion": "2026-01-01",
+                    "fecha_fin_facturacion": "2026-03-31",
+                },
+                "base_empresa": "demo",
+            },
+            Mock(),
+            fetch_anet_fn=lambda **kwargs: [],
+        )
+
+    def test_grilla_lb_en_unidades(self):
+        self._seed("levis_bw", "lb")
+        result = self._run("levis_bw")
+        self.assertEqual(result.meta["extra"]["unit_mode"], "units")
+        # Seed de LB ya está en unidades: se usa tal cual (sin x12).
+        self.assertEqual(result.data[0]["unidades"], 8.0)
+        self.assertEqual(result.totals["unidades"], 8.0)
+        self.assertEqual(result.data[0]["ytd_unidades"], 8.0)
+
+    def test_grilla_otro_pack_sigue_en_docenas(self):
+        self._seed("levis_lw_dz", "lw")
+        result = self._run("levis_lw_dz")
+        self.assertEqual(result.meta["extra"]["unit_mode"], "dozens")
+        self.assertEqual(result.data[0]["unidades"], 8.0)
+        self.assertEqual(result.totals["unidades"], 8.0)
+
+    def _exported_units(self, pack_id: str, key: str) -> list:
+        pack = self._seed(pack_id, key)
+        merge = merge_pack_year(
+            pack=pack,
+            year=2026,
+            month_from=1,
+            month_to=3,
+            base_empresa="demo",
+            fetch_anet_fn=lambda **kwargs: [],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "export.xlsx"
+            export_licenciatarios_workbook(
+                out, pack=pack, merge_result=merge, year=2026, month_from=1, month_to=3
+            )
+            wb = openpyxl.load_workbook(out)
+            ws = wb[SHEET_SALES]
+            values = [c.value for row in ws.iter_rows() for c in row if isinstance(c.value, (int, float))]
+            wb.close()
+        return values
+
+    def test_export_lb_escribe_unidades(self):
+        values = self._exported_units("levis_bw", "exp-lb")
+        self.assertIn(8.0, values)
+
+    def test_export_otro_pack_escribe_docenas(self):
+        values = self._exported_units("levis_lw_dz", "exp-lw")
+        self.assertIn(8.0, values)
+
+
+class ExactDayRangeTests(TestCase):
+    """Rango exacto de días: ANET acotado; seed por mes completo + aviso."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+        self.pack = MonthlyReportingPack.objects.get(pack_id="levis_bw")
+        self.report = ReportDefinition.objects.create(
+            slug=VENTAS_MENSUALES_LICENCIATARIOS_SLUG,
+            name="Ventas Mensuales Licenciatarios",
+            category="operational",
+            is_active=True,
+        )
+        match = MonthlyReportingClientMatch.objects.create(
+            seed_key="name:exact",
+            seed_customer_name="Cliente Exact",
+            estado=MonthlyReportingClientMatch.Estado.MATCHED,
+            anet_cliente_id=950,
+            base_empresa="demo",
+        )
+        batch = MonthlyReportingImportBatch.objects.create(
+            pack=self.pack,
+            file_name="exact.xlsx",
+            file_format="xlsx",
+            file_sha256="sha-exact",
+            estado=MonthlyReportingImportBatch.Estado.APPLIED,
+        )
+        for month in (6, 7):
+            MonthlyReportingSeedRow.objects.create(
+                pack=self.pack,
+                match=match,
+                month=date(2026, month, 1),
+                units=Decimal("10"),
+                amount=Decimal("100"),
+                batch=batch,
+            )
+
+    def _calls(self, fi: str, ff: str):
+        calls = []
+
+        def _fetch(**kwargs):
+            calls.append((kwargs["date_from"], kwargs["date_to"]))
+            return []
+
+        result = run_ventas_mensuales_licenciatarios(
+            self.report,
+            {
+                "filters": {
+                    "pack_id": "levis_bw",
+                    "fecha_inicio_facturacion": fi,
+                    "fecha_fin_facturacion": ff,
+                },
+                "base_empresa": "demo",
+            },
+            Mock(),
+            fetch_anet_fn=_fetch,
+        )
+        return calls, result
+
+    def test_anet_clamp_dias_exactos_agosto_septiembre(self):
+        calls, _ = self._calls("2026-08-15", "2026-09-10")
+        self.assertEqual(
+            calls,
+            [(date(2026, 8, 15), date(2026, 8, 31)), (date(2026, 9, 1), date(2026, 9, 10))],
+        )
+
+    def test_cutover_25_31_julio_anet_y_seed_julio(self):
+        calls, result = self._calls("2026-07-25", "2026-07-31")
+        self.assertEqual(calls, [(date(2026, 7, 25), date(2026, 7, 31))])
+        # Seed de julio incluido completo.
+        self.assertEqual(result.totals["unidades"], 10.0)
+        self.assertEqual(result.meta["extra"]["seed_months_partial"], ["2026-07"])
+
+    def test_rango_antes_del_cutover_no_consulta_anet(self):
+        calls, result = self._calls("2026-06-10", "2026-06-20")
+        self.assertEqual(calls, [])
+        self.assertEqual(result.totals["unidades"], 10.0)
+        self.assertEqual(result.meta["extra"]["seed_months_partial"], ["2026-06"])
+
+    def test_sin_aviso_cuando_rango_cubre_meses_seed_completos(self):
+        calls, result = self._calls("2026-06-01", "2026-07-31")
+        self.assertEqual(calls, [(date(2026, 7, 22), date(2026, 7, 31))])
+        self.assertEqual(result.meta["extra"]["seed_months_partial"], [])
+
+    def test_anet_range_for_month_clamp_vacio(self):
+        self.assertIsNone(anet_range_for_month(2026, 8, date(2026, 9, 1), date(2026, 9, 10)))
+        self.assertEqual(
+            anet_range_for_month(2026, 7, date(2026, 7, 1), date(2026, 7, 25)),
+            (date(2026, 7, 22), date(2026, 7, 25)),
+        )
+
+
+class ExportWorkbookLabelsAndPeriodTests(TestCase):
+    """El workbook refleja unidad, formatos, período exacto y aviso seed."""
+
+    def setUp(self):
+        seed_monthly_reporting_packs(MonthlyReportingPack)
+
+    def _export(self, pack_id: str, *, partial=None, units="8.5"):
+        pack = MonthlyReportingPack.objects.get(pack_id=pack_id)
+        merge = MergeResult(
+            rows=[
+                MergedClientMonth(
+                    identity="c1",
+                    display_name="Cliente Uno",
+                    match_estado="matched",
+                    month=date(2026, 3, 1),
+                    units=Decimal(units),
+                    amount=Decimal("100"),
+                    source="seed",
+                    pending=False,
+                )
+            ],
+            ytd_by_identity={},
+            pending_clients=[],
+            qa_superarts=[],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "x.xlsx"
+            export_licenciatarios_workbook(
+                out,
+                pack=pack,
+                merge_result=merge,
+                year=2026,
+                month_from=3,
+                month_to=4,
+                fecha_inicio="2026-03-10",
+                fecha_fin="2026-04-20",
+                seed_months_partial=partial or [],
+            )
+            return openpyxl.load_workbook(out)
+
+    def test_lb_unidades_etiquetas_periodo_y_formato(self):
+        wb = self._export("levis_bw", partial=["2026-03"], units="8")
+        ws = wb[SHEET_SALES]
+        self.assertIn("10/03/2026 – 20/04/2026", ws["A1"].value)
+        self.assertIn("Unidades", ws["A1"].value)
+        self.assertNotIn("Docenas", ws["A1"].value)
+        self.assertIn("planillas mensuales", ws["A2"].value)
+        self.assertEqual(wb[SHEET_MONTHLY]["B4"].value, "Unidades")
+        self.assertEqual(ws["I5"].value, 8.0)  # marzo = columna I
+        self.assertEqual(ws["I5"].number_format, "#,##0")
+        self.assertEqual(ws["I2"].number_format, "#,##0")
+        self.assertIsNone(ws["E5"].value)  # enero fuera de rango: vacío
+        filtros = {r[0].value: r[1].value for r in wb[SHEET_FILTROS].iter_rows(min_row=2)}
+        self.assertEqual(filtros["Unidad de medida"], "Unidades")
+        self.assertEqual(filtros["Período exportado"], "10/03/2026 – 20/04/2026")
+        self.assertIn("Nota", filtros)
+
+    def test_pack_docenas_conserva_unidad_y_decimales_sin_aviso(self):
+        wb = self._export("levis_lw_dz", units="8.5")
+        ws = wb[SHEET_SALES]
+        self.assertIn("Docenas", ws["A1"].value)
+        self.assertIsNone(ws["A2"].value)
+        self.assertEqual(wb[SHEET_MONTHLY]["B4"].value, "dozens")
+        self.assertEqual(ws["I5"].value, 8.5)
+        self.assertEqual(ws["I5"].number_format, "#,##0.00")
+        filtros = {r[0].value: r[1].value for r in wb[SHEET_FILTROS].iter_rows(min_row=2)}
+        self.assertEqual(filtros["Unidad de medida"], "Docenas")
+        self.assertNotIn("Nota", filtros)
+
+    def test_pack_packs_etiqueta_packs(self):
+        wb = self._export("puma_bw", units="3")
+        self.assertIn("Packs", wb[SHEET_SALES]["A1"].value)
+
+    def test_parse_anet_units_prefiere_unidades_qty(self):
+        raw = {
+            "month_start": "2026-08-01",
+            "codigo_cliente": 1,
+            "nombre_cliente": "C",
+            "docenas_qty": "0.3333",
+            "unidades_qty": "4",
+            "facturacion": "1",
+        }
+        self.assertEqual(parse_anet_sales_row(raw, unit_mode="units").units, Decimal("4"))

@@ -16,6 +16,7 @@ from core.utils.administranet_types import str_or_default
 from reports.models import MonthlyReportingPack
 from reports.services.monthly_reporting_pack_seed import MONTHLY_REPORTING_TEMPLATE_FILES
 from reports.services.monthly_reporting_template_builder import TEMPLATE_DIR
+from reports.services.ventas_mensuales_licenciatarios_query import resolve_pack_unit_mode
 from reports.services.ventas_mensuales_licenciatarios_merger import (
     MergeResult,
     MergedClientMonth,
@@ -34,8 +35,13 @@ YTD_UNITS_HEADER = "YTD_Units"
 YTD_SALES_HEADER = "YTD_Sales"
 SUM_LAST_ROW = 4931
 UNITS_FORMAT = "#,##0"
+DOZENS_FORMAT = "#,##0.00"
+UNIT_LABELS = {"units": "Unidades", "dozens": "Docenas", "packs": "Packs"}
 AMOUNTS_FORMAT = '"$"#,##0.00'
 MONTH_DATE_FORMAT = "mmm-yy"
+SEED_PARTIAL_NOTICE = (
+    "Los meses anteriores al 22/07/2026 provienen de planillas mensuales y se incluyen completos."
+)
 
 # Paridad visual plantilla julio (accent1 #4F81BD + texto blanco Tahoma 10).
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="4F81BD")
@@ -61,6 +67,23 @@ MIN_AMOUNTS_WIDTH = 14.0
 MIN_YTD_UNITS_WIDTH = 12.5
 MIN_YTD_SALES_WIDTH = 15.5
 MAX_COL_WIDTH = 48.0
+
+
+def _qty_format(unit_mode: str) -> str:
+    """Docenas conservan decimales; unidades y packs se muestran enteros."""
+    return DOZENS_FORMAT if unit_mode == "dozens" else UNITS_FORMAT
+
+
+def _fmt_dmy(value) -> str:
+    if isinstance(value, datetime):
+        value = value.date()
+    if isinstance(value, date):
+        return value.strftime("%d/%m/%Y")
+    text = str(value or "").strip()
+    try:
+        return datetime.strptime(text[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return text
 
 
 def resolve_template_path(pack_id: str) -> Path:
@@ -91,7 +114,7 @@ def _month_columns(year: int) -> List[tuple[int, date]]:
     return cols
 
 
-def _write_row2_sums(ws, columns: Iterable[int]) -> None:
+def _write_row2_sums(ws, columns: Iterable[int], units_format: str = UNITS_FORMAT) -> None:
     for col_idx in columns:
         letter = get_column_letter(col_idx)
         cell = ws.cell(row=2, column=col_idx)
@@ -104,7 +127,7 @@ def _write_row2_sums(ws, columns: Iterable[int]) -> None:
         if col_idx % 2 == 0 or col_idx == 30:
             cell.number_format = AMOUNTS_FORMAT
         else:
-            cell.number_format = UNITS_FORMAT
+            cell.number_format = units_format
 
 
 def _unmerge_all(ws) -> None:
@@ -253,7 +276,9 @@ def _write_levis_sales_sheet(
     month_from: int,
     month_to: int,
     product_group: str,
+    unit_mode: str = "dozens",
 ) -> None:
+    qty_format = _qty_format(unit_mode)
     month_cols = _month_columns(year)
     ytd_units_col = 29
     ytd_sales_col = 30
@@ -298,7 +323,7 @@ def _write_levis_sales_sheet(
             if cell is None:
                 continue
             units_cell = ws.cell(row=excel_row, column=col_idx, value=float(cell.units))
-            units_cell.number_format = UNITS_FORMAT
+            units_cell.number_format = qty_format
             units_cell.font = DATA_FONT
             units_cell.alignment = RIGHT
             amount_cell = ws.cell(row=excel_row, column=col_idx + 1, value=float(cell.amount))
@@ -313,6 +338,7 @@ def _write_levis_sales_sheet(
         )
         ytd_u.font = DATA_FONT
         ytd_u.alignment = RIGHT
+        ytd_u.number_format = qty_format
         ytd_s = ws.cell(
             row=excel_row,
             column=ytd_sales_col,
@@ -329,7 +355,7 @@ def _write_levis_sales_sheet(
 
     sum_cols = [col for col_idx, _ in month_cols for col in (col_idx, col_idx + 1)]
     sum_cols.extend([ytd_units_col, ytd_sales_col])
-    _write_row2_sums(ws, sum_cols)
+    _write_row2_sums(ws, sum_cols, qty_format)
     _autosize_sales_columns(
         ws,
         last_data_row=max(last_data_row, 5),
@@ -409,6 +435,9 @@ def export_licenciatarios_workbook(
     month_from: int,
     month_to: int,
     filter_lines: Optional[List[Tuple[str, str]]] = None,
+    fecha_inicio=None,
+    fecha_fin=None,
+    seed_months_partial: Optional[List[str]] = None,
 ) -> None:
     """
     Clona plantilla anual, reescribe ventas/mensual, conserva hojas auxiliares y agrega QA.
@@ -421,6 +450,8 @@ def export_licenciatarios_workbook(
     if SHEET_SALES not in wb.sheetnames:
         raise ValueError(f"La plantilla no contiene hoja '{SHEET_SALES}'")
     sales_ws = wb[SHEET_SALES]
+    unit_mode = resolve_pack_unit_mode(pack)
+    unit_label = UNIT_LABELS.get(unit_mode, "Unidades")
     _write_levis_sales_sheet(
         sales_ws,
         rows=merge_result.rows,
@@ -428,13 +459,35 @@ def export_licenciatarios_workbook(
         month_from=month_from,
         month_to=month_to,
         product_group=str_or_default(pack.product_group, ""),
+        unit_mode=unit_mode,
     )
+
+    period_text = ""
+    if fecha_inicio and fecha_fin:
+        period_text = f"{_fmt_dmy(fecha_inicio)} – {_fmt_dmy(fecha_fin)}"
+    sales_ws["A1"] = f"Período: {period_text} · Unidad: {unit_label}" if period_text else f"Unidad: {unit_label}"
+    sales_ws["A1"].font = Font(name="Calibri", size=11, bold=True)
+    sales_ws["A1"].alignment = LEFT
+    notice = SEED_PARTIAL_NOTICE if seed_months_partial else ""
+    if notice:
+        sales_ws["A2"] = notice
+        sales_ws["A2"].font = Font(name="Calibri", size=9, italic=True)
+        sales_ws["A2"].alignment = LEFT
 
     if SHEET_MONTHLY in wb.sheetnames:
         _ensure_monthly_links_row2(wb[SHEET_MONTHLY])
+        if unit_mode == "units":
+            wb[SHEET_MONTHLY]["B4"] = unit_label
+
+    filter_lines = list(filter_lines or [])
+    if period_text:
+        filter_lines.insert(0, ("Período exportado", period_text))
+    filter_lines.append(("Unidad de medida", unit_label))
+    if notice:
+        filter_lines.append(("Nota", notice))
 
     _write_qa_sheet(wb, merge_result=merge_result)
-    _write_filtros_sheet(wb, filter_lines or [])
+    _write_filtros_sheet(wb, filter_lines)
 
     for sheet_name in preserved:
         if sheet_name not in wb.sheetnames:

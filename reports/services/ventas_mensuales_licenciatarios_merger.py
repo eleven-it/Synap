@@ -172,8 +172,56 @@ class MergeResult:
     qa_superarts: List[str] = field(default_factory=list)
 
 
-def anet_range_for_month(year: int, month: int) -> Optional[tuple[date, date]]:
-    """Rango ANET según cutover 21/22 julio 2026."""
+def anet_range_for_month(
+    year: int,
+    month: int,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+) -> Optional[tuple[date, date]]:
+    """
+    Rango ANET del mes según cutover 21/22 julio 2026, acotado a [date_from, date_to].
+
+    Devuelve None si no hay días ANET (antes del cutover o intersección vacía).
+    """
+    base = _cutover_anet_range_for_month(year, month)
+    if base is None:
+        return None
+    first, last = base
+    if date_from is not None:
+        first = max(first, date_from)
+    if date_to is not None:
+        last = min(last, date_to)
+    if first > last:
+        return None
+    return first, last
+
+
+def seed_months_partially_covered(
+    year: int, date_from: date, date_to: date
+) -> List[str]:
+    """
+    Meses seed (YYYY-MM) incluidos completos aunque el rango los cubra solo en parte.
+
+    El seed son agregados mensuales y no se puede dividir por día. Julio 2026 solo
+    aporta seed hasta el 21/07 (el resto es ANET).
+    """
+    out: List[str] = []
+    for month in seed_months_in_range(year, date_from.month, date_to.month):
+        first = date(year, month, 1)
+        last = (
+            date(year, 12, 31)
+            if month == 12
+            else date(year, month + 1, 1) - timedelta(days=1)
+        )
+        if year == CUTOVER_YEAR and month == CUTOVER_DATE.month:
+            last = CUTOVER_DATE - timedelta(days=1)
+        if date_from > first or date_to < last:
+            out.append(f"{year}-{month:02d}")
+    return out
+
+
+def _cutover_anet_range_for_month(year: int, month: int) -> Optional[tuple[date, date]]:
+    """Rango ANET del mes completo según cutover 21/22 julio 2026."""
     if year < CUTOVER_YEAR:
         return None
     if year > CUTOVER_YEAR:
@@ -224,6 +272,8 @@ def seed_row_to_merged(
     base_empresa: str,
     pack: MonthlyReportingPack,
 ) -> MergedClientMonth:
+    # Las planillas seed de packs en modo unidades (p. ej. levis_bw) ya están
+    # almacenadas en unidades: se usan tal cual, sin conversión.
     match = row.match
     meta = match_to_aggregate_row(match, base_empresa)
     return MergedClientMonth(
@@ -424,11 +474,15 @@ def merge_pack_year(
     register_unknown_superart=None,
     sucursales: Optional[Sequence[int]] = None,
     puntos_venta: Optional[Sequence[int]] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
 ) -> MergeResult:
     """
     Fusiona seed + ANET respetando cutover 22/07/2026.
 
     Ene–jun: seed. Julio: seed + ANET 22–31. Ago+: ANET.
+    ``date_from``/``date_to`` (opcionales) acotan el tramo ANET a días exactos; el
+    seed se incluye por mes completo.
     """
     acc: dict[tuple[str, date], MergedClientMonth] = {}
     pending_clients: dict[str, dict] = {}
@@ -451,7 +505,7 @@ def merge_pack_year(
             register_unknown_superart(superart, sample)
 
     for month in range(month_from, month_to + 1):
-        anet_range = anet_range_for_month(year, month)
+        anet_range = anet_range_for_month(year, month, date_from, date_to)
         if anet_range is None:
             continue
         d_from, d_to = anet_range

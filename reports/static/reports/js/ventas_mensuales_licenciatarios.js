@@ -127,7 +127,10 @@
   }
 
   function unidadLabel(unitMode) {
-    return String(unitMode || "").toLowerCase() === "dozens" ? "Docenas" : "Packs";
+    const mode = String(unitMode || "").toLowerCase();
+    if (mode === "dozens") return "Docenas";
+    if (mode === "units") return "Unidades";
+    return "Packs";
   }
 
   function escHtml(value) {
@@ -189,6 +192,18 @@
         String(a.product_group || "").localeCompare(String(b.product_group || ""), "es"),
     );
     return { meses, filas };
+  }
+
+  function seedPartialNoticeHtml(extra) {
+    const partial = Array.isArray(extra?.seed_months_partial) ? extra.seed_months_partial : [];
+    if (!partial.length) return "";
+    const m = String(extra?.cutover_date || "2026-07-22").split("-");
+    const cutover = m.length === 3 ? `${m[2]}/${m[1]}/${m[0]}` : "22/07/2026";
+    return (
+      '<p class="px-3 py-2 text-xs text-amber-700 dark:text-amber-300 m-0" role="note">' +
+      `Los meses anteriores al ${escHtml(cutover)} provienen de planillas mensuales y se incluyen completos.` +
+      "</p>"
+    );
   }
 
   function renderMatriz(data, extra) {
@@ -297,7 +312,7 @@
     html += `<td class="px-1.5 py-2 text-right tabular-nums border-l border-emerald-400/80 dark:border-emerald-700 text-slate-900 dark:text-slate-50">${NUM.format(colTot.totU)}</td>`;
     html += `<td class="px-1.5 py-2 text-right tabular-nums text-emerald-950 dark:text-emerald-50">${ARS.format(colTot.totF)}</td>`;
     html += "</tr></tfoot></table>";
-    container.innerHTML = html;
+    container.innerHTML = seedPartialNoticeHtml(extra) + html;
   }
 
   let _lastMatriz = { data: [], extra: {} };
