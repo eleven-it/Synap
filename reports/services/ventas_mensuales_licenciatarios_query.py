@@ -19,11 +19,11 @@ from reports.services.ventas_marcas_mensual_rules import (
 )
 logger = logging.getLogger(__name__)
 
-# Seeds/ANET se expresan en docenas por defecto; estos packs se muestran en unidades.
-# Ajuste de presentación por pack_id (sin migración): el valor persistido de
+# Por defecto los packs se expresan según ``unit_mode`` (docenas/packs). Los packs
+# listados aquí usan "unidades" = packs facturados (cantidad con signo, tal cual,
+# sin conversión por U.M.), igual que los seeds ya cargados. Ajuste de presentación por pack_id (sin migración): el valor persistido de
 # ``MonthlyReportingPack.unit_mode`` no cambia.
 UNIT_MODE_UNITS = "units"
-DOZEN_TO_UNITS_FACTOR = Decimal("12")
 PACK_UNIT_MODE_OVERRIDES: dict[str, str] = {"levis_bw": UNIT_MODE_UNITS}
 
 
@@ -104,7 +104,6 @@ def build_anet_sales_sql(
             DATE_FORMAT(cc.Fecha, '%%Y-%%m-01') AS month_start,
             SUM({signo_qty}) AS packs_qty,
             SUM({signo_qty} / {factor_sql}) AS docenas_qty,
-            SUM({signo_qty} * 12 / {factor_sql}) AS unidades_qty,
             SUM({signo_imp}) AS facturacion
             {superart_select}
         FROM stock st
@@ -133,13 +132,8 @@ def parse_anet_sales_row(
     mode = str_or_default(unit_mode, "").strip().lower()
     if mode == "dozens":
         units = to_decimal_or_none(raw.get("docenas_qty")) or Decimal("0")
-    elif mode == UNIT_MODE_UNITS:
-        # unidades_qty evita el redondeo de docenas (p. ej. 1/3 x 12); fallback a docenas x 12.
-        units = to_decimal_or_none(raw.get("unidades_qty"))
-        if units is None:
-            dozens = to_decimal_or_none(raw.get("docenas_qty")) or Decimal("0")
-            units = dozens * DOZEN_TO_UNITS_FACTOR
     else:
+        # packs y units: cantidad facturada con signo, sin conversión por U.M.
         units = to_decimal_or_none(raw.get("packs_qty")) or Decimal("0")
     amount = to_decimal_or_none(raw.get("facturacion")) or Decimal("0")
     superart = str_or_default(raw.get("superart"), "").strip()
