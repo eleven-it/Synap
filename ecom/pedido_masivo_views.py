@@ -42,7 +42,7 @@ from ecom.services.pedido_masivo_matriz import (
     obtener_o_crear_draft,
     serializar_matriz,
 )
-from ecom.services.catalogo_producto import obtener_detalle_articulo
+from ecom.services.catalogo_producto import obtener_detalle_articulo, fotos_urls_articulos
 from ecom.services.pedido_masivo_import import (
     generar_plantilla_excel,
     importar_matriz_excel,
@@ -836,6 +836,11 @@ class PedidoMasivoArticulosAPIView(APIView):
             rubro_id=to_int_or_none(request.query_params.get("rubro_id")),
             subrubro_id=to_int_or_none(request.query_params.get("subrubro_id")),
         )
+        if str(request.query_params.get("fotos") or "") == "1":
+            items = result.get("items") or []
+            fotos = fotos_urls_articulos(base, [item.get("id_articulo") for item in items[:24]])
+            for item in items[:24]:
+                item["foto_url"] = fotos.get(int(item.get("id_articulo") or 0), "")
         return Response({"ok": True, **result})
 
 

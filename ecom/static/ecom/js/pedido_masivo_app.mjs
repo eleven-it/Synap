@@ -196,6 +196,11 @@ function pedidoMasivoCore() {
     rubroFiltro: '',
     subrubroFiltro: '',
     carritoAbierto: false,
+    carritoEnLineaAbierto: false,
+    vistaCatalogoSimple: 'lista',
+    paginaGaleriaSimple: 1,
+    hayMasGaleriaSimple: false,
+    nuevoPedidoSimpleAbierto: false,
     seleccionSimpleAbierta: false,
     cantidadesSeleccionadas: {},
     cantidadesCarrito: {},
@@ -219,6 +224,26 @@ function pedidoMasivoCore() {
         return this.preview.total_lote || { neto: 0, iva: 0, total: 0 };
       }
       return this.previewEstimado || { neto: 0, iva: 0, total: 0 };
+    },
+    get resumenPieSimple() {
+      const totales = this.totalesPie;
+      const bruto = this.carritoItems.reduce((suma, art) => {
+        const cantidad = Number(this.celda(art.id_articulo, this.sucursales[0]?.id_cliente_domicilio)) || 0;
+        return suma + cantidad * Number(art.precio_unitario_neto || 0);
+      }, 0);
+      const subtotal = Number(totales.neto || 0);
+      return {
+        bruto: roundMoney(bruto),
+        descuento: roundMoney(Math.max(0, bruto - subtotal)),
+        subtotal,
+        iva: Number(totales.iva || 0),
+        internos: Number(totales.impuesto_interno || 0),
+        percepciones: null,
+        total: Number(totales.total || 0),
+      };
+    },
+    get articulosGaleriaSimple() {
+      return this.articulosBusqueda;
     },
 
     /**
@@ -418,6 +443,11 @@ function pedidoMasivoCore() {
         this.abrirPedido(boot.cod_mov, !!boot.repetir, consulta);
       } else if (boot.draft_id) {
         this.abrirDraft(boot.draft_id);
+      } else if (this.modoSimple) {
+        this.$nextTick(() => {
+          this.restaurarClientePedidoNuevo();
+          this.$refs.pmClienteSimple?.focus();
+        });
       }
       // Al hacer scroll de la matriz, cerrar el dropdown (evita menú desfasado).
       this._onMatrixScrollCloseArt = () => {
@@ -585,6 +615,11 @@ function pedidoMasivoCore() {
       }
     },
     async elegirSucursal(s) {
+      if (this.modoSimple) {
+        this.articulosBusqueda = [];
+        this.hayMasGaleriaSimple = false;
+        this.paginaGaleriaSimple = 1;
+      }
       this._aplicarSucursal(s);
       this.cerrarPanelSuc();
       await this.abrirCliente();
@@ -1401,6 +1436,8 @@ function pedidoMasivoCore() {
           : null,
         multiplo_cantidad_vta: Number(it.multiplo_cantidad_vta || 0),
         multiplo_empaque: Number(it.multiplo_empaque || multiploEmpaque(it)),
+        foto_url: it.foto_url || '',
+        impuesto_interno_pct: Number(it.impuesto_interno_pct || 0),
       };
     },
     _mapArticuloFila(a) {
@@ -1581,7 +1618,8 @@ function pedidoMasivoCore() {
           if (!await this.agregarArticuloSeleccionadoSimple(articulo)) return;
         }
         this.seleccionSimpleAbierta = false;
-        this.abrirCarritoSimple();
+        this.carritoEnLineaAbierto = false;
+        this.abrirCarritoEnLineaSimple();
       } finally {
         this.guardandoCantidadSimple = false;
       }
@@ -1593,7 +1631,8 @@ function pedidoMasivoCore() {
         const guardado = await this.agregarArticuloSeleccionadoSimple(articulo);
         if (guardado && !this.cantidadSeleccionados) {
           this.seleccionSimpleAbierta = false;
-          this.abrirCarritoSimple();
+          this.carritoEnLineaAbierto = false;
+          this.abrirCarritoEnLineaSimple();
         }
       } finally {
         this.guardandoCantidadSimple = false;
@@ -1623,6 +1662,12 @@ function pedidoMasivoCore() {
         }
       }
       this.carritoAbierto = false;
+      if (this.modoSimple) {
+        this.carritoEnLineaAbierto = false;
+        this.articulosBusqueda = [];
+        this.hayMasGaleriaSimple = false;
+        this.paginaGaleriaSimple = 1;
+      }
       await this.confirmarLote();
     },
     async abrirFichaArticulo(articulo) {
@@ -1641,6 +1686,7 @@ function pedidoMasivoCore() {
         const data = await this.getJson(url);
         if (this.fichaArticuloAbierta && Number(this.fichaArticulo?.id_articulo) === id && data?.ok && data.item) {
           this.fichaDetalle = data.item;
+          this.fichaArticulo.impuesto_interno_pct = Number(data.item.impuesto_interno_pct || 0);
         }
       } catch {
         // La ficha conserva los datos del catálogo del pedido si el detalle no está disponible.
@@ -1666,7 +1712,41 @@ function pedidoMasivoCore() {
       return (this.facetasCatalogo[tipo] || []).find((item) => String(item.id) === String(id))?.nombre || '—';
     },
     precioFinalArticulo(articulo) {
-      return Number(articulo?.precio_unitario_neto || 0) * (1 + Number(articulo?.alicuota_iva || 0) / 100);
+      const neto = Number(articulo?.precio_unitario_neto || 0);
+      return neto * (1 + (Number(articulo?.alicuota_iva || 0) + Number(articulo?.impuesto_interno_pct || 0)) / 100);
+    },
+    async cambiarVistaCatalogoSimple(vista) {
+      if (!this.modoSimple || !['lista', 'galeria'].includes(vista)) return;
+      this.vistaCatalogoSimple = vista;
+      if (vista === 'galeria' && this.idCliente) {
+        if (!this.facetasCatalogo.marcas.length) {
+          try {
+            const data = await this.getJson(`${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}&facetas=1`
+              + this.parametroDomicilioCatalogo());
+            if (data.ok) this.facetasCatalogo = {
+              marcas: data.marcas || [], rubros: data.rubros || [], subrubros: data.subrubros || [],
+            };
+          } catch { /* La galería sigue disponible aunque no carguen nombres de facetas. */ }
+        }
+        this.paginaGaleriaSimple = 1;
+        await this._fetchArticulos({ q: this.qArt.trim(), todos: true, tam: 24 });
+        this.cerrarPanelArt();
+      }
+    },
+    async cargarMasGaleriaSimple() {
+      if (!this.modoSimple || this.vistaCatalogoSimple !== 'galeria' || !this.hayMasGaleriaSimple || this.cargandoArt) return;
+      const pagina = this.paginaGaleriaSimple + 1;
+      await this._fetchArticulos({ q: this.qArt.trim(), todos: true, tam: 24, pagina, append: true });
+      this.cerrarPanelArt();
+    },
+    abrirCarritoEnLineaSimple() {
+      if (!this.modoSimple) return;
+      this.carritoEnLineaAbierto = !this.carritoEnLineaAbierto;
+      if (this.carritoEnLineaAbierto) {
+        this.cantidadesCarrito = Object.fromEntries(this.carritoItems.map((art) => [
+          String(art.id_articulo), String(this.celda(art.id_articulo, this.sucursales[0].id_cliente_domicilio)),
+        ]));
+      }
     },
     stockTotalDepositos() {
       return (this.fichaDetalle?.stock_depositos || []).reduce(
@@ -1705,7 +1785,9 @@ function pedidoMasivoCore() {
     async aplicarFiltrosCatalogo() {
       if (!this.idCliente) return;
       this.catalogoDesplegado = false;
-      await this._fetchArticulos({ q: this.qArt.trim(), todos: true, tam: 5000 });
+      this.paginaGaleriaSimple = 1;
+      await this._fetchArticulos({ q: this.qArt.trim(), todos: true,
+        tam: this.modoSimple && this.vistaCatalogoSimple === 'galeria' ? 24 : 5000 });
     },
     /** Espacio: marca/desmarca el ítem resaltado del dropdown. */
     onSpaceArt() {
@@ -2071,20 +2153,23 @@ function pedidoMasivoCore() {
         }
         if (netoLinea > 0) {
           netoBruto += netoLinea;
-          lineas.push({ neto: netoLinea, alic });
+          lineas.push({ neto: netoLinea, alic, interno: Number(art.impuesto_interno_pct || 0) });
         }
       }
 
       const neto = netoBruto * factorPie;
       let iva = 0;
+      let impuestoInterno = 0;
       for (const ln of lineas) {
         iva += ln.neto * factorPie * (ln.alic / 100);
+        if (this.modoSimple) impuestoInterno += ln.neto * factorPie * (ln.interno / 100);
       }
 
       this.previewEstimado = {
         neto: roundMoney(neto),
         iva: roundMoney(iva),
-        total: roundMoney(neto + iva),
+        impuesto_interno: roundMoney(impuestoInterno),
+        total: roundMoney(neto + iva + impuestoInterno),
       };
     },
     /** Quita avisos informativos de preview que no frenan el confirm. */
@@ -2171,6 +2256,12 @@ function pedidoMasivoCore() {
     async buscarArticulos() {
       if (!this.idCliente || !this.urls.articulos) return;
       const q = (this.qArt || '').trim();
+      if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') {
+        this.paginaGaleriaSimple = 1;
+        await this._fetchArticulos({ q, todos: true, tam: 24 });
+        this.cerrarPanelArt();
+        return;
+      }
       if (q.length < 2) {
         ++this._artBusquedaSeq;
         if (this._articulosBusquedaAbort) {
@@ -2190,9 +2281,11 @@ function pedidoMasivoCore() {
      */
     async listarTodosArticulos() {
       if (!this.idCliente || !this.urls.articulos) return;
-      await this._fetchArticulos({ q: '', todos: true, tam: 5000 });
+      this.paginaGaleriaSimple = 1;
+      await this._fetchArticulos({ q: '', todos: true,
+        tam: this.modoSimple && this.vistaCatalogoSimple === 'galeria' ? 24 : 5000 });
     },
-    async _fetchArticulos({ q = '', todos = false, tam = 20 } = {}) {
+    async _fetchArticulos({ q = '', todos = false, tam = 20, pagina = 1, append = false } = {}) {
       if (!this.idCliente || !this.urls.articulos) return;
       if (this._articulosBusquedaAbort) {
         this._articulosBusquedaAbort.abort();
@@ -2206,7 +2299,9 @@ function pedidoMasivoCore() {
         + '?id_cliente=' + this.idCliente
         + '&lista_id=' + (this.cabecera?.lista_id || this.listaId || 1)
         + '&tam=' + encodeURIComponent(String(tam))
+        + '&pagina=' + encodeURIComponent(String(pagina))
         + this.parametroDomicilioCatalogo();
+      if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') u += '&fotos=1';
       if (todos) {
         u += '&todos=1';
       } else {
@@ -2224,7 +2319,12 @@ function pedidoMasivoCore() {
           this.artBusquedaHecha = true;
           return;
         }
-        this.articulosBusqueda = (data.items || []).map((it) => this._mapArticuloItem(it));
+        const items = (data.items || []).map((it) => this._mapArticuloItem(it));
+        this.articulosBusqueda = append ? [...this.articulosBusqueda, ...items] : items;
+        if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') {
+          this.paginaGaleriaSimple = pagina;
+          this.hayMasGaleriaSimple = items.length === 24;
+        }
         this.idxArt = 0;
         this.artBusquedaHecha = true;
       } catch (error) {
@@ -2503,6 +2603,32 @@ function pedidoMasivoCore() {
     onNuevoSimple() {
       const u = this.urls.nuevo_simple;
       if (u) window.location.href = u;
+    },
+    onNuevoMismoCliente() {
+      if (!this.modoSimple || !this.idCliente) return;
+      try {
+        sessionStorage.setItem('pm-nuevo-simple-cliente', JSON.stringify({
+          id_cliente: Number(this.idCliente),
+          nombre: this.clienteNombre || this.qCliente,
+          id_domicilio: Number(this.sucursales[0]?.id_cliente_domicilio || 0),
+        }));
+      } catch { /* El usuario podrá elegir el cliente en la nueva pantalla. */ }
+      this.onNuevoSimple();
+    },
+    async restaurarClientePedidoNuevo() {
+      let cliente = null;
+      try {
+        cliente = JSON.parse(sessionStorage.getItem('pm-nuevo-simple-cliente') || 'null');
+        sessionStorage.removeItem('pm-nuevo-simple-cliente');
+      } catch { return; }
+      if (!cliente?.id_cliente) return;
+      await this.elegirCliente(cliente);
+      if (!this.draftId && cliente.id_domicilio) {
+        const domicilio = this.opcionesSucursal.find(
+          (s) => Number(s.id_cliente_domicilio) === Number(cliente.id_domicilio),
+        );
+        if (domicilio) await this.elegirSucursal(domicilio);
+      }
     },
     onNuevoMasivo() {
       const u = this.urls.nuevo_masivo;
@@ -2930,6 +3056,7 @@ function pedidoMasivoCore() {
         setTimeout(() => {
           this.confirmProgreso = null;
           this.cerrarDialogo();
+          if (this.modoSimple) this.nuevoPedidoSimpleAbierto = true;
         }, 1500);
       }
     },

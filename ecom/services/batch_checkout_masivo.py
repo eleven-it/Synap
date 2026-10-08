@@ -313,6 +313,7 @@ def calcular_totales_lote_masivo(
                     "id_cliente_domicilio": id_dom,
                     "neto": float(cart.subtotal_neto or 0),
                     "iva": float(iva_total),
+                    "impuesto_interno": float(cart.impuesto_interno_total or 0),
                     "total": float(cart.total or 0),
                 }
             )
@@ -321,6 +322,7 @@ def calcular_totales_lote_masivo(
 
     neto_lote = sum(s["neto"] for s in sucursales_out)
     iva_lote = sum(s["iva"] for s in sucursales_out)
+    interno_lote = sum(s["impuesto_interno"] for s in sucursales_out)
     total_lote = sum(s["total"] for s in sucursales_out)
 
     return {
@@ -329,6 +331,7 @@ def calcular_totales_lote_masivo(
         "total_lote": {
             "neto": round(neto_lote, 2),
             "iva": round(iva_lote, 2),
+            "impuesto_interno": round(interno_lote, 2),
             "total": round(total_lote, 2),
         },
         "warning": " ".join(warnings).strip(),

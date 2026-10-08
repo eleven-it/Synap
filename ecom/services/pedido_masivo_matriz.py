@@ -811,6 +811,8 @@ def buscar_articulos_filtrados_ternas(
         lim = max(1, min(int(tam or 5000), 5000))
     else:
         lim = max(1, min(int(tam or 20), 40))
+    pagina_ef = max(1, int(pagina or 1)) if todos and lim <= 24 else 1
+    offset = (pagina_ef - 1) * lim
     if not marcas:
         return {
             "items": [],
@@ -913,11 +915,11 @@ def buscar_articulos_filtrados_ternas(
                 ELSE 3
             END,
             articulo.NombreArticulo
-        LIMIT %s
+        LIMIT %s OFFSET %s
         """
         q_exact = q
         q_prefix = f"{q}%"
-        params_order = params + [q_exact, q_exact, q_prefix, lim]
+        params_order = params + [q_exact, q_exact, q_prefix, lim, offset]
     else:
         sql = f"""
         SELECT {select_cols}
@@ -925,9 +927,9 @@ def buscar_articulos_filtrados_ternas(
         LEFT JOIN iva ON iva.ID = articulo.Alicuota
         WHERE {' AND '.join(where)}
         ORDER BY articulo.NombreArticulo
-        LIMIT %s
+        LIMIT %s OFFSET %s
         """
-        params_order = params + [lim]
+        params_order = params + [lim, offset]
 
     try:
         pool = get_mysql_pool()
@@ -976,6 +978,7 @@ def buscar_articulos_filtrados_ternas(
                             "precio_unitario_neto": float(precio or 0),
                             "precio_lista1": float(precio or 0),
                             "alicuota_iva": float(0 if iva_no_responsable else alic if alic is not None else 21),
+                            "impuesto_interno_pct": float(to_decimal_or_none(articulo.get("impuesto_interno")) or 0),
                             **mult_campos,
                         }
                     )
@@ -1005,7 +1008,7 @@ def buscar_articulos_filtrados_ternas(
     return {
         "items": items,
         "total": len(items),
-        "pagina": 1,
+        "pagina": pagina_ef,
         "tam": lim,
         "total_paginas": 1 if items else 0,
         "marcas": marcas,
@@ -1033,7 +1036,8 @@ def _nombres_articulos(
             COALESCE(articulo.NombreArticulo, ''),
             COALESCE(iva.Alicuota, 21) AS alic_iva,
             articulo.multiplo_cantidad_vta,
-            COALESCE(articulo.CodArtProv, '')
+            COALESCE(articulo.CodArtProv, ''),
+            articulo.impuesto_interno
         FROM articulo
         LEFT JOIN iva ON iva.ID = articulo.Alicuota
         WHERE articulo.IDArt IN ({placeholders})
@@ -1062,6 +1066,7 @@ def _nombres_articulos(
                         "precio_unitario_neto": float(precio or 0),
                         "precio_lista1": float(precio or 0),
                         "alicuota_iva": float(0 if iva_no_responsable else alic if alic is not None else 21),
+                        "impuesto_interno_pct": float(to_decimal_or_none(r[6]) or 0),
                         **campos_multiplo_articulo(r[4]),
                     }
             finally:
@@ -1376,6 +1381,7 @@ def serializar_matriz(
                 nombres.get(aid, {}).get("alicuota_iva")
                 if nombres.get(aid, {}).get("alicuota_iva") is not None else 21
             ),
+            "impuesto_interno_pct": float(nombres.get(aid, {}).get("impuesto_interno_pct") or 0),
             "porcentaje_descuento": float(desc_map.get(aid, desc_cli)),
             "multiplo_cantidad_vta": int(nombres.get(aid, {}).get("multiplo_cantidad_vta") or 0),
             "multiplo_empaque": int(

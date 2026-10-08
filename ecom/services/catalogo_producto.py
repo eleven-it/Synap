@@ -84,6 +84,41 @@ def _foto_url_articulo(cur: Any, id_articulo: int) -> str:
     return ""
 
 
+def fotos_urls_articulos(base_empresa: str, ids_articulos: List[int]) -> Dict[int, str]:
+    """Fotos de la primera página de galería. La tabla es opcional en instalaciones viejas."""
+    ids = list(dict.fromkeys(int(i) for i in ids_articulos if i is not None and str(i).isdigit() and int(i) > 0))[:24]
+    if not ids:
+        return {}
+    try:
+        with _mysql_conn(base_empresa) as conn:
+            cur = conn.cursor()
+            placeholders = ",".join(["%s"] * len(ids))
+            cur.execute(
+                f"SELECT idArt, url_externo, url_interno FROM articulo_foto "
+                f"WHERE idArt IN ({placeholders}) "
+                "ORDER BY idArt, CASE WHEN LOWER(TRIM(COALESCE(foto_principal, ''))) "
+                "IN ('si', 's', '1', 'true') THEN 0 ELSE 1 END, id_articulo_foto DESC",
+                ids,
+            )
+            fotos: Dict[int, str] = {}
+            for id_art, externa, interna in cur.fetchall():
+                key = int(id_art)
+                if key in fotos:
+                    continue
+                for raw in (externa, interna):
+                    url = _s(raw).strip()
+                    try:
+                        parsed = urlsplit(url)
+                    except ValueError:
+                        continue
+                    if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
+                        fotos[key] = url
+                        break
+            return fotos
+    except Exception:
+        return {}
+
+
 _SELECT_LISTADO_COLS = """
     articulo.IDArt,
     articulo.id_manual,
@@ -704,6 +739,7 @@ def obtener_detalle_articulo(
             "marca": _s(art_dict.get("NombreMarca"), ""),
             "precio": float(precio),
             "precio_neto": float(precio_neto),
+            "impuesto_interno_pct": float(_d(art_dict.get("impuesto_interno"), "0")),
             "stock_disponible": float(stock_disponible),
             "stock_depositos": stock_depositos,
             "tiene_foto": bool(foto_url),
