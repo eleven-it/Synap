@@ -35,12 +35,11 @@ YTD_UNITS_HEADER = "YTD_Units"
 YTD_SALES_HEADER = "YTD_Sales"
 SUM_LAST_ROW = 4931
 UNITS_FORMAT = "#,##0"
-DOZENS_FORMAT = "#,##0.00"
-UNIT_LABELS = {"units": "Unidades", "dozens": "Docenas", "packs": "Packs"}
+UNIT_LABELS = {"units": "units", "dozens": "dozens", "packs": "packs"}
 AMOUNTS_FORMAT = '"$"#,##0.00'
 MONTH_DATE_FORMAT = "mmm-yy"
 SEED_PARTIAL_NOTICE = (
-    "Los meses anteriores al 22/07/2026 provienen de planillas mensuales y se incluyen completos."
+    "Months before 22/07/2026 come from monthly spreadsheets and are included in full."
 )
 
 # Paridad visual plantilla julio (accent1 #4F81BD + texto blanco Tahoma 10).
@@ -70,8 +69,8 @@ MAX_COL_WIDTH = 48.0
 
 
 def _qty_format(unit_mode: str) -> str:
-    """Docenas conservan decimales; unidades y packs se muestran enteros."""
-    return DOZENS_FORMAT if unit_mode == "dozens" else UNITS_FORMAT
+    """Todas las cantidades se muestran enteras (solo formato; los valores no se redondean)."""
+    return UNITS_FORMAT
 
 
 def _fmt_dmy(value) -> str:
@@ -451,7 +450,7 @@ def export_licenciatarios_workbook(
         raise ValueError(f"La plantilla no contiene hoja '{SHEET_SALES}'")
     sales_ws = wb[SHEET_SALES]
     unit_mode = resolve_pack_unit_mode(pack)
-    unit_label = UNIT_LABELS.get(unit_mode, "Unidades")
+    unit_label = UNIT_LABELS.get(unit_mode, "units")
     _write_levis_sales_sheet(
         sales_ws,
         rows=merge_result.rows,
@@ -465,7 +464,7 @@ def export_licenciatarios_workbook(
     period_text = ""
     if fecha_inicio and fecha_fin:
         period_text = f"{_fmt_dmy(fecha_inicio)} – {_fmt_dmy(fecha_fin)}"
-    sales_ws["A1"] = f"Período: {period_text} · Unidad: {unit_label}" if period_text else f"Unidad: {unit_label}"
+    sales_ws["A1"] = f"Period: {period_text} · Unit: {unit_label}" if period_text else f"Unit: {unit_label}"
     sales_ws["A1"].font = Font(name="Calibri", size=11, bold=True)
     sales_ws["A1"].alignment = LEFT
     notice = SEED_PARTIAL_NOTICE if seed_months_partial else ""
