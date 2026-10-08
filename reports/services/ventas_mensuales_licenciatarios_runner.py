@@ -19,10 +19,12 @@ from reports.services.ventas_mensuales_licenciatarios_merger import (
     MergeResult,
     filter_merge_result_by_clientes_excluidos,
     merge_pack_year,
+    seed_months_partially_covered,
 )
 from reports.services.ventas_mensuales_licenciatarios_query import (
     AnetSalesRow,
     fetch_anet_sales,
+    resolve_pack_unit_mode,
 )
 
 CUTOVER_DATE = date(2026, 7, 22)
@@ -59,6 +61,12 @@ def validate_calendar_year_range(fecha_inicio: Any, fecha_fin: Any) -> tuple[int
     if d_start > d_end:
         raise ValueError("La fecha inicio no puede ser posterior a la fecha fin.")
     return d_start.year, d_start.month, d_end.month
+
+
+def parse_exact_date_range(fecha_inicio: Any, fecha_fin: Any) -> tuple[date, date]:
+    """Valida (mismas reglas que ``validate_calendar_year_range``) y devuelve fechas exactas."""
+    validate_calendar_year_range(fecha_inicio, fecha_fin)
+    return _parse_filter_date(fecha_inicio), _parse_filter_date(fecha_fin)
 
 
 def _parse_clientes_excluidos_filters(filters: Dict[str, Any]) -> List[int]:
@@ -159,6 +167,7 @@ def run_ventas_mensuales_licenciatarios(
     ff = filters.get("fecha_fin_facturacion")
     try:
         year, month_from, month_to = validate_calendar_year_range(fi, ff)
+        d_start, d_end = parse_exact_date_range(fi, ff)
     except ValueError as exc:
         return QueryResult(meta=meta, data=[], totals={}, notes=[str(exc)])
 
@@ -204,6 +213,8 @@ def run_ventas_mensuales_licenciatarios(
         register_unknown_superart=_register_unknown,
         sucursales=sucursales or None,
         puntos_venta=puntos_venta or None,
+        date_from=d_start,
+        date_to=d_end,
     )
     clientes_excluidos = _parse_clientes_excluidos_filters(filters)
     if clientes_excluidos:
@@ -254,7 +265,10 @@ def run_ventas_mensuales_licenciatarios(
             "pending_clients": merge_result.pending_clients,
             "qa_superarts": qa_all,
             "pack_codigo_salida": pack.codigo_salida,
-            "unit_mode": pack.unit_mode,
+            "unit_mode": resolve_pack_unit_mode(pack),
+            "fecha_inicio": d_start.isoformat(),
+            "fecha_fin": d_end.isoformat(),
+            "seed_months_partial": seed_months_partially_covered(year, d_start, d_end),
         }
     )
 
