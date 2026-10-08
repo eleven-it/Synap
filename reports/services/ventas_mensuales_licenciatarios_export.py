@@ -38,6 +38,10 @@ UNITS_FORMAT = "#,##0"
 UNIT_LABELS = {"units": "units", "dozens": "dozens", "packs": "packs"}
 AMOUNTS_FORMAT = '"$"#,##0.00'
 MONTH_DATE_FORMAT = "mmm-yy"
+SEED_SCOPE_NOTICE = (
+    "Monthly spreadsheets (until 21/07/2026) cover PV 1, 8, 9 and 10 and cannot be split "
+    "by point of sale; excluded with the current filter."
+)
 SEED_PARTIAL_NOTICE = (
     "Months before 22/07/2026 come from monthly spreadsheets and are included in full."
 )
@@ -440,6 +444,7 @@ def export_licenciatarios_workbook(
     fecha_inicio=None,
     fecha_fin=None,
     seed_months_partial: Optional[List[str]] = None,
+    seed_excluded_by_scope: str = "",
 ) -> None:
     """
     Clona plantilla anual, reescribe ventas/mensual, conserva hojas auxiliares y agrega QA.
@@ -470,7 +475,12 @@ def export_licenciatarios_workbook(
     sales_ws["A1"] = f"Period: {period_text} · Unit: {unit_label}" if period_text else f"Unit: {unit_label}"
     sales_ws["A1"].font = Font(name="Calibri", size=11, bold=True)
     sales_ws["A1"].alignment = LEFT
-    notice = SEED_PARTIAL_NOTICE if seed_months_partial else ""
+    notices = []
+    if seed_months_partial:
+        notices.append(SEED_PARTIAL_NOTICE)
+    if seed_excluded_by_scope:
+        notices.append(SEED_SCOPE_NOTICE)
+    notice = " ".join(notices)
     if notice:
         sales_ws["A2"] = notice
         sales_ws["A2"].font = Font(name="Calibri", size=9, italic=True)
@@ -485,8 +495,8 @@ def export_licenciatarios_workbook(
     if period_text:
         filter_lines.insert(0, ("Período exportado", period_text))
     filter_lines.append(("Unidad de medida", unit_label))
-    if notice:
-        filter_lines.append(("Nota", notice))
+    for note in notices:
+        filter_lines.append(("Nota", note))
 
     _write_qa_sheet(wb, merge_result=merge_result)
     _write_filtros_sheet(wb, filter_lines)

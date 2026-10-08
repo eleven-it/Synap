@@ -2,6 +2,7 @@
 """Merger seed PostgreSQL + AdministraNET read-only para licenciatarios."""
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -25,8 +26,12 @@ from reports.services.ventas_mensuales_licenciatarios_query import (
     AnetSalesRow,
     aggregate_anet_rows,
     aggregate_anet_rows_by_genero,
+    SEED_PUNTOS_VENTA_NRO,
     fetch_anet_sales,
+    resolve_selected_nro_pv,
 )
+
+logger = logging.getLogger(__name__)
 
 CUTOVER_DATE = date(2026, 7, 22)
 CUTOVER_YEAR = CUTOVER_DATE.year
@@ -193,6 +198,8 @@ class MergeResult:
     ytd_by_identity: Dict[str, Dict[str, Decimal]] = field(default_factory=dict)
     pending_clients: List[dict] = field(default_factory=list)
     qa_superarts: List[str] = field(default_factory=list)
+    # "" | "partial" | "disjoint": seed excluido por el filtro sucursal/PV.
+    seed_excluded_by_scope: str = ""
 
 
 def anet_range_for_month(
@@ -276,6 +283,19 @@ def seed_months_in_range(year: int, month_from: int, month_to: int) -> List[int]
         elif year == CUTOVER_YEAR and month <= 7:
             months.append(month)
     return months
+
+
+def seed_scope_status(selected_nro_pv: Optional[set[int]]) -> str:
+    """
+    "" si el seed aplica (sin filtro o el filtro cubre todos los PV del seed);
+    "partial" si hay solapamiento parcial; "disjoint" si no hay ninguno.
+    """
+    if selected_nro_pv is None:
+        return ""
+    seed = set(SEED_PUNTOS_VENTA_NRO)
+    if seed <= selected_nro_pv:
+        return ""
+    return "partial" if seed & selected_nro_pv else "disjoint"
 
 
 def load_seed_rows(
@@ -489,6 +509,7 @@ def filter_merge_result_by_clientes_excluidos(
         ytd_by_identity=compute_ytd(filtered_rows),
         pending_clients=filtered_pending,
         qa_superarts=merge_result.qa_superarts,
+        seed_excluded_by_scope=merge_result.seed_excluded_by_scope,
     )
 
 
@@ -506,6 +527,7 @@ def merge_pack_year(
     puntos_venta: Optional[Sequence[int]] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    seed_scope_resolver: Optional[Callable[..., Optional[set[int]]]] = None,
 ) -> MergeResult:
     """
     Fusiona seed + ANET respetando cutover 22/07/2026.
@@ -518,7 +540,18 @@ def merge_pack_year(
     pending_clients: dict[str, dict] = {}
     qa_superarts: set[str] = set()
 
-    seed_months = seed_months_in_range(year, month_from, month_to)
+    seed_excluded = ""
+    if sucursales or puntos_venta:
+        resolver = seed_scope_resolver or resolve_selected_nro_pv
+        try:
+            seed_excluded = seed_scope_status(
+                resolver(base_empresa, sucursales, puntos_venta)
+            )
+        except Exception:  # noqa: BLE001 - fail safe: incluir seed como antes
+            logger.warning(
+                "No se pudo resolver PV del filtro; se incluye el seed.", exc_info=True
+            )
+    seed_months = [] if seed_excluded else seed_months_in_range(year, month_from, month_to)
     for seed_row in load_seed_rows(pack, year, seed_months):
         merged = seed_row_to_merged(seed_row, base_empresa, pack)
         _add_row(acc, merged)
@@ -589,6 +622,7 @@ def merge_pack_year(
         ytd_by_identity=ytd,
         pending_clients=list(pending_clients.values()),
         qa_superarts=sorted(qa_superarts),
+        seed_excluded_by_scope=seed_excluded,
     )
 
 
