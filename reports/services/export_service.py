@@ -1331,6 +1331,9 @@ class ExportService:
             month_from=int(month_from or 1),
             month_to=int(month_to or 12),
             filter_lines=filter_lines,
+            fecha_inicio=extra.get("fecha_inicio"),
+            fecha_fin=extra.get("fecha_fin"),
+            seed_months_partial=extra.get("seed_months_partial") or [],
         )
         logger.info("Excel ventas-mensuales-licenciatarios (plantilla + QA): %s", file_path)
 
