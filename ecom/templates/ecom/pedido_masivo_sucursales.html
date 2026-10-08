@@ -6,10 +6,21 @@
 {% block content %}
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
+<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=2">
 
 <section class="pm-matrix-viewport pm-matrix-viewport--sin-desc flex min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible {% if pm_embed %}h-full{% else %}h-[calc(100dvh-4.5rem)]{% endif %}"
          x-data="pedidoMasivoApp()"
+         :class="modoSimple ? 'pm-simple-mode' : ''"
          x-init="init()">
+  {% if not pm_embed %}
+  <template x-teleport="#pm-simple-navbar-cart">
+    <button type="button" x-show="modoSimple" x-cloak @click="abrirCarritoSimple()"
+            class="pm-simple-navbar-cart" aria-label="Abrir carrito del pedido" title="Carrito del pedido">
+      <span class="material-icons" aria-hidden="true">shopping_cart</span>
+      <span x-show="carritoItems.length > 0" class="pm-simple-navbar-count" x-text="carritoItems.length"></span>
+    </button>
+  </template>
+  {% endif %}
   <div class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col px-3 sm:px-4 md:px-6 lg:px-8 max-lg:h-auto">
     <div class="flex-shrink-0">
       {% if not pm_embed %}
@@ -38,13 +49,13 @@
             <span x-show="guardadoChip" x-cloak
                   class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"
                   x-text="guardadoChip"></span>
-            {# Crédito del cliente (modo simple) #}
-            <span x-show="modoSimple && credito && idCliente" x-cloak
-                  class="inline-flex items-center gap-1 rounded-lg bg-slate-700/70 px-2.5 py-1 text-[11px] font-semibold text-slate-200"
-                  :title="'Saldo CC: ' + money(credito ? credito.saldo : 0) + ' · Límite: ' + (credito ? credito.credito_limite_dias : 0) + ' días'">
-              <span class="material-icons text-sm leading-none" aria-hidden="true">account_balance_wallet</span>
-              <span x-text="'Crédito: ' + money(credito ? credito.saldo : 0)"></span>
-            </span>
+            <button type="button" x-show="modoSimple && draftId" x-cloak
+                    @click="abrirCarritoSimple()"
+                    class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-sky-300/70 bg-sky-900/60 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-800"
+                    aria-label="Abrir carrito del pedido">
+              <span class="material-icons text-base leading-none" aria-hidden="true">shopping_cart</span>
+              Carrito <span class="rounded-full bg-sky-500 px-1.5" x-text="carritoItems.length"></span>
+            </button>
             {# Acciones hero PED: PDF · Mail · Repetir · Anular #}
             <template x-if="pedidoCargado">
               <span class="inline-flex flex-wrap items-center gap-2">
@@ -83,7 +94,8 @@
                     @click="anularBorrador()"
                     :disabled="anulando"
                     class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-rose-400/70 bg-transparent px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50">
-              <span x-text="anulando ? 'Anulando…' : 'Anular borrador'"></span>
+              <span class="material-icons text-base leading-none" aria-hidden="true">delete_outline</span>
+              <span x-text="anulando ? 'Anulando…' : (modoSimple ? 'Anular' : 'Anular borrador')"></span>
             </button>
             {# Tras confirmar: Nuevo Simple | Masivo (mismo patrón que el Hub) #}
             <div class="relative" x-show="mostrarBotonNuevo" x-cloak>
@@ -104,14 +116,17 @@
                 </button>
               </div>
             </div>
-            <a :href="urls.hub"
-               class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
-              Hub pedidos
-            </a>
-            <button type="button" @click="confirmarLote()"
+             <a :href="urls.hub"
+                class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
+              <span x-show="modoSimple" class="material-icons text-base leading-none" aria-hidden="true">list_alt</span>
+              <span x-text="modoSimple ? 'Pedidos' : 'Hub pedidos'">Hub pedidos</span>
+             </a>
+             <button type="button" @click="confirmarLote()"
+                    class="pm-hero-confirm inline-flex min-h-8 items-center gap-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                     x-show="!pedidoSoloConsulta"
                     :disabled="confirmando || previewCargando || !puedeConfirmar"
-                    class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">
+                    >
+              <span x-show="modoSimple" class="material-icons text-base leading-none" aria-hidden="true">check_circle</span>
               <span x-text="confirmando ? 'Confirmando…' : (previewCargando ? 'Validando…' : ((codMovOrigen && puedeAnularPedido) ? 'Anular y crear nuevo' : 'Confirmar pedido'))"></span>
             </button>
           </div>
@@ -131,10 +146,12 @@
     <div class="pm-context-card mb-3 flex-shrink-0 rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-2.5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800/90">
       {# Eyebrow + chevron expandir/compactar #}
       <div class="flex items-center justify-between gap-2">
-        <p class="pm-context-eyebrow text-[10px] font-semibold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">
+        <p class="pm-context-eyebrow text-[10px] font-semibold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80"
+           x-text="modoSimple ? 'Encabezado del pedido' : 'Contexto comercial'">
           Contexto comercial
         </p>
         <button type="button"
+                x-show="!modoSimple"
                 @click="toggleContexto()"
                 class="pm-context-toggle inline-flex h-6 w-6 items-center justify-center rounded-md text-sky-700 hover:bg-sky-100/70 dark:text-sky-300 dark:hover:bg-sky-900/40 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
                 :aria-expanded="contextoAbierto"
@@ -158,15 +175,83 @@
 
       {# Filtros densos (visible al expandir) — 2 columnas, label inline #}
       <div x-show="contextoAbierto" x-cloak class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 lg:grid-cols-2">
-        <div class="pm-field-row" x-show="cabecera" x-cloak>
-          <label class="pm-label-inline" for="pm-fecha-pedido">Fecha pedido</label>
+        <div class="pm-field-row" x-show="modoSimple && !cabecera" x-cloak style="order: 1">
+          <span class="pm-label-inline">Fecha</span>
+          <span class="text-xs font-semibold text-slate-700 dark:text-slate-200"
+                x-text="new Date().toLocaleDateString('es-AR')"></span>
+        </div>
+        <div class="pm-field-row" x-show="cabecera" x-cloak :style="modoSimple ? 'order: 1' : ''">
+          <label class="pm-label-inline" for="pm-fecha-pedido" x-text="modoSimple ? 'Fecha' : 'Fecha pedido'">Fecha pedido</label>
           <input id="pm-fecha-pedido" type="date"
                  x-model="cabecera.fecha_pedido"
                  @change="onCabeceraFechaIso('fecha_pedido')"
+                 :disabled="modoSimple"
+                 :title="modoSimple ? 'La fecha del pedido es informativa' : ''"
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
-        <div class="pm-field-row" x-show="cabecera && tipo === 'PED'" x-cloak>
+        <div class="pm-field-row" x-show="tipo === 'PED'" x-cloak :style="modoSimple ? 'order: 4' : ''">
+          <label class="pm-label-inline" for="pm-forma-entrega">Forma de entrega</label>
+          <select id="pm-forma-entrega" x-model="formaEntrega" :disabled="modoSimple && !sucursalSel"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <option value="">Sin especificar</option>
+            <option value="Retira cliente mostrador">Retira cliente mostrador</option>
+            <option value="Retira cliente despacho">Retira cliente despacho</option>
+            <option value="Envía por despacho">Envía por despacho</option>
+            <option value="Entrega vendedor">Entrega vendedor</option>
+            <option value="Transporte">Transporte</option>
+            <option value="Envia repartidor">Envia repartidor</option>
+            <option value="Reservado en depósito">Reservado en depósito</option>
+            <option value="Operador logistico">Operador logistico</option>
+          </select>
+        </div>
+        <div class="pm-field-row" x-show="formaEntrega === 'Envia repartidor'" x-cloak :style="modoSimple ? 'order: 5' : ''">
+          <label class="pm-label-inline" for="pm-repartidor">Usuario repartidor</label>
+          <select id="pm-repartidor" x-model.number="idRepartidor"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <option value="">Seleccioná un usuario</option>
+            <template x-for="u in repartidores" :key="u.id"><option :value="u.id" x-text="u.nombre"></option></template>
+          </select>
+        </div>
+        <div class="pm-field-row" x-show="formaEntrega === 'Operador logistico'" x-cloak :style="modoSimple ? 'order: 5' : ''">
+          <label class="pm-label-inline" for="pm-operador-logistico">Operador logístico</label>
+          <select id="pm-operador-logistico" x-model="operadorLogistico"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <template x-for="o in operadoresLogisticos" :key="o"><option :value="o" x-text="o"></option></template>
+          </select>
+        </div>
+        <div x-show="formaEntrega === 'Transporte' && sucursales.length" x-cloak :style="modoSimple ? 'order: 5' : ''" class="w-full rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+          <p class="text-xs font-semibold mb-2">Transporte por domicilio</p>
+          <template x-for="s in sucursales" :key="s.id_cliente_domicilio">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center mb-2">
+              <span class="text-xs" x-text="s.nombre || s.etiqueta"></span>
+              <select :aria-label="`Transporte para ${s.nombre || s.etiqueta}`"
+                      x-model.number="transportesPorDomicilio[String(s.id_cliente_domicilio)]"
+                      class="pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+                <option value="">Seleccioná transporte</option>
+                <template x-for="t in transportes" :key="t.id"><option :value="t.id" x-text="t.nombre"></option></template>
+              </select>
+              <input type="text" :aria-label="`Nro. seguimiento para ${s.nombre || s.etiqueta}`" placeholder="Nro. seguimiento"
+                     x-model="numerosSeguimientoPorDomicilio[String(s.id_cliente_domicilio)]"
+                     class="pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+              <input type="text" :aria-label="`Link seguimiento para ${s.nombre || s.etiqueta}`" placeholder="Link seguimiento"
+                     x-model="linksSeguimientoPorDomicilio[String(s.id_cliente_domicilio)]"
+                     class="pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+            </div>
+          </template>
+        </div>
+        <div class="pm-field-row" x-show="tipo === 'PED' && muestraRutaEntrega" x-cloak :style="modoSimple ? 'order: 6' : ''">
+          <label class="pm-label-inline" for="pm-ruta-entrega">Ruta logística</label>
+          <select id="pm-ruta-entrega" x-model.number="idRuta"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <option value="">Sin ruta asignada</option>
+            <template x-for="r in rutasEntrega" :key="r.id">
+              <option :value="r.id" x-text="`${r.id} — ${r.nombre || 'Ruta'}${r.fecha_salida ? ' · ' + r.fecha_salida : ''}`"></option>
+            </template>
+          </select>
+        </div>
+
+        <div class="pm-field-row" x-show="cabecera && tipo === 'PED'" x-cloak :style="modoSimple ? 'order: 6' : ''">
           <label class="pm-label-inline" for="pm-fecha-entrega">Fecha entrega <span class="text-rose-600" aria-hidden="true">*</span></label>
           <input id="pm-fecha-entrega" type="date" required
                  x-model="cabecera.fecha_entrega"
@@ -175,7 +260,7 @@
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
-        <div class="pm-field-row" x-show="cabecera" x-cloak>
+        <div class="pm-field-row" x-show="cabecera && (!modoSimple || detallesComercialesAbiertos)" x-cloak :style="modoSimple ? 'order: 22' : ''">
           <label class="pm-label-inline" for="pm-vencimiento">Vencimiento</label>
           <input id="pm-vencimiento" type="date"
                  x-model="cabecera.vencimiento"
@@ -185,8 +270,8 @@
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
-        <div class="pm-field-row" x-show="cabecera" x-cloak>
-          <label class="pm-label-inline" for="pm-lista">Lista</label>
+        <div class="pm-field-row" x-show="cabecera && (!modoSimple || detallesComercialesAbiertos)" x-cloak :style="modoSimple ? 'order: 21' : ''">
+          <label class="pm-label-inline" for="pm-lista" x-text="modoSimple ? 'Lista de precio' : 'Lista'">Lista</label>
           <template x-if="puedeEditarLista">
             <select id="pm-lista" x-model.number="cabecera.lista_id"
                     @change="onCabeceraListaChange()"
@@ -203,10 +288,10 @@
           </template>
         </div>
 
-        <div class="pm-field-row" @click.outside="cerrarPanelCli()">
+        <div class="pm-field-row" :style="modoSimple ? 'order: 2' : ''" @click.outside="cerrarPanelCli()">
           <label class="pm-label-inline" for="pm-cli">Cliente</label>
           <div class="relative min-w-[12rem] flex-1">
-            <input id="pm-cli" type="text" autocomplete="off" role="combobox"
+            <input id="pm-cli" x-ref="pmClienteSimple" type="text" autocomplete="off" role="combobox"
                    :aria-expanded="panelCli"
                    x-model="qCliente"
                    @focus="abrirPanelCli(); buscarClientes()"
@@ -236,8 +321,8 @@
           </div>
         </div>
 
-        <div class="pm-field-row" x-show="modoSimple" x-cloak @click.outside="cerrarPanelSuc()">
-          <label class="pm-label-inline" for="pm-sucursal">Sucursal</label>
+        <div class="pm-field-row" x-show="modoSimple" x-cloak :style="modoSimple ? 'order: 3' : ''" @click.outside="cerrarPanelSuc()">
+          <label class="pm-label-inline" for="pm-sucursal">Sucursal/Domicilio entrega</label>
           <div class="relative min-w-[12rem] flex-1">
             <input id="pm-sucursal" type="text" autocomplete="off" role="combobox"
                    :aria-expanded="panelSuc"
@@ -269,8 +354,8 @@
           </div>
         </div>
 
-        <div class="pm-field-row" x-show="cabecera" x-cloak>
-          <label class="pm-label-inline" for="pm-condicion">Condición</label>
+        <div class="pm-field-row" x-show="cabecera && (!modoSimple || detallesComercialesAbiertos)" x-cloak :style="modoSimple ? 'order: 20' : ''">
+          <label class="pm-label-inline" for="pm-condicion" x-text="modoSimple ? 'Condición de Vta.' : 'Condición'">Condición</label>
           <select id="pm-condicion" x-model.number="cabecera.id_condventa"
                   @change="onCabeceraCondicionChange()"
                   :disabled="!puedeEditarCondicion"
@@ -279,6 +364,22 @@
               <option :value="cv.Codigo" x-text="`${cv.Descripcion} (${cv.Dias} días)`"></option>
             </template>
           </select>
+        </div>
+      </div>
+
+      <div x-show="modoSimple && cabecera" x-cloak class="mt-2 border-t border-sky-200 pt-2 dark:border-sky-900/50">
+        <button type="button" @click="detallesComercialesAbiertos = !detallesComercialesAbiertos"
+                class="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-sky-800 dark:text-sky-300"
+                :aria-expanded="detallesComercialesAbiertos.toString()">
+          <span class="material-icons text-base" x-text="detallesComercialesAbiertos ? 'expand_less' : 'expand_more'"></span>
+          <span x-text="detallesComercialesAbiertos ? 'Ocultar detalles comerciales' : 'Ver condición de venta, lista y crédito'"></span>
+        </button>
+        <div x-show="detallesComercialesAbiertos" x-cloak
+             class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-700 dark:text-slate-200">
+          <span>Saldo del cliente: <strong x-text="money(credito?.saldo || 0)"></strong></span>
+          <span>Días vencidos: <strong x-text="credito?.dias_vencidos ?? 0"></strong></span>
+          <span>Límite de crédito: <strong x-text="money(credito?.credito_cupo || 0)"></strong></span>
+          <span>Límite de mora: <strong x-text="(credito?.credito_limite_dias || 0) + ' días'"></strong></span>
         </div>
       </div>
 
@@ -369,10 +470,72 @@
     </div>
 
     {# Matriz always-on: shell visible desde el primer render #}
-    <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2 max-lg:min-h-[16rem]">
+    <div class="pm-order-body flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2 max-lg:min-h-[16rem]">
+      <div x-show="modoSimple" x-cloak class="pm-simple-section-title">
+        <span class="material-icons" aria-hidden="true">inventory_2</span>
+        <span>Artículos del pedido</span>
+      </div>
       <p class="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400">
         Solo artículos Tercero o Terminado con e-commerce activo · marcas de tu territorio
       </p>
+      <div x-show="modoSimple && draftId" x-cloak
+           class="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+        <div class="pm-simple-actions" role="group" aria-label="Acciones de artículos">
+          <button type="button" @click="abrirFiltrosAvanzados()"
+                  class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+                  :aria-expanded="filtrosAvanzadosAbiertos.toString()">
+            <span class="material-icons text-base" aria-hidden="true">filter_list</span> Filtros
+          </button>
+          <button type="button" @click="toggleCatalogo()" :disabled="!puedeToggleCatalogo"
+                   class="inline-flex min-h-9 items-center rounded-lg border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
+                   :class="catalogoDesplegado ? 'border-orange-400 bg-orange-50 text-orange-800 dark:border-orange-600 dark:text-orange-200' : ''"
+                   :title="catalogoDesplegado ? 'Ocultar artículos sin cantidad' : 'Mostrar artículos de la selección'">
+            <span class="material-icons text-base" aria-hidden="true" x-text="catalogoDesplegado ? 'visibility_off' : 'visibility'"></span>
+            <span x-text="catalogoDesplegado ? 'Ocultar' : 'Artículos'"></span>
+          </button>
+          <button type="button" @click="abrirCarritoSimple()"
+                  class="inline-flex min-h-9 items-center gap-1 rounded-lg bg-sky-600 px-3 py-1 text-xs font-semibold text-white hover:bg-sky-500">
+            <span class="material-icons text-base" aria-hidden="true">shopping_cart</span>
+            Carrito <span x-text="'(' + carritoItems.length + ')'"></span>
+          </button>
+          <button type="button" @click="cambiarVistaCatalogoSimple('lista')" :aria-pressed="vistaCatalogoSimple === 'lista'"
+                  :class="vistaCatalogoSimple === 'lista' ? 'pm-simple-view-active' : ''">
+            <span class="material-icons" aria-hidden="true">checklist</span> Lista
+          </button>
+          <button type="button" @click="cambiarVistaCatalogoSimple('galeria')" :aria-pressed="vistaCatalogoSimple === 'galeria'"
+                  :class="vistaCatalogoSimple === 'galeria' ? 'pm-simple-view-active' : ''">
+            <span class="material-icons" aria-hidden="true">grid_view</span> Galería
+          </button>
+          <button type="button" x-show="cantidadSeleccionados" x-cloak @click="abrirSeleccionSimple()"
+                  class="inline-flex min-h-9 items-center gap-1 rounded-md border border-sky-300 px-3 text-xs font-semibold text-sky-800 dark:text-sky-200">
+            <span class="material-icons text-base" aria-hidden="true">playlist_add_check</span>
+            Revisar <span x-text="cantidadSeleccionados"></span>
+          </button>
+        </div>
+        <div x-show="filtrosAvanzadosAbiertos" x-cloak class="mt-3 grid gap-2 sm:grid-cols-3">
+          <label class="text-xs font-medium text-slate-700 dark:text-slate-200">Marca
+            <select x-model="marcaFiltro" @change="aplicarFiltrosCatalogo()"
+                    class="mt-1 block h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+              <option value="">Todas las marcas</option>
+              <template x-for="m in facetasCatalogo.marcas" :key="m.id"><option :value="m.id" x-text="m.nombre"></option></template>
+            </select>
+          </label>
+          <label class="text-xs font-medium text-slate-700 dark:text-slate-200">Rubro
+            <select x-model="rubroFiltro" @change="subrubroFiltro = ''; aplicarFiltrosCatalogo()"
+                    class="mt-1 block h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+              <option value="">Todos los rubros</option>
+              <template x-for="r in facetasCatalogo.rubros" :key="r.id"><option :value="r.id" x-text="r.nombre"></option></template>
+            </select>
+          </label>
+          <label class="text-xs font-medium text-slate-700 dark:text-slate-200">Subrubro
+            <select x-model="subrubroFiltro" @change="aplicarFiltrosCatalogo()"
+                    class="mt-1 block h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+              <option value="">Todos los subrubros</option>
+              <template x-for="sr in subrubrosFiltrados" :key="sr.id"><option :value="sr.id" x-text="sr.nombre"></option></template>
+            </select>
+          </label>
+        </div>
+      </div>
 
       {# Desktop (lg+): shell de 3 zonas — izq. fija · sucursales scroll-x · der. fija #}
       <div class="pm-matrix-desktop hidden min-h-0 w-full min-w-0 flex-1 flex-col gap-0 lg:flex">
@@ -407,6 +570,7 @@
                       <div class="pm-zhead-art">
                         <span class="pm-zhead-art-label">Artículo</span>
                         <button type="button"
+                                x-show="!modoSimple"
                                 @click="toggleCatalogo()"
                                 :disabled="!puedeToggleCatalogo"
                                 class="pm-chip-catalogo"
@@ -475,9 +639,12 @@
                                      :checked="estaSeleccionado(a)"
                                      :aria-label="'Seleccionar ' + (a.nombre || a.id_manual)"/>
                               <span class="min-w-0 flex-1">
-                                <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
-                                <span class="text-slate-500"> — </span>
-                                <span x-text="a.nombre"></span>
+                                <span x-show="!modoSimple" class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
+                                <span x-show="!modoSimple" class="text-slate-500"> — </span>
+                                <span x-show="!modoSimple" x-text="a.nombre"></span>
+                                <span x-show="modoSimple" class="block font-semibold" x-text="a.nombre"></span>
+                                <span x-show="modoSimple" class="block text-[11px] text-slate-500"
+                                      x-text="'Cód. manual: ' + (a.id_manual || '—') + ' · Cód. interno: ' + (a.codartprov || '—')"></span>
                                 <span x-show="estaEnTabla(a)" x-cloak
                                       class="ml-1.5 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                                   En tabla
@@ -489,10 +656,10 @@
                         <div x-show="cantidadSeleccionados > 0" x-cloak
                              class="pm-art-dropdown-footer">
                           <button type="button"
-                                  @mousedown.prevent="agregarSeleccionados()"
+                                  @mousedown.prevent="modoSimple ? abrirSeleccionSimple() : agregarSeleccionados()"
                                   :disabled="cantidadSeleccionados === 0"
                                   class="w-full rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-700 dark:hover:bg-sky-600"
-                                  x-text="'Agregar seleccionados (' + cantidadSeleccionados + ')'"></button>
+                                  x-text="(modoSimple ? 'Revisar seleccionados (' : 'Agregar seleccionados (') + cantidadSeleccionados + ')'"></button>
                         </div>
                       </div>
                       <p x-show="panelArt && cargandoArt" x-cloak
@@ -514,6 +681,8 @@
                     <td class="pm-c-art">
                       <div class="pm-cell-art">
                         <p class="pm-art-nombre text-xs font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
+                        <p x-show="modoSimple" class="text-[10px] text-slate-500 dark:text-slate-400"
+                           x-text="'Manual: ' + (art.id_manual || '—') + ' · Interno: ' + (art.codartprov || '—')"></p>
                       </div>
                     </td>
                     <td class="pm-c-precio">
@@ -715,10 +884,16 @@
                 <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
               </button>
             </div>
-            <div x-show="panelArt && (articulosBusqueda.length || cantidadSeleccionados > 0)" x-cloak
-                x-ref="pmArtDropdownMob"
-                class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800"
-                role="listbox">
+            <div x-show="panelArt && (!modoSimple || vistaCatalogoSimple === 'lista') && (articulosBusqueda.length || cantidadSeleccionados > 0)" x-cloak
+                 x-ref="pmArtDropdownMob"
+                 class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800"
+                 role="listbox">
+              <div x-show="modoSimple && cantidadSeleccionados > 0" x-cloak class="pm-simple-search-review">
+                <button type="button" @mousedown.stop.prevent="null" @click.stop.prevent="abrirSeleccionSimple()">
+                  <span class="material-icons" aria-hidden="true">playlist_add_check</span>
+                  <span x-text="'Revisar ' + cantidadSeleccionados + ' seleccionados'"></span>
+                </button>
+              </div>
               <ul class="pm-art-dropdown-list max-h-56 overflow-y-auto overscroll-contain py-1">
                 <template x-for="(a, i) in articulosBusqueda" :key="'mob-' + a.id_articulo">
                   <li role="option"
@@ -732,24 +907,34 @@
                            :checked="estaSeleccionado(a)"
                            :aria-label="'Seleccionar ' + (a.nombre || a.id_manual)"/>
                     <span class="min-w-0 flex-1">
-                      <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
-                      <span class="text-slate-500"> — </span>
-                      <span x-text="a.nombre"></span>
+                      <span x-show="!modoSimple" class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
+                      <span x-show="!modoSimple" class="text-slate-500"> — </span>
+                      <span x-show="!modoSimple" x-text="a.nombre"></span>
+                      <span x-show="modoSimple" class="block font-semibold" x-text="a.nombre"></span>
+                       <span x-show="modoSimple" class="block text-[11px] text-slate-500"
+                             x-text="'Cód. manual: ' + (a.id_manual || '—') + ' · Cód. interno: ' + (a.codartprov || '—')"></span>
+                       <span x-show="modoSimple" class="pm-simple-search-price"
+                             x-text="'Neto ' + money(a.precio_unitario_neto) + ' · Final ' + money(precioFinalArticulo(a))"></span>
                       <span x-show="estaEnTabla(a)" x-cloak
                             class="ml-1.5 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                         En tabla
                       </span>
-                    </span>
-                  </li>
+                     </span>
+                     <button type="button" x-show="modoSimple" x-cloak
+                             @mousedown.stop.prevent="null" @click.stop.prevent="abrirFichaArticulo(a)"
+                             class="pm-simple-info-btn" :aria-label="'Ver foto y detalles de ' + a.nombre" title="Foto, stock y precios">
+                       <span class="material-icons" aria-hidden="true">info_outline</span>
+                     </button>
+                   </li>
                 </template>
               </ul>
-              <div x-show="cantidadSeleccionados > 0" x-cloak
+              <div x-show="!modoSimple && cantidadSeleccionados > 0" x-cloak
                    class="pm-art-dropdown-footer">
                 <button type="button"
-                        @mousedown.prevent="agregarSeleccionados()"
+                        @mousedown.prevent="modoSimple ? abrirSeleccionSimple() : agregarSeleccionados()"
                         :disabled="cantidadSeleccionados === 0"
                         class="w-full rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-700 dark:hover:bg-sky-600"
-                        x-text="'Agregar seleccionados (' + cantidadSeleccionados + ')'"></button>
+                        x-text="(modoSimple ? 'Revisar seleccionados (' : 'Agregar seleccionados (') + cantidadSeleccionados + ')'"></button>
               </div>
             </div>
             <p x-show="panelArt && cargandoArt" x-cloak
@@ -762,10 +947,41 @@
             </p>
           </div>
 
+          <div x-show="modoSimple && vistaCatalogoSimple === 'galeria'" x-cloak class="pm-simple-gallery" aria-label="Galería de artículos">
+            <p x-show="cargandoArt" class="pm-simple-gallery-empty">Buscando artículos…</p>
+            <p x-show="!cargandoArt && !articulosGaleriaSimple.length" class="pm-simple-gallery-empty">Buscá un artículo o usá la flecha para ver los disponibles.</p>
+            <template x-for="a in articulosGaleriaSimple" :key="'gal-' + a.id_articulo">
+              <article class="pm-simple-gallery-card">
+                <div class="pm-simple-gallery-photo">
+                  <img x-show="a.foto_url" :src="a.foto_url || ''" :alt="a.nombre" @error="a.foto_url = ''" loading="lazy">
+                  <span x-show="!a.foto_url" class="material-icons" aria-label="Sin foto">image_not_supported</span>
+                </div>
+                <div class="pm-simple-gallery-data">
+                  <strong x-text="a.nombre"></strong>
+                  <small x-text="'Manual ' + (a.id_manual || '—') + ' · Interno ' + (a.codartprov || '—')"></small>
+                  <span x-text="'Neto ' + money(a.precio_unitario_neto) + ' · Final ' + money(precioFinalArticulo(a))"></span>
+                  <small x-text="'Marca ' + nombreFaceta('marcas', a.marca_id) + ' · Rubro ' + nombreFaceta('rubros', a.rubro_id)"></small>
+                  <small x-text="stockPacksTexto(a)"></small>
+                  <div class="pm-simple-gallery-actions">
+                    <button type="button" @click="abrirFichaArticulo(a)" aria-label="Ver ficha del artículo"><span class="material-icons" aria-hidden="true">info_outline</span> Detalle</button>
+                    <button type="button" @click="toggleSeleccionArticulo(a)" :disabled="!matrizEditable"
+                            :aria-pressed="estaSeleccionado(a)">
+                      <span class="material-icons" aria-hidden="true" x-text="estaSeleccionado(a) ? 'check_box' : 'check_box_outline_blank'"></span>
+                      <span x-text="estaSeleccionado(a) ? 'Seleccionado' : 'Seleccionar'"></span>
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </template>
+            <button type="button" x-show="hayMasGaleriaSimple" @click="cargarMasGaleriaSimple()" :disabled="cargandoArt"
+                    class="pm-simple-gallery-more"><span class="material-icons" aria-hidden="true">expand_more</span> Cargar más</button>
+          </div>
+
           {# Barra PWA: chip Mostrar/Ocultar todos #}
           <div x-show="draftId && sucursales.length" x-cloak
                class="flex flex-wrap items-center gap-2 px-1 lg:hidden">
             <button type="button"
+                    x-show="!modoSimple"
                     @click="toggleCatalogo()"
                     :disabled="!puedeToggleCatalogo"
                     class="pm-chip-catalogo"
@@ -776,72 +992,45 @@
                   x-text="articulos.length + ' artículo' + (articulos.length === 1 ? '' : 's')"></span>
           </div>
 
-          {# Modo simple móvil: lista plana (1 sucursal) — el nombre del artículo predomina #}
-          <template x-if="modoSimple && sucursales.length">
-            <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <template x-for="art in articulos" :key="'simple-' + art.id_articulo">
-                <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700"
-                     x-show="coincideBusquedaTabla(art)"
-                     :class="filaResaltadaId === art.id_articulo ? 'pm-fila-resaltada' : ''"
-                     :data-pm-fila="art.id_articulo">
-                  <div class="flex items-start justify-between gap-2">
-                    <div class="min-w-0 flex-1">
-                      <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
-                      <p class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400" x-text="stockPacksTexto(art)"></p>
-                    </div>
-                    <button type="button"
-                            @click="eliminarFila(art.id_articulo)"
-                            x-show="matrizEditable"
-                            class="pm-btn-delete pm-touch-target inline-flex shrink-0 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 dark:text-rose-400"
-                            title="Quitar artículo"
-                            :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
-                      <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
-                    </button>
+          <section x-show="modoSimple && draftId" x-cloak class="pm-simple-inline-cart" aria-label="Carrito del pedido">
+            <div class="pm-simple-inline-cart-head">
+              <button type="button" @click="abrirCarritoEnLineaSimple()" :aria-expanded="carritoEnLineaAbierto"
+                      class="pm-simple-cart-toggle">
+                <span class="material-icons" aria-hidden="true">shopping_cart</span>
+                <span x-text="'Carrito (' + carritoItems.length + ')' "></span>
+                <span class="material-icons" aria-hidden="true" x-text="carritoEnLineaAbierto ? 'expand_less' : 'expand_more'"></span>
+              </button>
+              <button type="button" @click="abrirCarritoSimple()" class="pm-simple-cart-modal-btn" aria-label="Abrir carrito en ventana" title="Carrito en ventana">
+                <span class="material-icons" aria-hidden="true">open_in_new</span>
+              </button>
+            </div>
+            <div x-show="carritoEnLineaAbierto" x-cloak class="pm-simple-inline-cart-body">
+              <p x-show="!carritoItems.length" class="pm-simple-empty-cart">Seleccioná artículos para agregarlos al pedido.</p>
+              <template x-for="art in carritoItems" :key="'inline-' + art.id_articulo">
+                <div class="pm-simple-cart-line">
+                  <div class="pm-simple-cart-line-title">
+                    <strong x-text="art.nombre || art.descripcion"></strong>
+                    <button type="button" @click="abrirFichaArticulo(art)" :aria-label="'Ver ficha de ' + art.nombre"><span class="material-icons" aria-hidden="true">info_outline</span></button>
                   </div>
-                  <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(5rem,1fr)_minmax(0,2fr)]">
-                    <div class="min-w-0 pm-desc-mob hidden">
-                      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" :for="'pm-desc-simple-' + art.id_articulo">% desc.</label>
-                      <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                             :id="'pm-desc-simple-' + art.id_articulo"
-                             class="pm-input-dense w-full rounded-md border border-slate-300 bg-white px-2 text-right tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
-                             :value="descFila(art.id_articulo)"
-                             placeholder="0"
-                             title="% descuento fila"
-                             :disabled="!matrizEditable || !puedeEditarDescRenglon"
-                             @change="onDescFila(art.id_articulo, $event.target.value)"/>
-                    </div>
-                    <div class="min-w-0">
-                      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" :for="'pm-qty-simple-' + art.id_articulo">Cantidad</label>
-                      <input type="number" min="0" step="0.001" inputmode="decimal"
-                             :id="'pm-qty-simple-' + art.id_articulo"
-                             :data-pm-qty="art.id_articulo + ':' + sucursales[0].id_cliente_domicilio"
-                             class="pm-input-dense w-full rounded-md border bg-white px-2 text-right tabular-nums text-slate-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
-                             :class="celdaInvalida(art.id_articulo, sucursales[0].id_cliente_domicilio)
-                               ? 'border-amber-500 ring-2 ring-amber-500/40 focus:border-amber-500 focus:ring-amber-500/40 dark:border-amber-500'
-                               : 'border-slate-300 focus:border-sky-400 focus:ring-sky-500/40 dark:border-slate-600'"
-                             :value="celda(art.id_articulo, sucursales[0].id_cliente_domicilio)"
-                             placeholder="0"
-                             :disabled="!matrizEditable"
-                             @change="onCelda(art.id_articulo, sucursales[0].id_cliente_domicilio, $event.target.value)"
-                             @keydown.enter.prevent="focusBuscadorArt()"/>
-                    </div>
+                  <small x-text="'Manual ' + (art.id_manual || '—') + ' · Interno ' + (art.codartprov || '—')"></small>
+                  <div class="pm-simple-cart-line-edit">
+                    <label>Cantidad <button type="button" @click="abrirTecladoCantidad(art, 'carrito')"
+                           :disabled="!matrizEditable || guardandoCantidadSimple" :aria-label="'Editar cantidad de ' + art.nombre"
+                           class="pm-simple-inline-qty-trigger"
+                           x-text="cantidadesCarrito[String(art.id_articulo)] ?? celda(art.id_articulo, sucursales[0]?.id_cliente_domicilio)"></button>
+                    <input type="number" min="0" step="0.001" inputmode="decimal"
+                           class="pm-simple-inline-qty-desktop"
+                           x-model="cantidadesCarrito[String(art.id_articulo)]"
+                           @focus="$event.target.select()" @keydown.enter.prevent="guardarCantidadCarrito(art)"
+                           :disabled="!matrizEditable || guardandoCantidadSimple" :aria-label="'Cantidad de ' + art.nombre"></label>
+                    <button type="button" @click="guardarCantidadCarrito(art)" :disabled="!matrizEditable || guardandoCantidadSimple"
+                            class="pm-simple-save-icon" title="Guardar cantidad" :aria-label="'Guardar cantidad de ' + art.nombre"><span class="material-icons" aria-hidden="true">check</span></button>
+                    <button type="button" @click="eliminarFila(art.id_articulo)" x-show="matrizEditable" title="Quitar artículo" :aria-label="'Quitar ' + art.nombre"><span class="material-icons" aria-hidden="true">delete_outline</span></button>
                   </div>
                 </div>
               </template>
-              <div x-show="mostrarTotalesPorSucursal" x-cloak
-                   class="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
-                <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Total packs</span>
-                <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100"
-                      x-text="sumaColumnaSucursal(sucursales[0].id_cliente_domicilio)"></span>
-              </div>
-              {# Empty state líneas (simple móvil): hint claro bajo el buscador #}
-              <p x-show="!articulos.length"
-                 class="py-3 text-center text-xs text-slate-500 dark:text-slate-400">
-                Buscá un artículo para agregar la primera línea.
-              </p>
             </div>
-          </template>
-
+          </section>
           {# Modo masivo móvil: acordeón por sucursal (primera abierta por defecto) #}
           <template x-if="!modoSimple">
             <div class="space-y-2">
@@ -949,7 +1138,7 @@
 
       {# Pie compacto: descuento + totales en una sola fila (más alto útil para la matriz) #}
       <div class="pm-preview-panel flex flex-shrink-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-sky-200/80 bg-white px-3 py-2 shadow-sm dark:border-sky-900/40 dark:bg-slate-800"
-           x-show="draftId && sucursales.length" x-cloak>
+           x-show="!modoSimple && draftId && sucursales.length" x-cloak>
         <div class="flex min-w-0 flex-wrap items-center gap-2">
           <label class="whitespace-nowrap text-xs font-medium text-slate-600 dark:text-slate-300" for="pm-desc-pie">Desc. pie lote (%)</label>
           <input id="pm-desc-pie" type="number" min="0" max="100" step="0.01" inputmode="decimal"
@@ -988,6 +1177,227 @@
           </div>
         </div>
       </div>
+      <footer x-show="modoSimple && draftId && sucursales.length" x-cloak class="pm-simple-footer" aria-label="Totales del pedido">
+        <div class="pm-simple-footer-head"><span class="material-icons" aria-hidden="true">receipt_long</span> Pie del pedido</div>
+        <div class="pm-simple-footer-tools">
+          <label for="pm-desc-simple">Descuento (%)
+            <input id="pm-desc-simple" type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                   :value="descPiePct || ''" placeholder="0" :disabled="!matrizEditable || !puedeEditarDescPie"
+                   @change="onDescPie($event.target.value)">
+          </label>
+          <button type="button" @click="refrescarPreview()" :disabled="previewCargando" title="Validar impuestos y totales">
+            <span class="material-icons" aria-hidden="true">calculate</span>
+            <span x-text="previewCargando ? 'Validando…' : 'Validar'"></span>
+          </button>
+          <span class="pm-simple-estimate" x-text="previewFuente === 'servidor' ? 'Validado' : 'Estimado'"></span>
+        </div>
+        <div class="pm-simple-totals">
+          <div><span>Total</span><strong x-text="money(resumenPieSimple.bruto)"></strong></div>
+          <div><span>Descuento</span><strong x-text="money(resumenPieSimple.descuento)"></strong></div>
+          <div><span>Subtotal</span><strong x-text="money(resumenPieSimple.subtotal)"></strong></div>
+          <div><span>IVA</span><strong x-text="money(resumenPieSimple.iva)"></strong></div>
+          <div><span>Imp. internos</span><strong x-text="resumenPieSimple.internos === null ? 'Pendiente' : money(resumenPieSimple.internos)"></strong></div>
+          <div><span>Percepciones</span><strong title="Se determinan al confirmar">Al confirmar</strong></div>
+          <div class="pm-simple-grand-total"><span>Total general</span><strong x-text="money(resumenPieSimple.total)"></strong></div>
+        </div>
+        <small class="pm-simple-tax-note">El total mostrado no incluye percepciones; se determinan al confirmar.</small>
+        <button type="button" x-show="!pedidoSoloConsulta" @click="confirmarLote()"
+                :disabled="confirmando || previewCargando || !puedeConfirmar" class="pm-simple-confirm">
+          <span class="material-icons" aria-hidden="true">check_circle</span>
+          <span x-text="confirmando ? 'Confirmando…' : 'Confirmar pedido'"></span>
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  {# Selección múltiple del pedido simple: permite revisar cantidades antes de cargar el carrito. #}
+  <div x-show="modoSimple && seleccionSimpleAbierta" x-cloak
+       @keydown.escape.window="seleccionSimpleAbierta = false"
+       class="fixed inset-0 z-[100] flex justify-end" role="dialog" aria-modal="true" aria-label="Artículos seleccionados">
+    <button type="button" @click="seleccionSimpleAbierta = false" class="absolute inset-0 bg-slate-950/60" aria-label="Cerrar selección"></button>
+    <aside class="relative flex h-full w-full max-w-lg flex-col bg-white shadow-2xl dark:bg-slate-900">
+      <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+        <div><h2 class="text-lg font-bold text-slate-900 dark:text-white">Artículos seleccionados</h2>
+          <p class="text-xs text-slate-500" x-text="cantidadSeleccionados + ' artículos para agregar'"></p></div>
+        <button type="button" @click="seleccionSimpleAbierta = false" class="inline-flex h-10 w-10 items-center justify-center rounded-lg" aria-label="Cerrar selección"><span class="material-icons">close</span></button>
+      </div>
+      <div class="flex-1 space-y-2 overflow-y-auto p-4">
+        <template x-for="art in seleccionadosSimple" :key="'elegido-' + art.id_articulo">
+          <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+            <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="art.nombre || art.descripcion"></p>
+            <p class="mt-0.5 text-[11px] text-slate-500" x-text="'Manual: ' + (art.id_manual || '—') + ' · Interno: ' + (art.codartprov || '—')"></p>
+            <button type="button" @click="abrirFichaArticulo(art)" class="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-sky-700 underline dark:text-sky-300"><span class="material-icons text-base" aria-hidden="true">info_outline</span> Ver ficha</button>
+            <div class="mt-2 flex flex-wrap items-end gap-2">
+              <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Cantidad
+                <button type="button" @click="abrirTecladoCantidad(art, 'seleccion')"
+                        :disabled="!matrizEditable || guardandoCantidadSimple"
+                        class="pm-simple-qty-trigger mt-1 block w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        :aria-label="'Editar cantidad para ' + (art.nombre || art.id_manual)"
+                        x-text="cantidadesSeleccionadas[String(art.id_articulo)] ?? 1"></button>
+                <input type="number" min="0.001" step="0.001" inputmode="decimal"
+                       x-model.number="cantidadesSeleccionadas[String(art.id_articulo)]"
+                       @focus="$event.target.select()"
+                       :disabled="!matrizEditable || guardandoCantidadSimple"
+                       class="pm-simple-qty-desktop mt-1 w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                       :aria-label="'Cantidad para ' + (art.nombre || art.id_manual)">
+              </label>
+              <button type="button" @click="agregarUnoSeleccionadoSimple(art)" :disabled="guardandoCantidadSimple || !matrizEditable"
+                       class="pm-simple-add-icon inline-flex h-10 items-center justify-center rounded-md bg-sky-600 px-3 text-white disabled:opacity-50" :aria-label="'Agregar ' + art.nombre" title="Agregar al carrito"><span class="material-icons text-xl" aria-hidden="true">add</span></button>
+              <button type="button" @click="toggleSeleccionArticulo(art)" :disabled="guardandoCantidadSimple"
+                       class="ml-auto inline-flex h-10 items-center gap-1 rounded-md border border-rose-200 px-2 text-xs font-semibold text-rose-700 disabled:opacity-50 dark:text-rose-300"><span class="material-icons text-base" aria-hidden="true">delete_outline</span> Quitar</button>
+            </div>
+          </div>
+
+        </template>
+      </div>
+      <div class="border-t border-slate-200 p-4 dark:border-slate-700">
+        <button type="button" @click="agregarSeleccionadosSimple()"
+                :disabled="guardandoCantidadSimple || !cantidadSeleccionados || !matrizEditable"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">
+          <span class="material-icons text-lg" aria-hidden="true">playlist_add</span>
+          <span x-text="guardandoCantidadSimple ? 'Guardando…' : 'Agregar seleccionados'"></span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <div x-show="modoSimple && tecladoCantidadAbierto" x-cloak
+       @keydown.escape.window="tecladoCantidadAbierto = false"
+       class="pm-simple-keypad-backdrop" role="dialog" aria-modal="true" aria-label="Ingresar cantidad">
+    <button type="button" class="pm-simple-keypad-shade" @click="tecladoCantidadAbierto = false" aria-label="Cerrar teclado de cantidad"></button>
+    <div class="pm-simple-keypad">
+      <div class="pm-simple-keypad-head">
+        <strong>Cantidad</strong>
+        <button type="button" @click="tecladoCantidadAbierto = false" aria-label="Cerrar"><span class="material-icons" aria-hidden="true">close</span></button>
+      </div>
+      <output x-text="tecladoCantidadValor || '0'"></output>
+      <div class="pm-simple-keypad-grid">
+        <template x-for="digito in ['1','2','3','4','5','6','7','8','9']" :key="digito">
+          <button type="button" @click="teclaCantidad(digito)" x-text="digito"></button>
+        </template>
+        <button type="button" @click="teclaCantidad('.')" aria-label="Coma decimal">,</button>
+        <button type="button" @click="teclaCantidad('0')">0</button>
+        <button type="button" @click="teclaCantidad('borrar')" aria-label="Borrar último dígito"><span class="material-icons" aria-hidden="true">backspace</span></button>
+      </div>
+      <div class="pm-simple-keypad-tools">
+        <button type="button" @click="teclaCantidad('limpiar')">Limpiar</button>
+        <button type="button" @click="ajustarTecladoCantidad(-1)" aria-label="Restar uno"><span class="material-icons" aria-hidden="true">remove</span> 1</button>
+        <button type="button" @click="ajustarTecladoCantidad(1)" aria-label="Sumar uno"><span class="material-icons" aria-hidden="true">add</span> 1</button>
+      </div>
+      <button type="button" class="pm-simple-keypad-accept" @click="aceptarTecladoCantidad()"><span class="material-icons" aria-hidden="true">check</span> Aceptar</button>
+    </div>
+  </div>
+
+  {# Ficha de producto del pedido simple. Los precios se toman del catálogo de este pedido/cliente. #}
+  <div x-show="modoSimple && fichaArticuloAbierta" x-cloak
+       @keydown.escape.window="fichaArticuloAbierta = false"
+       class="fixed inset-0 z-[110] flex items-center justify-center p-3" role="dialog" aria-modal="true" aria-label="Ficha del artículo">
+    <button type="button" @click="fichaArticuloAbierta = false" class="absolute inset-0 bg-slate-950/65" aria-label="Cerrar ficha"></button>
+    <div class="relative max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-4 shadow-2xl dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white" x-text="fichaArticulo?.nombre || 'Artículo'"></h2>
+        <button type="button" @click="fichaArticuloAbierta = false" class="h-10 w-10 shrink-0 rounded-lg" aria-label="Cerrar ficha"><span class="material-icons">close</span></button>
+      </div>
+      <div class="mt-3 flex h-32 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <img x-show="fichaDetalle?.foto_url && !fichaFotoError" x-cloak
+             :src="fichaDetalle?.foto_url || ''" :alt="fichaArticulo?.nombre || 'Foto del artículo'"
+             @error="fichaFotoError = true" class="h-full w-full object-contain">
+        <span x-show="!fichaDetalle?.foto_url || fichaFotoError">Foto no disponible</span>
+      </div>
+      <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-slate-800 dark:text-slate-200">
+        <div><dt class="text-xs text-slate-500">Código manual</dt><dd x-text="fichaArticulo?.id_manual || '—'"></dd></div>
+        <div><dt class="text-xs text-slate-500">Código interno</dt><dd x-text="fichaArticulo?.codartprov || '—'"></dd></div>
+        <div class="col-span-2"><dt class="text-xs text-slate-500">Descripción</dt><dd x-text="fichaDetalle?.descripcion || fichaArticulo?.descripcion || '—'"></dd></div>
+        <div><dt class="text-xs text-slate-500">Precio neto</dt><dd class="font-semibold" x-text="money(fichaArticulo?.precio_unitario_neto)"></dd></div>
+        <div><dt class="text-xs text-slate-500">Precio final</dt><dd class="font-semibold" x-text="money(precioFinalArticulo(fichaArticulo))"></dd></div>
+        <div><dt class="text-xs text-slate-500">IVA</dt><dd x-text="money(Number(fichaArticulo?.precio_unitario_neto || 0) * Number(fichaArticulo?.alicuota_iva || 0) / 100) + ' (' + Number(fichaArticulo?.alicuota_iva || 0) + '%)'"></dd></div>
+        <div><dt class="text-xs text-slate-500">Imp. internos</dt><dd x-text="money(Number(fichaArticulo?.precio_unitario_neto || 0) * Number(fichaArticulo?.impuesto_interno_pct || 0) / 100) + ' (' + Number(fichaArticulo?.impuesto_interno_pct || 0) + '%)'"></dd></div>
+        <div><dt class="text-xs text-slate-500">Marca</dt><dd x-text="fichaDetalle?.marca || nombreFaceta('marcas', fichaArticulo?.marca_id)"></dd></div>
+        <div><dt class="text-xs text-slate-500">Rubro</dt><dd x-text="fichaDetalle?.rubro || nombreFaceta('rubros', fichaArticulo?.rubro_id)"></dd></div>
+        <div class="col-span-2"><dt class="text-xs text-slate-500">Stock disponible del pedido</dt><dd x-text="stockPacksTexto(fichaArticulo)"></dd></div>
+      </dl>
+      <div x-show="fichaDetalle?.stock_depositos?.length" x-cloak class="mt-3 border-t border-slate-200 pt-3 text-xs dark:border-slate-700">
+        <p class="flex justify-between font-semibold text-slate-800 dark:text-slate-200"><span>Stock disponible por depósito</span><span x-text="stockTotalDepositos()"></span></p>
+        <template x-for="deposito in fichaDetalle?.stock_depositos || []" :key="deposito.id_deposito">
+          <p class="flex justify-between py-1 text-slate-600 dark:text-slate-300"><span x-text="deposito.nombre_deposito || deposito.id_deposito"></span><span x-text="deposito.disponible"></span></p>
+        </template>
+      </div>
+      <p x-show="fichaCargando" class="mt-2 text-xs text-slate-500">Cargando más detalles…</p>
+      <button type="button" @click="fichaArticuloAbierta = false" class="mt-4 w-full rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white">Volver a la selección</button>
+    </div>
+  </div>
+
+  {# Carrito del pedido simple: solo renglones con cantidad, editable sin buscar la fila. #}
+  <div x-show="modoSimple && carritoAbierto" x-cloak
+       @keydown.escape.window="carritoAbierto = false"
+       class="fixed inset-0 z-[100] flex justify-end" role="dialog" aria-modal="true" aria-label="Carrito del pedido">
+    <button type="button" @click="carritoAbierto = false"
+            class="absolute inset-0 bg-slate-950/60" aria-label="Cerrar carrito"></button>
+    <aside class="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-900">
+      <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+        <div><h2 class="text-lg font-bold text-slate-900 dark:text-white">Carrito del pedido</h2>
+          <p class="text-xs text-slate-500" x-text="carritoItems.length + ' artículos con cantidad'"></p></div>
+        <button type="button" @click="carritoAbierto = false" class="inline-flex h-10 w-10 items-center justify-center rounded-lg"
+                aria-label="Cerrar carrito"><span class="material-icons">close</span></button>
+      </div>
+      <div class="flex-1 space-y-2 overflow-y-auto p-4">
+        <p x-show="!carritoItems.length" class="rounded-lg border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
+          El carrito todavía no tiene artículos con cantidad.
+        </p>
+        <template x-for="art in carritoItems" :key="'carrito-' + art.id_articulo">
+          <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+            <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="art.nombre || art.descripcion"></p>
+            <p class="mt-0.5 text-[11px] text-slate-500"
+               x-text="'Manual: ' + (art.id_manual || '—') + ' · Interno: ' + (art.codartprov || '—')"></p>
+            <button type="button" @click="abrirFichaArticulo(art)" class="mt-1 text-xs font-semibold text-sky-700 underline dark:text-sky-300">Ver ficha del artículo</button>
+            <div class="mt-2 flex items-end gap-2">
+              <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Cantidad
+                <button type="button" @click="abrirTecladoCantidad(art, 'carrito')"
+                        :disabled="!matrizEditable || guardandoCantidadSimple"
+                        class="pm-simple-qty-trigger mt-1 block w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        :aria-label="'Editar cantidad de ' + art.nombre"
+                        x-text="cantidadesCarrito[String(art.id_articulo)] ?? celda(art.id_articulo, sucursales[0]?.id_cliente_domicilio)"></button>
+                <input type="number" min="0" step="0.001" inputmode="decimal"
+                       x-model="cantidadesCarrito[String(art.id_articulo)]"
+                       @focus="$event.target.select()"
+                       @keydown.enter.prevent="guardarCantidadCarrito(art)"
+                       :disabled="!matrizEditable || guardandoCantidadSimple"
+                       class="pm-simple-qty-desktop mt-1 w-24 rounded-md border border-slate-300 bg-white px-2 text-right text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+              </label>
+              <button type="button" @click="guardarCantidadCarrito(art)" :disabled="!matrizEditable || guardandoCantidadSimple"
+                      class="pm-simple-save-icon h-10 rounded-md px-3 text-white disabled:opacity-50" :aria-label="'Guardar cantidad de ' + art.nombre" title="Guardar cantidad"><span class="material-icons text-xl" aria-hidden="true">check</span></button>
+              <button type="button" @click="eliminarFila(art.id_articulo)" x-show="matrizEditable"
+                      class="ml-auto inline-flex h-9 items-center gap-1 rounded-md border border-rose-200 px-2 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                <span class="material-icons text-base" aria-hidden="true">delete_outline</span> Quitar
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="border-t border-slate-200 p-4 dark:border-slate-700">
+        <p class="mb-2 flex justify-between text-sm font-semibold"><span>Total estimado</span><span x-text="money(totalesPie.total)"></span></p>
+        <button type="button" @click="confirmarDesdeCarritoSimple()"
+                :disabled="confirmando || previewCargando || !puedeConfirmar || pedidoSoloConsulta || guardandoCantidadSimple"
+                class="w-full rounded-lg bg-orange-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">Confirmar pedido</button>
+      </div>
+    </aside>
+  </div>
+
+  <div x-show="modoSimple && nuevoPedidoSimpleAbierto" x-cloak
+       @keydown.escape.window="nuevoPedidoSimpleAbierto = false"
+       class="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Nuevo pedido">
+    <div class="absolute inset-0 bg-slate-950/60"></div>
+    <div class="relative w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-2">
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white">Pedido confirmado</h2>
+        <button type="button" @click="nuevoPedidoSimpleAbierto = false" aria-label="Ver pedido confirmado"><span class="material-icons" aria-hidden="true">close</span></button>
+      </div>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">¿Cómo querés cargar el siguiente pedido?</p>
+      <div class="mt-4 grid gap-2">
+        <button type="button" @click="onNuevoMismoCliente()" class="pm-simple-next-action"><span class="material-icons" aria-hidden="true">person</span> Mismo cliente</button>
+        <button type="button" @click="onNuevoSimple()" class="pm-simple-next-action"><span class="material-icons" aria-hidden="true">person_search</span> Otro cliente</button>
+      </div>
+      <button type="button" @click="nuevoPedidoSimpleAbierto = false" class="mt-3 w-full text-sm text-sky-700 dark:text-sky-300">Ver pedido confirmado</button>
     </div>
   </div>
 
@@ -1100,5 +1510,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo45"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple48"></script>
 {% endblock %}

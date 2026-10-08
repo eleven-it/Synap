@@ -8,11 +8,14 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import MySQLdb
+
+from core.mysql_pool import get_connection
 from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 from ecom.models import EcomCart, EcomPedidoMasivoDraft
 from ecom.services.comprobantes_anulacion import anular_pedido_relay
 from ecom.services.mayorista_cart_service import agregar_item, recalcular_totales
-from ecom.services.mayorista_checkout_service import CheckoutInput, confirmar
+from ecom.services.mayorista_checkout_service import CheckoutInput, _clave_forma_entrega, confirmar
 from ecom.services.pedido_cabecera_comercial import (
     PedidoCabeceraComercial,
     parsear_cabecera_desde_body,
@@ -178,6 +181,11 @@ def _checkout_input_desde_cabecera(
     *,
     id_punto_venta: int,
     id_cliente_domicilio: int,
+    id_ruta: Optional[int],
+    id_transporte: Optional[int],
+    id_repartidor: Optional[int],
+    operador_logistico: str,
+    nro_seguimiento: str,
     forma_entrega: str,
     observaciones: str,
     agente_percep: Optional[str],
@@ -189,6 +197,11 @@ def _checkout_input_desde_cabecera(
         tipo=EcomCart.TIPO_PEDIDO,
         id_punto_venta=id_punto_venta,
         id_cliente_domicilio=id_cliente_domicilio,
+        id_ruta=id_ruta,
+        id_transporte=id_transporte,
+        id_repartidor=id_repartidor,
+        operador_logistico=operador_logistico,
+        nro_seguimiento=nro_seguimiento,
         forma_entrega=forma_entrega or "",
         observaciones=observaciones,
         agente_percep=agente_percep,
@@ -300,6 +313,7 @@ def calcular_totales_lote_masivo(
                     "id_cliente_domicilio": id_dom,
                     "neto": float(cart.subtotal_neto or 0),
                     "iva": float(iva_total),
+                    "impuesto_interno": float(cart.impuesto_interno_total or 0),
                     "total": float(cart.total or 0),
                 }
             )
@@ -308,6 +322,7 @@ def calcular_totales_lote_masivo(
 
     neto_lote = sum(s["neto"] for s in sucursales_out)
     iva_lote = sum(s["iva"] for s in sucursales_out)
+    interno_lote = sum(s["impuesto_interno"] for s in sucursales_out)
     total_lote = sum(s["total"] for s in sucursales_out)
 
     return {
@@ -316,6 +331,7 @@ def calcular_totales_lote_masivo(
         "total_lote": {
             "neto": round(neto_lote, 2),
             "iva": round(iva_lote, 2),
+            "impuesto_interno": round(interno_lote, 2),
             "total": round(total_lote, 2),
         },
         "warning": " ".join(warnings).strip(),
@@ -464,6 +480,75 @@ def _anular_pedido_origen_simple(
     return cod_origen, None
 
 
+def _validar_entrega_antes_de_anular(
+    draft: EcomPedidoMasivoDraft,
+    domicilios: List[int],
+    *,
+    forma_entrega: str,
+    id_ruta: Optional[int],
+    id_repartidor: Optional[int],
+    operador_logistico: str,
+    transportes_por_domicilio: Optional[Dict[str, int]],
+) -> Optional[str]:
+    """Evita anular el PED origen si un dato de entrega fallaría en checkout."""
+    forma = _clave_forma_entrega(forma_entrega)
+    with get_connection(draft.base_empresa) as conn:
+        cur = conn.cursor(MySQLdb.cursors.DictCursor)
+        if forma == "transporte":
+            for id_dom in domicilios:
+                cur.execute(
+                    """
+                    SELECT tr.id_transporte FROM cliente_domicilio AS cm
+                    LEFT JOIN transporte AS tr ON tr.id_transporte = cm.id_transporte
+                                              AND tr.anulado = 'No'
+                    WHERE cm.id_cliente_domicilio = %s AND cm.id_cliente = %s
+                      AND cm.anulado = 'No'
+                    LIMIT 1
+                    """,
+                    [id_dom, int(draft.id_cliente)],
+                )
+                domicilio = cur.fetchone()
+                if not domicilio:
+                    return f"Sucursal #{id_dom}: el domicilio no pertenece al cliente o está anulado."
+                transporte = to_int_or_none(
+                    (transportes_por_domicilio or {}).get(str(id_dom))
+                ) or to_int_or_none(domicilio.get("id_transporte"))
+                if transporte is None:
+                    return f"Sucursal #{id_dom}: seleccioná un transporte activo."
+                cur.execute(
+                    "SELECT id_transporte FROM transporte WHERE id_transporte = %s AND anulado = 'No' LIMIT 1",
+                    [transporte],
+                )
+                if not cur.fetchone():
+                    return f"Sucursal #{id_dom}: el transporte elegido no está activo."
+        if forma == "envia repartidor":
+            repartidor = to_int_or_none(id_repartidor)
+            if repartidor is None:
+                return "Seleccioná un usuario repartidor."
+            cur.execute(
+                "SELECT id_usuario FROM usuarios WHERE id_usuario = %s AND baja_usuario = 'No' LIMIT 1",
+                [repartidor],
+            )
+            if not cur.fetchone():
+                return "El usuario repartidor elegido no está activo."
+        if forma == "operador logistico" and str_or_default(operador_logistico, "").strip() not in (
+            "Mercado envio", "Envio Pack", "OCA Envio"
+        ):
+            return "Seleccioná un operador logístico válido."
+        ruta = to_int_or_none(id_ruta)
+        if ruta is not None and forma in ("envia por despacho", "transporte"):
+            cur.execute("SELECT activ_logistica FROM configuracion LIMIT 1")
+            if str((cur.fetchone() or {}).get("activ_logistica") or "").strip() == "Si":
+                cur.execute(
+                    "SELECT id_ruta FROM logi_hoja_ruta WHERE id_ruta = %s "
+                    "AND COALESCE(anulado, 'No') = 'No' LIMIT 1",
+                    [ruta],
+                )
+                if not cur.fetchone():
+                    return "La ruta logística elegida no está disponible."
+    return None
+
+
 def confirmar_lote_masivo_stream(
     draft: EcomPedidoMasivoDraft,
     *,
@@ -474,6 +559,11 @@ def confirmar_lote_masivo_stream(
     id_deposito: int = 1,
     desc_pie_pct: Optional[Any] = None,
     forma_entrega: str = "",
+    id_ruta: Optional[int] = None,
+    id_repartidor: Optional[int] = None,
+    operador_logistico: str = "",
+    transportes_por_domicilio: Optional[Dict[str, int]] = None,
+    seguimientos_por_domicilio: Optional[Dict[str, str]] = None,
     observaciones: str = "",
     agente_percep: Optional[str] = None,
     sess_user: Optional[Dict[str, Any]] = None,
@@ -548,6 +638,19 @@ def confirmar_lote_masivo_stream(
     precio_map = precios_fila_efectivos(draft, draft.base_empresa, lista_id=lista_ef)
     pie = _pie_efectivo(draft, desc_pie_pct)
 
+    err_entrega = _validar_entrega_antes_de_anular(
+        draft,
+        [id_dom for id_dom, _ in doms_ordenados],
+        forma_entrega=forma_entrega,
+        id_ruta=id_ruta,
+        id_repartidor=id_repartidor,
+        operador_logistico=operador_logistico,
+        transportes_por_domicilio=transportes_por_domicilio,
+    )
+    if err_entrega:
+        yield _evento_fin(ok=False, message=err_entrega)
+        return
+
     cod_origen_anulado, err_origen = _anular_pedido_origen_simple(draft)
     if err_origen:
         yield _evento_fin(ok=False, message=err_origen)
@@ -615,6 +718,11 @@ def confirmar_lote_masivo_stream(
                     cabecera,
                     id_punto_venta=pv,
                     id_cliente_domicilio=id_dom,
+                    id_ruta=id_ruta,
+                    id_transporte=to_int_or_none((transportes_por_domicilio or {}).get(str(id_dom))),
+                    id_repartidor=id_repartidor,
+                    operador_logistico=operador_logistico,
+                    nro_seguimiento=str((seguimientos_por_domicilio or {}).get(str(id_dom)) or ""),
                     forma_entrega=forma_entrega or "",
                     observaciones=obs_sucursal,
                     agente_percep=agente_percep,
@@ -627,6 +735,11 @@ def confirmar_lote_masivo_stream(
                     tipo=EcomCart.TIPO_PEDIDO,
                     id_punto_venta=pv,
                     id_cliente_domicilio=id_dom,
+                    id_ruta=id_ruta,
+                    id_transporte=to_int_or_none((transportes_por_domicilio or {}).get(str(id_dom))),
+                    id_repartidor=id_repartidor,
+                    operador_logistico=operador_logistico,
+                    nro_seguimiento=str((seguimientos_por_domicilio or {}).get(str(id_dom)) or ""),
                     forma_entrega=forma_entrega or "",
                     observaciones=obs_sucursal,
                     agente_percep=agente_percep,
@@ -760,6 +873,11 @@ def confirmar_lote_masivo(
     id_deposito: int = 1,
     desc_pie_pct: Optional[Any] = None,
     forma_entrega: str = "",
+    id_ruta: Optional[int] = None,
+    id_repartidor: Optional[int] = None,
+    operador_logistico: str = "",
+    transportes_por_domicilio: Optional[Dict[str, int]] = None,
+    seguimientos_por_domicilio: Optional[Dict[str, str]] = None,
     observaciones: str = "",
     agente_percep: Optional[str] = None,
     sess_user: Optional[Dict[str, Any]] = None,
@@ -784,6 +902,11 @@ def confirmar_lote_masivo(
         id_deposito=id_deposito,
         desc_pie_pct=desc_pie_pct,
         forma_entrega=forma_entrega,
+        id_ruta=id_ruta,
+        id_repartidor=id_repartidor,
+        operador_logistico=operador_logistico,
+        transportes_por_domicilio=transportes_por_domicilio,
+        seguimientos_por_domicilio=seguimientos_por_domicilio,
         observaciones=observaciones,
         agente_percep=agente_percep,
         sess_user=sess_user,

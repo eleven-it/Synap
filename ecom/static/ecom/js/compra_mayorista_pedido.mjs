@@ -143,6 +143,12 @@ export function compraMayoristaPedidoMixin() {
         }));
       }
       if (cab.forma_entrega) this.formaEntrega = cab.forma_entrega;
+      if (cab.id_cliente_domicilio) this.idClienteDomicilio = Number(cab.id_cliente_domicilio);
+      if (cab.id_ruta) this.idRuta = Number(cab.id_ruta);
+      if (cab.id_transporte) this.idTransporte = Number(cab.id_transporte);
+      if (cab.id_repartidor) this.idRepartidor = Number(cab.id_repartidor);
+      if (cab.operador_logistico) this.operadorLogistico = cab.operador_logistico;
+      if (cab.nro_seguimiento) this.nroSeguimiento = cab.nro_seguimiento;
       if (cab.observaciones) this.observaciones = cab.observaciones;
       return true;
     },
@@ -207,6 +213,12 @@ export function compraMayoristaPedidoMixin() {
           }));
         }
         if (cab.forma_entrega) this.formaEntrega = cab.forma_entrega;
+        if (cab.id_cliente_domicilio) this.idClienteDomicilio = Number(cab.id_cliente_domicilio);
+        if (cab.id_ruta) this.idRuta = Number(cab.id_ruta);
+        if (cab.id_transporte) this.idTransporte = Number(cab.id_transporte);
+        if (cab.id_repartidor) this.idRepartidor = Number(cab.id_repartidor);
+        if (cab.operador_logistico) this.operadorLogistico = cab.operador_logistico;
+        if (cab.nro_seguimiento) this.nroSeguimiento = cab.nro_seguimiento;
         if (cab.observaciones) this.observaciones = cab.observaciones;
 
         if (anulado || estado.toLowerCase() !== 'pendiente') {
@@ -379,6 +391,18 @@ export function compraMayoristaPedidoMixin() {
     },
 
     async _confirmarCambiosPendiente() {
+      if (this.formaEntrega.trim().toLowerCase() === 'transporte' && !this.idClienteDomicilio) {
+        this.flash('Seleccioná un domicilio de entrega para usar Transporte antes de reemplazar el pedido.', false);
+        return;
+      }
+      if (this.formaEntrega.trim().toLowerCase() === 'transporte' && !this.idTransporte) {
+        this.flash('Seleccioná un transporte antes de reemplazar el pedido.', false);
+        return;
+      }
+      if (this.formaEntrega.trim().toLowerCase().includes('repartidor') && !this.idRepartidor) {
+        this.flash('Seleccioná un usuario repartidor antes de reemplazar el pedido.', false);
+        return;
+      }
       this.confirmando = true;
       const motivo = `Edición Synap: reemplazo PED ${this.cabeceraPedido?.nro_comprobante || this.codMov}`;
       const anular = await this.api(this.urls.anular, 'POST', {
@@ -395,6 +419,13 @@ export function compraMayoristaPedidoMixin() {
       const body = {
         tipo: this.tipo,
         forma_entrega: this.formaEntrega,
+        id_cliente_domicilio: this.idClienteDomicilio,
+        id_ruta: this.muestraRutaEntrega ? this.idRuta : null,
+        id_transporte: this.formaEntrega.trim().toLowerCase() === 'transporte' ? this.idTransporte : null,
+        id_repartidor: this.formaEntrega.trim().toLowerCase().includes('repartidor') ? this.idRepartidor : null,
+        operador_logistico: this.formaEntrega.trim().toLowerCase().startsWith('operador log') ? this.operadorLogistico : '',
+        nro_seguimiento: this.linkSeguimiento
+          ? `${this.nroSeguimiento} - ${this.linkSeguimiento}` : this.nroSeguimiento,
         observaciones: this.observaciones,
       };
       if (this.esCliente) body.es_cliente = true;

@@ -28,8 +28,79 @@
           <input id="pedidos-forma-entrega"
                  type="text"
                  x-model="formaEntrega"
-                 placeholder="Retira / Envío"
+                 list="pedidos-formas-entrega"
+                 placeholder="Elegí una forma de entrega"
                  class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+          <datalist id="pedidos-formas-entrega">
+            <option value="Retira cliente mostrador"></option>
+            <option value="Retira cliente despacho"></option>
+            <option value="Envía por despacho"></option>
+            <option value="Entrega vendedor"></option>
+            <option value="Transporte"></option>
+            <option value="Envia repartidor"></option>
+            <option value="Reservado en depósito"></option>
+            <option value="Operador logistico"></option>
+          </datalist>
+        </div>
+        <div>
+          <label for="pedidos-domicilio-entrega" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Domicilio de entrega</label>
+          <select id="pedidos-domicilio-entrega" x-model.number="idClienteDomicilio" @change="onDomicilioEntregaChange()"
+                  class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none">
+            <option value="">Seleccioná un domicilio</option>
+            <template x-for="d in domiciliosCliente" :key="d.idDom">
+              <option :value="d.idDom" x-text="[d.Calle, d.NroCalle, d.Dpto].filter(Boolean).join(' ') || `Domicilio ${d.idDom}`"></option>
+            </template>
+          </select>
+        </div>
+        <div x-show="formaEntrega.trim().toLowerCase() === 'transporte'" x-cloak>
+          <label for="pedidos-transporte" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Transporte</label>
+          <select id="pedidos-transporte" x-model.number="idTransporte"
+                  class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none">
+            <option value="">Seleccioná un transporte</option>
+            <template x-for="t in transportes" :key="t.id">
+              <option :value="t.id" x-text="t.nombre"></option>
+            </template>
+          </select>
+          <span class="block text-xs text-slate-500 mt-1" x-show="idClienteDomicilio" x-text="transporteHabitualNombre ? `Habitual del domicilio: ${transporteHabitualNombre}` : 'Este domicilio no tiene transporte habitual'"></span>
+        </div>
+        <div x-show="formaEntrega.trim().toLowerCase() === 'transporte'" x-cloak>
+          <label for="pedidos-seguimiento" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nro. de seguimiento</label>
+          <input id="pedidos-seguimiento" type="text" x-model="nroSeguimiento"
+                 class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 outline-none" />
+        </div>
+        <div x-show="formaEntrega.trim().toLowerCase() === 'transporte'" x-cloak>
+          <label for="pedidos-link-seguimiento" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Link de seguimiento</label>
+          <input id="pedidos-link-seguimiento" type="text" x-model="linkSeguimiento"
+                 class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 outline-none" />
+        </div>
+        <div x-show="formaEntrega.trim().toLowerCase() === 'envia repartidor' || formaEntrega.trim().toLowerCase() === 'envía repartidor'" x-cloak>
+          <label for="pedidos-repartidor" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Usuario repartidor</label>
+          <select id="pedidos-repartidor" x-model.number="idRepartidor"
+                  class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 outline-none">
+            <option value="">Seleccioná un usuario</option>
+            <template x-for="u in repartidores" :key="u.id">
+              <option :value="u.id" x-text="u.nombre"></option>
+            </template>
+          </select>
+        </div>
+        <div x-show="formaEntrega.trim().toLowerCase() === 'operador logistico' || formaEntrega.trim().toLowerCase() === 'operador logístico'" x-cloak>
+          <label for="pedidos-operador" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Operador logístico</label>
+          <select id="pedidos-operador" x-model="operadorLogistico"
+                  class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 outline-none">
+            <template x-for="o in operadoresLogisticos" :key="o">
+              <option :value="o" x-text="o"></option>
+            </template>
+          </select>
+        </div>
+        <div x-show="muestraRutaEntrega" x-cloak>
+          <label for="pedidos-ruta-entrega" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Ruta logística</label>
+          <select id="pedidos-ruta-entrega" x-model.number="idRuta"
+                  class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none">
+            <option value="">Sin ruta asignada</option>
+            <template x-for="r in rutasEntrega" :key="r.id">
+              <option :value="r.id" x-text="`${r.id} — ${r.nombre || 'Ruta'}${r.fecha_salida ? ' · ' + r.fecha_salida : ''}`"></option>
+            </template>
+          </select>
         </div>
       </div>
       <div>

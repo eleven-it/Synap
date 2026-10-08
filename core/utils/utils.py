@@ -129,6 +129,14 @@ APPS_MENU = [
                         "menu_item_id": "ventas_cb_pedidos",
                     },
                     {
+                        "label": _("Nuevo pedido"),
+                        "url": "ecom:mayoristapp_pedido_masivo_sucursales",
+                        "url_query": {"modo": "simple"},
+                        "icon": "add_shopping_cart",
+                        "permission": ["ecom.pedidos.crear", "ecom.pedido_masivo.usar"],
+                        "menu_item_id": "ventas_cb_nuevo_pedido",
+                    },
+                    {
                         "label": _("Pedido masivo sucursales"),
                         "url": "ecom:mayoristapp_pedido_masivo_sucursales",
                         "icon": "grid_on",
@@ -693,8 +701,9 @@ APPS_MENU = [
                     {
                         "label": _("Pedido de venta"),
                         "url": "ecom:mayoristapp_pedido_masivo_sucursales",
+                        "url_query": {"modo": "simple"},
                         "icon": "shopping_cart",
-                        "permission": "ecom.carrito.editar",
+                        "permission": ["ecom.pedidos.crear", "ecom.pedido_masivo.usar"],
                         "menu_item_id": "ecom_compra",
                     },
                 ],
@@ -1292,8 +1301,13 @@ def _permiso_menu_ok(perm, permisos_usuario: Set[str]) -> bool:
     if not perm:
         return True
     if isinstance(perm, (list, tuple)):
-        return any(p in permisos_usuario for p in perm if p)
-    return perm in permisos_usuario
+        return any(_permiso_menu_ok(p, permisos_usuario) for p in perm if p)
+    if perm in permisos_usuario:
+        return True
+    return any(
+        concedido.endswith(".*") and str(perm).startswith(concedido[:-1])
+        for concedido in permisos_usuario
+    )
 
 def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optional[Dict[str, Any]]:
     """Resuelve la URL de un ítem de menú con 'url'. Retorna dict con label, url, icon, permission o None si no aplica."""

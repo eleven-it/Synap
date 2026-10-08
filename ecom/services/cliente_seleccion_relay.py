@@ -126,6 +126,8 @@ def construir_payload_cliente_seleccionado(
     sql_dom = """
         SELECT
             cm.id_cliente_domicilio AS idDom,
+            tr.id_transporte AS id_transporte,
+            tr.nombre_transporte AS nombre_transporte,
             cm.Calle AS Calle,
             cm.NroCalle AS NroCalle,
             cm.Dpto AS Dpto,
@@ -135,6 +137,7 @@ def construir_payload_cliente_seleccionado(
             z.nombre_zona AS nombre_zona,
             z.id_zona AS id_zona
         FROM cliente_domicilio AS cm
+        LEFT JOIN transporte AS tr ON tr.id_transporte = cm.id_transporte AND tr.anulado = 'No'
         LEFT JOIN provincia AS pv ON pv.CodProvincia = cm.CodProvincia
         LEFT JOIN departamento AS dp ON dp.IDDepartamento = cm.IDDepartamento
         LEFT JOIN distrito AS dt ON dt.IDDistrito = cm.IDDistrito

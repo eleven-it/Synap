@@ -57,6 +57,10 @@ def cabecera_pedido_relay(base_empresa: str, cod_mov: int) -> Optional[Dict[str,
             CONCAT(viajantes.CodViajante, ' - ', viajantes.Nombre) AS nombre_viajante,
             cda.fechaEntrega AS cda_fecha_entrega,
             cda.id_cliente_domicilio AS id_cliente_domicilio,
+            cda.id_transporte AS id_transporte,
+            cda.id_repartidor AS id_repartidor,
+            cda.operador_logistico AS operador_logistico,
+            cda.nro_seguimiento AS nro_seguimiento,
             cda.id_ruta AS id_ruta,
             cda.Fentrega AS cda_forma_entrega
         FROM comp_ped cp

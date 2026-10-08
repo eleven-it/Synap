@@ -25,6 +25,9 @@ from ecom.permissions import (
 from ecom.services.pedido_masivo_matriz import (
     anular_borrador_masivo_usuario,
     buscar_articulos_filtrados_ternas,
+    filtros_articulos_filtrados_ternas,
+    leer_contexto_cliente_masivo,
+    marcas_asignadas_viajante_cliente,
     cod_viajante_sesion,
     credito_cliente_masivo,
     eliminar_fila_articulo,
@@ -39,6 +42,7 @@ from ecom.services.pedido_masivo_matriz import (
     obtener_o_crear_draft,
     serializar_matriz,
 )
+from ecom.services.catalogo_producto import obtener_detalle_articulo, fotos_urls_articulos
 from ecom.services.pedido_masivo_import import (
     generar_plantilla_excel,
     importar_matriz_excel,
@@ -48,6 +52,7 @@ from ecom.services.pedido_cabecera_relay import (
     cabecera_pedido_relay,
     puede_anular_pedido_relay,
 )
+from ecom.services.pedido_entrega_catalogos import catalogo_rutas_entrega
 from ecom.services.pedidos_hub_pipeline import url_pedido_masivo_modo_simple
 from ecom.services.pedido_plantilla_service import cargar_pedido_en_draft_masivo
 from ecom.services.batch_checkout_masivo import (
@@ -185,11 +190,15 @@ def _resolver_cabecera_masivo(
         bag.get("cant_dias_entrega")
     ) or 0
     parsed = parsear_cabecera_desde_body(data)
+    fecha_pedido = (
+        None if (draft.modo or "").strip().lower() == EcomPedidoMasivoDraft.MODO_SIMPLE
+        else parsed.get("fecha_pedido")
+    )
     return resolver_cabecera_comercial(
         draft.base_empresa,
         draft.id_cliente,
         es_supervisor=flags["es_supervisor"],
-        fecha_pedido=parsed.get("fecha_pedido"),
+        fecha_pedido=fecha_pedido,
         fecha_entrega=parsed.get("fecha_entrega"),
         vencimiento=parsed.get("vencimiento"),
         id_condventa=parsed.get("id_condventa"),
@@ -266,6 +275,9 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
                     "readonly": readonly_q,
                     "consulta": consulta_q,
                     "aprobacion_pedidos_activa": aprobacion_pedidos_activa(base_sess),
+                    **catalogo_rutas_entrega(
+                        base_sess, to_int_or_none(_sess_user(self.request).get("id_usuario"))
+                    ),
                     "urls": {
                         "hub": reverse("ecom:mayoristapp_pedidos_hub"),
                         "nuevo_simple": url_pedido_masivo_modo_simple(),
@@ -369,6 +381,13 @@ class PedidoMasivoConfirmarAPIView(APIView):
             id_deposito=int(id_dep),
             desc_pie_pct=desc_pie,
             forma_entrega=str(data.get("forma_entrega") or ""),
+            id_ruta=to_int_or_none(data.get("id_ruta")),
+            id_repartidor=to_int_or_none(data.get("id_repartidor")),
+            operador_logistico=str(data.get("operador_logistico") or ""),
+            transportes_por_domicilio=(data.get("transportes_por_domicilio")
+                                       if isinstance(data.get("transportes_por_domicilio"), dict) else {}),
+            seguimientos_por_domicilio=(data.get("seguimientos_por_domicilio")
+                                        if isinstance(data.get("seguimientos_por_domicilio"), dict) else {}),
             observaciones=str(data.get("observaciones") or ""),
             agente_percep=_session_agente_percep(request),
             sess_user=sess,
@@ -648,6 +667,13 @@ class PedidoMasivoAbrirPedidoAPIView(APIView):
             "estado": str(cab.get("estado") or "").strip(),
             "anulado": str(cab.get("anulado") or "").strip(),
             "email_cliente": str(cab.get("email_cliente") or "").strip(),
+            "forma_entrega": str(cab.get("forma_entrega") or "").strip(),
+            "id_ruta": to_int_or_none(cab.get("id_ruta")),
+            "id_repartidor": to_int_or_none(cab.get("id_repartidor")),
+            "operador_logistico": str(cab.get("operador_logistico") or "").strip(),
+            "id_cliente_domicilio": to_int_or_none(cab.get("id_cliente_domicilio")),
+            "id_transporte": to_int_or_none(cab.get("id_transporte")),
+            "nro_seguimiento": str(cab.get("nro_seguimiento") or "").strip(),
             "editable": False if consulta else bool(meta.get("editable")),
             "puede_anular": False if consulta else bool(puede_anular),
             "repetido": repetir,
@@ -761,6 +787,35 @@ class PedidoMasivoArticulosAPIView(APIView):
         idc = to_int_or_none(request.query_params.get("id_cliente"))
         if cv is None or idc is None:
             return _err("Se requieren viajante e id_cliente.")
+        id_domicilio = to_int_or_none(request.query_params.get("id_cliente_domicilio"))
+        if request.query_params.get("detalle_id") is not None:
+            id_articulo = to_int_or_none(request.query_params.get("detalle_id"))
+            if id_articulo is None or id_articulo <= 0:
+                return _err("Artículo inválido.", "articulo_invalido")
+            marcas = marcas_asignadas_viajante_cliente(base, cv, idc, id_domicilio)
+            if not marcas:
+                return _err("Artículo no disponible para este cliente.", "articulo_no_disponible", 404)
+            contexto = leer_contexto_cliente_masivo(base, idc)
+            detalle = obtener_detalle_articulo(
+                base,
+                idart=id_articulo,
+                lista_id=to_int_or_none(request.query_params.get("lista_id")) or contexto.get("lista_id") or 1,
+                codigo_cliente=idc,
+                descuento_cliente=contexto.get("descRenglon"),
+                iva_incluido=False,
+                id_deposito=to_int_or_none(request.query_params.get("id_deposito")) or 1,
+            )
+            if not detalle or to_int_or_none(detalle.get("codigo_marca")) not in marcas:
+                return _err("Artículo no disponible para este cliente.", "articulo_no_disponible", 404)
+            return Response({"ok": True, "item": detalle})
+        if str(request.query_params.get("facetas") or "") == "1":
+            return Response({
+                "ok": True,
+                **filtros_articulos_filtrados_ternas(
+                    base, cod_viajante=cv, id_cliente=idc,
+                    id_cliente_domicilio=id_domicilio,
+                ),
+            })
         lista_id = to_int_or_none(request.query_params.get("lista_id")) or 1
         id_dep = to_int_or_none(request.query_params.get("id_deposito")) or 1
         todos_raw = str(request.query_params.get("todos") or "").strip().lower()
@@ -770,14 +825,22 @@ class PedidoMasivoArticulosAPIView(APIView):
             base,
             cod_viajante=cv,
             id_cliente=idc,
-            id_cliente_domicilio=to_int_or_none(request.query_params.get("id_cliente_domicilio")),
+            id_cliente_domicilio=id_domicilio,
             q=str(request.query_params.get("q") or ""),
             lista_id=lista_id,
             id_deposito=id_dep,
             pagina=to_int_or_none(request.query_params.get("pagina")) or 1,
             tam=to_int_or_none(request.query_params.get("tam")) or tam_default,
             listar_todos=listar_todos,
+            marca_id=to_int_or_none(request.query_params.get("marca_id")),
+            rubro_id=to_int_or_none(request.query_params.get("rubro_id")),
+            subrubro_id=to_int_or_none(request.query_params.get("subrubro_id")),
         )
+        if str(request.query_params.get("fotos") or "") == "1":
+            items = result.get("items") or []
+            fotos = fotos_urls_articulos(base, [item.get("id_articulo") for item in items[:24]])
+            for item in items[:24]:
+                item["foto_url"] = fotos.get(int(item.get("id_articulo") or 0), "")
         return Response({"ok": True, **result})
 
 

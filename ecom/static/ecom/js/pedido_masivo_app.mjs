@@ -149,6 +149,22 @@ function pedidoMasivoCore() {
     condicionesVenta: [],
     listasPrecio: [],
     tipo: 'PED',
+    formaEntrega: '',
+    logisticaActiva: false,
+    rutasEntrega: [],
+    idRuta: null,
+    transportes: [],
+    repartidores: [],
+    operadoresLogisticos: [],
+    idRepartidor: null,
+    operadorLogistico: '',
+    transportesPorDomicilio: {},
+    numerosSeguimientoPorDomicilio: {},
+    linksSeguimientoPorDomicilio: {},
+    get muestraRutaEntrega() {
+      const forma = String(this.formaEntrega || '').trim().toLowerCase();
+      return this.logisticaActiva && ['transporte', 'envía por despacho', 'envia por despacho'].includes(forma);
+    },
     // Contexto comercial compacto por defecto para reservar alto a la matriz.
     contextoAbierto: false,
     // ── Pedido simple (masivo 1 columna) ──
@@ -174,6 +190,32 @@ function pedidoMasivoCore() {
     // Catálogo completo en matriz (Mostrar/Ocultar todos).
     catalogoDesplegado: false,
     articulosSeleccionados: {},
+    filtrosAvanzadosAbiertos: false,
+    facetasCatalogo: { marcas: [], rubros: [], subrubros: [] },
+    marcaFiltro: '',
+    rubroFiltro: '',
+    subrubroFiltro: '',
+    carritoAbierto: false,
+    carritoEnLineaAbierto: false,
+    vistaCatalogoSimple: 'lista',
+    paginaGaleriaSimple: 1,
+    hayMasGaleriaSimple: false,
+    nuevoPedidoSimpleAbierto: false,
+    seleccionSimpleAbierta: false,
+    cantidadesSeleccionadas: {},
+    cantidadesCarrito: {},
+    tecladoCantidadAbierto: false,
+    tecladoCantidadOrigen: '',
+    tecladoCantidadId: '',
+    tecladoCantidadValor: '',
+    tecladoCantidadReemplazar: true,
+    guardandoCantidadSimple: false,
+    fichaArticuloAbierta: false,
+    fichaArticulo: null,
+    fichaDetalle: null,
+    fichaCargando: false,
+    fichaFotoError: false,
+    detallesComercialesAbiertos: false,
     esperaOperacion: false,
     esperaMensaje: 'Procesando…',
     importArchivo: null,
@@ -187,6 +229,26 @@ function pedidoMasivoCore() {
         return this.preview.total_lote || { neto: 0, iva: 0, total: 0 };
       }
       return this.previewEstimado || { neto: 0, iva: 0, total: 0 };
+    },
+    get resumenPieSimple() {
+      const totales = this.totalesPie;
+      const bruto = this.carritoItems.reduce((suma, art) => {
+        const cantidad = Number(this.celda(art.id_articulo, this.sucursales[0]?.id_cliente_domicilio)) || 0;
+        return suma + cantidad * Number(art.precio_unitario_neto || 0);
+      }, 0);
+      const subtotal = Number(totales.neto || 0);
+      return {
+        bruto: roundMoney(bruto),
+        descuento: roundMoney(Math.max(0, bruto - subtotal)),
+        subtotal,
+        iva: Number(totales.iva || 0),
+        internos: Number(totales.impuesto_interno || 0),
+        percepciones: null,
+        total: Number(totales.total || 0),
+      };
+    },
+    get articulosGaleriaSimple() {
+      return this.articulosBusqueda;
     },
 
     /**
@@ -312,6 +374,21 @@ function pedidoMasivoCore() {
     get cantidadSeleccionados() {
       return Object.keys(this.articulosSeleccionados || {}).length;
     },
+    get seleccionadosSimple() {
+      return Object.values(this.articulosSeleccionados || {});
+    },
+    get subrubrosFiltrados() {
+      return (this.facetasCatalogo.subrubros || []).filter(
+        (s) => !this.rubroFiltro || String(s.rubro_id) === String(this.rubroFiltro),
+      );
+    },
+    get carritoItems() {
+      if (!this.modoSimple || !this.sucursales.length) return [];
+      const domicilio = this.sucursales[0].id_cliente_domicilio;
+      return (this.articulos || []).filter(
+        (art) => Number(this.celda(art.id_articulo, domicilio)) > 0,
+      );
+    },
     get sugerenciasTabla() {
       const q = (this.qTabla || '').trim().toLowerCase();
       if (!q) return [];
@@ -341,25 +418,41 @@ function pedidoMasivoCore() {
       const el = document.getElementById('pm-bootstrap');
       const boot = el ? JSON.parse(el.textContent) : {};
       this.urls = boot.urls || {};
+      this.logisticaActiva = !!boot.logistica_activa;
+      this.rutasEntrega = Array.isArray(boot.rutas_entrega) ? boot.rutas_entrega : [];
+      if (!this.idRuta && this.rutasEntrega.length) this.idRuta = this.rutasEntrega[0].id;
+      this.transportes = Array.isArray(boot.transportes) ? boot.transportes : [];
+      this.repartidores = Array.isArray(boot.repartidores) ? boot.repartidores : [];
+      this.operadoresLogisticos = Array.isArray(boot.operadores_logisticos) ? boot.operadores_logisticos : [];
+      this.formaEntrega = boot.forma_entrega_default || '';
+      this.idRepartidor = this.repartidores[0]?.id || null;
+      this.operadorLogistico = this.operadoresLogisticos[0] || '';
       this.modoSimple = String(boot.modo || '') === 'simple';
+      if (this.modoSimple) this.contextoAbierto = true;
       this.idDomicilioInicial = boot.id_domicilio || null;
       this.readonly = Boolean(boot.readonly);
       this.aprobacionPedidosActiva = Boolean(boot.aprobacion_pedidos_activa);
       try {
         const guardado = sessionStorage.getItem('pm-contexto-abierto');
-        if (guardado === '1') this.contextoAbierto = true;
+        if (!this.modoSimple && guardado === '1') this.contextoAbierto = true;
       } catch { /* sessionStorage no disponible */ }
       this.cargarCarteraVendedor();
       this.buscarClientes();
       // Prioridad: abrir PED (cod_mov) → recuperar borrador → nuevo simple.
       if (boot.cod_mov) {
         this.modoSimple = true;
+        this.contextoAbierto = true;
         const consulta = Boolean(
           boot.consulta || (boot.readonly && boot.cod_mov),
         );
         this.abrirPedido(boot.cod_mov, !!boot.repetir, consulta);
       } else if (boot.draft_id) {
         this.abrirDraft(boot.draft_id);
+      } else if (this.modoSimple) {
+        this.$nextTick(() => {
+          this.restaurarClientePedidoNuevo();
+          this.$refs.pmClienteSimple?.focus();
+        });
       }
       // Al hacer scroll de la matriz, cerrar el dropdown (evita menú desfasado).
       this._onMatrixScrollCloseArt = () => {
@@ -527,6 +620,11 @@ function pedidoMasivoCore() {
       }
     },
     async elegirSucursal(s) {
+      if (this.modoSimple) {
+        this.articulosBusqueda = [];
+        this.hayMasGaleriaSimple = false;
+        this.paginaGaleriaSimple = 1;
+      }
       this._aplicarSucursal(s);
       this.cerrarPanelSuc();
       await this.abrirCliente();
@@ -561,11 +659,23 @@ function pedidoMasivoCore() {
       const id = String(c.id_cliente);
       if (this.abriendo) return;
       if (!this.modoSimple && this.draftId && String(this.idCliente) === id && this.clienteSel === id) return;
+      const cambioClienteSimple = this.modoSimple && String(this.idCliente || '') !== id;
       this.clienteSel = id;
       const nombre = this._nombreClienteVisible(c.nombre || c.etiqueta || '');
       this.clienteNombre = nombre;
       this.qCliente = nombre;
       this._aplicarListaDesdeCliente(c);
+      this.facetasCatalogo = { marcas: [], rubros: [], subrubros: [] };
+      this.marcaFiltro = '';
+      this.rubroFiltro = '';
+      this.subrubroFiltro = '';
+      this.filtrosAvanzadosAbiertos = false;
+      this.carritoAbierto = false;
+      if (cambioClienteSimple) {
+        this.cabecera = null;
+        this.credito = null;
+        this.formaEntrega = '';
+      }
       this.cerrarPanelCli();
       if (this.modoSimple) {
         this.opcionesSucursal = [];
@@ -841,9 +951,16 @@ function pedidoMasivoCore() {
       ).trim();
       this.listaId = Number(m.lista_id || 1);
       this.sucursales = this._ordenarSucursalesAsc(m.sucursales || []);
+      for (const s of this.sucursales) {
+        const key = String(s.id_cliente_domicilio);
+        if (this.transportesPorDomicilio[key] === undefined) {
+          this.transportesPorDomicilio[key] = Number(s.id_transporte) || null;
+        }
+      }
       this.articulos = (m.articulos || []).map(a => ({
         id_articulo: a.id_articulo,
         id_manual: a.id_manual || a.codigo || '',
+        codartprov: a.codartprov || '',
         codigo: a.codigo || a.id_manual || '',
         nombre: a.nombre || a.descripcion || '',
         descripcion: a.descripcion || a.nombre || '',
@@ -865,7 +982,10 @@ function pedidoMasivoCore() {
       this.descPiePct = Number(m.desc_pie_pct || 0);
       this.ultimoError = m.ultimo_error || {};
       // Modo simple + metadata de origen (REQ-PSU-02/03) y crédito hero.
-      if (String(m.modo || '') === 'simple') this.modoSimple = true;
+      if (String(m.modo || '') === 'simple') {
+        this.modoSimple = true;
+        this.contextoAbierto = true;
+      }
       if (this.modoSimple && this.sucursales[0]) {
         this._aplicarSucursal(this.sucursales[0]);
         if (!this.opcionesSucursal.length && this.idCliente) {
@@ -1166,6 +1286,16 @@ function pedidoMasivoCore() {
     },
     _aplicarPedidoInfo(info, advertencias) {
       const p = info || {};
+      if (p.forma_entrega) this.formaEntrega = p.forma_entrega;
+      if (p.id_ruta) this.idRuta = Number(p.id_ruta);
+      if (p.id_repartidor) this.idRepartidor = Number(p.id_repartidor);
+      if (p.operador_logistico) this.operadorLogistico = p.operador_logistico;
+      if (p.id_cliente_domicilio && p.id_transporte) {
+        this.transportesPorDomicilio[String(p.id_cliente_domicilio)] = Number(p.id_transporte);
+      }
+      if (p.id_cliente_domicilio && p.nro_seguimiento) {
+        this.numerosSeguimientoPorDomicilio[String(p.id_cliente_domicilio)] = p.nro_seguimiento;
+      }
       this.pedidoCodMov = p.cod_mov || null;
       this.pedidoNro = String(p.nro_comprobante || '').trim();
       this.pedidoEstado = String(p.estado || '').trim();
@@ -1296,6 +1426,10 @@ function pedidoMasivoCore() {
       return {
         id_articulo: it.id_articulo || it.IDArt,
         id_manual: it.id_manual || '',
+        codartprov: it.codartprov || '',
+        marca_id: it.marca_id || null,
+        rubro_id: it.rubro_id || null,
+        subrubro_id: it.subrubro_id || null,
         codigo: it.id_manual || it.codigo || '',
         nombre: it.nombre || it.descripcion || '',
         descripcion: it.nombre || it.descripcion || '',
@@ -1307,6 +1441,8 @@ function pedidoMasivoCore() {
           : null,
         multiplo_cantidad_vta: Number(it.multiplo_cantidad_vta || 0),
         multiplo_empaque: Number(it.multiplo_empaque || multiploEmpaque(it)),
+        foto_url: it.foto_url || '',
+        impuesto_interno_pct: Number(it.impuesto_interno_pct || 0),
       };
     },
     _mapArticuloFila(a) {
@@ -1334,6 +1470,7 @@ function pedidoMasivoCore() {
     },
     _limpiarSeleccionArticulos() {
       this.articulosSeleccionados = {};
+      this.cantidadesSeleccionadas = {};
     },
     estaSeleccionado(a) {
       const id = this._idArticuloKey(a);
@@ -1427,10 +1564,289 @@ function pedidoMasivoCore() {
     toggleSeleccionArticulo(a) {
       const id = this._idArticuloKey(a);
       if (!id) return;
+      const estaba = Boolean((this.articulosSeleccionados || {})[id]);
       const next = { ...(this.articulosSeleccionados || {}) };
-      if (next[id]) delete next[id];
-      else next[id] = this._mapArticuloItem(a);
+      if (!estaba) next[id] = this._mapArticuloItem(a);
+      else delete next[id];
       this.articulosSeleccionados = next;
+      if (this.modoSimple) {
+        if (estaba) delete this.cantidadesSeleccionadas[id];
+        else this.cantidadesSeleccionadas[id] = Number(this.celda(id, this.sucursales[0]?.id_cliente_domicilio)) || 1;
+      }
+    },
+    abrirSeleccionSimple() {
+      if (!this.modoSimple || !this.cantidadSeleccionados) return;
+      document.activeElement?.blur?.();
+      this.cerrarPanelArt();
+      this.seleccionSimpleAbierta = true;
+    },
+    abrirTecladoCantidad(articulo, origen) {
+      if (!this.modoSimple || !this.matrizEditable || this.guardandoCantidadSimple) return;
+      const id = this._idArticuloKey(articulo);
+      if (!id || !['seleccion', 'carrito'].includes(origen)) return;
+      document.activeElement?.blur?.();
+      this.tecladoCantidadOrigen = origen;
+      this.tecladoCantidadId = id;
+      this.tecladoCantidadValor = String(origen === 'seleccion'
+        ? this.cantidadesSeleccionadas[id] ?? 1
+        : this.cantidadesCarrito[id] ?? this.celda(id, this.sucursales[0]?.id_cliente_domicilio) ?? 0);
+      this.tecladoCantidadReemplazar = true;
+      this.tecladoCantidadAbierto = true;
+    },
+    teclaCantidad(digito) {
+      if (!this.tecladoCantidadAbierto) return;
+      const tecla = String(digito);
+      if (tecla === 'borrar') {
+        this.tecladoCantidadValor = this.tecladoCantidadReemplazar ? '' : this.tecladoCantidadValor.slice(0, -1);
+        this.tecladoCantidadReemplazar = false;
+        return;
+      }
+      if (tecla === 'limpiar') {
+        this.tecladoCantidadValor = '';
+        this.tecladoCantidadReemplazar = false;
+        return;
+      }
+      if (tecla === '.') {
+        if (this.tecladoCantidadReemplazar) this.tecladoCantidadValor = '0.';
+        else if (!this.tecladoCantidadValor.includes('.')) this.tecladoCantidadValor = (this.tecladoCantidadValor || '0') + '.';
+      } else if (/^[0-9]$/.test(tecla)) {
+        if (this.tecladoCantidadReemplazar) this.tecladoCantidadValor = tecla;
+        else if ((this.tecladoCantidadValor.split('.')[1] || '').length < 3) {
+          this.tecladoCantidadValor = this.tecladoCantidadValor === '0' ? tecla : this.tecladoCantidadValor + tecla;
+        }
+      }
+      this.tecladoCantidadReemplazar = false;
+    },
+    ajustarTecladoCantidad(delta) {
+      const actual = Number(this.tecladoCantidadValor || 0);
+      this.tecladoCantidadValor = String(Math.max(0, Math.round((actual + delta) * 1000) / 1000));
+      this.tecladoCantidadReemplazar = true;
+    },
+    aceptarTecladoCantidad() {
+      const valor = Number(this.tecladoCantidadValor);
+      if (!String(this.tecladoCantidadValor).trim() || !Number.isFinite(valor) || valor < 0
+          || (this.tecladoCantidadOrigen === 'seleccion' && valor === 0)) {
+        this.mostrarAviso('Ingresá una cantidad válida mayor que cero.', 'error');
+        return;
+      }
+      if (this.tecladoCantidadOrigen === 'seleccion') this.cantidadesSeleccionadas[this.tecladoCantidadId] = valor;
+      else this.cantidadesCarrito[this.tecladoCantidadId] = String(valor);
+      this.tecladoCantidadAbierto = false;
+    },
+    abrirCarritoSimple() {
+      if (!this.modoSimple) return;
+      this.cantidadesCarrito = Object.fromEntries(this.carritoItems.map((art) => [
+        String(art.id_articulo),
+        String(this.celda(art.id_articulo, this.sucursales[0].id_cliente_domicilio)),
+      ]));
+      this.carritoAbierto = true;
+    },
+    async agregarArticuloSeleccionadoSimple(articulo) {
+      const domicilio = this.sucursales[0]?.id_cliente_domicilio;
+      const id = this._idArticuloKey(articulo);
+      const cantidad = Number(this.cantidadesSeleccionadas[id]);
+      if (!this.modoSimple || !articulo || !domicilio || !this.matrizEditable) return false;
+      if (!Number.isFinite(cantidad) || cantidad <= 0) {
+        this.mostrarAviso('Ingresá una cantidad mayor que cero.', 'error');
+        return false;
+      }
+      const multiplo = multiploEmpaque(articulo);
+      if (!cantidadOk(cantidad, multiplo)) {
+        this._mostrarModalMultiploCelda(articulo.id_articulo, domicilio, cantidad, multiplo);
+        return false;
+      }
+      if (!this.articulos.some((item) => Number(item.id_articulo) === Number(id))) {
+        this.articulos = [...this.articulos, this._mapArticuloFila(articulo)];
+      }
+      const guardado = await this.onCelda(id, domicilio, String(cantidad));
+      if (guardado) {
+        const next = { ...this.articulosSeleccionados };
+        delete next[id];
+        this.articulosSeleccionados = next;
+        delete this.cantidadesSeleccionadas[id];
+      }
+      return guardado;
+    },
+    async agregarSeleccionadosSimple() {
+      if (!this.modoSimple || this.guardandoCantidadSimple) return;
+      const items = this.seleccionadosSimple;
+      if (!items.length) return;
+      this.guardandoCantidadSimple = true;
+      try {
+        for (const articulo of items) {
+          if (!await this.agregarArticuloSeleccionadoSimple(articulo)) return;
+        }
+        this.seleccionSimpleAbierta = false;
+        this.carritoEnLineaAbierto = false;
+        this.abrirCarritoEnLineaSimple();
+      } finally {
+        this.guardandoCantidadSimple = false;
+      }
+    },
+    async agregarUnoSeleccionadoSimple(articulo) {
+      if (this.guardandoCantidadSimple) return;
+      this.guardandoCantidadSimple = true;
+      try {
+        const guardado = await this.agregarArticuloSeleccionadoSimple(articulo);
+        if (guardado && !this.cantidadSeleccionados) {
+          this.seleccionSimpleAbierta = false;
+          this.carritoEnLineaAbierto = false;
+          this.abrirCarritoEnLineaSimple();
+        }
+      } finally {
+        this.guardandoCantidadSimple = false;
+      }
+    },
+    async guardarCantidadCarrito(articulo) {
+      if (!this.modoSimple || this.guardandoCantidadSimple || !this.matrizEditable) return false;
+      const id = String(articulo.id_articulo);
+      const domicilio = this.sucursales[0]?.id_cliente_domicilio;
+      const valor = String(this.cantidadesCarrito[id] ?? '').trim();
+      this.guardandoCantidadSimple = true;
+      try {
+        const guardado = await this.onCelda(id, domicilio, valor);
+        if (guardado) this.cantidadesCarrito[id] = String(this.celda(id, domicilio));
+        return guardado;
+      } finally {
+        this.guardandoCantidadSimple = false;
+      }
+    },
+    async confirmarDesdeCarritoSimple() {
+      if (!this.modoSimple || this.guardandoCantidadSimple) return;
+      for (const articulo of [...this.carritoItems]) {
+        const id = String(articulo.id_articulo);
+        const actual = String(this.celda(id, this.sucursales[0].id_cliente_domicilio));
+        if (String(this.cantidadesCarrito[id] ?? actual) !== actual) {
+          if (!await this.guardarCantidadCarrito(articulo)) return;
+        }
+      }
+      this.carritoAbierto = false;
+      if (this.modoSimple) {
+        this.carritoEnLineaAbierto = false;
+        this.articulosBusqueda = [];
+        this.hayMasGaleriaSimple = false;
+        this.paginaGaleriaSimple = 1;
+      }
+      await this.confirmarLote();
+    },
+    async abrirFichaArticulo(articulo) {
+      if (!this.modoSimple || !articulo) return;
+      this.fichaArticulo = this._mapArticuloItem(articulo);
+      this.fichaDetalle = null;
+      this.fichaFotoError = false;
+      this.fichaArticuloAbierta = true;
+      this.fichaCargando = true;
+      try {
+        const id = Number(this.fichaArticulo.id_articulo);
+        const url = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}`
+          + `&detalle_id=${encodeURIComponent(id)}`
+          + `&lista_id=${encodeURIComponent(String(this.cabecera?.lista_id || this.listaId || 1))}`
+          + this.parametroDomicilioCatalogo();
+        const data = await this.getJson(url);
+        if (this.fichaArticuloAbierta && Number(this.fichaArticulo?.id_articulo) === id && data?.ok && data.item) {
+          this.fichaDetalle = data.item;
+          this.fichaArticulo.impuesto_interno_pct = Number(data.item.impuesto_interno_pct || 0);
+        }
+      } catch {
+        // La ficha conserva los datos del catálogo del pedido si el detalle no está disponible.
+      } finally {
+        if (!this.fichaDetalle && !this.facetasCatalogo.marcas.length && this.urls.articulos && this.idCliente) {
+          try {
+            const url = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}&facetas=1`
+              + this.parametroDomicilioCatalogo();
+            const datos = await this.getJson(url);
+            if (datos.ok) {
+              this.facetasCatalogo = {
+                marcas: datos.marcas || [], rubros: datos.rubros || [], subrubros: datos.subrubros || [],
+              };
+            }
+          } catch {
+            // Marca y rubro siguen mostrando «—» si no hay catálogo accesible.
+          }
+        }
+        this.fichaCargando = false;
+      }
+    },
+    nombreFaceta(tipo, id) {
+      return (this.facetasCatalogo[tipo] || []).find((item) => String(item.id) === String(id))?.nombre || '—';
+    },
+    precioFinalArticulo(articulo) {
+      const neto = Number(articulo?.precio_unitario_neto || 0);
+      return neto * (1 + (Number(articulo?.alicuota_iva || 0) + Number(articulo?.impuesto_interno_pct || 0)) / 100);
+    },
+    async cambiarVistaCatalogoSimple(vista) {
+      if (!this.modoSimple || !['lista', 'galeria'].includes(vista)) return;
+      this.vistaCatalogoSimple = vista;
+      if (vista === 'galeria' && this.idCliente) {
+        if (!this.facetasCatalogo.marcas.length) {
+          try {
+            const data = await this.getJson(`${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}&facetas=1`
+              + this.parametroDomicilioCatalogo());
+            if (data.ok) this.facetasCatalogo = {
+              marcas: data.marcas || [], rubros: data.rubros || [], subrubros: data.subrubros || [],
+            };
+          } catch { /* La galería sigue disponible aunque no carguen nombres de facetas. */ }
+        }
+        this.paginaGaleriaSimple = 1;
+        await this._fetchArticulos({ q: this.qArt.trim(), todos: true, tam: 24 });
+        this.cerrarPanelArt();
+      }
+    },
+    async cargarMasGaleriaSimple() {
+      if (!this.modoSimple || this.vistaCatalogoSimple !== 'galeria' || !this.hayMasGaleriaSimple || this.cargandoArt) return;
+      const pagina = this.paginaGaleriaSimple + 1;
+      await this._fetchArticulos({ q: this.qArt.trim(), todos: true, tam: 24, pagina, append: true });
+      this.cerrarPanelArt();
+    },
+    abrirCarritoEnLineaSimple() {
+      if (!this.modoSimple) return;
+      this.carritoEnLineaAbierto = !this.carritoEnLineaAbierto;
+      if (this.carritoEnLineaAbierto) {
+        this.cantidadesCarrito = Object.fromEntries(this.carritoItems.map((art) => [
+          String(art.id_articulo), String(this.celda(art.id_articulo, this.sucursales[0].id_cliente_domicilio)),
+        ]));
+      }
+    },
+    stockTotalDepositos() {
+      return (this.fichaDetalle?.stock_depositos || []).reduce(
+        (total, deposito) => total + Math.max(0, Number(deposito.disponible || 0)), 0,
+      );
+    },
+    async abrirFiltrosAvanzados() {
+      this.filtrosAvanzadosAbiertos = !this.filtrosAvanzadosAbiertos;
+      if (!this.filtrosAvanzadosAbiertos || !this.idCliente || this.facetasCatalogo.marcas.length) return;
+      try {
+        const url = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}&facetas=1`
+          + this.parametroDomicilioCatalogo();
+        const data = await this.getJson(url);
+        if (!data.ok) {
+          this.mostrarAviso(data.error || 'No se pudieron cargar los filtros.', 'error');
+          return;
+        }
+        this.facetasCatalogo = {
+          marcas: data.marcas || [], rubros: data.rubros || [], subrubros: data.subrubros || [],
+        };
+      } catch {
+        this.mostrarAviso('No se pudieron cargar los filtros.', 'error');
+      }
+    },
+    parametrosFiltrosCatalogo() {
+      const params = new URLSearchParams();
+      if (this.marcaFiltro) params.set('marca_id', this.marcaFiltro);
+      if (this.rubroFiltro) params.set('rubro_id', this.rubroFiltro);
+      if (this.subrubroFiltro) params.set('subrubro_id', this.subrubroFiltro);
+      return params.toString();
+    },
+    parametroDomicilioCatalogo() {
+      const id = this.modoSimple ? Number(this.sucursales[0]?.id_cliente_domicilio || 0) : 0;
+      return id > 0 ? `&id_cliente_domicilio=${encodeURIComponent(String(id))}` : '';
+    },
+    async aplicarFiltrosCatalogo() {
+      if (!this.idCliente) return;
+      this.catalogoDesplegado = false;
+      this.paginaGaleriaSimple = 1;
+      await this._fetchArticulos({ q: this.qArt.trim(), todos: true,
+        tam: this.modoSimple && this.vistaCatalogoSimple === 'galeria' ? 24 : 5000 });
     },
     /** Espacio: marca/desmarca el ítem resaltado del dropdown. */
     onSpaceArt() {
@@ -1457,7 +1873,9 @@ function pedidoMasivoCore() {
       try {
         const u = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}`
           + `&lista_id=${encodeURIComponent(String(this.cabecera?.lista_id || this.listaId || 1))}`
-          + '&tam=5000&todos=1';
+          + '&tam=5000&todos=1'
+          + this.parametroDomicilioCatalogo()
+          + (this.parametrosFiltrosCatalogo() ? `&${this.parametrosFiltrosCatalogo()}` : '');
         const data = await this.getJson(u);
         if (!data.ok) {
           this.mostrarAviso(data.error || 'No se pudo cargar el catálogo.', 'error');
@@ -1466,6 +1884,11 @@ function pedidoMasivoCore() {
         if (data.sin_marcas) {
           this.mostrarAviso('No hay marcas asignadas para este cliente en tu territorio.', 'error');
           return;
+        }
+        if (this.modoSimple) {
+          this.articulos = (this.articulos || []).filter(
+            (art) => this._sumaPacksFilaNumerica(art.id_articulo) > 0,
+          );
         }
         const existentes = new Set((this.articulos || []).map((x) => Number(x.id_articulo)));
         const nuevos = [];
@@ -1634,7 +2057,7 @@ function pedidoMasivoCore() {
       this.flashGuardado();
     },
     async onCelda(idArt, idDom, raw) {
-      if (this.readonly || !this.matrizEditable) return;
+      if (this.readonly || !this.matrizEditable) return false;
       const key = idArt + ':' + idDom;
       const val = String(raw || '').trim();
       const prev = this.celdas[key] || '';
@@ -1648,7 +2071,7 @@ function pedidoMasivoCore() {
         this.celdas[key] = prev;
         this._mostrarModalMultiploCelda(idArt, idDom, qtyNum, multiplo);
         this.marcarTotalesEstimados();
-        return;
+        return false;
       }
       this._marcarCeldaInvalida(idArt, idDom, false);
       const { data } = await this.postJson(this.urls.celda, {
@@ -1664,15 +2087,20 @@ function pedidoMasivoCore() {
           this._marcarCeldaInvalida(idArt, idDom, true);
           this._mostrarModalMultiploCelda(idArt, idDom, qtyNum, mult);
           this.marcarTotalesEstimados();
-          return;
+          return false;
         }
         this.mostrarAviso(data.error || 'Error al guardar', 'error');
-        return;
+        if (this.modoSimple) {
+          this.celdas[key] = prev;
+          this.marcarTotalesEstimados();
+        }
+        return false;
       }
       if (data.celda && data.celda.eliminada) delete this.celdas[key];
       else if (data.celda) this.celdas[key] = data.celda.cantidad_packs;
       this.flashGuardado();
       this.marcarTotalesEstimados();
+      return true;
     },
     async onPrecioFila(idArt, raw) {
       if (this.readonly || !this.matrizEditable || !this.puedeEditarPrecioLinea) return;
@@ -1784,20 +2212,23 @@ function pedidoMasivoCore() {
         }
         if (netoLinea > 0) {
           netoBruto += netoLinea;
-          lineas.push({ neto: netoLinea, alic });
+          lineas.push({ neto: netoLinea, alic, interno: Number(art.impuesto_interno_pct || 0) });
         }
       }
 
       const neto = netoBruto * factorPie;
       let iva = 0;
+      let impuestoInterno = 0;
       for (const ln of lineas) {
         iva += ln.neto * factorPie * (ln.alic / 100);
+        if (this.modoSimple) impuestoInterno += ln.neto * factorPie * (ln.interno / 100);
       }
 
       this.previewEstimado = {
         neto: roundMoney(neto),
         iva: roundMoney(iva),
-        total: roundMoney(neto + iva),
+        impuesto_interno: roundMoney(impuestoInterno),
+        total: roundMoney(neto + iva + impuestoInterno),
       };
     },
     /** Quita avisos informativos de preview que no frenan el confirm. */
@@ -1884,6 +2315,12 @@ function pedidoMasivoCore() {
     async buscarArticulos() {
       if (!this.idCliente || !this.urls.articulos) return;
       const q = (this.qArt || '').trim();
+      if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') {
+        this.paginaGaleriaSimple = 1;
+        await this._fetchArticulos({ q, todos: true, tam: 24 });
+        this.cerrarPanelArt();
+        return;
+      }
       if (q.length < 2) {
         ++this._artBusquedaSeq;
         if (this._articulosBusquedaAbort) {
@@ -1903,9 +2340,11 @@ function pedidoMasivoCore() {
      */
     async listarTodosArticulos() {
       if (!this.idCliente || !this.urls.articulos) return;
-      await this._fetchArticulos({ q: '', todos: true, tam: 5000 });
+      this.paginaGaleriaSimple = 1;
+      await this._fetchArticulos({ q: '', todos: true,
+        tam: this.modoSimple && this.vistaCatalogoSimple === 'galeria' ? 24 : 5000 });
     },
-    async _fetchArticulos({ q = '', todos = false, tam = 20 } = {}) {
+    async _fetchArticulos({ q = '', todos = false, tam = 20, pagina = 1, append = false } = {}) {
       if (!this.idCliente || !this.urls.articulos) return;
       if (this._articulosBusquedaAbort) {
         this._articulosBusquedaAbort.abort();
@@ -1918,12 +2357,17 @@ function pedidoMasivoCore() {
       let u = this.urls.articulos
         + '?id_cliente=' + this.idCliente
         + '&lista_id=' + (this.cabecera?.lista_id || this.listaId || 1)
-        + '&tam=' + encodeURIComponent(String(tam));
+        + '&tam=' + encodeURIComponent(String(tam))
+        + '&pagina=' + encodeURIComponent(String(pagina))
+        + this.parametroDomicilioCatalogo();
+      if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') u += '&fotos=1';
       if (todos) {
         u += '&todos=1';
       } else {
         u += '&q=' + encodeURIComponent(q || '');
       }
+      const filtros = this.parametrosFiltrosCatalogo();
+      if (filtros) u += `&${filtros}`;
       try {
         const data = await this.getJson(u, { signal: abortController.signal });
         if (seq !== this._artBusquedaSeq || abortController.signal.aborted) return;
@@ -1934,7 +2378,12 @@ function pedidoMasivoCore() {
           this.artBusquedaHecha = true;
           return;
         }
-        this.articulosBusqueda = (data.items || []).map((it) => this._mapArticuloItem(it));
+        const items = (data.items || []).map((it) => this._mapArticuloItem(it));
+        this.articulosBusqueda = append ? [...this.articulosBusqueda, ...items] : items;
+        if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') {
+          this.paginaGaleriaSimple = pagina;
+          this.hayMasGaleriaSimple = items.length === 24;
+        }
         this.idxArt = 0;
         this.artBusquedaHecha = true;
       } catch (error) {
@@ -2087,6 +2536,10 @@ function pedidoMasivoCore() {
       }
     },
     elegirResaltadoArt() {
+      if (this.modoSimple && this.articulosBusqueda[this.idxArt]) {
+        this.toggleSeleccionArticulo(this.articulosBusqueda[this.idxArt]);
+        return;
+      }
       if (this.cantidadSeleccionados > 0) {
         this.agregarSeleccionados();
         return;
@@ -2210,6 +2663,32 @@ function pedidoMasivoCore() {
       const u = this.urls.nuevo_simple;
       if (u) window.location.href = u;
     },
+    onNuevoMismoCliente() {
+      if (!this.modoSimple || !this.idCliente) return;
+      try {
+        sessionStorage.setItem('pm-nuevo-simple-cliente', JSON.stringify({
+          id_cliente: Number(this.idCliente),
+          nombre: this.clienteNombre || this.qCliente,
+          id_domicilio: Number(this.sucursales[0]?.id_cliente_domicilio || 0),
+        }));
+      } catch { /* El usuario podrá elegir el cliente en la nueva pantalla. */ }
+      this.onNuevoSimple();
+    },
+    async restaurarClientePedidoNuevo() {
+      let cliente = null;
+      try {
+        cliente = JSON.parse(sessionStorage.getItem('pm-nuevo-simple-cliente') || 'null');
+        sessionStorage.removeItem('pm-nuevo-simple-cliente');
+      } catch { return; }
+      if (!cliente?.id_cliente) return;
+      await this.elegirCliente(cliente);
+      if (!this.draftId && cliente.id_domicilio) {
+        const domicilio = this.opcionesSucursal.find(
+          (s) => Number(s.id_cliente_domicilio) === Number(cliente.id_domicilio),
+        );
+        if (domicilio) await this.elegirSucursal(domicilio);
+      }
+    },
     onNuevoMasivo() {
       const u = this.urls.nuevo_masivo;
       if (u) window.location.href = u;
@@ -2302,6 +2781,19 @@ function pedidoMasivoCore() {
       }
       this.error = '';
       this.mensajeOk = '';
+      if (this.formaEntrega === 'Transporte') {
+        const sinTransporte = this._sucursalesConCarga().filter((s) =>
+          !Number(this.transportesPorDomicilio[String(s.id_cliente_domicilio)] || s.id_transporte || 0));
+        if (sinTransporte.length) {
+          this.contextoAbierto = true;
+          this.mostrarAviso(`Seleccioná un transporte para: ${sinTransporte.map((s) => s.nombre || s.etiqueta).join(', ')}.`, 'error');
+          return;
+        }
+      }
+      if (this.formaEntrega === 'Envia repartidor' && !this.idRepartidor) {
+        this.mostrarAviso('Seleccioná un usuario repartidor.', 'error');
+        return;
+      }
       const fe = (
         this.cabecera?.fecha_entrega
         || displayToIso(this.cabecera?.fecha_entrega_display)
@@ -2525,6 +3017,19 @@ function pedidoMasivoCore() {
           {
             draft_id: this.draftId,
             desc_pie_pct: this.descPiePct,
+            forma_entrega: this.formaEntrega,
+            id_ruta: this.muestraRutaEntrega ? this.idRuta : null,
+            id_repartidor: this.formaEntrega.trim().toLowerCase() === 'envia repartidor' ? this.idRepartidor : null,
+            operador_logistico: this.formaEntrega.trim().toLowerCase() === 'operador logistico' ? this.operadorLogistico : '',
+            transportes_por_domicilio: this.formaEntrega.trim().toLowerCase() === 'transporte'
+              ? this.transportesPorDomicilio : {},
+            seguimientos_por_domicilio: this.formaEntrega.trim().toLowerCase() === 'transporte'
+              ? Object.fromEntries(this.sucursales.map((s) => {
+                const key = String(s.id_cliente_domicilio);
+                const numero = String(this.numerosSeguimientoPorDomicilio[key] || '').trim();
+                const link = String(this.linksSeguimientoPorDomicilio[key] || '').trim();
+                return [key, link ? `${numero} - ${link}` : numero];
+              })) : {},
             stream: true,
             ...this._payloadCabecera(),
           },
@@ -2610,6 +3115,7 @@ function pedidoMasivoCore() {
         setTimeout(() => {
           this.confirmProgreso = null;
           this.cerrarDialogo();
+          if (this.modoSimple) this.nuevoPedidoSimpleAbierto = true;
         }, 1500);
       }
     },
