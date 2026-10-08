@@ -2738,35 +2738,37 @@ class ExportWorkbookLabelsAndPeriodTests(TestCase):
     def test_lb_unidades_etiquetas_periodo_y_formato(self):
         wb = self._export("levis_bw", partial=["2026-03"], units="8")
         ws = wb[SHEET_SALES]
-        self.assertIn("10/03/2026 – 20/04/2026", ws["A1"].value)
-        self.assertIn("Unidades", ws["A1"].value)
-        self.assertNotIn("Docenas", ws["A1"].value)
-        self.assertIn("planillas mensuales", ws["A2"].value)
-        self.assertEqual(wb[SHEET_MONTHLY]["B4"].value, "Unidades")
+        self.assertIn("Period: 10/03/2026 – 20/04/2026 · Unit: units", ws["A1"].value)
+        self.assertNotIn("dozens", ws["A1"].value)
+        self.assertEqual(
+            ws["A2"].value,
+            "Months before 22/07/2026 come from monthly spreadsheets and are included in full.",
+        )
+        self.assertEqual(wb[SHEET_MONTHLY]["B4"].value, "units")
         self.assertEqual(ws["I5"].value, 8.0)  # marzo = columna I
         self.assertEqual(ws["I5"].number_format, "#,##0")
         self.assertEqual(ws["I2"].number_format, "#,##0")
         self.assertIsNone(ws["E5"].value)  # enero fuera de rango: vacío
         filtros = {r[0].value: r[1].value for r in wb[SHEET_FILTROS].iter_rows(min_row=2)}
-        self.assertEqual(filtros["Unidad de medida"], "Unidades")
+        self.assertEqual(filtros["Unidad de medida"], "units")
         self.assertEqual(filtros["Período exportado"], "10/03/2026 – 20/04/2026")
         self.assertIn("Nota", filtros)
 
     def test_pack_docenas_conserva_unidad_y_decimales_sin_aviso(self):
         wb = self._export("levis_lw_dz", units="8.5")
         ws = wb[SHEET_SALES]
-        self.assertIn("Docenas", ws["A1"].value)
+        self.assertIn("Unit: dozens", ws["A1"].value)
         self.assertIsNone(ws["A2"].value)
         self.assertEqual(wb[SHEET_MONTHLY]["B4"].value, "dozens")
         self.assertEqual(ws["I5"].value, 8.5)
-        self.assertEqual(ws["I5"].number_format, "#,##0.00")
+        self.assertEqual(ws["I5"].number_format, "#,##0")
         filtros = {r[0].value: r[1].value for r in wb[SHEET_FILTROS].iter_rows(min_row=2)}
-        self.assertEqual(filtros["Unidad de medida"], "Docenas")
+        self.assertEqual(filtros["Unidad de medida"], "dozens")
         self.assertNotIn("Nota", filtros)
 
     def test_pack_packs_etiqueta_packs(self):
         wb = self._export("puma_bw", units="3")
-        self.assertIn("Packs", wb[SHEET_SALES]["A1"].value)
+        self.assertIn("Unit: packs", wb[SHEET_SALES]["A1"].value)
 
     def test_parse_anet_units_prefiere_unidades_qty(self):
         raw = {
