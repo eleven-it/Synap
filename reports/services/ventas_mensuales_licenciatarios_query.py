@@ -36,6 +36,10 @@ def resolve_pack_unit_mode(pack: Any) -> str:
     return str_or_default(getattr(pack, "unit_mode", ""), "").strip().lower()
 
 
+GENERO_NONE = ""
+GENERO_UNCLASSIFIED = "unclassified"
+
+
 @dataclass(frozen=True)
 class AnetSalesRow:
     codigo_cliente: int
@@ -48,6 +52,8 @@ class AnetSalesRow:
     amount_men: Decimal = Decimal("0")
     amount_women: Decimal = Decimal("0")
     superart: str = ""
+    # "men" | "women" | "unclassified" cuando hay clasificador (Puma); "" si no aplica.
+    genero: str = GENERO_NONE
 
 
 def _normalize_scope_id_list(values: Optional[Sequence]) -> List[int]:
@@ -141,14 +147,17 @@ def parse_anet_sales_row(
     units_women = Decimal("0")
     amount_men = Decimal("0")
     amount_women = Decimal("0")
-    if classify_genero and superart:
-        genero = classify_genero(superart)
+    genero_bucket = GENERO_NONE
+    if classify_genero:
+        genero = classify_genero(superart) if superart else None
         if genero == "men":
             units_men = units
             amount_men = amount
         elif genero == "women":
             units_women = units
             amount_women = amount
+        # Sin SuperArt o SuperArt desconocido: no se pierde, queda en bucket aparte.
+        genero_bucket = genero if genero in ("men", "women") else GENERO_UNCLASSIFIED
     return AnetSalesRow(
         codigo_cliente=int(raw["codigo_cliente"]),
         nombre_cliente=str_or_default(raw.get("nombre_cliente"), ""),
@@ -160,6 +169,7 @@ def parse_anet_sales_row(
         amount_men=amount_men,
         amount_women=amount_women,
         superart=superart,
+        genero=genero_bucket,
     )
 
 
@@ -257,6 +267,43 @@ def aggregate_anet_rows(rows: Iterable[AnetSalesRow]) -> dict[tuple[int, date], 
                 units_women=prev.units_women + row.units_women,
                 amount_men=prev.amount_men + row.amount_men,
                 amount_women=prev.amount_women + row.amount_women,
+            )
+    return acc
+
+
+def aggregate_anet_rows_by_genero(
+    rows: Iterable[AnetSalesRow],
+) -> dict[tuple[int, date, str], AnetSalesRow]:
+    """Agrega filas ANET por cliente×mes×género (Puma: una fila por product group)."""
+    acc: dict[tuple[int, date, str], AnetSalesRow] = {}
+    for row in rows:
+        key = (row.codigo_cliente, row.month, row.genero)
+        prev = acc.get(key)
+        if prev is None:
+            acc[key] = AnetSalesRow(
+                codigo_cliente=row.codigo_cliente,
+                nombre_cliente=row.nombre_cliente,
+                month=row.month,
+                units=row.units,
+                amount=row.amount,
+                units_men=row.units_men,
+                units_women=row.units_women,
+                amount_men=row.amount_men,
+                amount_women=row.amount_women,
+                genero=row.genero,
+            )
+        else:
+            acc[key] = AnetSalesRow(
+                codigo_cliente=prev.codigo_cliente,
+                nombre_cliente=prev.nombre_cliente,
+                month=prev.month,
+                units=prev.units + row.units,
+                amount=prev.amount + row.amount,
+                units_men=prev.units_men + row.units_men,
+                units_women=prev.units_women + row.units_women,
+                amount_men=prev.amount_men + row.amount_men,
+                amount_women=prev.amount_women + row.amount_women,
+                genero=prev.genero,
             )
     return acc
 
