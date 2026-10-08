@@ -629,6 +629,7 @@ class ReportFiltersAPIView(APIView):
                         "id": row_dict.get("id_punto_venta"),
                         "label": f"PV {row_dict.get('nro_punto_venta', row_dict.get('id_punto_venta'))}",
                         "value": row_dict.get("id_punto_venta"),
+                        "nro_punto_venta": row_dict.get("nro_punto_venta"),
                         "sucursal_id": row_dict.get("id_sucursal"),
                     })
                 cursor.close()
