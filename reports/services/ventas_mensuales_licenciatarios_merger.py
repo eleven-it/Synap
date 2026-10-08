@@ -24,6 +24,7 @@ from reports.services.monthly_reporting_pack_seed import PUMA_GENDER_PRODUCT_GRO
 from reports.services.ventas_mensuales_licenciatarios_query import (
     AnetSalesRow,
     aggregate_anet_rows,
+    aggregate_anet_rows_by_genero,
     fetch_anet_sales,
 )
 
@@ -76,6 +77,28 @@ def _build_match_indexes() -> tuple[
             if name_key:
                 by_name[name_key] = match
     return by_anet, by_anet_pg, by_name
+
+
+UNCLASSIFIED_PRODUCT_GROUP = "Sin clasificar"
+
+
+def _is_gender_split_pack(pack: MonthlyReportingPack) -> bool:
+    """Packs Puma: cada cliente tiene filas separadas por product group de género."""
+    return pack.pack_id in PUMA_GENDER_PRODUCT_GROUPS
+
+
+def _with_pg_identity(identity: str, product_group: str) -> str:
+    base = identity.split("|pg:", 1)[0]
+    return f"{base}|pg:{product_group}"
+
+
+def _anet_product_group(pack: MonthlyReportingPack, genero: str) -> str:
+    groups = PUMA_GENDER_PRODUCT_GROUPS.get(pack.pack_id, {})
+    if genero in groups:
+        return groups[genero]
+    if genero == "unclassified":
+        return UNCLASSIFIED_PRODUCT_GROUP
+    return str_or_default(pack.product_group, "").strip()
 
 
 def _product_groups_for_pack(pack: MonthlyReportingPack) -> set[str]:
@@ -276,8 +299,15 @@ def seed_row_to_merged(
     # almacenadas en unidades: se usan tal cual, sin conversión.
     match = row.match
     meta = match_to_aggregate_row(match, base_empresa)
+    pack_pg = str_or_default(pack.product_group, "").strip()
+    identity = meta["identity"]
+    seed_pg = pack_pg
+    if _is_gender_split_pack(pack):
+        # Las planillas Puma traen una fila por product group (Men/Women).
+        seed_pg = str_or_default(match.seed_product_group, "").strip() or pack_pg
+        identity = _with_pg_identity(identity, seed_pg)
     return MergedClientMonth(
-        identity=meta["identity"],
+        identity=identity,
         display_name=meta["display_name"],
         match_estado=meta["match_estado"],
         month=row.month,
@@ -292,7 +322,7 @@ def seed_row_to_merged(
         anet_cliente_id=match.anet_cliente_id,
         city=(row.city or match.seed_city or "").strip(),
         store_type=(row.store_type or match.seed_store_type or "").strip(),
-        product_group=str_or_default(pack.product_group, "").strip(),
+        product_group=seed_pg,
     )
 
 
@@ -430,7 +460,7 @@ def filter_merge_result_by_clientes_excluidos(
         if row.identity in excluded_identities:
             return True
         if row.identity.startswith("seed:"):
-            seed_key = row.identity[5:]
+            seed_key = row.identity[5:].split("|pg:", 1)[0]
             if seed_key in excluded_seed_keys:
                 return True
         if row.identity.startswith("anet:"):
@@ -520,13 +550,23 @@ def merge_pack_year(
             register_unknown_superart=_qa_hook if classify_genero else register_unknown_superart,
         )
         month_date = date(year, month, 1)
-        for _key, agg in aggregate_anet_rows(anet_rows).items():
+        split = _is_gender_split_pack(pack)
+        aggregated = (
+            aggregate_anet_rows_by_genero(anet_rows).values()
+            if split
+            else aggregate_anet_rows(anet_rows).values()
+        )
+        for agg in aggregated:
+            # genero == "" (sin clasificador): fila consolidada legacy, sin split.
+            row_split = split and bool(agg.genero)
+            anet_pg = _anet_product_group(pack, agg.genero) if row_split else ""
             match = resolve_anet_match(
                 codigo_cliente=agg.codigo_cliente,
                 nombre_cliente=agg.nombre_cliente,
                 matches_by_anet=matches_by_anet,
                 matches_by_anet_pg=matches_by_anet_pg,
                 matches_by_name=matches_by_name,
+                product_group=anet_pg,
                 pack=pack,
             )
             merged = anet_row_to_merged(
@@ -536,6 +576,10 @@ def merge_pack_year(
                 match=match,
             )
             merged.month = month_date
+            if row_split:
+                # Una fila por product group: Men/Women propios + bucket sin clasificar.
+                merged.identity = _with_pg_identity(merged.identity, anet_pg)
+                merged.product_group = anet_pg
             _add_row(acc, merged)
 
     rows = sorted(acc.values(), key=lambda r: (r.identity, r.month))
