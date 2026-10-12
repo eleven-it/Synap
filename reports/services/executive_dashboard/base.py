@@ -85,7 +85,7 @@ def resolve_filters_from_query_params(
     base_empresa: str,
     default_fecha: date | None = None,
 ) -> DashboardFilters:
-    """Resuelve período canónico ``fecha_inicio`` / ``fecha_fin`` (default: hoy).
+    """Resuelve período canónico ``fecha_inicio`` / ``fecha_fin`` (default: mes a hoy).
 
     ``fecha`` (legacy) sin intervalo explícito equivale a un solo día (inicio = fin).
     ``fecha_referencia`` se deriva siempre de ``fecha_fin`` (compatibilidad meta/API).
@@ -100,7 +100,7 @@ def resolve_filters_from_query_params(
     elif fecha_legacy:
         fecha_inicio = fecha_fin = fecha_legacy
     else:
-        fecha_inicio = fecha_fin = hoy
+        fecha_inicio, fecha_fin = hoy.replace(day=1), hoy
 
     if fecha_inicio > fecha_fin:
         raise InvalidDashboardFilters("fecha_inicio no puede ser posterior a fecha_fin.")

@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 
 from django.db.models import Q
 
+from core.utils.permissions import user_has_permission
 from reports.models import ReportCategory, ReportDefinition
 from reports.services.report_visibility import COMMAND_CENTER_SLUG
 
@@ -36,6 +37,40 @@ CC_AREA_LABELS: Dict[str, str] = {
     "tesoreria": "Tesorería",
     "ventas_cobros": "Ventas por cobro",
 }
+
+# Los códigos ya existen en el catálogo synap_permiso de administraNET.
+# Cada área web sólo se expone con sus permisos funcionales completos.
+CC_AREA_PERMISSION_CODES: Dict[str, tuple[str, ...]] = {
+    "ventas": ("tablero_comercial_ventas",),
+    "inventario": ("tablero_abastecimiento_stock",),
+    "compras": ("tablero_abastecimiento_compras",),
+    "cruzados": ("tablero_comercial_ventas", "tablero_abastecimiento_stock"),
+    "tesoreria": ("tablero_gestion_financiera",),
+    "ventas_cobros": ("tablero_gestion_financiera",),
+}
+
+
+def user_has_cc_area_permission(user, area_key: str) -> bool:
+    """Exige cada permiso de tablero; acepta el código VB6 o su clave Synap."""
+    if area_key == "manufactura":
+        return user_has_permission(user, "mpr.reportes") or user_has_permission(user, "mpr.ver")
+    required = CC_AREA_PERMISSION_CODES.get(area_key)
+    if not required:
+        return False
+    return all(
+        user_has_permission(user, code)
+        or user_has_permission(user, f"reports.{code}")
+        for code in required
+    )
+
+
+def resolve_cc_areas_for_user(user, *, mpr_active: bool) -> Dict[str, bool]:
+    """Intersección de habilitación global, módulo y permisos efectivos del usuario."""
+    configured = resolve_cc_areas(mpr_active=mpr_active)
+    return {
+        key: bool(enabled and user_has_cc_area_permission(user, key))
+        for key, enabled in configured.items()
+    }
 
 # Detalle UI / detail_urls → área padre
 DETAIL_KEY_TO_AREA: Dict[str, str] = {

@@ -60,10 +60,10 @@ def _cursor_zeros():
 
 
 class ExecutiveDashboardContractTests(SimpleTestCase):
-    def test_resolve_filters_periodo_default_hoy(self):
+    def test_resolve_filters_periodo_default_mes_a_hoy(self):
         with patch.object(timezone, "localdate", return_value=date(2026, 5, 11)):
             f = resolve_filters_from_query_params({}, base_empresa="be1")
-        self.assertEqual(f.fecha_inicio, date(2026, 5, 11))
+        self.assertEqual(f.fecha_inicio, date(2026, 5, 1))
         self.assertEqual(f.fecha_fin, date(2026, 5, 11))
         self.assertEqual(f.fecha_referencia, date(2026, 5, 11))
 
@@ -262,6 +262,31 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertNotIn("manufactura", out["areas"])
         self.assertFalse(out["meta"]["modulos"]["mpr"])
         mock_mfg.assert_not_called()
+
+    @patch(
+        "reports.services.executive_dashboard.command_center.resolve_cc_areas",
+        return_value={
+            "ventas": True, "inventario": True, "compras": True,
+            "manufactura": False, "cruzados": True,
+            "tesoreria": True, "ventas_cobros": True,
+        },
+    )
+    @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=False)
+    @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
+    @patch("reports.services.executive_dashboard.command_center.fetch_ventas_resumen")
+    @patch("reports.services.executive_dashboard.command_center.fetch_inventario_resumen")
+    def test_seleccion_stock_no_consulta_ventas_ni_publica_sus_endpoints(
+        self, mock_stock, mock_ventas, mock_legacy, _mpr, _areas
+    ):
+        mock_legacy.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
+        mock_stock.return_value = {"disponible": True, "meta": {}, "stock_total": 5}
+        out = run_command_center(_filters(), allowed_areas={"inventario": True})
+        mock_stock.assert_called_once()
+        mock_ventas.assert_not_called()
+        self.assertEqual(list(out["areas"]), ["inventario"])
+        self.assertNotIn("ventas", out["meta"]["endpoints"])
+        self.assertNotIn("ventas_cobros", out["meta"]["endpoints"])
 
     @patch(
         "reports.services.executive_dashboard.command_center.resolve_cc_areas",

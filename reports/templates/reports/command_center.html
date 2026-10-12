@@ -61,7 +61,7 @@
         <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
           <div class="min-w-0 flex-1 md:max-w-2xl">
             <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300/90">Gerencial · Operaciones</p>
-            <h1 class="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl lg:text-[1.65rem]">{{ page_title }}</h1>
+            <h1 class="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl lg:text-[1.65rem]">Tablero gerencial y operativo</h1>
             <p class="mt-1.5 max-w-2xl text-xs leading-relaxed text-slate-400 sm:text-sm">
               Vista consolidada por área. Datos legacy AdministraNET en tiempo de consulta.
             </p>
@@ -75,10 +75,10 @@
               Áreas visibles
             </button>
             {% endif %}
-            <a href="{{ executive_sales_page_url }}" id="cc-link-panel-dia" data-base-url="{{ executive_sales_page_url }}" class="cc-report-link inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:border-sky-500/40 hover:bg-slate-800/80">
+            {% if executive_summary_api_url %}<a href="{{ executive_sales_page_url }}" id="cc-link-panel-dia" data-base-url="{{ executive_sales_page_url }}" class="cc-report-link inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:border-sky-500/40 hover:bg-slate-800/80">
               <span class="material-icons text-[1.125rem]" aria-hidden="true">insights</span>
               Ventas del día
-            </a>
+            </a>{% endif %}
             {% if mpr_module_active and cc_areas.manufactura %}
             <a href="{{ mpr_tablero_url }}" id="cc-link-mpr-tablero" data-base-url="{{ mpr_tablero_url }}" class="cc-report-link inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:border-violet-500/40 hover:bg-slate-800/80">
               <span class="material-icons text-[1.125rem]" aria-hidden="true">precision_manufacturing</span>
@@ -111,6 +111,13 @@
         {% endif %}
 
         <div class="cc-hero-toolbar rounded-xl p-3 sm:p-3.5">
+          <div class="cc-filter-field mb-3 flex flex-col gap-1">
+            <label for="cc-tablero-select" class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Tablero autorizado</label>
+            <select id="cc-tablero-select" class="min-h-11 rounded-lg border border-slate-600/80 bg-slate-950/80 px-3 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35">
+              <option value="">Seleccioná un tablero…</option>
+              {% for option in cc_tablero_options %}<option value="{{ option.key }}">{{ option.label }}</option>{% endfor %}
+            </select>
+          </div>
           <p class="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Filtros del período</p>
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
             <fieldset class="grid min-w-0 flex-1 grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-2 lg:max-w-[22rem]">
@@ -175,11 +182,15 @@
 
     <div id="cc-error" class="mb-4 hidden break-words rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200 sm:px-4" role="alert"></div>
 
+    <div id="cc-welcome" class="mb-4 rounded-xl border border-sky-200 bg-white p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" role="status">
+      {% if cc_tablero_options %}Elegí un tablero para consultar sus indicadores. No se cargan datos antes de seleccionarlo.{% else %}No tenés tableros habilitados para esta empresa. Solicitá la revisión de tus permisos.{% endif %}
+    </div>
+
     <p id="cc-periodo-label" class="mb-3 break-words px-1 text-xs font-medium text-slate-500 dark:text-slate-400 sm:px-0"></p>
 
-    <div id="cc-global-kpis" class="mb-6 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"></div>
+    <div id="cc-global-kpis" class="mb-6 hidden grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"></div>
 
-    <div id="cc-areas-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    <div id="cc-areas-grid" class="grid grid-cols-1 gap-4"></div>
   </div>
 </section>
 
@@ -284,5 +295,5 @@
   import { initializeTagsFilter } from "{% static 'reports/js/tags_filter.mjs' %}?v=20260901b";
   window.initializeTagsFilter = initializeTagsFilter;
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20260901a" defer></script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20261012a" defer></script>
 {% endblock %}

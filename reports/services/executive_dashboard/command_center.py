@@ -38,6 +38,23 @@ ENDPOINTS_RELATIVOS = {
     "executive_summary_dia": "/api/reports/executive-summary/",
 }
 
+ENDPOINT_AREA = {
+    "ventas": "ventas",
+    "ventas_pedidos_pendientes": "ventas",
+    "ventas_remitos_nf": "ventas",
+    "inventario": "inventario",
+    "inventario_existencias": "inventario",
+    "compras": "compras",
+    "manufactura": "manufactura",
+    "cruzados": "cruzados",
+    "cruzados_backorder": "cruzados",
+    "tesoreria": "tesoreria",
+    "tesoreria_banco": "tesoreria",
+    "tesoreria_movimientos_caja": "tesoreria",
+    "ventas_cobros": "ventas_cobros",
+    "ventas_cobros_detalle": "ventas_cobros",
+}
+
 
 def _area_sin_meta_interno(area_payload: dict[str, Any]) -> dict[str, Any]:
     """Quita meta anidado de sub-área para el orquestador."""
@@ -55,11 +72,19 @@ def _safe_legacy_area(name: str, fn, *args, **kwargs) -> dict[str, Any]:
         return legacy_area_failure_payload(exc)
 
 
-def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
+def run_command_center(
+    filters: DashboardFilters, *, allowed_areas: dict[str, bool] | None = None,
+    show_stock_costs: bool = True,
+) -> dict[str, Any]:
     areas: dict[str, Any] = {}
     notas_globales: list[str] = []
     mpr_on = mpr_modulo_activo()
-    areas_habilitadas = resolve_cc_areas(mpr_active=mpr_on)
+    configured = resolve_cc_areas(mpr_active=mpr_on)
+    selected = allowed_areas if allowed_areas is not None else configured
+    areas_habilitadas = {
+        key: bool(enabled and selected.get(key))
+        for key, enabled in configured.items()
+    }
 
     sucursales_disponibles: list = []
     with legacy_cursor(filters.base_empresa) as cursor:
@@ -80,6 +105,8 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
             if not areas_habilitadas.get(area_name):
                 continue
             area_full = _safe_legacy_area(area_name, fetch_fn, cursor, filters)
+            if area_name == "inventario" and not show_stock_costs:
+                area_full["valor_stock"] = None
             if area_full.get("disponible") is not False:
                 areas[area_name] = _area_sin_meta_interno(area_full)
             else:
@@ -102,12 +129,13 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
             else:
                 areas["tesoreria"] = tesoreria_full
 
-        try:
-            sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)
-        except Exception:
-            logger.warning(
-                "No se pudieron cargar sucursales para command center", exc_info=True
-            )
+        if areas_habilitadas.get("ventas"):
+            try:
+                sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)
+            except Exception:
+                logger.warning(
+                    "No se pudieron cargar sucursales para command center", exc_info=True
+                )
 
     if areas_habilitadas.get("manufactura"):
         areas["manufactura"] = _area_sin_meta_interno(
@@ -117,7 +145,10 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
     meta = build_meta(
         filters,
         notas_semanticas=notas_globales,
-        endpoints=ENDPOINTS_RELATIVOS,
+        endpoints={
+            key: url for key, url in ENDPOINTS_RELATIVOS.items()
+            if areas_habilitadas.get(ENDPOINT_AREA.get(key, ""), False)
+        },
         modulos={"mpr": mpr_on},
     )
     meta["areas_habilitadas"] = areas_habilitadas

@@ -7,13 +7,12 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.utils.permissions import user_has_full_access
+from core.utils.permissions import user_has_full_access, user_has_permission
 
-from .permissions import ManagerialReportsPermission
+from .permissions import CommandCenterPermission
 from .services.executive_dashboard.area_visibility import (
-    AREA_DISABLED_PAYLOAD,
     areas_catalog,
-    is_cc_area_enabled,
+    resolve_cc_areas_for_user,
     set_cc_areas,
 )
 from .services.executive_dashboard.base import (
@@ -52,7 +51,7 @@ from .services.executive_dashboard.ventas_metrics import (
 
 
 class ExecutiveDashboardMixin:
-    permission_classes = [ManagerialReportsPermission]
+    permission_classes = [CommandCenterPermission]
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
@@ -66,12 +65,16 @@ class ExecutiveDashboardMixin:
             raise NotFound("Informe no disponible")
 
     def _area_disabled_response(self, area_key: str):
-        """None si el área está habilitada; Response de degradación si no."""
-        if is_cc_area_enabled(area_key):
+        """El gate del servidor se aplica también a cada detalle."""
+        allowed = resolve_cc_areas_for_user(
+            self.request.user, mpr_active=mpr_modulo_activo()
+        )
+        if allowed.get(area_key):
             return None
-        payload = dict(AREA_DISABLED_PAYLOAD)
-        payload["motivo"] = f"Área «{area_key}» deshabilitada en la configuración del Command Center."
-        return Response(payload)
+        return Response(
+            {"detail": "Tablero no autorizado o deshabilitado."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
     def _filters_or_error(self, request):
         base = base_empresa_from_request(request)
@@ -115,7 +118,14 @@ class ExecutiveDashboardAreasAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
         mpr_active = mpr_modulo_activo()
         payload = areas_catalog(mpr_active=mpr_active)
-        payload["can_edit"] = user_has_full_access(request.user)
+        can_edit = user_has_full_access(request.user)
+        effective = resolve_cc_areas_for_user(request.user, mpr_active=mpr_active)
+        payload["areas"] = effective
+        if not can_edit:
+            payload.pop("areas_config", None)
+            payload["keys"] = [key for key in payload["keys"] if effective.get(key)]
+            payload["labels"] = {key: label for key, label in payload["labels"].items() if effective.get(key)}
+        payload["can_edit"] = can_edit
         return Response(payload)
 
     def patch(self, request, *args, **kwargs):
@@ -151,11 +161,24 @@ class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
     """GET orquestador command center."""
 
     def get(self, request, *args, **kwargs):
+        area_key = (request.query_params.get("tablero") or "").strip()
+        if not area_key:
+            return Response(
+                {"detail": "Seleccioná un tablero antes de consultar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        disabled = self._area_disabled_response(area_key)
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
         try:
-            payload = run_command_center(filters)
+            payload = run_command_center(
+                filters,
+                allowed_areas={area_key: True},
+                show_stock_costs=user_has_permission(request.user, "reports.view_managerial"),
+            )
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:
@@ -192,6 +215,8 @@ class ExecutiveDashboardInventarioResumenAPIView(ExecutiveDashboardMixin, APIVie
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
                 payload = fetch_inventario_resumen(cursor, filters)
+            if not user_has_permission(request.user, "reports.view_managerial"):
+                payload["valor_stock"] = None
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         return Response(payload)

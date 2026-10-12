@@ -72,6 +72,21 @@ class ManagerialReportsPermission(BaseReportsPermission):
     required_permission = "reports.view_managerial"
 
 
+class CommandCenterPermission(BasePermission):
+    """Permite entrar al selector sólo con un permiso de tablero explícito."""
+
+    def has_permission(self, request, view):
+        from reports.services.executive_dashboard.area_visibility import (
+            CC_AREA_KEYS,
+            user_has_cc_area_permission,
+        )
+
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        return any(user_has_cc_area_permission(user, key) for key in CC_AREA_KEYS)
+
+
 class DabraConsolidadoRemitosPermission(BaseReportsPermission):
     """Permiso dedicado al informe DABRA consolidado remitos."""
 

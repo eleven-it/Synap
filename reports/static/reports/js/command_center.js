@@ -633,6 +633,7 @@
   let ventasDiaCache = null;
   let areasCache = {};
   let dashboardLoadToken = 0;
+  let selectedAreaKey = "";
 
   const WAIT_LABELS = {
     dashboard: {
@@ -660,8 +661,7 @@
 
   function isAreaVisible(key) {
     const vis = cfg.areasVisible;
-    if (!vis || typeof vis !== "object") return true;
-    return vis[key] !== false;
+    return key === selectedAreaKey && !!vis && vis[key] === true;
   }
 
   function visibleAreaDefs() {
@@ -826,7 +826,7 @@
     const cruz = a.cruzados || {};
     const vd = ventasDia?.kpis || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
-    const ventasFirstVal = singleDay
+    const ventasFirstVal = singleDay && cfg.executiveSummaryUrl
       ? ventasDia === null
         ? "…"
         : fmtMoney.format(vd.ventas_netas_dia || 0)
@@ -1270,6 +1270,7 @@
   }
 
   async function loadExecutiveSummaryDeferred(loadToken) {
+    if (selectedAreaKey !== "ventas") return;
     if (!cfg.executiveSummaryUrl) return;
     if (!isSingleDayPeriod(readFilters())) return;
     ventasDiaCache = null;
@@ -1334,17 +1335,20 @@
 
   async function loadDashboardMonolith() {
     if (!cfg.dashboardUrl) return;
+    const loadToken = dashboardLoadToken;
     setLoading(true);
     showError("");
     try {
-      const q = buildQuery();
+      const q = buildQuery({ tablero: selectedAreaKey });
       const data = await fetchJson(`${cfg.dashboardUrl}?${q}`);
+      if (loadToken !== dashboardLoadToken) return;
       updatePeriodoLabel(false);
       areasCache = data.areas || {};
       let ventasDia = null;
-      if (cfg.executiveSummaryUrl && isSingleDayPeriod(readFilters())) {
+      if (selectedAreaKey === "ventas" && cfg.executiveSummaryUrl && isSingleDayPeriod(readFilters())) {
         try {
           ventasDia = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
+          if (loadToken !== dashboardLoadToken) return;
         } catch (e) {
           console.warn("Resumen ventas del día:", e);
         }
@@ -1353,13 +1357,27 @@
       renderGlobalKpis(areasCache, ventasDiaCache);
       renderAreas({ areas: areasCache });
     } catch (e) {
+      if (loadToken !== dashboardLoadToken) return;
       showError(e.message || "No se pudo cargar el Command Center.");
     } finally {
-      setLoading(false);
+      if (loadToken === dashboardLoadToken) setLoading(false);
     }
   }
 
   async function loadDashboard() {
+    selectedAreaKey = el("cc-tablero-select")?.value || "";
+    dashboardLoadToken += 1;
+    areasCache = {};
+    ventasDiaCache = null;
+    if (!selectedAreaKey || cfg.areasVisible?.[selectedAreaKey] !== true) {
+      el("cc-welcome")?.classList.remove("hidden");
+      el("cc-global-kpis")?.classList.add("hidden");
+      if (el("cc-areas-grid")) el("cc-areas-grid").innerHTML = "";
+      if (el("cc-periodo-label")) el("cc-periodo-label").textContent = "";
+      return;
+    }
+    el("cc-welcome")?.classList.add("hidden");
+    el("cc-global-kpis")?.classList.remove("hidden");
     const areaUrls = cfg.areaUrls || {};
     const hasParallel = Object.keys(areaUrls).length > 0;
     if (!hasParallel && !cfg.dashboardUrl) return;
@@ -1371,12 +1389,9 @@
       return;
     }
 
-    dashboardLoadToken += 1;
     const loadToken = dashboardLoadToken;
     showError("");
     setRefreshDisabled(true);
-    areasCache = {};
-    ventasDiaCache = null;
     updatePeriodoLabel(true);
     renderGlobalKpisLoading();
     renderAreasSkeleton();
@@ -1547,9 +1562,23 @@
     const t = todayIso();
     const fi = el("cc-fecha-inicio");
     const ff = el("cc-fecha-fin");
-    if (fi && !fi.value) fi.value = t;
+    if (fi && !fi.value) fi.value = `${t.slice(0, 7)}-01`;
     if (ff && !ff.value) ff.value = t;
     const onFilterChange = () => {
+      dashboardLoadToken += 1;
+      setLoading(false);
+      setRefreshDisabled(false);
+      areasCache = {};
+      ventasDiaCache = null;
+      if (selectedAreaKey) {
+        if (el("cc-areas-grid")) el("cc-areas-grid").innerHTML = "";
+        if (el("cc-global-kpis")) el("cc-global-kpis").innerHTML = "";
+        const welcome = el("cc-welcome");
+        if (welcome) {
+          welcome.textContent = "Filtros modificados. Pulsá Actualizar para consultar el tablero con el nuevo período y alcance.";
+          welcome.classList.remove("hidden");
+        }
+      }
       rememberFilters();
       syncReportLinks();
       updatePeriodoLabel(false);
@@ -1693,6 +1722,7 @@
 
   function bind() {
     el("cc-refresh")?.addEventListener("click", loadDashboard);
+    el("cc-tablero-select")?.addEventListener("change", loadDashboard);
     el("cc-detail-close")?.addEventListener("click", () => openModal(false));
     el("cc-detail-modal")?.addEventListener("click", (ev) => {
       if (ev.target === el("cc-detail-modal")) openModal(false);
@@ -1710,6 +1740,5 @@
     initDates();
     bind();
     await initFilterTags();
-    loadDashboard();
   });
 })();
