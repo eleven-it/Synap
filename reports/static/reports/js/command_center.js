@@ -790,6 +790,12 @@
     return kpiCard(label, "…", theme);
   }
 
+  function stockValueLabel(area) {
+    if (!area || area.disponible === false) return "No disponible";
+    if (area.valor_stock == null) return "Sin permiso";
+    return fmtMoney.format(area.valor_stock);
+  }
+
   function stripAreaMeta(payload) {
     if (!payload || typeof payload !== "object") return payload || {};
     const out = { ...payload };
@@ -840,7 +846,7 @@
       );
     }
     if (isAreaVisible("inventario")) {
-      cards.push(kpiCard("Valor stock", fmtMoney.format(inv.valor_stock || 0), "emerald"));
+      cards.push(kpiCard("Valor stock", stockValueLabel(inv), "emerald"));
     }
     if (isAreaVisible("compras")) {
       cards.push(
@@ -910,7 +916,7 @@
       icon: "inventory_2",
       color: "emerald",
       metrics: (a) => [
-        ["Valor stock", fmtMoney.format(a.valor_stock || 0)],
+        ["Valor stock", stockValueLabel(a)],
         ["Con stock", fmtNum.format(a.productos_con_stock || 0)],
         ["Bajo mínimo", fmtNum.format(a.productos_bajo_minimo || 0)],
         ["Sin stock", fmtNum.format(a.productos_sin_stock || 0)],
