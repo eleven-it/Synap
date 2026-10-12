@@ -42,7 +42,10 @@ from .ventas_mensuales_licenciatarios_api_views import (
 from .executive_dashboard_api_views import (
     ExecutiveDashboardAPIView,
     ExecutiveDashboardAreasAPIView,
+    ExecutiveDashboardFilterOptionsAPIView,
     ExecutiveDashboardVentasResumenAPIView,
+    ExecutiveDashboardComercialVentasV45APIView,
+    ExecutiveDashboardComercialVentasV45DetailAPIView,
     ExecutiveDashboardInventarioResumenAPIView,
     ExecutiveDashboardComprasResumenAPIView,
     ExecutiveDashboardManufacturaResumenAPIView,
@@ -173,6 +176,11 @@ urlpatterns = [
     path("pv-canal-ejecutivo/", PuntoVentaCanalEjecutivoAPIView.as_view(), name="reports-pv-canal-ejecutivo"),
     path("executive-dashboard/", ExecutiveDashboardAPIView.as_view(), name="reports-executive-dashboard"),
     path(
+        "executive-dashboard/filter-options/",
+        ExecutiveDashboardFilterOptionsAPIView.as_view(),
+        name="reports-executive-dashboard-filter-options",
+    ),
+    path(
         "executive-dashboard/areas/",
         ExecutiveDashboardAreasAPIView.as_view(),
         name="reports-executive-dashboard-areas",
@@ -211,6 +219,16 @@ urlpatterns = [
         "executive-dashboard/ventas/resumen/",
         ExecutiveDashboardVentasResumenAPIView.as_view(),
         name="reports-executive-dashboard-ventas-resumen",
+    ),
+    path(
+        "executive-dashboard/ventas/comercial-v45/",
+        ExecutiveDashboardComercialVentasV45APIView.as_view(),
+        name="reports-executive-dashboard-comercial-ventas-v45",
+    ),
+    path(
+        "executive-dashboard/ventas/comercial-v45/detalle/",
+        ExecutiveDashboardComercialVentasV45DetailAPIView.as_view(),
+        name="reports-executive-dashboard-comercial-ventas-v45-detalle",
     ),
     path(
         "executive-dashboard/inventario/resumen/",

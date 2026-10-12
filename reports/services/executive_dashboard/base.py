@@ -23,6 +23,7 @@ class DashboardFilters:
     fecha_fin: date
     sucursales_filtro: tuple[int, ...] = ()
     puntos_venta: tuple[int, ...] = ()
+    depositos_filtro: tuple[int, ...] = ()
     limit: int = 100
     offset: int = 0
     busqueda: str | None = None
@@ -114,6 +115,7 @@ def resolve_filters_from_query_params(
                 sucursales_filtro = (int(sid),)
 
     puntos_venta = _parse_int_list_qp(qp, "puntos_venta", "punto_venta")
+    depositos_filtro = _parse_int_list_qp(qp, "depositos", "deposito")
 
     limit = to_int_or_none(qp.get("limit") if qp else None) or 100
     offset = to_int_or_none(qp.get("offset") if qp else None) or 0
@@ -135,6 +137,7 @@ def resolve_filters_from_query_params(
         fecha_fin=fecha_fin,
         sucursales_filtro=sucursales_filtro,
         puntos_venta=puntos_venta,
+        depositos_filtro=depositos_filtro,
         limit=limit,
         offset=offset,
         busqueda=busqueda,
@@ -154,6 +157,7 @@ def build_meta(filters: DashboardFilters, **extra: Any) -> dict[str, Any]:
         if filters.sucursales_filtro
         else None,
         "punto_venta_filtros": list(filters.puntos_venta) if filters.puntos_venta else None,
+        "depositos_autorizados": list(filters.depositos_filtro) if filters.depositos_filtro else None,
         "notas_semanticas": [],
     }
     meta.update(extra)

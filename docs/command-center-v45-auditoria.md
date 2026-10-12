@@ -21,7 +21,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Tablero administraNET | KPI históricos | Permiso heredado | Estado en Synap `Desarrollo` |
 |---|---:|---|---|
 | Resumen general | 16 | `tablero_resumen_general` | Pendiente de migrar. |
-| Comercial — Ventas | 16 | `tablero_comercial_ventas` | `ventas` existente es un subconjunto; falta paridad. |
+| Comercial — Ventas | 16 | `tablero_comercial_ventas` | Implementación V45 en rama de trabajo: KPI, comparación, gráfico y detalles. Validación Django y revisión del PR pendientes. |
 | Comercial — Preparación de pedidos | 16 | `tablero_comercial_prep_pedidos` | Pendiente de migrar. |
 | Abastecimiento — Compras | 14 | `tablero_abastecimiento_compras` | `compras` existente es un subconjunto; falta paridad. |
 | Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | `inventario` existente es un subconjunto; falta paridad. |
@@ -38,7 +38,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 
 1. `CM_ResumenEjecutivo.frm` abre un selector sin consulta inicial. Synap consultaba varias áreas al cargar la página. La pantalla debe quedar vacía hasta elegir un tablero y cada API debe autorizarlo por separado.
 2. Las banderas `tablero_*` existen tanto en `permiso_sistema` como en `synap_permiso` de Best Sox. La autorización web debe tomar la empresa, el puesto y el usuario actuales, y denegar por defecto cuando falte una regla aplicable.
-3. `modCM_FiltroPuntoVenta.bas` usa `punto_venta_usr` y deriva sucursales por `punto_venta.id_sucursal`. La copia Best Sox tiene 58 asignaciones de PV distribuidas entre 34 usuarios. Los servicios actuales de Synap no aplican todavía esta restricción de modo uniforme; por eso no se puede certificar seguridad territorial sólo filtrando las opciones del selector.
+3. `modCM_FiltroPuntoVenta.bas` usa `punto_venta_usr` y deriva sucursales por `punto_venta.id_sucursal`. La copia Best Sox tiene 58 asignaciones de PV distribuidas entre 34 usuarios. La rama aplica PV a los servicios de Ventas y depósitos de `deposito_usr` a Stock en el servidor. Las demás áreas actuales quedan ocultas para usuarios sin acceso total hasta auditar su alcance.
 4. Varias consultas actuales usan `Fecha <= fecha_fin`. En ambos backups `comp_ped.Fecha`, `cuentacliente.Fecha` y `stockp.Fecha` son `DATE`, por lo que ese predicado incluye el último día para esas tres tablas. Antes de reutilizarlo en columnas `DATETIME`, deben verificarse sus tipos y emplearse un fin exclusivo al día siguiente.
 5. El detalle, las comparaciones, los gráficos y las exportaciones de los once tableros requieren la misma autorización y el mismo contexto que el KPI padre. No deben inventarse valores cero ante consultas faltantes o fallidas.
 6. El acceso a costos, rentabilidad, montos de caja, cuenta corriente, comprobantes y asientos necesita gates independientes antes de publicarse.
@@ -46,3 +46,9 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 ## Criterio de avance
 
 Cada KPI se marcará `implementado` sólo con fórmula y fuente verificadas en V45, filtro territorial del servidor, permisos, respuesta explícita de no disponibilidad, detalle y comparación cuando correspondan, y conciliación numérica en la base adecuada. Los candidatos pasan por PR y pruebas en Desarrollo; Staging se considera después de esas verificaciones.
+
+## Conciliación inicial de Comercial/Ventas (rama de trabajo)
+
+Período 01–08/10/2026 en el backup Best Sox, importes sin impuestos, todos los PV: ventas netas $171.207.874,10; 82 facturas; 180 pedidos por $513.873.093,50; 108 pendientes por $368.254.613,61; 95 remitos; 72 pedidos con vínculo a remito; 50 vinculados a factura; rentabilidad $41.161.219,60 y margen 22,06 %. La prueba ejecutó las consultas del servicio contra MySQL 5.7 aislado, incluidos los 16 detalles, comparación y selección de PV 2. En Stock, depósito 6 «Terminado»: 724 artículos con stock, 286.967 unidades y 724 filas de detalle positivo. La base restaurada es histórica y estas cifras son una conciliación técnica, no una prueba de la instalación web en Best Sox.
+
+El PR continúa en borrador: aún falta ejecutar el suite Django integrado, revisar la experiencia móvil y completar los otros diez tableros antes de cualquier promoción.

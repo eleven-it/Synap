@@ -32,6 +32,13 @@ _SQL_ARTICULO_VENDIBLE = """
 """
 
 
+def _deposito_where(filters: DashboardFilters, alias: str = "dep") -> tuple[str, list[int]]:
+    if not filters.depositos_filtro:
+        return "", []
+    placeholders = ",".join(["%s"] * len(filters.depositos_filtro))
+    return f" AND {alias}.CodDeposito IN ({placeholders})", list(filters.depositos_filtro)
+
+
 def _like_pattern(term: str) -> str:
     escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
@@ -92,6 +99,7 @@ def _order_tipo_mpr_sql(alias: str = "dep") -> str:
 
 def _count_productos_bajo_minimo(cursor, filters: DashboardFilters) -> int | None:
     """Umbral: articulo.stock_min o punto_pedido (legacy AdministraNET)."""
+    dep_sql, dep_params = _deposito_where(filters)
     sql_bajo_min = f"""
         SELECT COUNT(*) FROM (
             SELECT a.IDArt,
@@ -103,13 +111,14 @@ def _count_productos_bajo_minimo(cursor, filters: DashboardFilters) -> int | Non
             {_reservado_join_sql(filters)}
             WHERE {_SQL_ARTICULO_VENDIBLE.strip()}
               AND {_SQL_DEPOSITO_SUMA_STOCK.strip()}
+              {dep_sql}
             GROUP BY a.IDArt
             HAVING umbral > 0 AND disp < umbral
         ) sub
     """
     try:
         _, reservado_params = sql_fecha_en_periodo("cp_res", filters)
-        cursor.execute(sql_bajo_min, reservado_params)
+        cursor.execute(sql_bajo_min, reservado_params + dep_params)
         row_bm = cursor.fetchone()
         return int(row_bm[0] or 0) if row_bm else 0
     except Exception as exc:
@@ -117,9 +126,10 @@ def _count_productos_bajo_minimo(cursor, filters: DashboardFilters) -> int | Non
         return None
 
 
-def _list_depositos_suma_stock(cursor) -> list[dict[str, Any]]:
+def _list_depositos_suma_stock(cursor, filters: DashboardFilters) -> list[dict[str, Any]]:
     """Una fila por depósito Stock=Sí (anulado=No), unidades de artículos vendibles."""
     order_sql = _order_tipo_mpr_sql("dep")
+    dep_sql, dep_params = _deposito_where(filters)
     sql = f"""
         SELECT
             dep.CodDeposito AS id_deposito,
@@ -135,10 +145,11 @@ def _list_depositos_suma_stock(cursor) -> list[dict[str, Any]]:
             AND a.disponible_vta = 'Si'
             AND a.tipo_art = 'Articulo'
         WHERE {_SQL_DEPOSITO_SUMA_STOCK.strip()}
+          {dep_sql}
         GROUP BY dep.CodDeposito, dep.NombreDeposito, dep.tipo_mpr
         ORDER BY {order_sql} ASC, IFNULL(dep.NombreDeposito, '') ASC, dep.CodDeposito ASC
     """
-    cursor.execute(sql)
+    cursor.execute(sql, dep_params)
     rows = cursor.fetchall() or []
     cols = [d[0] for d in cursor.description] if cursor.description else []
     out: list[dict[str, Any]] = []
@@ -173,6 +184,7 @@ def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any
         "Reservado y bajo mínimo: PED En preparación/Preparado filtrados por cp_res.Fecha en el período.",
         "Filtro sucursal no aplica a inventario en v1.",
     ]
+    dep_sql, dep_params = _deposito_where(filters)
     sql = f"""
         SELECT
             COALESCE(SUM(COALESCE(sd.saldo, 0) * COALESCE(a.PrecioCosto, 0)), 0) AS valor_stock,
@@ -183,8 +195,9 @@ def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any
         INNER JOIN deposito dep ON dep.CodDeposito = sd.id_deposito
         WHERE {_SQL_ARTICULO_VENDIBLE.strip()}
           AND {_SQL_DEPOSITO_SUMA_STOCK.strip()}
+          {dep_sql}
     """
-    cursor.execute(sql)
+    cursor.execute(sql, dep_params)
     row = cursor.fetchone()
     valor_stock = float(row[0] or 0) if row else 0.0
     productos_con_stock = int(row[1] or 0) if row else 0
@@ -194,12 +207,12 @@ def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any
     if productos_bajo_minimo is None:
         notas.append("productos_bajo_minimo: no disponible (columnas stock_min/punto_pedido).")
 
-    depositos = _list_depositos_suma_stock(cursor)
+    depositos = _list_depositos_suma_stock(cursor, filters)
 
     return {
         "valor_stock": round_money(valor_stock),
         "productos_con_stock": productos_con_stock,
-        "productos_bajo_minimo": productos_bajo_minimo if productos_bajo_minimo is not None else 0,
+        "productos_bajo_minimo": productos_bajo_minimo,
         "productos_sin_stock": productos_sin_stock,
         "depositos": depositos,
         "disponible": True,
@@ -219,10 +232,12 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
         )
     reservado_join_sql = _reservado_join_sql(filters)
     _, reservado_params = sql_fecha_en_periodo("cp_res", filters)
+    dep_sql, dep_params = _deposito_where(filters)
     where_art = f"""
         {_SQL_ARTICULO_VENDIBLE.strip()}
         AND {_SQL_DEPOSITO_SUMA_STOCK.strip()}
         AND COALESCE(sd.saldo, 0) > 0
+        {dep_sql}
     """
     search_sql, search_params = _search_where_sql(filters.busqueda)
     where_art += search_sql
@@ -238,7 +253,7 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
     """
     notas.append("Reservado: PED en período (cp_res.Fecha entre fecha_inicio y fecha_fin).")
     sql_count = f"SELECT COUNT(*) {from_clause}"
-    cursor.execute(sql_count, reservado_params + search_params)
+    cursor.execute(sql_count, reservado_params + dep_params + search_params)
     row_count = cursor.fetchone()
     total_registros = int(row_count[0] or 0) if row_count else 0
 
@@ -260,7 +275,7 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
         ORDER BY a.NombreArticulo ASC, sd.id_deposito ASC
         LIMIT %s OFFSET %s
     """
-    cursor.execute(sql, reservado_params + search_params + [filters.limit, filters.offset])
+    cursor.execute(sql, reservado_params + dep_params + search_params + [filters.limit, filters.offset])
     cols = [d[0] for d in cursor.description]
     filas = []
     for row in cursor.fetchall():

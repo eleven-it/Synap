@@ -308,6 +308,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["command_center_areas_api_url"] = reverse(
                 "reports-api:reports-executive-dashboard-areas"
             )
+            context["command_center_filter_options_api_url"] = reverse(
+                "reports-api:reports-executive-dashboard-filter-options"
+            )
             context["executive_summary_api_url"] = (
                 reverse("reports-api:reports-executive-summary")
                 if cc_areas.get("ventas") and user_has_permission(self.request.user, "reports.view_managerial")
@@ -331,7 +334,7 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["can_edit_cc_areas"] = can_edit_cc_areas
 
             area_urls = {
-                "ventas": reverse("reports-api:reports-executive-dashboard-ventas-resumen"),
+                "ventas": reverse("reports-api:reports-executive-dashboard-comercial-ventas-v45"),
                 "inventario": reverse(
                     "reports-api:reports-executive-dashboard-inventario-resumen"
                 ),
@@ -357,6 +360,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 else ""
             )
             detail_urls = {
+                "comercial_v45": reverse(
+                    "reports-api:reports-executive-dashboard-comercial-ventas-v45-detalle"
+                ),
                 "pedidos_pendientes": reverse(
                     "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"
                 ),

@@ -7,6 +7,7 @@ from typing import Any
 from .area_visibility import resolve_cc_areas
 from .base import DashboardFilters, build_meta, legacy_cursor, mpr_modulo_activo
 from .cross_metrics import fetch_cruzados_resumen
+from .comercial_v45 import fetch_comercial_ventas_v45
 from .exceptions import is_legacy_db_error, legacy_area_failure_payload
 from .inventory_metrics import fetch_inventario_resumen
 from .manufacturing_metrics import fetch_manufactura_resumen
@@ -75,6 +76,7 @@ def _safe_legacy_area(name: str, fn, *args, **kwargs) -> dict[str, Any]:
 def run_command_center(
     filters: DashboardFilters, *, allowed_areas: dict[str, bool] | None = None,
     show_stock_costs: bool = True,
+    v45_sales: bool = False, gross_sales: bool = False, compare_sales: bool = False,
 ) -> dict[str, Any]:
     areas: dict[str, Any] = {}
     notas_globales: list[str] = []
@@ -89,7 +91,14 @@ def run_command_center(
     sucursales_disponibles: list = []
     with legacy_cursor(filters.base_empresa) as cursor:
         if areas_habilitadas.get("ventas"):
-            ventas_full = _safe_legacy_area("ventas", fetch_ventas_resumen, cursor, filters)
+            if v45_sales:
+                ventas_full = _safe_legacy_area(
+                    "ventas", fetch_comercial_ventas_v45, cursor, filters,
+                    gross=gross_sales, include_profit=show_stock_costs,
+                    compare_previous=compare_sales,
+                )
+            else:
+                ventas_full = _safe_legacy_area("ventas", fetch_ventas_resumen, cursor, filters)
             if ventas_full.get("disponible") is not False:
                 areas["ventas"] = _area_sin_meta_interno(ventas_full)
                 notas_globales.extend(ventas_full.get("meta", {}).get("notas_semanticas") or [])
@@ -132,6 +141,12 @@ def run_command_center(
         if areas_habilitadas.get("ventas"):
             try:
                 sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)
+                if filters.sucursales_filtro:
+                    permitidas = set(filters.sucursales_filtro)
+                    sucursales_disponibles = [
+                        row for row in sucursales_disponibles
+                        if row.get("id_sucursal") in permitidas
+                    ]
             except Exception:
                 logger.warning(
                     "No se pudieron cargar sucursales para command center", exc_info=True

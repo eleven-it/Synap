@@ -23,6 +23,11 @@ from .services.executive_dashboard.base import (
     resolve_filters_from_query_params,
 )
 from .services.executive_dashboard.command_center import run_command_center
+from .services.executive_dashboard.comercial_v45 import (
+    COMERCIAL_V45_DETAIL_KEYS,
+    fetch_comercial_ventas_v45,
+    list_comercial_v45_detail,
+)
 from .services.executive_dashboard.cross_metrics import (
     fetch_cruzados_resumen,
     list_backorder_detalle,
@@ -48,6 +53,11 @@ from .services.executive_dashboard.ventas_metrics import (
     list_pedidos_pendientes,
     list_remitos_no_facturados,
 )
+from .services.executive_dashboard.territory import (
+    TerritoryAccessDenied,
+    constrain_filters_to_user,
+    list_filter_options,
+)
 
 
 class ExecutiveDashboardMixin:
@@ -66,6 +76,7 @@ class ExecutiveDashboardMixin:
 
     def _area_disabled_response(self, area_key: str):
         """El gate del servidor se aplica también a cada detalle."""
+        self._cc_area_key = area_key
         allowed = resolve_cc_areas_for_user(
             self.request.user, mpr_active=mpr_modulo_activo()
         )
@@ -90,11 +101,25 @@ class ExecutiveDashboardMixin:
             filters = resolve_filters_from_query_params(
                 request.query_params, base_empresa=base
             )
+            filters = constrain_filters_to_user(
+                request.user, filters, area_key=getattr(self, "_cc_area_key", "")
+            )
         except InvalidDashboardFilters as exc:
             return None, Response(
                 {"detail": str(exc), "error_type": "invalid_data"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except TerritoryAccessDenied as exc:
+            return None, Response(
+                {"detail": str(exc), "error_type": "territory_denied"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except LegacyReadError as exc:
+            return None, self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return None, self._legacy_error_response(self._legacy_read_error(exc))
+            raise
         return filters, None
 
     def _legacy_error_response(self, exc: Exception) -> Response:
@@ -128,6 +153,7 @@ class ExecutiveDashboardAreasAPIView(ExecutiveDashboardMixin, APIView):
         payload["can_edit"] = can_edit
         return Response(payload)
 
+
     def patch(self, request, *args, **kwargs):
         if not user_has_full_access(request.user):
             return Response(
@@ -157,6 +183,27 @@ class ExecutiveDashboardAreasAPIView(ExecutiveDashboardMixin, APIView):
         return Response(payload)
 
 
+class ExecutiveDashboardFilterOptionsAPIView(ExecutiveDashboardMixin, APIView):
+    """Opciones de PV, sucursal y depósito bajo los permisos del usuario."""
+
+    def get(self, request, *args, **kwargs):
+        filter_type = request.query_params.get("type", "")
+        if filter_type not in {"puntos_venta", "sucursales", "depositos"}:
+            return Response({"detail": "Filtro desconocido."}, status=status.HTTP_400_BAD_REQUEST)
+        base = base_empresa_from_request(request)
+        if not base:
+            return Response({"detail": "Empresa no disponible."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            options = list_filter_options(request.user, base, filter_type)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response({filter_type: options})
+
+
 class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
     """GET orquestador command center."""
 
@@ -178,6 +225,9 @@ class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
                 filters,
                 allowed_areas={area_key: True},
                 show_stock_costs=user_has_permission(request.user, "reports.view_managerial"),
+                v45_sales=area_key == "ventas",
+                gross_sales=str(request.query_params.get("incluir_impuestos", "")).lower() in {"1", "true", "si"},
+                compare_sales=request.query_params.get("comparar") == "anterior",
             )
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
@@ -201,6 +251,66 @@ class ExecutiveDashboardVentasResumenAPIView(ExecutiveDashboardMixin, APIView):
                 payload = fetch_ventas_resumen(cursor, filters)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardComercialVentasV45APIView(ExecutiveDashboardMixin, APIView):
+    """Los 16 KPI de Comercial/Ventas, con permiso de costos independiente."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("ventas")
+        if disabled:
+            return disabled
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        gross = str(request.query_params.get("incluir_impuestos", "")).lower() in {"1", "true", "si"}
+        compare_previous = request.query_params.get("comparar") == "anterior"
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_comercial_ventas_v45(
+                    cursor, filters, gross=gross,
+                    include_profit=user_has_permission(request.user, "reports.view_managerial"),
+                    compare_previous=compare_previous,
+                )
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response(payload)
+
+
+class ExecutiveDashboardComercialVentasV45DetailAPIView(ExecutiveDashboardMixin, APIView):
+    """Detalle protegido de cada KPI de Comercial/Ventas V45."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("ventas")
+        if disabled:
+            return disabled
+        kpi = request.query_params.get("kpi", "")
+        if kpi not in COMERCIAL_V45_DETAIL_KEYS:
+            return Response({"detail": "Indicador desconocido."}, status=status.HTTP_400_BAD_REQUEST)
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        gross = str(request.query_params.get("incluir_impuestos", "")).lower() in {"1", "true", "si"}
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_comercial_v45_detail(
+                    cursor, filters, kpi=kpi, gross=gross,
+                    allow_cost=user_has_permission(request.user, "reports.view_managerial"),
+                    order=request.query_params.get("orden", "fecha_desc"),
+                )
+        except PermissionError:
+            return Response({"detail": "Sin permiso de costos."}, status=status.HTTP_403_FORBIDDEN)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
         return Response(payload)
 
 

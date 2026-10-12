@@ -57,6 +57,9 @@
   let existenciasAbort = null;
   let existenciasDebounce = null;
   let existenciasSearchBound = false;
+  let comercialDetail = null;
+  let comercialDetailData = null;
+  let comercialSearchTimer = null;
 
   function resetDetailPanelsLayout() {
     const tableWrap = el("cc-detail-table-wrap");
@@ -68,7 +71,8 @@
   function formatTabularCell(key, value) {
     if (value == null || value === "") return "—";
     if (
-      key === "subtotal_desc" ||
+      key === "subtotal_desc" || key === "importe" || key === "venta" ||
+      key === "costo" || key === "rentabilidad" ||
       key === "bo_importe" ||
       key.endsWith("_importe") ||
       (typeof value === "number" && (key.includes("monto") || key.includes("importe")))
@@ -222,6 +226,12 @@
     const searchInput = el("cc-detail-search");
     if (searchInput) searchInput.value = "";
     updateExistenciasSearchClear();
+    el("cc-v45-detail-controls")?.classList.add("hidden");
+    el("cc-v45-detail-controls")?.classList.remove("flex");
+    el("cc-v45-pagination")?.classList.add("hidden");
+    el("cc-v45-pagination")?.classList.remove("flex");
+    comercialDetail = null;
+    comercialDetailData = null;
     if (existenciasAbort) {
       existenciasAbort.abort();
       existenciasAbort = null;
@@ -394,7 +404,7 @@
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
   /** Persistencia local de filtros (mismo navegador / perfil). */
   const FILTERS_STORAGE_KEY = "synap_cc_filters_v2";
-  const FILTERS_API_URL = "/api/reports/filters/";
+  const FILTERS_API_URL = cfg.filtersUrl;
   let filterTagsReady = false;
   /** Presentación unidades / unidades+docenas en tarjeta Inventario. */
   const INV_PRESENTACION_KEY = "synap_cc_inv_presentacion_v1";
@@ -435,6 +445,7 @@
       fecha_fin: ff,
       sucursales: selectedFilterIds("sucursales"),
       puntos_venta: selectedFilterIds("punto_venta"),
+      depositos: selectedFilterIds("depositos"),
     };
   }
 
@@ -451,6 +462,7 @@
               fecha_fin: legacy.fecha_fin || "",
               sucursales: [String(legacy.sucursal)],
               puntos_venta: [],
+              depositos: [],
             };
           }
         }
@@ -470,11 +482,15 @@
       const puntos_venta = Array.isArray(parsed.puntos_venta)
         ? parsed.puntos_venta.map(String).filter(Boolean)
         : [];
+      const depositos = Array.isArray(parsed.depositos)
+        ? parsed.depositos.map(String).filter(Boolean)
+        : [];
       return {
         fecha_inicio: fi || "",
         fecha_fin: ff || "",
         sucursales,
         puntos_venta,
+        depositos,
       };
     } catch (e) {
       return null;
@@ -491,6 +507,7 @@
           fecha_fin: f.fecha_fin || "",
           sucursales: f.sucursales || [],
           puntos_venta: f.puntos_venta || [],
+          depositos: f.depositos || [],
         }),
       );
     } catch (e) {
@@ -509,8 +526,10 @@
       url.searchParams.delete("sucursales");
       url.searchParams.delete("punto_venta");
       url.searchParams.delete("puntos_venta");
+      url.searchParams.delete("depositos");
       (f.sucursales || []).forEach((id) => url.searchParams.append("sucursales", id));
       (f.puntos_venta || []).forEach((id) => url.searchParams.append("punto_venta", id));
+      (f.depositos || []).forEach((id) => url.searchParams.append("depositos", id));
       url.searchParams.delete("fecha");
       window.history.replaceState({}, "", url.pathname + url.search + url.hash);
     } catch (e) {
@@ -522,6 +541,7 @@
     const f = filters || readFilters();
     (f.sucursales || []).forEach((id) => q.append("sucursales", id));
     (f.puntos_venta || []).forEach((id) => q.append("punto_venta", id));
+    (f.depositos || []).forEach((id) => q.append("depositos", id));
   }
 
   function buildQuery(extra) {
@@ -532,6 +552,10 @@
       ...(extra || {}),
     });
     appendFilterParams(q, f);
+    if (selectedAreaKey === "ventas") {
+      if (el("cc-incluir-impuestos")?.checked) q.set("incluir_impuestos", "1");
+      if (el("cc-comparar-anterior")?.checked) q.set("comparar", "anterior");
+    }
     return q.toString();
   }
 
@@ -581,6 +605,7 @@
     const pending = {
       sucursales: params.getAll("sucursales"),
       puntos_venta: params.getAll("punto_venta"),
+      depositos: params.getAll("depositos"),
     };
     const legacySuc = (params.get("sucursal") || "").trim();
     if (!pending.sucursales.length && legacySuc) {
@@ -593,7 +618,7 @@
   function applyPendingFilterSelections() {
     const pending = window.__ccPendingFilterIds;
     if (!pending) return;
-    [["sucursales", pending.sucursales], ["punto_venta", pending.puntos_venta]].forEach(
+    [["sucursales", pending.sucursales], ["punto_venta", pending.puntos_venta], ["depositos", pending.depositos]].forEach(
       ([selectId, ids]) => {
         const sel = el(selectId);
         if (!sel || !Array.isArray(ids) || !ids.length) return;
@@ -620,17 +645,17 @@
       ffEl.value = saved.fecha_fin;
       applied = true;
     }
-    if (saved.sucursales?.length || saved.puntos_venta?.length) {
+    if (saved.sucursales?.length || saved.puntos_venta?.length || saved.depositos?.length) {
       window.__ccPendingFilterIds = {
         sucursales: saved.sucursales || [],
         puntos_venta: saved.puntos_venta || [],
+        depositos: saved.depositos || [],
       };
     }
     return applied;
   }
 
   let waitModalLocks = 0;
-  let ventasDiaCache = null;
   let areasCache = {};
   let dashboardLoadToken = 0;
   let selectedAreaKey = "";
@@ -747,17 +772,21 @@
 
   async function initFilterTags() {
     try {
-      const [sucRes, pvRes] = await Promise.all([
+      const [sucRes, pvRes, depRes] = await Promise.all([
         fetch(`${FILTERS_API_URL}?type=sucursales`, { credentials: "same-origin" }),
         fetch(`${FILTERS_API_URL}?type=puntos_venta`, { credentials: "same-origin" }),
+        fetch(`${FILTERS_API_URL}?type=depositos`, { credentials: "same-origin" }),
       ]);
       const sucPayload = sucRes.ok ? await sucRes.json() : {};
       const pvPayload = pvRes.ok ? await pvRes.json() : {};
+      const depPayload = depRes.ok ? await depRes.json() : {};
       poblarSelectTags("sucursales", sucPayload.sucursales || [], "value", "label");
       poblarSelectTags("punto_venta", pvPayload.puntos_venta || [], "value", "label");
+      poblarSelectTags("depositos", depPayload.depositos || [], "value", "label");
       if (typeof window.initializeTagsFilter === "function") {
         window.initializeTagsFilter("sucursales", "sucursales");
         window.initializeTagsFilter("punto_venta", "puntos_venta");
+        window.initializeTagsFilter("depositos", "depositos");
         filterTagsReady = true;
       }
       applyPendingFilterSelections();
@@ -819,7 +848,7 @@
     lbl.textContent = loading ? `${full} · Cargando áreas…` : full;
   }
 
-  function renderGlobalKpis(areas, ventasDia) {
+  function renderGlobalKpis(areas) {
     const grid = el("cc-global-kpis");
     if (!grid) return;
     const f = readFilters();
@@ -830,20 +859,15 @@
     const comp = a.compras || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
-    const vd = ventasDia?.kpis || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
-    const ventasFirstVal = singleDay && cfg.executiveSummaryUrl
-      ? ventasDia === null
-        ? "…"
-        : fmtMoney.format(vd.ventas_netas_dia || 0)
-      : fmtMoney.format(v.ventas_netas || 0);
+    const ventasFirstVal = v.disponible === false
+      ? "No disponible"
+      : fmtMoney.format(v.kpis?.ventas_netas ?? v.ventas_netas ?? 0);
 
     const cards = [];
     if (isAreaVisible("ventas")) {
       cards.push(kpiCard(ventasFirstLabel, ventasFirstVal, "sky"));
-      cards.push(
-        kpiCard("Total operativo (período)", fmtMoney.format(v.total_operativo || 0), "indigo")
-      );
+      cards.push(kpiCard("Facturas", v.disponible === false ? "No disponible" : fmtNum.format(v.kpis?.facturas ?? 0), "indigo"));
     }
     if (isAreaVisible("inventario")) {
       cards.push(kpiCard("Valor stock", stockValueLabel(inv), "emerald"));
@@ -875,7 +899,7 @@
     const loadingCards = [];
     if (isAreaVisible("ventas")) {
       loadingCards.push(kpiCardLoading(ventasLabel, "sky"));
-      loadingCards.push(kpiCardLoading("Total operativo (período)", "indigo"));
+      loadingCards.push(kpiCardLoading("Facturas", "indigo"));
     }
     if (isAreaVisible("inventario")) {
       loadingCards.push(kpiCardLoading("Valor stock", "emerald"));
@@ -895,20 +919,41 @@
   const AREA_DEFS = [
     {
       key: "ventas",
-      title: "Ventas",
+      title: "Comercial · Ventas (V45)",
       icon: "point_of_sale",
       color: "sky",
-      metrics: (a) => [
-        ["Ventas netas", fmtMoney.format(a.ventas_netas || 0)],
-        ["Pedidos pend.", fmtMoney.format(a.pedidos_pendientes_monto || 0)],
-        ["Remitos s/ fact.", fmtMoney.format(a.remitos_no_facturados_monto || 0)],
-        ["Total operativo", fmtMoney.format(a.total_operativo || 0)],
-      ],
-      details: [
-        { label: "Pedidos pendientes", urlKey: "pedidos_pendientes" },
-        { label: "Remitos no facturados", urlKey: "remitos_nf" },
-        { label: "Ventas marcas mensual", urlKey: "ventas_marcas_mensual", navigate: true },
-      ],
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const m = (name) => k[name] == null ? "No disponible" : fmtMoney.format(k[name]);
+        const n = (name) => k[name] == null ? "No disponible" : fmtNum.format(k[name]);
+        const rows = [
+          ["Ventas netas", m("ventas_netas")],
+          ["Rentabilidad", k.rentabilidad == null ? "Sin permiso de costos" : m("rentabilidad")],
+          ["Margen %", k.margen_porcentaje == null ? "Sin permiso de costos" : `${k.margen_porcentaje} %`],
+          ["Ticket promedio", m("ticket_promedio")],
+          ["Presupuestos", n("presupuestos")],
+          ["Monto presupuestos", m("monto_presupuestos")],
+          ["Pedidos", n("pedidos")],
+          ["Monto pedidos", m("monto_pedidos")],
+          ["Pedidos pendientes", n("pedidos_pendientes")],
+          ["Monto pendiente", m("monto_pendientes")],
+          ["Pedidos en remito", n("pedidos_en_remito")],
+          ["Pedidos facturados", n("pedidos_facturados")],
+          ["Remitos", n("remitos")],
+          ["Facturas", n("facturas")],
+          ["Créditos/devoluciones", m("creditos_devoluciones")],
+          ["Notas de débito", m("notas_debito")],
+        ];
+        const keys = [
+          "ventas_netas", "rentabilidad", "margen_porcentaje", "ticket_promedio",
+          "presupuestos", "monto_presupuestos", "pedidos", "monto_pedidos",
+          "pedidos_pendientes", "monto_pendientes", "pedidos_en_remito",
+          "pedidos_facturados", "remitos", "facturas", "creditos_devoluciones", "notas_debito",
+        ];
+        return rows.map((row, index) => [...row, keys[index]]);
+      },
+      afterMetrics: (a) => renderComercialV45Comparison(a),
+      details: [],
     },
     {
       key: "inventario",
@@ -918,7 +963,7 @@
       metrics: (a) => [
         ["Valor stock", stockValueLabel(a)],
         ["Con stock", fmtNum.format(a.productos_con_stock || 0)],
-        ["Bajo mínimo", fmtNum.format(a.productos_bajo_minimo || 0)],
+        ["Bajo mínimo", a.productos_bajo_minimo == null ? "No disponible" : fmtNum.format(a.productos_bajo_minimo)],
         ["Sin stock", fmtNum.format(a.productos_sin_stock || 0)],
       ],
       afterMetrics: (a) => renderInventarioDepositosBlock(a),
@@ -1038,6 +1083,72 @@
     },
   ];
 
+  function renderComercialV45Comparison(areaData) {
+    const comparison = areaData?.comparacion;
+    if (!comparison?.kpis) return "";
+    const actual = areaData.kpis || {};
+    const previous = comparison.kpis;
+    const fields = [
+      ["Ventas netas", "ventas_netas", "money"],
+      ["Rentabilidad", "rentabilidad", "money"],
+      ["Margen", "margen_porcentaje", "percent"],
+      ["Ticket promedio", "ticket_promedio", "money"],
+      ["Presupuestos", "presupuestos", "count"],
+      ["Monto presupuestos", "monto_presupuestos", "money"],
+      ["Pedidos", "pedidos", "count"],
+      ["Monto pedidos", "monto_pedidos", "money"],
+      ["Pedidos pendientes", "pedidos_pendientes", "count"],
+      ["Monto pendiente", "monto_pendientes", "money"],
+      ["En remito", "pedidos_en_remito", "count"],
+      ["Facturados", "pedidos_facturados", "count"],
+      ["Remitos", "remitos", "count"],
+      ["Facturas", "facturas", "count"],
+      ["Créditos/devoluciones", "creditos_devoluciones", "money"],
+      ["Notas de débito", "notas_debito", "money"],
+    ];
+    const formatValue = (value, kind) => {
+      if (value == null) return "Sin permiso";
+      if (kind === "money") return fmtMoney.format(value);
+      if (kind === "percent") return `${Number(value).toFixed(2)} %`;
+      return fmtNum.format(value);
+    };
+    const rows = fields.map(([label, key, kind]) => {
+      const delta = comparison.diferencias?.[key];
+      return `<tr class="border-t border-slate-100 dark:border-slate-800">
+        <th scope="row" class="px-2 py-1.5 text-left font-medium">${label}</th>
+        <td class="px-2 py-1.5 text-right tabular-nums">${formatValue(actual[key], kind)}</td>
+        <td class="px-2 py-1.5 text-right tabular-nums">${formatValue(previous[key], kind)}</td>
+        <td class="px-2 py-1.5 text-right tabular-nums">${formatValue(delta, kind)}</td>
+      </tr>`;
+    }).join("");
+    const currentSeries = areaData.series?.ventas_actual || [];
+    const previousSeries = areaData.series?.ventas_anterior || [];
+    const pointCount = Math.max(currentSeries.length, previousSeries.length, 2);
+    const allValues = [...currentSeries, ...previousSeries].map((item) => Number(item.valor || 0));
+    const minValue = Math.min(0, ...allValues);
+    const maxValue = Math.max(1, ...allValues);
+    const range = Math.max(1, maxValue - minValue);
+    const points = (series) => series.map((item, index) => {
+      const x = 8 + (index / (pointCount - 1)) * 304;
+      const y = 103 - ((Number(item.valor || 0) - minValue) / range) * 88;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    const graph = `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="mb-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Evolución de ventas por ${areaData.series?.agrupacion === "mes" ? "mes" : "día"}</p>
+      <svg viewBox="0 0 320 112" role="img" aria-label="Ventas diarias: período actual azul y anterior naranja" class="h-28 w-full">
+        <line x1="8" y1="103" x2="312" y2="103" stroke="#94a3b8" />
+        <polyline points="${points(previousSeries)}" fill="none" stroke="#f97316" stroke-width="2.5" />
+        <polyline points="${points(currentSeries)}" fill="none" stroke="#0284c7" stroke-width="2.5" />
+      </svg>
+      <div class="flex gap-4 text-[10px] text-slate-500"><span>● Azul: actual</span><span>● Naranja: anterior</span></div>
+    </div>`;
+    return `${graph}<details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Comparar los 16 indicadores</summary>
+      <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[34rem] text-xs text-slate-700 dark:text-slate-200">
+        <thead class="sticky top-0 bg-slate-50 dark:bg-slate-900"><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Anterior</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div></details>`;
+  }
+
   function renderInventarioDepositosBlock(areaData) {
     const deps = Array.isArray(areaData?.depositos) ? areaData.depositos : [];
     const modo = readInvPresentacion();
@@ -1110,9 +1221,11 @@
       const a = areaData || {};
       const rows = def.metrics(a)
         .map(
-          ([k, val]) => `
+          ([k, val, kpi]) => `
         <div class="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0 dark:border-slate-800">
-          <span class="min-w-0 shrink text-sm text-slate-500 dark:text-slate-400">${k}</span>
+          <span class="min-w-0 shrink text-sm text-slate-500 dark:text-slate-400">${k}
+            ${kpi && val !== "Sin permiso de costos" ? `<button type="button" class="cc-v45-kpi-detail ml-1 align-middle text-sky-600 dark:text-sky-300" data-kpi="${kpi}" data-title="${escHtml(k)}" aria-label="Ver detalle de ${escHtml(k)}"><span class="material-icons text-sm" aria-hidden="true">open_in_new</span></button>` : ""}
+          </span>
           <span class="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-white">${val}</span>
         </div>`
         )
@@ -1156,7 +1269,6 @@
         <div class="flex-1 px-4 py-2">${body}</div>
         <footer class="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap dark:border-slate-700">
           ${detailBtns}
-          ${def.key === "ventas" ? `<a href="${buildReportLink(cfg.executiveSalesPageUrl || "#")}" class="cc-report-link inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-2 text-[11px] font-medium text-white hover:bg-sky-500 sm:w-auto sm:py-1" data-base-url="${cfg.executiveSalesPageUrl || ""}">Panel del día</a>` : ""}
           ${cashFlowBtn}
           ${mprBtn}
         </footer>
@@ -1209,6 +1321,9 @@
     const scope = root || el("cc-areas-grid");
     scope?.querySelectorAll(".cc-detail-btn").forEach((btn) => {
       btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title));
+    });
+    scope?.querySelectorAll(".cc-v45-kpi-detail").forEach((btn) => {
+      btn.addEventListener("click", () => openComercialDetail(btn.dataset.kpi, btn.dataset.title));
     });
     bindInventarioPresentacion(scope);
   }
@@ -1265,35 +1380,6 @@
     return body;
   }
 
-  function buildSummaryQuery() {
-    const f = readFilters();
-    const q = new URLSearchParams({
-      fecha_inicio: f.fecha_inicio,
-      fecha_fin: f.fecha_fin,
-    });
-    appendFilterParams(q, f);
-    return q.toString();
-  }
-
-  async function loadExecutiveSummaryDeferred(loadToken) {
-    if (selectedAreaKey !== "ventas") return;
-    if (!cfg.executiveSummaryUrl) return;
-    if (!isSingleDayPeriod(readFilters())) return;
-    ventasDiaCache = null;
-    renderGlobalKpis(areasCache, null);
-    try {
-      const data = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
-      if (loadToken !== dashboardLoadToken) return;
-      ventasDiaCache = data;
-      renderGlobalKpis(areasCache, ventasDiaCache);
-    } catch (e) {
-      console.warn("Resumen ventas del día:", e);
-      if (loadToken !== dashboardLoadToken) return;
-      ventasDiaCache = {};
-      renderGlobalKpis(areasCache, ventasDiaCache);
-    }
-  }
-
   async function fetchArea(key, url, q, loadToken) {
     try {
       const payload = await fetchJson(`${url}?${q}`);
@@ -1333,7 +1419,7 @@
         }
         areasCache[result.key] = result.data;
         updateSingleAreaCard(result.key, result.data);
-        renderGlobalKpis(areasCache, ventasDiaCache);
+        renderGlobalKpis(areasCache);
       });
     });
     await Promise.allSettled(tasks);
@@ -1350,17 +1436,7 @@
       if (loadToken !== dashboardLoadToken) return;
       updatePeriodoLabel(false);
       areasCache = data.areas || {};
-      let ventasDia = null;
-      if (selectedAreaKey === "ventas" && cfg.executiveSummaryUrl && isSingleDayPeriod(readFilters())) {
-        try {
-          ventasDia = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
-          if (loadToken !== dashboardLoadToken) return;
-        } catch (e) {
-          console.warn("Resumen ventas del día:", e);
-        }
-      }
-      ventasDiaCache = ventasDia;
-      renderGlobalKpis(areasCache, ventasDiaCache);
+      renderGlobalKpis(areasCache);
       renderAreas({ areas: areasCache });
     } catch (e) {
       if (loadToken !== dashboardLoadToken) return;
@@ -1372,9 +1448,15 @@
 
   async function loadDashboard() {
     selectedAreaKey = el("cc-tablero-select")?.value || "";
+    document.querySelectorAll(".cc-sales-filter").forEach((node) => {
+      node.classList.toggle("hidden", selectedAreaKey === "inventario");
+    });
+    document.querySelectorAll(".cc-stock-filter").forEach((node) => {
+      node.classList.toggle("hidden", selectedAreaKey !== "inventario");
+      node.classList.toggle("flex", selectedAreaKey === "inventario");
+    });
     dashboardLoadToken += 1;
     areasCache = {};
-    ventasDiaCache = null;
     if (!selectedAreaKey || cfg.areasVisible?.[selectedAreaKey] !== true) {
       el("cc-welcome")?.classList.remove("hidden");
       el("cc-global-kpis")?.classList.add("hidden");
@@ -1402,7 +1484,6 @@
     renderGlobalKpisLoading();
     renderAreasSkeleton();
 
-    void loadExecutiveSummaryDeferred(loadToken);
 
     try {
       await loadDashboardParallel(loadToken);
@@ -1506,6 +1587,98 @@
 
   const NAVIGATE_DETAIL_KEYS = new Set(["ventas_marcas_mensual"]);
 
+  const V45_DOC_COLUMNS = [
+    { key: "fecha", label: "Fecha" }, { key: "tipo_comprobante", label: "Tipo" },
+    { key: "numero", label: "Número" }, { key: "cliente", label: "Cliente" },
+    { key: "codigo_cliente", label: "Cód. cliente" }, { key: "importe", label: "Importe" },
+  ];
+  const V45_PROFIT_COLUMNS = [
+    { key: "fecha", label: "Fecha" }, { key: "tipo_comprobante", label: "Movimiento" },
+    { key: "codigo_articulo", label: "Código" }, { key: "articulo", label: "Artículo" },
+    { key: "cantidad", label: "Cantidad" }, { key: "venta", label: "Venta" },
+    { key: "costo", label: "Costo" }, { key: "rentabilidad", label: "Rentabilidad" },
+  ];
+
+  function comercialCardHtml(row) {
+    const title = escHtml(row.cliente || row.articulo || "Sin descripción");
+    const code = escHtml(row.numero || row.codigo_articulo || "");
+    const amount = row.importe ?? row.rentabilidad;
+    return `<article class="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+      <div class="flex justify-between gap-2"><strong class="min-w-0 break-words text-sm">${title}</strong><span class="shrink-0 text-sm font-semibold tabular-nums">${formatTabularCell("importe", amount)}</span></div>
+      <p class="mt-1 text-xs text-slate-500">${escHtml(row.fecha)} · ${escHtml(row.tipo_comprobante)} · ${code}</p>
+    </article>`;
+  }
+
+  async function loadComercialDetail() {
+    if (!comercialDetail) return;
+    const base = (cfg.detailUrls || {}).comercial_v45;
+    if (!base) return;
+    const term = (el("cc-v45-search")?.value || "").trim();
+    const extra = {
+      kpi: comercialDetail.kpi, limit: "100", offset: String(comercialDetail.offset),
+      orden: el("cc-v45-order")?.value || "fecha_desc",
+    };
+    if (term.length >= 2) extra.busqueda = term;
+    el("cc-detail-summary").textContent = "Cargando detalle…";
+    el("cc-detail-error")?.classList.add("hidden");
+    try {
+      const data = await fetchJson(`${base}?${buildQuery(extra)}`);
+      if (!comercialDetail || comercialDetail.kpi !== extra.kpi || comercialDetail.offset !== Number(extra.offset)) return;
+      comercialDetailData = data;
+      const cols = (extra.kpi === "rentabilidad" || extra.kpi === "margen_porcentaje")
+        ? V45_PROFIT_COLUMNS : V45_DOC_COLUMNS;
+      renderTabularDetail(data, cols, comercialCardHtml);
+      const pagination = el("cc-v45-pagination");
+      pagination?.classList.remove("hidden");
+      pagination?.classList.add("flex");
+      el("cc-v45-prev").disabled = data.offset <= 0;
+      el("cc-v45-next").disabled = data.offset + data.filas.length >= data.total_registros;
+      const start = data.total_registros ? data.offset + 1 : 0;
+      el("cc-v45-page-label").textContent = `${start}–${data.offset + data.filas.length} de ${data.total_registros}`;
+    } catch (e) {
+      const err = el("cc-detail-error");
+      err.textContent = e.message || "Error al cargar detalle.";
+      err.classList.remove("hidden");
+    }
+  }
+
+  function openComercialDetail(kpi, title) {
+    if (!kpi || !(cfg.detailUrls || {}).comercial_v45) return;
+    openModal(true);
+    clearDetailContent();
+    comercialDetail = { kpi, offset: 0 };
+    el("cc-detail-title").textContent = `Ventas · ${title || kpi}`;
+    el("cc-detail-error")?.classList.add("hidden");
+    const controls = el("cc-v45-detail-controls");
+    controls?.classList.remove("hidden");
+    controls?.classList.add("flex");
+    if (el("cc-v45-search")) el("cc-v45-search").value = "";
+    if (el("cc-v45-order")) el("cc-v45-order").value = "fecha_desc";
+    void loadComercialDetail();
+  }
+
+  function exportComercialCurrentPage() {
+    if (!comercialDetailData?.filas?.length || !comercialDetail) return;
+    const columns = (comercialDetail.kpi === "rentabilidad" || comercialDetail.kpi === "margen_porcentaje")
+      ? V45_PROFIT_COLUMNS : V45_DOC_COLUMNS;
+    const csvCell = (value) => {
+      let cell = String(value ?? "");
+      if (/^[=+\-@]/.test(cell)) cell = `'${cell}`;
+      return `"${cell.replace(/"/g, '""')}"`;
+    };
+    const lines = [columns.map((col) => csvCell(col.label)).join(";")];
+    comercialDetailData.filas.forEach((row) => {
+      lines.push(columns.map((col) => csvCell(row[col.key])).join(";"));
+    });
+    const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `ventas-v45-${comercialDetail.kpi}-${readFilters().fecha_inicio}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   async function openDetail(urlKey, title) {
     const base = (cfg.detailUrls || {})[urlKey];
     if (!base) return;
@@ -1557,11 +1730,12 @@
     const saved = loadPersistedFilters();
     if (!fromUrl && saved) {
       applyPeriodFromStorage();
-    } else if (saved && (saved.sucursales?.length || saved.puntos_venta?.length)) {
+    } else if (saved && (saved.sucursales?.length || saved.puntos_venta?.length || saved.depositos?.length)) {
       if (!window.__ccPendingFilterIds) {
         window.__ccPendingFilterIds = {
           sucursales: saved.sucursales || [],
           puntos_venta: saved.puntos_venta || [],
+          depositos: saved.depositos || [],
         };
       }
     }
@@ -1575,7 +1749,6 @@
       setLoading(false);
       setRefreshDisabled(false);
       areasCache = {};
-      ventasDiaCache = null;
       if (selectedAreaKey) {
         if (el("cc-areas-grid")) el("cc-areas-grid").innerHTML = "";
         if (el("cc-global-kpis")) el("cc-global-kpis").innerHTML = "";
@@ -1593,6 +1766,9 @@
     ff?.addEventListener("change", onFilterChange);
     el("sucursales")?.addEventListener("change", onFilterChange);
     el("punto_venta")?.addEventListener("change", onFilterChange);
+    el("depositos")?.addEventListener("change", onFilterChange);
+    el("cc-incluir-impuestos")?.addEventListener("change", onFilterChange);
+    el("cc-comparar-anterior")?.addEventListener("change", onFilterChange);
     rememberFilters();
     syncReportLinks();
   }
@@ -1730,6 +1906,28 @@
     el("cc-refresh")?.addEventListener("click", loadDashboard);
     el("cc-tablero-select")?.addEventListener("change", loadDashboard);
     el("cc-detail-close")?.addEventListener("click", () => openModal(false));
+    el("cc-v45-search")?.addEventListener("input", () => {
+      if (comercialSearchTimer) clearTimeout(comercialSearchTimer);
+      if (!comercialDetail) return;
+      comercialDetail.offset = 0;
+      comercialSearchTimer = setTimeout(() => void loadComercialDetail(), 300);
+    });
+    el("cc-v45-order")?.addEventListener("change", () => {
+      if (!comercialDetail) return;
+      comercialDetail.offset = 0;
+      void loadComercialDetail();
+    });
+    el("cc-v45-prev")?.addEventListener("click", () => {
+      if (!comercialDetail) return;
+      comercialDetail.offset = Math.max(0, comercialDetail.offset - 100);
+      void loadComercialDetail();
+    });
+    el("cc-v45-next")?.addEventListener("click", () => {
+      if (!comercialDetail) return;
+      comercialDetail.offset += 100;
+      void loadComercialDetail();
+    });
+    el("cc-v45-export")?.addEventListener("click", exportComercialCurrentPage);
     el("cc-detail-modal")?.addEventListener("click", (ev) => {
       if (ev.target === el("cc-detail-modal")) openModal(false);
     });

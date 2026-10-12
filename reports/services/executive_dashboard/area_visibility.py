@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 from django.db.models import Q
 
-from core.utils.permissions import user_has_permission
+from core.utils.permissions import user_has_full_access, user_has_permission
 from reports.models import ReportCategory, ReportDefinition
 from reports.services.report_visibility import COMMAND_CENTER_SLUG
 
@@ -49,6 +49,10 @@ CC_AREA_PERMISSION_CODES: Dict[str, tuple[str, ...]] = {
     "ventas_cobros": ("tablero_gestion_financiera",),
 }
 
+# Los otros servicios existentes no aplican aún el alcance del usuario en todas
+# sus consultas; no se publican a usuarios restringidos hasta completar esa capa.
+CC_TERRITORIAL_READY_AREAS = frozenset({"ventas", "inventario"})
+
 
 def user_has_cc_area_permission(user, area_key: str) -> bool:
     """Exige cada permiso de tablero; acepta el código VB6 o su clave Synap."""
@@ -68,7 +72,11 @@ def resolve_cc_areas_for_user(user, *, mpr_active: bool) -> Dict[str, bool]:
     """Intersección de habilitación global, módulo y permisos efectivos del usuario."""
     configured = resolve_cc_areas(mpr_active=mpr_active)
     return {
-        key: bool(enabled and user_has_cc_area_permission(user, key))
+        key: bool(
+            enabled
+            and user_has_cc_area_permission(user, key)
+            and (user_has_full_access(user) or key in CC_TERRITORIAL_READY_AREAS)
+        )
         for key, enabled in configured.items()
     }
 
