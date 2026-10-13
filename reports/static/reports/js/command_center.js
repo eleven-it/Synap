@@ -714,6 +714,7 @@
       gestion_contable: "gestión contable",
       impositivo: "impuestos y posiciones fiscales",
       libros_contables: "libros y estados contables",
+      logistica: "logística y hojas de ruta",
       manufactura: "manufactura",
       cruzados: "demanda pendiente",
       tesoreria: "tesorería",
@@ -880,6 +881,7 @@
     const account = a.gestion_contable || {};
     const tax = a.impositivo || {};
     const books = a.libros_contables || {};
+    const routes = a.logistica || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
@@ -923,6 +925,10 @@
     if (isAreaVisible("libros_contables")) {
       cards.push(kpiCard("Asientos del Diario", books.disponible === false ? "No disponible" : fmtNum.format(books.kpis?.asientos ?? 0), "indigo"));
       cards.push(kpiCard("Resultado del período", books.disponible === false ? "No disponible" : fmtMoney.format(books.kpis?.resultado_periodo ?? 0), "purple"));
+    }
+    if (isAreaVisible("logistica")) {
+      cards.push(kpiCard("Hojas de ruta", routes.disponible === false ? "No disponible" : fmtNum.format(routes.kpis?.hojas_ruta ?? 0), "sky"));
+      cards.push(kpiCard("Facturación en rutas", routes.disponible === false ? "No disponible" : fmtMoney.format(routes.kpis?.facturacion_rutas ?? 0), "emerald"));
     }
     if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
@@ -977,6 +983,10 @@
     if (isAreaVisible("libros_contables")) {
       loadingCards.push(kpiCardLoading("Asientos del Diario", "indigo"));
       loadingCards.push(kpiCardLoading("Resultado del período", "purple"));
+    }
+    if (isAreaVisible("logistica")) {
+      loadingCards.push(kpiCardLoading("Hojas de ruta", "sky"));
+      loadingCards.push(kpiCardLoading("Facturación en rutas", "emerald"));
     }
     if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
@@ -1246,6 +1256,31 @@
       details: [],
     },
     {
+      key: "logistica",
+      title: "Logística · hojas de ruta (V45)",
+      icon: "local_shipping",
+      color: "sky",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Hojas de ruta", count("hojas_ruta")], ["Rutas abiertas", count("rutas_abiertas")],
+          ["Rutas cerradas", count("rutas_cerradas")], ["Rutas rendidas", count("rutas_rendidas")],
+          ["Pendientes de rendir", count("pendientes_rendir")],
+          ["Documentos valorizados", count("documentos_valorizados")],
+          ["Facturas en ruta", count("facturas_ruta")], ["Notas de crédito", count("notas_credito")],
+          ["Facturación en rutas", money("facturacion_rutas")],
+          ["Promedio por ruta", money("promedio_ruta")],
+          ["Promedio por factura", money("promedio_factura")],
+          ["Choferes utilizados", count("choferes")], ["Unidades utilizadas", count("unidades")],
+          ["Dif. de rendición", money("diferencia_rendicion")],
+        ];
+      },
+      afterMetrics: (a) => renderLogisticaV45Comparison(a),
+      details: [],
+    },
+    {
       key: "manufactura",
       title: "Manufactura",
       icon: "precision_manufacturing",
@@ -1346,6 +1381,18 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderLogisticaV45Comparison(areaData) {
+    const k = areaData.kpis || {};
+    const previous = areaData.comparacion || {};
+    const pairs = [
+      ["Hojas de ruta", "hojas_ruta"], ["Abiertas", "rutas_abiertas"],
+      ["Cerradas", "rutas_cerradas"], ["Rendidas", "rutas_rendidas"],
+      ["Pendientes", "pendientes_rendir"],
+    ];
+    const rows = pairs.map(([label, key]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${label}</th><td class="p-2 text-right tabular-nums">${fmtNum.format(k[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtNum.format(previous[key] || 0)}</td></tr>`).join("");
+    return `<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="mb-2 text-xs font-semibold">Rutas · período actual y anterior</h3><table class="w-full min-w-[24rem] text-xs"><thead><tr><th class="p-2 text-left">Estado</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Anterior</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
 
   function renderLibrosV45Charts(areaData) {
     const rows = (areaData.series?.filas || []).slice(-30);
@@ -1991,8 +2038,8 @@
       node.classList.toggle("hidden", !["gestion_contable", "libros_contables"].includes(selectedAreaKey));
       node.classList.toggle("flex", ["gestion_contable", "libros_contables"].includes(selectedAreaKey));
     });
-    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables"].includes(selectedAreaKey));
-    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables"].includes(selectedAreaKey));
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica"].includes(selectedAreaKey));
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey !== "inventario");
       node.classList.toggle("flex", selectedAreaKey === "inventario");

@@ -29,7 +29,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI y serie Debe/Haber en rama de trabajo; faltan detalles, comparación y validación Django/web. |
 | Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI fiscales y composición de IVA en rama de trabajo; faltan libros y detalles, series mensuales y comparación. |
 | Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI y dos series contables en rama de trabajo; faltan las cuatro vistas documentales, comparación y prueba web. |
-| Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | Pendiente de migrar. |
+| Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI y comparación de estados en rama de trabajo; faltan ranking, detalles y contraste con rutas recientes. |
 | Análisis de gastos | 15 | `tablero_gestion_financiera` en V45 | Pendiente de migrar; confirmar permiso y fuentes. |
 
 **No presentar las siete áreas parciales de Synap como equivalentes a estos once tableros.** El código actual añade además `manufactura` y `cruzados` como áreas web propias; no corresponden directamente a tableros homónimos del ERP.
@@ -82,3 +82,7 @@ En Best Sox 01–12/10/2026, el débito IVA fue $35.953.653,57, el crédito fisc
 ## Conciliación inicial de Libros y estados
 
 En Best Sox 01–12/10/2026, los 253 asientos suman $1.008.193.355,56 tanto en Debe como en Haber; 37 cuentas tienen movimiento. El Mayor tiene saldos deudor y acreedor de $448.845.652,63; ingresos $182.597.266,77, egresos $183.393.621,01, resultado -$796.354,24, activo $167.906.532,47 y pasivo $168.702.886,71. Estas cifras coinciden con la captura V45 de Libros y estados. Se validaron las series diarias de Diario y Resultados y una selección de sucursal sobre el asiento en MySQL 5.7 aislado. Todavía faltan Libro Diario, Mayor, Balance y Estado de resultados a nivel documento, comparación y prueba de interfaz.
+
+## Conciliación inicial de Logística
+
+La copia Best Sox sólo tiene una hoja de ruta, con `fecha_salida` 23/07/**2911** y fecha de creación 23/07/2026. V45 prioriza `fecha_salida`, por lo que para octubre 2026 el tablero informa correctamente cero rutas; la consulta para julio 2911 devuelve una ruta abierta. Los 888 documentos vinculados a esa ruta producen 769 facturas, 119 notas de crédito y $2.708.695.918,94 de facturación neta. La fecha de salida aparentemente errónea es dato de origen y debe revisarse en AdministraNET antes de usar este caso para una prueba de negocio. Se verificaron consultas de rango y filtro territorial en MySQL 5.7 aislado; faltan ranking, detalles, gráfico y prueba web.

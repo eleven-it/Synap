@@ -49,6 +49,7 @@ from .executive_dashboard_api_views import (
     ExecutiveDashboardGestionContableV45APIView,
     ExecutiveDashboardImpositivoV45APIView,
     ExecutiveDashboardLibrosV45APIView,
+    ExecutiveDashboardLogisticaV45APIView,
     ExecutiveDashboardVentasResumenAPIView,
     ExecutiveDashboardComercialVentasV45APIView,
     ExecutiveDashboardComercialVentasV45DetailAPIView,
@@ -212,6 +213,11 @@ urlpatterns = [
         "executive-dashboard/libros-contables/v45/",
         ExecutiveDashboardLibrosV45APIView.as_view(),
         name="reports-executive-dashboard-libros-v45",
+    ),
+    path(
+        "executive-dashboard/logistica/v45/",
+        ExecutiveDashboardLogisticaV45APIView.as_view(),
+        name="reports-executive-dashboard-logistica-v45",
     ),
     path(
         "executive-dashboard/filter-options/",
