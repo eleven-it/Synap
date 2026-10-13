@@ -1376,6 +1376,9 @@
         { label: "Hojas de ruta", urlKey: "logistica_v45", vista: "rutas" },
         { label: "Comprobantes", urlKey: "logistica_v45", vista: "documentos" },
         { label: "Facturación por ruta", urlKey: "logistica_v45", vista: "por_ruta" },
+        { label: "Por chofer", urlKey: "logistica_v45", vista: "por_chofer" },
+        { label: "Por unidad", urlKey: "logistica_v45", vista: "por_unidad" },
+        { label: "Por zona", urlKey: "logistica_v45", vista: "por_zona" },
       ],
     },
     {

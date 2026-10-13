@@ -6,7 +6,58 @@ from .logistica_v45 import _route_date, _range, _scope, POSITIVE_TYPES, CREDIT_T
 from .resumen_v45 import _table_exists
 
 
-LOGISTICA_V45_VIEWS = frozenset({"rutas", "documentos", "por_ruta"})
+LOGISTICA_V45_VIEWS = frozenset({
+    "rutas", "documentos", "por_ruta", "por_chofer", "por_unidad", "por_zona",
+})
+
+
+def _route_dimension(cursor, filters, view, date_expr):
+    scope, scope_params = _scope(filters)
+    base = (
+        f"SELECT r.id_ruta,r.id_chofer,r.id_unidad,r.id_zona,r.descripcion_chofer,r.descripcion_zona "
+        f"FROM logi_hoja_ruta r WHERE {date_expr} >= %s AND {date_expr} < %s "
+        f"AND UPPER(COALESCE(r.anulado,'NO'))<>'SI'{scope}"
+    )
+    params = _range(filters) + scope_params
+    if view == "por_chofer":
+        links = (
+            "(SELECT id_ruta,id_chofer FROM logi_ruta_chofer WHERE COALESCE(id_chofer,0)<>0 "
+            "UNION SELECT id_ruta,id_chofer FROM logi_hoja_ruta WHERE COALESCE(id_chofer,0)<>0)"
+            if _table_exists(cursor, "logi_ruta_chofer")
+            else "(SELECT id_ruta,id_chofer FROM logi_hoja_ruta WHERE COALESCE(id_chofer,0)<>0)"
+        )
+        source = (
+            "SELECT l.id_chofer codigo,COALESCE(NULLIF(ch.nombre_chofer,''),"
+            "NULLIF(MAX(r.descripcion_chofer),''),CONCAT('Chofer ',l.id_chofer)) nombre,"
+            f"COUNT(DISTINCT r.id_ruta) rutas FROM ({base}) r "
+            f"JOIN {links} l ON l.id_ruta=r.id_ruta "
+            "LEFT JOIN logi_abm_chofer ch ON ch.id_chofer=l.id_chofer "
+            "GROUP BY l.id_chofer,ch.nombre_chofer"
+        )
+    elif view == "por_unidad":
+        source = (
+            "SELECT r.id_unidad codigo,COALESCE(NULLIF(u.nombre_unidad,''),"
+            "CONCAT('Unidad ',r.id_unidad)) nombre,"
+            f"COUNT(DISTINCT r.id_ruta) rutas FROM ({base}) r "
+            "LEFT JOIN logi_unidad u ON u.id_unidad=r.id_unidad "
+            "WHERE COALESCE(r.id_unidad,0)<>0 GROUP BY r.id_unidad,u.nombre_unidad"
+        )
+    else:
+        links = (
+            "(SELECT id_ruta,id_zona FROM logi_ruta_zona WHERE COALESCE(id_zona,0)<>0 "
+            "UNION SELECT id_ruta,id_zona FROM logi_hoja_ruta WHERE COALESCE(id_zona,0)<>0)"
+            if _table_exists(cursor, "logi_ruta_zona")
+            else "(SELECT id_ruta,id_zona FROM logi_hoja_ruta WHERE COALESCE(id_zona,0)<>0)"
+        )
+        source = (
+            "SELECT l.id_zona codigo,COALESCE(NULLIF(z.nombre_zona,''),"
+            "CONCAT('Zona ',l.id_zona)) nombre,"
+            f"COUNT(DISTINCT r.id_ruta) rutas FROM ({base}) r "
+            f"JOIN {links} l ON l.id_ruta=r.id_ruta "
+            "LEFT JOIN logi_zona z ON z.id_zona=l.id_zona "
+            "GROUP BY l.id_zona,z.nombre_zona"
+        )
+    return source, params
 
 
 def _doc_source(filters, date_expr):
@@ -51,7 +102,18 @@ def list_logistica_v45_detail(cursor, filters: DashboardFilters, *, view: str) -
     date_expr = _route_date(cursor)
     if not date_expr:
         return {"disponible": False, "motivo": "sin_fecha_ruta", "filas": []}
-    if view == "rutas":
+    if view in {"por_chofer", "por_unidad", "por_zona"}:
+        catalog = {
+            "por_chofer": "logi_abm_chofer",
+            "por_unidad": "logi_unidad",
+            "por_zona": "logi_zona",
+        }[view]
+        if not _table_exists(cursor, catalog):
+            return {"disponible": False, "motivo": "tabla_faltante", "filas": []}
+        source, params = _route_dimension(cursor, filters, view, date_expr)
+        search_fields = ("nombre", "codigo")
+        order = "q.rutas DESC,q.nombre"
+    elif view == "rutas":
         scope, scope_params = _scope(filters)
         source = (
             f"SELECT r.id_ruta ruta,{date_expr} fecha,COALESCE(r.desc_ruta,'') descripcion_ruta,"
@@ -83,7 +145,8 @@ def list_logistica_v45_detail(cursor, filters: DashboardFilters, *, view: str) -
     if filters.busqueda:
         search = " WHERE (" + " OR ".join(f"CAST(q.{field} AS CHAR) LIKE %s" for field in search_fields) + ")"
         params += [f"%{filters.busqueda}%"] * len(search_fields)
-    cursor.execute(f"SELECT COUNT(*),COALESCE(SUM(q.importe),0) FROM ({source}) q{search}", params)
+    amount = "COALESCE(SUM(q.importe),0)" if view not in {"por_chofer", "por_unidad", "por_zona"} else "NULL"
+    cursor.execute(f"SELECT COUNT(*),{amount} FROM ({source}) q{search}", params)
     count, total = cursor.fetchone() or (0, 0)
     cursor.execute(
         f"SELECT * FROM ({source}) q{search} ORDER BY {order} LIMIT %s OFFSET %s",
@@ -93,4 +156,9 @@ def list_logistica_v45_detail(cursor, filters: DashboardFilters, *, view: str) -
     rows = [dict(zip(fields, row)) for row in cursor.fetchall() or []]
     payload = build_paginated_response(filters, rows, int(count or 0), total)
     payload["vista"] = view
+    if view in {"por_chofer", "por_unidad", "por_zona"}:
+        payload["meta"]["alcance"] = (
+            "Una ruta puede tener varios choferes o zonas; cada asignación cuenta "
+            "en su dimensión y la suma de grupos puede superar las rutas únicas."
+        )
     return payload
