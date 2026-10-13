@@ -210,9 +210,14 @@ class CatalogService:
         can_managerial = self.user_has_permission("reports.view_managerial")
 
         for definition in queryset:
-            if definition.category == ReportCategory.OPERATIONAL and not can_operational:
+            if definition.slug == "command-center-gerencial":
+                from reports.services.report_visibility import command_center_visible_for_user
+
+                if not command_center_visible_for_user(self.user, empresa_id=empresa_id):
+                    continue
+            elif definition.category == ReportCategory.MANAGERIAL and not can_managerial:
                 continue
-            if definition.category == ReportCategory.MANAGERIAL and not can_managerial:
+            if definition.category == ReportCategory.OPERATIONAL and not can_operational:
                 continue
 
             config = definition.config or {}
