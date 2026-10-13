@@ -556,7 +556,7 @@
       ...(extra || {}),
     });
     appendFilterParams(q, f);
-    if (selectedAreaKey === "ventas") {
+    if (selectedAreaKey === "ventas" || selectedAreaKey === "resumen_general") {
       if (el("cc-incluir-impuestos")?.checked) q.set("incluir_impuestos", "1");
       if (el("cc-comparar-anterior")?.checked) q.set("comparar", "anterior");
     } else if (selectedAreaKey === "inventario") {
@@ -702,6 +702,7 @@
 
   function dashboardWaitSubtitle() {
     const labelMap = {
+      resumen_general: "resumen gerencial",
       ventas: "ventas",
       inventario: "inventario",
       compras: "compras",
@@ -862,6 +863,7 @@
     const f = readFilters();
     const singleDay = isSingleDayPeriod(f);
     const a = areas || {};
+    const resumen = a.resumen_general || {};
     const v = a.ventas || {};
     const inv = a.inventario || {};
     const comp = a.compras || {};
@@ -873,6 +875,10 @@
       : fmtMoney.format(v.kpis?.ventas_netas ?? v.ventas_netas ?? 0);
 
     const cards = [];
+    if (isAreaVisible("resumen_general")) {
+      cards.push(kpiCard("Ventas del período", resumen.disponible === false ? "No disponible" : fmtMoney.format(resumen.kpis?.ventas ?? 0), "sky"));
+      cards.push(kpiCard("Pedidos", resumen.disponible === false ? "No disponible" : fmtNum.format(resumen.kpis?.pedidos ?? 0), "indigo"));
+    }
     if (isAreaVisible("ventas")) {
       cards.push(kpiCard(ventasFirstLabel, ventasFirstVal, "sky"));
       cards.push(kpiCard("Facturas", v.disponible === false ? "No disponible" : fmtNum.format(v.kpis?.facturas ?? 0), "indigo"));
@@ -905,6 +911,10 @@
     const singleDay = isSingleDayPeriod(readFilters());
     const ventasLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
     const loadingCards = [];
+    if (isAreaVisible("resumen_general")) {
+      loadingCards.push(kpiCardLoading("Ventas del período", "sky"));
+      loadingCards.push(kpiCardLoading("Pedidos", "indigo"));
+    }
     if (isAreaVisible("ventas")) {
       loadingCards.push(kpiCardLoading(ventasLabel, "sky"));
       loadingCards.push(kpiCardLoading("Facturas", "indigo"));
@@ -925,6 +935,33 @@
   }
 
   const AREA_DEFS = [
+    {
+      key: "resumen_general",
+      title: "Resumen gerencial (V45)",
+      icon: "dashboard",
+      color: "sky",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Ventas", money("ventas")], ["Compras netas", money("compras_netas")],
+          ["Cobranzas", money("cobranzas")], ["Pagos", money("pagos")],
+          ["Presupuestos", count("presupuestos")], ["Pedidos", count("pedidos")],
+          ["Facturas", count("facturas")], ["Remitos", count("remitos")],
+          ["Vencimiento a cobrar", money("vencimiento_cobrar")],
+          ["Vencimiento a pagar", money("vencimiento_pagar")],
+          ["Efectivo actual", money("efectivo_actual")],
+          ["Tarjetas actual", money("tarjetas_actual")],
+          ["Cheques actual", money("cheques_actual")],
+          ["Bancos actual", money("bancos_actual")],
+          ["Venta cuenta corriente", money("venta_cuenta_corriente")],
+          ["Compra cuenta corriente", money("compra_cuenta_corriente")],
+        ];
+      },
+      afterMetrics: (a) => renderResumenV45Charts(a),
+      details: [],
+    },
     {
       key: "ventas",
       title: "Comercial · Ventas (V45)",
@@ -1105,6 +1142,59 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderResumenV45Charts(areaData) {
+    const series = (areaData.series?.filas || []).slice(-30);
+    const chart = (title, left, right, leftLabel, rightLabel) => {
+      const maxValue = Math.max(1, ...series.flatMap((row) => [
+        Number(row[left] || 0), Number(row[right] || 0),
+      ]));
+      const step = series.length ? 304 / series.length : 304;
+      const width = Math.max(1, step / 2 - 1);
+      const bars = series.map((row, index) => {
+        const leftHeight = Math.max(0, Number(row[left] || 0)) / maxValue * 83;
+        const rightHeight = Math.max(0, Number(row[right] || 0)) / maxValue * 83;
+        const x = 8 + index * step;
+        return `<rect x="${x.toFixed(1)}" y="${(96 - leftHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${leftHeight.toFixed(1)}" fill="#0284c7" />
+          <rect x="${(x + width).toFixed(1)}" y="${(96 - rightHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${rightHeight.toFixed(1)}" fill="#f97316" />`;
+      }).join("");
+      return `<div class="min-w-0 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+        <p class="text-xs font-semibold">${title}</p>
+        <svg viewBox="0 0 320 102" role="img" aria-label="${title}" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg>
+        <p class="text-[11px] text-slate-500">🔵 ${leftLabel} · 🟠 ${rightLabel}</p>
+      </div>`;
+    };
+    const prior = areaData.comparacion?.kpis || {};
+    const current = areaData.kpis || {};
+    const fields = ["ventas", "compras_netas", "cobranzas", "pagos", "presupuestos", "pedidos", "facturas", "remitos", "venta_cuenta_corriente", "compra_cuenta_corriente"];
+    const names = ["Ventas", "Compras netas", "Cobranzas", "Pagos", "Presupuestos", "Pedidos", "Facturas", "Remitos", "Venta cta. cte.", "Compra cta. cte."];
+    const countKeys = new Set(["presupuestos", "pedidos", "facturas", "remitos"]);
+    const format = (key, value) => value == null ? "No disponible" : countKeys.has(key) ? fmtNum.format(value) : fmtMoney.format(value);
+    const rows = fields.map((key, index) => `<tr class="border-t border-slate-100 dark:border-slate-800">
+      <th scope="row" class="px-2 py-1.5 text-left font-medium">${names[index]}</th>
+      <td class="px-2 py-1.5 text-right tabular-nums">${format(key, current[key])}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${format(key, prior[key])}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${format(key, areaData.comparacion?.diferencias?.[key])}</td>
+    </tr>`).join("");
+    const seriesRows = series.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800">
+      <th scope="row" class="px-2 py-1.5 text-left font-medium">${escHtml(row.fecha)}</th>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.ventas)}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.compras)}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.cobranzas)}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.pagos)}</td>
+    </tr>`).join("");
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
+      ${chart("Gestión comercial", "ventas", "compras", "Ventas", "Compras")}
+      ${chart("Tesorería", "cobranzas", "pagos", "Cobranzas", "Pagos")}
+    </div><details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Ver serie completa (${areaData.series?.agrupacion || "período"})</summary>
+      <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[38rem] text-xs text-slate-700 dark:text-slate-200">
+        <thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Ventas</th><th class="px-2 py-2 text-right">Compras</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead>
+        <tbody>${seriesRows}</tbody></table></div></details>
+    <details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Comparar período anterior</summary>
+      <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[34rem] text-xs text-slate-700 dark:text-slate-200">
+        <thead><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Anterior</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
+        <tbody>${rows}</tbody></table></div></details>`;
+  }
 
   function renderComercialV45Comparison(areaData) {
     const comparison = areaData?.comparacion;

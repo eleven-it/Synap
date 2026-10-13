@@ -334,6 +334,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["can_edit_cc_areas"] = can_edit_cc_areas
 
             area_urls = {
+                "resumen_general": reverse(
+                    "reports-api:reports-executive-dashboard-resumen-v45"
+                ),
                 "ventas": reverse("reports-api:reports-executive-dashboard-comercial-ventas-v45"),
                 "inventario": reverse(
                     "reports-api:reports-executive-dashboard-stock-v45"

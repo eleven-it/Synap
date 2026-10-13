@@ -20,7 +20,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 
 | Tablero administraNET | KPI históricos | Permiso heredado | Estado en Synap `Desarrollo` |
 |---|---:|---|---|
-| Resumen general | 16 | `tablero_resumen_general` | Pendiente de migrar. |
+| Resumen general | 16 | `tablero_resumen_general` | 16 KPI, período anterior y dos gráficos integrados en rama de trabajo; faltan detalles y validación Django/web. |
 | Comercial — Ventas | 16 | `tablero_comercial_ventas` | Implementación V45 en rama de trabajo: KPI, comparación, gráfico y detalles. Validación Django y revisión del PR pendientes. |
 | Comercial — Preparación de pedidos | 16 | `tablero_comercial_prep_pedidos` | Pendiente de migrar. |
 | Abastecimiento — Compras | 14 | `tablero_abastecimiento_compras` | `compras` existente es un subconjunto; falta paridad. |
@@ -54,3 +54,7 @@ Período 01–08/10/2026 en el backup Best Sox, importes sin impuestos, todos lo
 El resumen de Stock se contrastó en el mismo backup para unidad, display y bulto. En depósito 6, del 01 al 08/10/2026 se registraron 55.803 entradas y 38.467 salidas expresadas en unidades, con valores de costo de $259.911.163,90 y $210.232.913,90. La comparación usa el período inmediatamente anterior de igual duración. Los indicadores de existencias son una foto actual y no se presentan como si fueran históricos. La serie, la distribución por depósito y los catorce detalles se ejecutaron contra MySQL 5.7 aislado. Las sumas de cada detalle coincidieron con su indicador (tolerancia de centavo); los datos de costo requieren permiso en el endpoint de detalle. También se corrigió el mapeo del enlace de detalle de Ventas, que antes no llegaba al frontend.
 
 El PR continúa en borrador: aún falta ejecutar el suite Django integrado, revisar la experiencia móvil y completar los nueve tableros restantes antes de cualquier promoción. No se ha instalado este código en Best Sox.
+
+## Conciliación inicial de Resumen general
+
+Se ejecutó `fetch_resumen_v45` contra la copia aislada Best Sox del 09/10/2026, período 01–12/10/2026. Los ocho indicadores documentales del período fueron ventas $171.207.874,10; compras netas $145.509.780,59; cobranzas $177.508.146,64; pagos $153.688.170,16; 0 presupuestos, 180 pedidos, 82 facturas y 95 remitos. La foto de vencimientos devolvió $33.410.146,54 a cobrar (3) y $41.087.933,52 a pagar (15); cheques $89.378.273,30 y bancos $1.289.836.286,82. Estas cuatro cifras coinciden con la captura del tablero V45. La venta de cuenta corriente calculada desde el backup fue $171.207.874,10, mientras la captura en vivo muestra $171.102.874,10: la diferencia de $105.000 requiere cotejar la misma fecha y base antes de declarar paridad. El backend evita consultar saldos globales cuando hay filtro de PV o sucursal, porque V45 no documenta una relación territorial para esos saldos. Faltan detalles por indicador, prueba web responsive y suite Django integrado; este tablero sigue en desarrollo.

@@ -17,6 +17,7 @@ from reports.models import ReportCategory, ReportDefinition
 from reports.services.report_visibility import COMMAND_CENTER_SLUG
 
 CC_AREA_KEYS = (
+    "resumen_general",
     "ventas",
     "inventario",
     "compras",
@@ -29,6 +30,7 @@ CC_AREA_KEYS = (
 DEFAULT_CC_AREAS: Dict[str, bool] = {key: True for key in CC_AREA_KEYS}
 
 CC_AREA_LABELS: Dict[str, str] = {
+    "resumen_general": "Resumen gerencial",
     "ventas": "Ventas",
     "inventario": "Inventario",
     "compras": "Compras",
@@ -41,6 +43,7 @@ CC_AREA_LABELS: Dict[str, str] = {
 # Los códigos ya existen en el catálogo synap_permiso de administraNET.
 # Cada área web sólo se expone con sus permisos funcionales completos.
 CC_AREA_PERMISSION_CODES: Dict[str, tuple[str, ...]] = {
+    "resumen_general": ("tablero_resumen_general",),
     "ventas": ("tablero_comercial_ventas",),
     "inventario": ("tablero_abastecimiento_stock",),
     "compras": ("tablero_abastecimiento_compras",),

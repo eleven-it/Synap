@@ -43,6 +43,7 @@ from .executive_dashboard_api_views import (
     ExecutiveDashboardAPIView,
     ExecutiveDashboardAreasAPIView,
     ExecutiveDashboardFilterOptionsAPIView,
+    ExecutiveDashboardResumenV45APIView,
     ExecutiveDashboardVentasResumenAPIView,
     ExecutiveDashboardComercialVentasV45APIView,
     ExecutiveDashboardComercialVentasV45DetailAPIView,
@@ -177,6 +178,11 @@ urlpatterns = [
     ),
     path("pv-canal-ejecutivo/", PuntoVentaCanalEjecutivoAPIView.as_view(), name="reports-pv-canal-ejecutivo"),
     path("executive-dashboard/", ExecutiveDashboardAPIView.as_view(), name="reports-executive-dashboard"),
+    path(
+        "executive-dashboard/resumen-general/v45/",
+        ExecutiveDashboardResumenV45APIView.as_view(),
+        name="reports-executive-dashboard-resumen-v45",
+    ),
     path(
         "executive-dashboard/filter-options/",
         ExecutiveDashboardFilterOptionsAPIView.as_view(),

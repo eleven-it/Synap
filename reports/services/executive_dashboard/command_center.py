@@ -11,6 +11,7 @@ from .comercial_v45 import fetch_comercial_ventas_v45
 from .exceptions import is_legacy_db_error, legacy_area_failure_payload
 from .inventory_metrics import fetch_inventario_resumen
 from .stock_v45 import fetch_stock_v45
+from .resumen_v45 import fetch_resumen_v45
 from .manufacturing_metrics import fetch_manufactura_resumen
 from .purchase_metrics import fetch_compras_resumen
 from .banco_metrics import fetch_tesoreria_banco_resumen
@@ -23,6 +24,7 @@ from .ventas_metrics import fetch_ventas_resumen
 logger = logging.getLogger(__name__)
 
 ENDPOINTS_RELATIVOS = {
+    "resumen_general": "/api/reports/executive-dashboard/resumen-general/v45/",
     "ventas": "/api/reports/executive-dashboard/ventas/resumen/",
     "ventas_pedidos_pendientes": "/api/reports/executive-dashboard/ventas/pedidos-pendientes/",
     "ventas_remitos_nf": "/api/reports/executive-dashboard/ventas/remitos-no-facturados/",
@@ -41,6 +43,7 @@ ENDPOINTS_RELATIVOS = {
 }
 
 ENDPOINT_AREA = {
+    "resumen_general": "resumen_general",
     "ventas": "ventas",
     "ventas_pedidos_pendientes": "ventas",
     "ventas_remitos_nf": "ventas",
@@ -93,6 +96,14 @@ def run_command_center(
 
     sucursales_disponibles: list = []
     with legacy_cursor(filters.base_empresa) as cursor:
+        if areas_habilitadas.get("resumen_general"):
+            summary = _safe_legacy_area(
+                "resumen_general", fetch_resumen_v45, cursor, filters, gross=gross_sales,
+            )
+            areas["resumen_general"] = (
+                _area_sin_meta_interno(summary)
+                if summary.get("disponible") is not False else summary
+            )
         if areas_habilitadas.get("ventas"):
             if v45_sales:
                 ventas_full = _safe_legacy_area(
