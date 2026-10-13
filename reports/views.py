@@ -402,6 +402,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "impositivo_v45": reverse(
                     "reports-api:reports-executive-dashboard-impositivo-v45-detail"
                 ),
+                "logistica_v45": reverse(
+                    "reports-api:reports-executive-dashboard-logistica-v45-detail"
+                ),
                 "pedidos_pendientes": reverse(
                     "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"
                 ),

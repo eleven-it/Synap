@@ -1313,7 +1313,11 @@
         ];
       },
       afterMetrics: (a) => renderLogisticaV45Comparison(a),
-      details: [],
+      details: [
+        { label: "Hojas de ruta", urlKey: "logistica_v45", vista: "rutas" },
+        { label: "Comprobantes", urlKey: "logistica_v45", vista: "documentos" },
+        { label: "Facturación por ruta", urlKey: "logistica_v45", vista: "por_ruta" },
+      ],
     },
     {
       key: "gastos",
@@ -2530,7 +2534,7 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
-    if (["libros_v45", "gastos_v45", "contable_v45", "impositivo_v45"].includes(urlKey) && vista) {
+    if (["libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45"].includes(urlKey) && vista) {
       genericV45Detail = { base, vista, offset: 0 };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");

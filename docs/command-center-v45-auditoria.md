@@ -29,7 +29,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI, serie Debe/Haber y aperturas de asientos, impuestos, períodos y ejercicios; faltan comparación y validación Django/web. |
 | Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI, composición de IVA y seis aperturas documentales; faltan posición IVA documental unificada, series mensuales y comparación. |
 | Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI, dos series y Diario, Mayor, Balance y Resultados paginados en rama de trabajo; faltan comparación y prueba web. |
-| Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI y comparación de estados en rama de trabajo; faltan ranking, detalles y contraste con rutas recientes. |
+| Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI, comparación de estados y aperturas de rutas y comprobantes; faltan dimensiones adicionales y contraste con rutas recientes. |
 | Análisis de gastos | 15 | `tablero_gestion_financiera` en V45 | 15 KPI, selector de fuente, documentos y siete agrupaciones en rama de trabajo; faltan serie comparativa y prueba web. |
 
 **No presentar las siete áreas parciales de Synap como equivalentes a estos once tableros.** El código actual añade además `manufactura` y `cruzados` como áreas web propias; no corresponden directamente a tableros homónimos del ERP.
@@ -89,7 +89,9 @@ Las cuatro vistas documentales ya ejecutan consultas paginadas de solo lectura: 
 
 ## Conciliación inicial de Logística
 
-La copia Best Sox sólo tiene una hoja de ruta, con `fecha_salida` 23/07/**2911** y fecha de creación 23/07/2026. V45 prioriza `fecha_salida`, por lo que para octubre 2026 el tablero informa correctamente cero rutas; la consulta para julio 2911 devuelve una ruta abierta. Los 888 documentos vinculados a esa ruta producen 769 facturas, 119 notas de crédito y $2.708.695.918,94 de facturación neta. La fecha de salida aparentemente errónea es dato de origen y debe revisarse en AdministraNET antes de usar este caso para una prueba de negocio. Se verificaron consultas de rango y filtro territorial en MySQL 5.7 aislado; faltan ranking, detalles, gráfico y prueba web.
+La copia Best Sox sólo tiene una hoja de ruta, con `fecha_salida` 23/07/**2911** y fecha de creación 23/07/2026. V45 prioriza `fecha_salida`, por lo que para octubre 2026 el tablero informa correctamente cero rutas; la consulta para julio 2911 devuelve una ruta abierta. Los 888 documentos vinculados a esa ruta producen 769 facturas, 119 notas de crédito y $2.708.695.918,94 de facturación neta. La fecha de salida aparentemente errónea es dato de origen y debe revisarse en AdministraNET antes de usar este caso para una prueba de negocio. Se verificaron consultas de rango y filtro territorial en MySQL 5.7 aislado; faltan gráfico y prueba web.
+
+Las aperturas devuelven la hoja, los 888 documentos y un ranking por ruta, con la misma suma de $2.708.695.918,94. El detalle de documentos intersecta el PV/sucursal autorizado incluso si una ruta contiene comprobantes de otros puntos de venta. Faltan chofer, unidad y zona como dimensiones de agrupación, además de una prueba web.
 
 ## Conciliación inicial de Análisis de gastos
 
