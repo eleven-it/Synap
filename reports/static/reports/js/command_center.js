@@ -712,6 +712,7 @@
       compras: "compras",
       financiero: "análisis financiero",
       gestion_contable: "gestión contable",
+      impositivo: "impuestos y posiciones fiscales",
       manufactura: "manufactura",
       cruzados: "demanda pendiente",
       tesoreria: "tesorería",
@@ -876,6 +877,7 @@
     const comp = a.compras || {};
     const fin = a.financiero || {};
     const account = a.gestion_contable || {};
+    const tax = a.impositivo || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
@@ -911,6 +913,10 @@
     if (isAreaVisible("gestion_contable")) {
       cards.push(kpiCard("Asientos", account.disponible === false ? "No disponible" : fmtNum.format(account.kpis?.asientos ?? 0), "indigo"));
       cards.push(kpiCard("Diferencia Debe/Haber", account.disponible === false ? "No disponible" : fmtMoney.format(account.kpis?.diferencia ?? 0), "emerald"));
+    }
+    if (isAreaVisible("impositivo")) {
+      cards.push(kpiCard("Posición IVA", tax.disponible === false ? "No disponible" : fmtMoney.format(tax.kpis?.posicion_iva ?? 0), "amber"));
+      cards.push(kpiCard("IVA débito", tax.disponible === false ? "No disponible" : fmtMoney.format(tax.kpis?.iva_debito ?? 0), "sky"));
     }
     if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
@@ -957,6 +963,10 @@
     if (isAreaVisible("gestion_contable")) {
       loadingCards.push(kpiCardLoading("Asientos", "indigo"));
       loadingCards.push(kpiCardLoading("Diferencia Debe/Haber", "emerald"));
+    }
+    if (isAreaVisible("impositivo")) {
+      loadingCards.push(kpiCardLoading("Posición IVA", "amber"));
+      loadingCards.push(kpiCardLoading("IVA débito", "sky"));
     }
     if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
@@ -1177,6 +1187,30 @@
       details: [],
     },
     {
+      key: "impositivo",
+      title: "Impuestos · posiciones fiscales (V45)",
+      icon: "receipt_long",
+      color: "amber",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Posición IVA", money("posicion_iva")], ["IVA débito", money("iva_debito")],
+          ["IVA crédito", money("iva_credito")], ["Percep. IVA ventas", money("percep_iva_ventas")],
+          ["Percep. IVA compras", money("percep_iva_compras")], ["Retenciones IVA", money("retenciones_iva")],
+          ["Libro IVA ventas", count("libro_ventas")], ["Libro IVA compras", count("libro_compras")],
+          ["IIBB ventas", money("iibb_ventas")], ["Percep. IIBB ventas", money("percep_iibb_ventas")],
+          ["Percep. IIBB compras", money("percep_iibb_compras")],
+          ["Retenciones IIBB", money("retenciones_iibb")],
+          ["Impuestos determinados", money("impuestos_determinados")],
+          ["Impuestos pagados", money("impuestos_pagados")],
+        ];
+      },
+      afterMetrics: (a) => renderImpositivoV45Chart(a),
+      details: [],
+    },
+    {
       key: "manufactura",
       title: "Manufactura",
       icon: "precision_manufacturing",
@@ -1277,6 +1311,20 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderImpositivoV45Chart(areaData) {
+    const k = areaData.kpis || {};
+    const metrics = [
+      ["IVA débito", "iva_debito", "bg-sky-500"],
+      ["Percep. IVA ventas", "percep_iva_ventas", "bg-sky-400"],
+      ["IVA crédito", "iva_credito", "bg-amber-500"],
+      ["Percep. IVA compras", "percep_iva_compras", "bg-amber-400"],
+      ["Retenciones IVA", "retenciones_iva", "bg-amber-300"],
+    ];
+    const max = Math.max(1, ...metrics.map(([, key]) => Math.abs(Number(k[key] || 0))));
+    const bars = metrics.map(([label, key, color]) => `<div class="grid grid-cols-[8.5rem_1fr] items-center gap-2 py-1 text-xs"><span>${label}</span><div class="h-3 rounded bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded ${color}" style="width:${Math.abs(Number(k[key] || 0)) / max * 100}%"></div></div><strong class="col-span-2 text-right tabular-nums">${fmtMoney.format(k[key] || 0)}</strong></div>`).join("");
+    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición de la posición IVA</h3><p class="mb-2 text-xs text-slate-500">Débito + percepciones de ventas − crédito − percepciones de compras − retenciones</p>${bars}</section>`;
+  }
 
   function renderContableV45Charts(areaData) {
     const rows = (areaData.serie_asientos?.filas || []).slice(-30);
@@ -1886,8 +1934,8 @@
       node.classList.toggle("hidden", selectedAreaKey !== "gestion_contable");
       node.classList.toggle("flex", selectedAreaKey === "gestion_contable");
     });
-    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable"].includes(selectedAreaKey));
-    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable"].includes(selectedAreaKey));
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo"].includes(selectedAreaKey));
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey !== "inventario");
       node.classList.toggle("flex", selectedAreaKey === "inventario");

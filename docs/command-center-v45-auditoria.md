@@ -27,7 +27,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | Resumen y detalle paginado de 14 KPI, tres presentaciones, comparación de movimientos y gráficos en rama de trabajo. Falta prueba Django, revisión visual móvil y revisión del PR. |
 | Análisis financiero | 15 | `tablero_gestion_financiera` | 15 KPI, aging, flujo y comparación en rama de trabajo; faltan detalles, validación Django/web y contraste visual con ERP. |
 | Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI y serie Debe/Haber en rama de trabajo; faltan detalles, comparación y validación Django/web. |
-| Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | Pendiente de migrar. |
+| Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI fiscales y composición de IVA en rama de trabajo; faltan libros y detalles, series mensuales y comparación. |
 | Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | Pendiente de migrar; validar con Best Sox. |
 | Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | Pendiente de migrar. |
 | Análisis de gastos | 15 | `tablero_gestion_financiera` en V45 | Pendiente de migrar; confirmar permiso y fuentes. |
@@ -74,3 +74,7 @@ En Best Sox 01–12/10/2026, cobranzas $177.508.146,64 y pagos $153.688.170,16 p
 ## Conciliación inicial de Gestión contable
 
 En Best Sox 01–12/10/2026, `cont_asiento` devuelve 253 asientos, Debe y Haber de $1.008.193.355,56 cada uno, diferencia cero, 253 de proceso y resultado contable de -$796.354,24. Los importes y resultado coinciden con la captura V45 de Contabilidad. Hay un ejercicio abierto y ningún período abierto en el rango. La serie diaria se ejecutó en MySQL 5.7 aislado. La selección de grupo y sucursal se aplica a los asientos; los impuestos y períodos son datos generales y se identifican así en la respuesta y la vista. Faltan detalles, comparación, contraste visual del tablero específico y prueba Django/web.
+
+## Conciliación inicial de Impuestos y posiciones fiscales
+
+En Best Sox 01–12/10/2026, el débito IVA fue $35.953.653,57, el crédito fiscal $30.531.853,91 y la posición $5.421.799,66. Se contaron 91 comprobantes de Libro IVA ventas y 38 de compras; las notas de crédito tienen signo negativo y compras usa `FechaRegistro`, `IVA1+IVA2+IVA3+sobretasa_iva` y excluye proveedores profesionales, como V45. El test con PV 2 y sucursal 1 devolvió una posición de $5.226.799,41 y no expuso las determinaciones fiscales generales. Las consultas se ejecutaron contra MySQL 5.7 aislado. Faltan aperturas documentales, serie fiscal temporal, comparación y prueba integrada web.
