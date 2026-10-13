@@ -30,7 +30,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI fiscales y composición de IVA en rama de trabajo; faltan libros y detalles, series mensuales y comparación. |
 | Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI y dos series contables en rama de trabajo; faltan las cuatro vistas documentales, comparación y prueba web. |
 | Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI y comparación de estados en rama de trabajo; faltan ranking, detalles y contraste con rutas recientes. |
-| Análisis de gastos | 15 | `tablero_gestion_financiera` en V45 | Pendiente de migrar; confirmar permiso y fuentes. |
+| Análisis de gastos | 15 | `tablero_gestion_financiera` en V45 | 15 KPI y selector de fuente en rama de trabajo; faltan serie temporal, ranking, documentos y prueba web. |
 
 **No presentar las siete áreas parciales de Synap como equivalentes a estos once tableros.** El código actual añade además `manufactura` y `cruzados` como áreas web propias; no corresponden directamente a tableros homónimos del ERP.
 
@@ -86,3 +86,7 @@ En Best Sox 01–12/10/2026, los 253 asientos suman $1.008.193.355,56 tanto en D
 ## Conciliación inicial de Logística
 
 La copia Best Sox sólo tiene una hoja de ruta, con `fecha_salida` 23/07/**2911** y fecha de creación 23/07/2026. V45 prioriza `fecha_salida`, por lo que para octubre 2026 el tablero informa correctamente cero rutas; la consulta para julio 2911 devuelve una ruta abierta. Los 888 documentos vinculados a esa ruta producen 769 facturas, 119 notas de crédito y $2.708.695.918,94 de facturación neta. La fecha de salida aparentemente errónea es dato de origen y debe revisarse en AdministraNET antes de usar este caso para una prueba de negocio. Se verificaron consultas de rango y filtro territorial en MySQL 5.7 aislado; faltan ranking, detalles, gráfico y prueba web.
+
+## Conciliación inicial de Análisis de gastos
+
+En Best Sox 01–12/10/2026, Fuente Todos excluyendo impuestos devuelve $207.803.715,61 de gasto operativo en 44 documentos, gasto bancario cero e impuestos pagados cero. El promedio documental es $4.722.811,72 y la variación frente al período anterior equivalente es -$74.680.875,57 (-26,44 %). El grupo de mayor importe es «Grupo 7 (mercaderías terminadas)», $73.794.608,80. Se ejecutaron las cuatro fuentes y el filtro de sucursal/PV contra MySQL 5.7 aislado. El cociente gastos/ventas usa la fórmula fiscal de ventas de `CMGas_CargarVentasNetas` y no suma pagos a proveedores como gasto. Faltan detalle documental, serie de evolución, ranking, comparación de dimensiones y prueba web.

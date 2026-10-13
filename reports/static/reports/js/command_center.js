@@ -566,6 +566,9 @@
     if (["gestion_contable", "libros_contables"].includes(selectedAreaKey) && el("cc-grupo-contable")?.value) {
       q.set("grupo_contable", el("cc-grupo-contable").value);
     }
+    if (selectedAreaKey === "gastos") {
+      q.set("fuente", el("cc-gastos-fuente")?.value || "0");
+    }
     return q.toString();
   }
 
@@ -715,6 +718,7 @@
       impositivo: "impuestos y posiciones fiscales",
       libros_contables: "libros y estados contables",
       logistica: "logística y hojas de ruta",
+      gastos: "análisis de gastos",
       manufactura: "manufactura",
       cruzados: "demanda pendiente",
       tesoreria: "tesorería",
@@ -882,6 +886,7 @@
     const tax = a.impositivo || {};
     const books = a.libros_contables || {};
     const routes = a.logistica || {};
+    const expenses = a.gastos || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
@@ -929,6 +934,10 @@
     if (isAreaVisible("logistica")) {
       cards.push(kpiCard("Hojas de ruta", routes.disponible === false ? "No disponible" : fmtNum.format(routes.kpis?.hojas_ruta ?? 0), "sky"));
       cards.push(kpiCard("Facturación en rutas", routes.disponible === false ? "No disponible" : fmtMoney.format(routes.kpis?.facturacion_rutas ?? 0), "emerald"));
+    }
+    if (isAreaVisible("gastos")) {
+      cards.push(kpiCard("Total de gastos", expenses.disponible === false ? "No disponible" : fmtMoney.format(expenses.kpis?.total_gastos ?? 0), "rose"));
+      cards.push(kpiCard("Documentos de gasto", expenses.disponible === false ? "No disponible" : fmtNum.format(expenses.kpis?.documentos ?? 0), "indigo"));
     }
     if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
@@ -987,6 +996,10 @@
     if (isAreaVisible("logistica")) {
       loadingCards.push(kpiCardLoading("Hojas de ruta", "sky"));
       loadingCards.push(kpiCardLoading("Facturación en rutas", "emerald"));
+    }
+    if (isAreaVisible("gastos")) {
+      loadingCards.push(kpiCardLoading("Total de gastos", "rose"));
+      loadingCards.push(kpiCardLoading("Documentos de gasto", "indigo"));
     }
     if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
@@ -1281,6 +1294,34 @@
       details: [],
     },
     {
+      key: "gastos",
+      title: "Análisis de gastos (V45)",
+      icon: "receipt",
+      color: "rose",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (value) => value == null ? "No disponible" : fmtMoney.format(value);
+        const named = (value) => value?.nombre ? `${escHtml(value.nombre)} · ${money(value.importe)}` : "No disponible";
+        return [
+          ["Total de gastos", money(k.total_gastos)],
+          ["Operativos", money(k.operativos)], ["Bancarios", money(k.bancarios)],
+          ["Impuestos pagados", money(k.impuestos_pagados)],
+          ["NC / Ajustes", money(k.nc_ajustes)], ["Documentos", fmtNum.format(k.documentos || 0)],
+          ["Promedio por documento", money(k.promedio_documento)],
+          ["Promedio diario", money(k.promedio_diario)],
+          ["Gastos sobre ventas", k.gastos_sobre_ventas == null ? "No disponible" : `${k.gastos_sobre_ventas} %`],
+          ["Variación vs anterior", k.variacion?.importe == null ? "No disponible" : `${money(k.variacion.importe)} · ${k.variacion.porcentaje == null ? "Nuevo" : `${k.variacion.porcentaje} %`}`],
+          ["Sin grupo", `${money(k.sin_grupo?.importe)} · ${fmtNum.format(k.sin_grupo?.documentos || 0)} docs`],
+          ["Sin cuenta contable", `${money(k.sin_cuenta?.importe)} · ${fmtNum.format(k.sin_cuenta?.documentos || 0)} docs`],
+          ["Grupo principal", named(k.grupo_principal)],
+          ["Gasto principal", named(k.gasto_principal)],
+          ["Sucursal principal", named(k.sucursal_principal)],
+        ];
+      },
+      afterMetrics: (a) => renderGastosV45Composition(a),
+      details: [],
+    },
+    {
       key: "manufactura",
       title: "Manufactura",
       icon: "precision_manufacturing",
@@ -1381,6 +1422,18 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderGastosV45Composition(areaData) {
+    const k = areaData.kpis || {};
+    const sources = [
+      ["Operativos", "operativos", "bg-rose-500"],
+      ["Bancarios", "bancarios", "bg-indigo-500"],
+      ["Impuestos pagados · separados", "impuestos_pagados", "bg-amber-500"],
+    ];
+    const max = Math.max(1, ...sources.map(([, key]) => Math.abs(Number(k[key] || 0))));
+    const rows = sources.map(([label, key, color]) => `<div class="grid grid-cols-[9rem_1fr] items-center gap-2 py-1 text-xs"><span>${label}</span><div class="h-3 rounded bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded ${color}" style="width:${Math.abs(Number(k[key] || 0)) / max * 100}%"></div></div><strong class="col-span-2 text-right tabular-nums">${k[key] == null ? "N/D" : fmtMoney.format(k[key])}</strong></div>`).join("");
+    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición por fuente</h3><p class="text-[11px] text-slate-500">Los impuestos se muestran separados y no integran «Todos».</p>${rows}</section>`;
+  }
 
   function renderLogisticaV45Comparison(areaData) {
     const k = areaData.kpis || {};
@@ -2038,8 +2091,12 @@
       node.classList.toggle("hidden", !["gestion_contable", "libros_contables"].includes(selectedAreaKey));
       node.classList.toggle("flex", ["gestion_contable", "libros_contables"].includes(selectedAreaKey));
     });
-    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica"].includes(selectedAreaKey));
-    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica"].includes(selectedAreaKey));
+    document.querySelectorAll(".cc-expense-filter").forEach((node) => {
+      node.classList.toggle("hidden", selectedAreaKey !== "gastos");
+      node.classList.toggle("flex", selectedAreaKey === "gastos");
+    });
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica", "gastos"].includes(selectedAreaKey));
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica", "gastos"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey !== "inventario");
       node.classList.toggle("flex", selectedAreaKey === "inventario");

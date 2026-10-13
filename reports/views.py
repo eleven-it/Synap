@@ -360,6 +360,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "logistica": reverse(
                     "reports-api:reports-executive-dashboard-logistica-v45"
                 ),
+                "gastos": reverse(
+                    "reports-api:reports-executive-dashboard-gastos-v45"
+                ),
                 "cruzados": reverse(
                     "reports-api:reports-executive-dashboard-cruzados-resumen"
                 ),
