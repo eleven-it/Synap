@@ -118,6 +118,16 @@
               {% for option in cc_tablero_options %}<option value="{{ option.key }}">{{ option.label }}</option>{% endfor %}
             </select>
           </div>
+          <div class="cc-filter-field mb-3 flex flex-col gap-1 sm:max-w-52">
+            <label for="cc-refresh-interval" class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Actualizar cada</label>
+            <select id="cc-refresh-interval" class="min-h-10 rounded-lg border border-slate-600/80 bg-slate-950/80 px-3 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35">
+              <option value="0">Manual</option>
+              <option value="1">1 minuto</option>
+              <option value="5" selected>5 minutos</option>
+              <option value="10">10 minutos</option>
+              <option value="15">15 minutos</option>
+            </select>
+          </div>
           <p class="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Filtros del período</p>
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
             <fieldset class="grid min-w-0 flex-1 grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-2 lg:max-w-[22rem]">
@@ -362,5 +372,5 @@
   import { initializeTagsFilter } from "{% static 'reports/js/tags_filter.mjs' %}?v=20260901b";
   window.initializeTagsFilter = initializeTagsFilter;
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20261012b" defer></script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20261012c" defer></script>
 {% endblock %}

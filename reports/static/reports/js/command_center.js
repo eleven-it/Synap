@@ -731,6 +731,20 @@
   let areasCache = {};
   let dashboardLoadToken = 0;
   let selectedAreaKey = "";
+  let autoRefreshTimer = null;
+
+  function scheduleAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+    const minutes = Number(el("cc-refresh-interval")?.value || 0);
+    if (![1, 5, 10, 15].includes(minutes)) return;
+    autoRefreshTimer = setInterval(() => {
+      if (!selectedAreaKey || document.visibilityState === "hidden") return;
+      const detail = el("cc-detail-modal");
+      if (el("cc-refresh")?.disabled || (detail && !detail.classList.contains("hidden"))) return;
+      void loadDashboard();
+    }, minutes * 60 * 1000);
+  }
 
   const WAIT_LABELS = {
     dashboard: {
@@ -2946,6 +2960,8 @@
   function bind() {
     el("cc-refresh")?.addEventListener("click", loadDashboard);
     el("cc-tablero-select")?.addEventListener("change", loadDashboard);
+    el("cc-refresh-interval")?.addEventListener("change", scheduleAutoRefresh);
+    scheduleAutoRefresh();
     el("cc-detail-close")?.addEventListener("click", () => openModal(false));
     el("cc-v45-search")?.addEventListener("input", () => {
       if (comercialSearchTimer) clearTimeout(comercialSearchTimer);

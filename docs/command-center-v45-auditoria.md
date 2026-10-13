@@ -43,6 +43,8 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 5. El detalle, las comparaciones, los gráficos y las exportaciones de los once tableros requieren la misma autorización y el mismo contexto que el KPI padre. No deben inventarse valores cero ante consultas faltantes o fallidas.
 6. El acceso a costos, rentabilidad, montos de caja, cuenta corriente, comprobantes y asientos necesita gates independientes antes de publicarse.
 
+La interfaz ofrece actualización manual o cada 1, 5, 10 o 15 minutos (5 minutos por defecto, como V45). La actualización automática sólo consulta el tablero seleccionado y se omite con la pestaña oculta, un detalle abierto o una consulta todavía activa. Las grillas genéricas de detalle se presentan como tarjetas en móvil y tabla en escritorio; falta cotejarlas en un navegador de la instalación real.
+
 ## Criterio de avance
 
 Cada KPI se marcará `implementado` sólo con fórmula y fuente verificadas en V45, filtro territorial del servidor, permisos, respuesta explícita de no disponibilidad, detalle y comparación cuando correspondan, y conciliación numérica en la base adecuada. Los candidatos pasan por PR y pruebas en Desarrollo; Staging se considera después de esas verificaciones.
