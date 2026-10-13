@@ -110,6 +110,7 @@ def resolve_cc_areas_for_user(user, *, mpr_active: bool) -> Dict[str, bool]:
 
 # Detalle UI / detail_urls → área padre
 DETAIL_KEY_TO_AREA: Dict[str, str] = {
+    "resumen_v45": "resumen_general",
     "comercial_v45": "ventas",
     "pedidos_pendientes": "ventas",
     "remitos_nf": "ventas",

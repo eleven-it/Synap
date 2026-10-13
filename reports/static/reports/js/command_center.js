@@ -1076,7 +1076,24 @@
         ];
       },
       afterMetrics: (a) => renderResumenV45Charts(a),
-      details: [],
+      details: [
+        { label: "Ventas", urlKey: "resumen_v45", vista: "ventas" },
+        { label: "Compras netas", urlKey: "resumen_v45", vista: "compras_netas" },
+        { label: "Cobranzas", urlKey: "resumen_v45", vista: "cobranzas" },
+        { label: "Pagos", urlKey: "resumen_v45", vista: "pagos" },
+        { label: "Presupuestos", urlKey: "resumen_v45", vista: "presupuestos" },
+        { label: "Pedidos", urlKey: "resumen_v45", vista: "pedidos" },
+        { label: "Facturas", urlKey: "resumen_v45", vista: "facturas" },
+        { label: "Remitos", urlKey: "resumen_v45", vista: "remitos" },
+        { label: "Vencimientos a cobrar", urlKey: "resumen_v45", vista: "vencimiento_cobrar" },
+        { label: "Vencimientos a pagar", urlKey: "resumen_v45", vista: "vencimiento_pagar" },
+        { label: "Efectivo actual", urlKey: "resumen_v45", vista: "efectivo_actual" },
+        { label: "Tarjetas actual", urlKey: "resumen_v45", vista: "tarjetas_actual" },
+        { label: "Cheques actual", urlKey: "resumen_v45", vista: "cheques_actual" },
+        { label: "Bancos actual", urlKey: "resumen_v45", vista: "bancos_actual" },
+        { label: "Venta cuenta corriente", urlKey: "resumen_v45", vista: "venta_cuenta_corriente" },
+        { label: "Compra cuenta corriente", urlKey: "resumen_v45", vista: "compra_cuenta_corriente" },
+      ],
     },
     {
       key: "ventas",
@@ -2689,7 +2706,7 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
-    if (["libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45", "compras_v45", "preparacion_v45", "financiero_v45"].includes(urlKey) && vista) {
+    if (["resumen_v45", "libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45", "compras_v45", "preparacion_v45", "financiero_v45"].includes(urlKey) && vista) {
       genericV45Detail = { base, vista, offset: 0 };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");

@@ -114,7 +114,7 @@ def _period_metrics(cursor, filters: DashboardFilters, *, gross: bool, has_rv: b
     }
 
 
-def _sales_account_current(cursor, filters: DashboardFilters, *, gross: bool, has_rv: bool) -> float:
+def _sales_account_source(filters: DashboardFilters, *, gross: bool, has_rv: bool) -> tuple[str, list]:
     credit = f"({_CREDIT_TYPES})"
     debit = "('NDA','NDB','NDC','NDE','NDM')"
     adjustment = f"({_CREDIT_TYPES},'NDA','NDB','NDC','NDE','NDM')"
@@ -165,8 +165,11 @@ def _sales_account_current(cursor, filters: DashboardFilters, *, gross: bool, ha
     )
     value = f"({value})*CASE WHEN cc.TipoComprobante IN {credit} THEN -1 ELSE 1 END"
     scope, scope_params = _sales_scope("cc", filters)
-    cursor.execute(
-        f"""SELECT COALESCE(SUM({value}),0) FROM cuentacliente cc {joins}
+    return (
+        f"""SELECT cc.Fecha fecha,cc.CodigoMovimiento movimiento,
+          cc.TipoComprobante tipo,cc.NroComprobante comprobante,
+          cc.Codigo codigo_entidad,{value} importe
+          FROM cuentacliente cc {joins}
           WHERE cc.Fecha >= %s AND cc.Fecha < %s
             AND COALESCE(cc.CodigoMovimiento,0)<>0
             AND UPPER(COALESCE(cc.Anulado,'NO'))<>'SI'
@@ -174,11 +177,16 @@ def _sales_account_current(cursor, filters: DashboardFilters, *, gross: bool, ha
         """,
         _period(filters) + scope_params,
     )
+
+
+def _sales_account_current(cursor, filters: DashboardFilters, *, gross: bool, has_rv: bool) -> float:
+    source, params = _sales_account_source(filters, gross=gross, has_rv=has_rv)
+    cursor.execute(f"SELECT COALESCE(SUM(q.importe),0) FROM ({source}) q", params)
     row = cursor.fetchone()
     return float(row[0] or 0) if row else 0.0
 
 
-def _purchase_account_current(cursor, filters: DashboardFilters) -> float:
+def _purchase_account_source(filters: DashboardFilters) -> tuple[str, list]:
     total = (
         "CASE WHEN cp.TipoComprobante='NC' THEN ABS(COALESCE(cp.ImportePago,0)) "
         "ELSE ABS(COALESCE(cp.ImporteCompra,0)) END"
@@ -196,8 +204,11 @@ def _purchase_account_current(cursor, filters: DashboardFilters) -> float:
         "ELSE 0 END)*CASE WHEN cp.TipoComprobante='NC' THEN -1 ELSE 1 END"
     )
     scope, scope_params = _purchase_scope("cp", filters)
-    cursor.execute(
-        f"""SELECT COALESCE(SUM({value}),0) FROM cuentaproveedor cp
+    return (
+        f"""SELECT cp.Fecha fecha,cp.CodigoMovimiento movimiento,
+          cp.TipoComprobante tipo,cp.NroComprobante comprobante,
+          cp.Codigo codigo_entidad,{value} importe
+          FROM cuentaproveedor cp
           LEFT JOIN cuentaproveedor cpv1 ON cpv1.CodigoMovimiento=CAST(cp.NroFacturaMov AS UNSIGNED)
           LEFT JOIN cuentaproveedor cpv2 ON cpv2.CodigoMovimiento=CAST(cpv1.NroFacturaMov AS UNSIGNED)
           WHERE cp.Fecha >= %s AND cp.Fecha < %s
@@ -207,6 +218,11 @@ def _purchase_account_current(cursor, filters: DashboardFilters) -> float:
         """,
         _period(filters) + scope_params,
     )
+
+
+def _purchase_account_current(cursor, filters: DashboardFilters) -> float:
+    source, params = _purchase_account_source(filters)
+    cursor.execute(f"SELECT COALESCE(SUM(q.importe),0) FROM ({source}) q", params)
     row = cursor.fetchone()
     return float(row[0] or 0) if row else 0.0
 

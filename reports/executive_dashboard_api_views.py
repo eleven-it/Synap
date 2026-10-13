@@ -40,6 +40,10 @@ from .services.executive_dashboard.inventory_metrics import (
 from .services.executive_dashboard.stock_v45 import STOCK_V45_KEYS, fetch_stock_v45
 from .services.executive_dashboard.stock_v45_detail import list_stock_v45_detail
 from .services.executive_dashboard.resumen_v45 import fetch_resumen_v45
+from .services.executive_dashboard.resumen_v45_detail import (
+    RESUMEN_V45_DETAIL_KEYS,
+    list_resumen_v45_detail,
+)
 from .services.executive_dashboard.preparacion_v45 import fetch_preparacion_v45
 from .services.executive_dashboard.preparacion_v45_detail import PREPARACION_V45_VIEWS, list_preparacion_v45_detail
 from .services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
@@ -292,6 +296,32 @@ class ExecutiveDashboardResumenV45APIView(ExecutiveDashboardMixin, APIView):
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
                 payload = fetch_resumen_v45(cursor, filters, gross=gross)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response(payload)
+
+
+class ExecutiveDashboardResumenV45DetailAPIView(ExecutiveDashboardMixin, APIView):
+    """Apertura paginada de cada indicador documental o saldo del Resumen V45."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("resumen_general")
+        if disabled:
+            return disabled
+        key = request.query_params.get("indicador") or request.query_params.get("vista", "")
+        if key not in RESUMEN_V45_DETAIL_KEYS:
+            return Response({"detail": "Indicador desconocido."}, status=status.HTTP_400_BAD_REQUEST)
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        gross = str(request.query_params.get("incluir_impuestos", "")).lower() in {"1", "true", "si"}
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_resumen_v45_detail(cursor, filters, key=key, gross=gross)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:

@@ -384,6 +384,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 else ""
             )
             detail_urls = {
+                "resumen_v45": reverse(
+                    "reports-api:reports-executive-dashboard-resumen-v45-detail"
+                ),
                 "comercial_v45": reverse(
                     "reports-api:reports-executive-dashboard-comercial-ventas-v45-detalle"
                 ),
