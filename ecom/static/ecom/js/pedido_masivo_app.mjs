@@ -591,6 +591,8 @@ function pedidoMasivoCore() {
         if (rect.top > topDeseado + 24) {
           input.scrollIntoView({ block: 'start', behavior: 'auto' });
           window.scrollBy(0, -84);
+        } else if (rect.top < topDeseado - 24) {
+          window.scrollBy(0, rect.top - topDeseado);
         }
         const actual = input.getBoundingClientRect();
         const espacio = Math.max(72, Math.floor(visibleBottom - actual.bottom - 12));
