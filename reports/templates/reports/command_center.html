@@ -17,19 +17,70 @@
   .cc-shell { overflow-x: clip; }
   .cc-hero {
     position: relative;
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 48%, #1e1b4b 100%);
+    background: linear-gradient(135deg, #fff 0%, #f8fafc 65%, #eef2ff 100%);
+    border-color: #cbd5e1;
+    color: #0f172a;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
   }
   .cc-hero::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 80% 60% at 100% 0%, rgba(56, 189, 248, 0.12), transparent 55%);
+    background: radial-gradient(ellipse 80% 60% at 100% 0%, rgba(56, 189, 248, 0.09), transparent 55%);
     pointer-events: none;
   }
   .cc-hero-toolbar {
-    background: rgba(15, 23, 42, 0.55);
-    border: 1px solid rgba(71, 85, 105, 0.45);
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #dbe4ef;
     backdrop-filter: blur(8px);
+  }
+  .cc-hero h1, .cc-hero-toolbar, .cc-hero-toolbar summary { color: #0f172a; }
+  .cc-hero p, .cc-hero-toolbar label { color: #475569; }
+  .cc-hero-toolbar input:not([type="checkbox"]),
+  .cc-hero-toolbar select, .cc-hero-toolbar details,
+  .cc-hero-toolbar .tags-filter-container {
+    background: #fff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+  }
+  .cc-hero-toolbar .tags-input { background: transparent !important; color: #0f172a !important; }
+  .cc-hero-toolbar .tags-input::placeholder { color: #64748b; opacity: 1; }
+  .cc-hero-toolbar .tags-dropdown { background: #fff; border-color: #cbd5e1; }
+  .cc-hero #cc-btn-areas-config { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+  .cc-hero .cc-report-link { background: #f8fafc; color: #1e40af; border-color: #cbd5e1; }
+  .cc-hero #cc-link-mpr-tablero { color: #6d28d9; }
+  .cc-hero #cc-areas-config-panel { background: #fff; border-color: #fcd34d; color: #0f172a; }
+  .cc-filter-layout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; align-items: start; }
+  .cc-period-fieldset, .cc-filter-scope, .cc-comparison { grid-column: span 2; }
+  .cc-filter-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; max-width: none; }
+  .cc-filter-scope .cc-filter-actions { grid-column: 1 / -1; }
+  .cc-filter-scope .cc-filter-field p { display: none; }
+  .dark .cc-hero {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 48%, #1e1b4b 100%);
+    border-color: #334155; color: #f8fafc;
+    box-shadow: 0 10px 24px rgba(2, 6, 23, .25);
+  }
+  .dark .cc-hero-toolbar { background: rgba(15, 23, 42, .55); border-color: rgba(71, 85, 105, .6); }
+  .dark .cc-hero h1, .dark .cc-hero-toolbar, .dark .cc-hero-toolbar summary { color: #fff; }
+  .dark .cc-hero p, .dark .cc-hero-toolbar label { color: #cbd5e1; }
+  .dark .cc-hero-toolbar input:not([type="checkbox"]),
+  .dark .cc-hero-toolbar select, .dark .cc-hero-toolbar details,
+  .dark .cc-hero-toolbar .tags-filter-container {
+    background: rgba(2, 6, 23, .55); border-color: #475569; color: #fff;
+  }
+  .dark .cc-hero-toolbar .tags-input { color: #fff !important; }
+  .dark .cc-hero-toolbar .tags-input::placeholder { color: #94a3b8; }
+  .dark .cc-hero-toolbar .tags-dropdown { background: #0f172a; border-color: #475569; }
+  .dark .cc-hero #cc-btn-areas-config { background: rgba(120, 53, 15, .4); color: #fef3c7; border-color: rgba(245, 158, 11, .5); }
+  .dark .cc-hero .cc-report-link { background: rgba(15, 23, 42, .5); color: #bae6fd; border-color: rgba(71, 85, 105, .7); }
+  .dark .cc-hero #cc-link-mpr-tablero { color: #ddd6fe; }
+  .dark .cc-hero #cc-areas-config-panel { background: rgba(2, 6, 23, .7); border-color: rgba(245, 158, 11, .3); color: #fff; }
+  @media (max-width: 900px) {
+    .cc-filter-layout { grid-template-columns: 1fr; }
+    .cc-period-fieldset, .cc-filter-scope, .cc-comparison { grid-column: 1; }
+  }
+  @media (max-width: 520px) {
+    .cc-filter-scope { grid-template-columns: 1fr; }
   }
   .cc-filter-field input,
   .cc-filter-field select {
@@ -111,14 +162,15 @@
         {% endif %}
 
         <div class="cc-hero-toolbar rounded-xl p-3 sm:p-3.5">
-          <div class="cc-filter-field mb-3 flex flex-col gap-1">
+          <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div class="cc-filter-field flex min-w-0 flex-1 flex-col gap-1">
             <label for="cc-tablero-select" class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Tablero autorizado</label>
             <select id="cc-tablero-select" class="min-h-11 rounded-lg border border-slate-600/80 bg-slate-950/80 px-3 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35">
               <option value="">Seleccioná un tablero…</option>
               {% for option in cc_tablero_options %}<option value="{{ option.key }}">{{ option.label }}</option>{% endfor %}
             </select>
           </div>
-          <div class="cc-filter-field mb-3 flex flex-col gap-1 sm:max-w-52">
+          <div class="cc-filter-field flex flex-col gap-1 sm:w-44 sm:shrink-0">
             <label for="cc-refresh-interval" class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Actualizar cada</label>
             <select id="cc-refresh-interval" class="min-h-10 rounded-lg border border-slate-600/80 bg-slate-950/80 px-3 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35">
               <option value="0">Manual</option>
@@ -128,9 +180,10 @@
               <option value="15">15 minutos</option>
             </select>
           </div>
+          </div>
           <p class="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Filtros del período</p>
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
-            <fieldset class="grid min-w-0 flex-1 grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-2 lg:max-w-[22rem]">
+          <div class="cc-filter-layout">
+            <fieldset class="cc-period-fieldset grid min-w-0 grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-2">
               <legend class="sr-only">Período</legend>
               <div class="cc-filter-field flex flex-col gap-1">
                 <label for="cc-fecha-inicio" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Desde</label>
@@ -142,7 +195,7 @@
               </div>
             </fieldset>
 
-            <details id="cc-custom-comparison" class="cc-filter-field hidden min-w-0 flex-1 rounded-lg border border-slate-600/60 bg-slate-950/40 px-3 py-2 text-xs text-slate-200 lg:max-w-[22rem]">
+            <details id="cc-custom-comparison" class="cc-comparison cc-filter-field hidden min-w-0 rounded-lg border border-slate-600/60 bg-slate-950/40 px-3 py-2 text-xs text-slate-200">
               <summary class="cursor-pointer font-medium">Comparar con otro período</summary>
               <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <label class="flex flex-col gap-1" for="cc-comparacion-inicio">Desde comparación
@@ -155,7 +208,7 @@
               <p class="mt-1 text-[11px] text-slate-400">Si dejás ambas fechas vacías, se usa el período anterior de igual duración.</p>
             </details>
 
-            <div class="flex min-w-0 flex-1 flex-col gap-3 lg:max-w-xl">
+            <div class="cc-filter-scope min-w-0">
               <div class="cc-filter-field cc-sales-filter flex flex-col gap-1">
                 <label for="sucursales_search" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sucursales</label>
                 <select name="sucursales" id="sucursales" multiple class="hidden" data-tags-field="sucursales">
@@ -166,7 +219,7 @@
                   <div class="tags-chips flex min-w-0 flex-1 flex-wrap gap-1.5"></div>
                   <input type="text" id="sucursales_search"
                          class="tags-input min-w-[8rem] flex-1 border-none bg-transparent py-0 text-sm text-white outline-none placeholder:text-slate-500"
-                         placeholder="Buscar sucursal…" autocomplete="off" />
+                         placeholder="Todas · buscar sucursal…" autocomplete="off" />
                   <div id="sucursales_dropdown"
                        class="tags-dropdown absolute left-0 right-0 top-full z-[200] mt-1 hidden max-h-60 overflow-y-auto rounded-md border border-slate-600 bg-slate-900 shadow-lg"></div>
                 </div>
@@ -182,7 +235,7 @@
                   <div class="tags-chips flex min-w-0 flex-1 flex-wrap gap-1.5"></div>
                   <input type="text" id="punto_venta_search"
                          class="tags-input min-w-[8rem] flex-1 border-none bg-transparent py-0 text-sm text-white outline-none placeholder:text-slate-500"
-                         placeholder="Buscar punto de venta…" autocomplete="off" />
+                         placeholder="Todos · buscar punto de venta…" autocomplete="off" />
                   <div id="punto_venta_dropdown"
                        class="tags-dropdown absolute left-0 right-0 top-full z-[200] mt-1 hidden max-h-60 overflow-y-auto rounded-md border border-slate-600 bg-slate-900 shadow-lg"></div>
                 </div>
@@ -222,11 +275,11 @@
                   <option value="2">Bancarios</option><option value="3">Impuestos</option>
                 </select>
               </div>
-              <div class="cc-sales-filter flex flex-wrap gap-3 text-xs text-slate-200">
+              <div class="cc-filter-actions cc-sales-filter flex flex-wrap items-center gap-3 text-xs text-slate-200">
                 <label class="inline-flex items-center gap-1.5"><input id="cc-incluir-impuestos" type="checkbox" class="rounded border-slate-500">Importes con impuestos</label>
                 <label class="inline-flex items-center gap-1.5"><input id="cc-comparar-anterior" type="checkbox" checked class="rounded border-slate-500">Comparar período anterior</label>
               </div>
-              <button type="button" id="cc-refresh" class="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-sky-950/40 transition hover:from-sky-400 hover:to-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[9.5rem]">
+              <button type="button" id="cc-refresh" class="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-sky-950/40 transition hover:from-sky-400 hover:to-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[9.5rem]">
                 <span class="material-icons text-lg" aria-hidden="true">refresh</span>
                 Actualizar
               </button>
@@ -372,5 +425,5 @@
   import { initializeTagsFilter } from "{% static 'reports/js/tags_filter.mjs' %}?v=20260901b";
   window.initializeTagsFilter = initializeTagsFilter;
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20261012d" defer></script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20261013a" defer></script>
 {% endblock %}

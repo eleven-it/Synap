@@ -73,7 +73,7 @@ def _route_counts(cursor, filters, date_expr, *, previous=False):
     else:
         params = _range(filters)
     scope, scope_params = _scope(filters)
-    open_state = "UPPER(TRIM(COALESCE(r.estado_ruta,''))) LIKE 'ABIER%'"
+    open_state = "UPPER(TRIM(COALESCE(r.estado_ruta,''))) LIKE 'ABIER%%'"
     closed = "UPPER(TRIM(COALESCE(r.estado_ruta,''))) IN ('CERRADO','CERRADA','FINALIZADO','FINALIZADA')"
     rendered = "UPPER(COALESCE(r.rendida,'NO'))='SI'"
     restricted = bool(filters.puntos_venta or filters.sucursales_filtro)

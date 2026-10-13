@@ -184,7 +184,7 @@ def _linked_orders(cursor, filters: DashboardFilters) -> dict:
 def _daily_sales(cursor, filters: DashboardFilters, *, gross: bool) -> list[dict]:
     scope, scope_params = _scope("cc", filters)
     day_count = (filters.fecha_fin - filters.fecha_inicio).days + 1
-    group_expr = "DATE(cc.Fecha)" if day_count <= 120 else "DATE_FORMAT(cc.Fecha,'%Y-%m-01')"
+    group_expr = "DATE(cc.Fecha)" if day_count <= 120 else "DATE_FORMAT(cc.Fecha,'%%Y-%%m-01')"
     debit = "COALESCE(cc.ImporteVenta,0)" if gross else "COALESCE(cc.SubtotalDesc,0)"
     credit = "COALESCE(cc.ImporteCobro,0)" if gross else "COALESCE(cc.SubtotalDesc,0)"
     cursor.execute(

@@ -46,12 +46,12 @@ def _states(has_original: bool) -> dict[str, str]:
         backorder = (
             f"({backorder} OR ({related} AND "
             f"({estado} IN ('PENDIENTE','PREPARADO','PARCIAL','BACKORDER','BACK ORDER') "
-            f"OR {estado} LIKE 'EN PREPARA%')))"
+            f"OR {estado} LIKE 'EN PREPARA%%')))"
         )
     return {
         "backorder": backorder,
         "pendientes": f"({estado}='PENDIENTE' AND NOT ({backorder}))",
-        "en_preparacion": f"({estado} LIKE 'EN PREPARA%' AND NOT ({backorder}))",
+        "en_preparacion": f"({estado} LIKE 'EN PREPARA%%' AND NOT ({backorder}))",
         "preparados": f"({estado}='PREPARADO' AND NOT ({backorder}))",
         "en_remito": f"{estado} IN ('EN REMITO','REMITIDO')",
         "facturados": f"{estado}='FACTURADO'",

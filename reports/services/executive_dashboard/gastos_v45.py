@@ -13,10 +13,10 @@ GASTOS_V45_KEYS = (
     "gastos_sobre_ventas", "variacion", "sin_grupo", "sin_cuenta",
     "grupo_principal", "gasto_principal", "sucursal_principal",
 )
-_TAX = "(COALESCE(oe.id_impuesto,0)<>0 OR COALESCE(oe.id_impuesto_detalle,0)<>0 OR UPPER(TRIM(COALESCE(oe.tipo_oe,''))) IN ('IMPUESTO','IMPUESTOS') OR UPPER(COALESCE(oe.tipo_comp,'')) LIKE '%IMPUEST%')"
-_SIGNED = "IF(UPPER(COALESCE(oe.tipo_comp,'')) LIKE 'NC%',-ABS(COALESCE(oe.importe_oe,0)),ABS(COALESCE(oe.importe_oe,0)))"
-_BRUTO = "IF(UPPER(COALESCE(oe.tipo_comp,'')) LIKE 'NC%',0,ABS(COALESCE(oe.importe_oe,0)))"
-_AJUSTE = "IF(UPPER(COALESCE(oe.tipo_comp,'')) LIKE 'NC%',ABS(COALESCE(oe.importe_oe,0)),0)"
+_TAX = "(COALESCE(oe.id_impuesto,0)<>0 OR COALESCE(oe.id_impuesto_detalle,0)<>0 OR UPPER(TRIM(COALESCE(oe.tipo_oe,''))) IN ('IMPUESTO','IMPUESTOS') OR UPPER(COALESCE(oe.tipo_comp,'')) LIKE '%%IMPUEST%%')"
+_SIGNED = "IF(UPPER(COALESCE(oe.tipo_comp,'')) LIKE 'NC%%',-ABS(COALESCE(oe.importe_oe,0)),ABS(COALESCE(oe.importe_oe,0)))"
+_BRUTO = "IF(UPPER(COALESCE(oe.tipo_comp,'')) LIKE 'NC%%',0,ABS(COALESCE(oe.importe_oe,0)))"
+_AJUSTE = "IF(UPPER(COALESCE(oe.tipo_comp,'')) LIKE 'NC%%',ABS(COALESCE(oe.importe_oe,0)),0)"
 
 
 def _dates(filters, previous=False):
@@ -53,7 +53,7 @@ def _operational(filters, previous=False):
         "AND UPPER(COALESCE(oe.anulado,'NO'))<>'SI' "
         "AND (COALESCE(oe.id_gasto,0)<>0 OR UPPER(TRIM(COALESCE(oe.tipo_oe,''))) "
         "IN ('GASTO','GASTOS','OTROS EGRESOS') OR UPPER(COALESCE(oe.tipo_comp,'')) "
-        "LIKE '%GASTO%' OR UPPER(COALESCE(oe.tipo_comp,'')) LIKE '%EGRESO%') "
+        "LIKE '%%GASTO%%' OR UPPER(COALESCE(oe.tipo_comp,'')) LIKE '%%EGRESO%%') "
         f"AND NOT {_TAX}{scope}"
     )
     return sql, _dates(filters, previous) + branch
