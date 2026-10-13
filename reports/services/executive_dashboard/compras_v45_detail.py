@@ -87,7 +87,7 @@ def list_compras_v45_detail(cursor, filters: DashboardFilters, *, view: str) -> 
     rows = [dict(zip(columns, row)) for row in cursor.fetchall() or []]
     payload = build_paginated_response(filters, rows, int(count or 0), round_money(amount))
     payload["vista"] = view
-    payload["meta"] = {
-        "alcance": "Todas las OC abiertas" if view == "ordenes_abiertas" else "Período seleccionado",
-    }
+    payload.setdefault("meta", {})["alcance"] = (
+        "Todas las OC abiertas" if view == "ordenes_abiertas" else "Período seleccionado"
+    )
     return payload

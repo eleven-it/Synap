@@ -340,6 +340,8 @@
     const total = data.total_registros ?? 0;
     let sumTxt = `${total} registro(s)`;
     if (data.total_monto != null) sumTxt += ` · Total ${fmtMoney.format(data.total_monto)}`;
+    if (data.meta?.alcance) sumTxt += ` · ${data.meta.alcance}`;
+    if (data.meta?.notas_semanticas?.length) sumTxt += ` · ${data.meta.notas_semanticas.join(" ")}`;
     const summaryEl = el("cc-detail-summary");
     if (summaryEl) summaryEl.textContent = sumTxt;
 
@@ -1211,7 +1213,14 @@
         ];
       },
       afterMetrics: (a) => renderFinancieroV45Charts(a),
-      details: [],
+      details: [
+        { label: "Cobranzas", urlKey: "financiero_v45", vista: "cobranzas" },
+        { label: "Pagos", urlKey: "financiero_v45", vista: "pagos" },
+        { label: "Cartera a cobrar", urlKey: "financiero_v45", vista: "cartera_cobrar" },
+        { label: "Cartera a pagar", urlKey: "financiero_v45", vista: "cartera_pagar" },
+        { label: "Vencido a cobrar", urlKey: "financiero_v45", vista: "vencido_cobrar" },
+        { label: "Vencido a pagar", urlKey: "financiero_v45", vista: "vencido_pagar" },
+      ],
     },
     {
       key: "gestion_contable",
@@ -2550,7 +2559,7 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
-    if (["libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45", "compras_v45", "preparacion_v45"].includes(urlKey) && vista) {
+    if (["libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45", "compras_v45", "preparacion_v45", "financiero_v45"].includes(urlKey) && vista) {
       genericV45Detail = { base, vista, offset: 0 };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");

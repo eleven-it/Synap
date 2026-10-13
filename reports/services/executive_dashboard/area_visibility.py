@@ -114,6 +114,7 @@ DETAIL_KEY_TO_AREA: Dict[str, str] = {
     "stock_v45": "inventario",
     "preparacion_v45": "preparacion_pedidos",
     "compras_v45": "compras",
+    "financiero_v45": "financiero",
     "libros_v45": "libros_contables",
     "gastos_v45": "gastos",
     "contable_v45": "gestion_contable",

@@ -47,6 +47,7 @@ from .executive_dashboard_api_views import (
     ExecutiveDashboardPreparacionV45APIView,
     ExecutiveDashboardPreparacionV45DetailAPIView,
     ExecutiveDashboardFinancieroV45APIView,
+    ExecutiveDashboardFinancieroV45DetailAPIView,
     ExecutiveDashboardGestionContableV45APIView,
     ExecutiveDashboardGestionContableV45DetailAPIView,
     ExecutiveDashboardImpositivoV45APIView,
@@ -211,6 +212,11 @@ urlpatterns = [
         "executive-dashboard/financiero/v45/",
         ExecutiveDashboardFinancieroV45APIView.as_view(),
         name="reports-executive-dashboard-financiero-v45",
+    ),
+    path(
+        "executive-dashboard/financiero/v45/detalle/",
+        ExecutiveDashboardFinancieroV45DetailAPIView.as_view(),
+        name="reports-executive-dashboard-financiero-v45-detail",
     ),
     path(
         "executive-dashboard/gestion-contable/v45/",
