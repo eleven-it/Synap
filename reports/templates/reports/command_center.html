@@ -98,6 +98,23 @@
     max-width: 100%;
     min-width: 0;
   }
+  .cc-detail-overlay { z-index: 70; }
+  .cc-detail-surface, #cc-v45-visual { color: #0f172a; }
+  .dark .cc-detail-surface, .dark #cc-v45-visual { color: #e2e8f0; }
+  #cc-v45-detail-controls .cc-v45-select,
+  #cc-v45-detail-controls .cc-v45-select option,
+  #cc-v45-detail-controls .cc-v45-select optgroup {
+    color: #0f172a !important;
+    background-color: #fff !important;
+    color-scheme: light;
+  }
+  .dark #cc-v45-detail-controls .cc-v45-select,
+  .dark #cc-v45-detail-controls .cc-v45-select option,
+  .dark #cc-v45-detail-controls .cc-v45-select optgroup {
+    color: #f8fafc !important;
+    background-color: #1e293b !important;
+    color-scheme: dark;
+  }
   .cc-detail-scroll {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
@@ -124,13 +141,13 @@
   .cc-summary-legend { margin: .4rem .15rem .55rem; color: #475569; font-size: .65rem; text-align: center; }
   .cc-summary-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
   .cc-summary-chart { min-width: 0; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: .9rem; background: #fff; padding: 1rem; box-shadow: 0 3px 12px rgba(15, 23, 42, .04); }
-  .cc-summary-chart svg { display: block; width: 100%; height: auto; min-height: 11rem; }
+  .cc-summary-chart svg { display: block; width: 100%; max-width: 720px; height: auto; min-height: 11rem; margin-inline: auto; }
   .cc-summary-chart-title { margin-bottom: .5rem; color: #0f172a; font-size: .82rem; font-weight: 700; }
   .cc-chart-grid { stroke: #e2e8f0; stroke-width: .75; }
   .cc-chart-zero { stroke: #334155; stroke-width: 1.1; }
   .cc-chart-axis { fill: #334155; font-size: 9px; }
   .cc-summary-readout { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem 1rem; padding: .8rem .3rem; font-size: .83rem; font-weight: 600; }
-  .dark .cc-summary-kpi, .dark .cc-summary-chart { background: #0f172a; border-color: #334155; box-shadow: none; }
+  .dark .cc-summary-kpi, .dark .cc-summary-chart { background: #0f172a; border-color: #334155; box-shadow: none; color: #e2e8f0; }
   .dark .cc-summary-kpi-title { color: #cbd5e1; }
   .dark .cc-summary-kpi-value { color: #f8fafc; }
   .dark .cc-summary-kpi-note { color: #cbd5e1; }
@@ -386,11 +403,11 @@
 </div>
 
 <div id="cc-detail-modal"
-     class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4"
+     class="cc-detail-overlay fixed inset-0 hidden bg-slate-900/60 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4"
      role="dialog"
      aria-modal="true"
      aria-labelledby="cc-detail-title">
-  <div class="flex h-[100dvh] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden border-0 bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[min(94vh,100dvh)] sm:max-w-[96vw] sm:rounded-2xl sm:border sm:border-slate-200 dark:sm:border-slate-700">
+  <div class="cc-detail-surface flex h-[100dvh] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden border-0 bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[min(94vh,100dvh)] sm:max-w-[96vw] sm:rounded-2xl sm:border sm:border-slate-200 dark:sm:border-slate-700">
     <div class="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900 sm:px-4">
       <h2 id="cc-detail-title" class="min-w-0 flex-1 truncate text-base font-bold text-slate-900 dark:text-white">Detalle</h2>
       <button type="button" id="cc-detail-close" class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Cerrar">
@@ -426,19 +443,19 @@
       <label class="sr-only" for="cc-v45-search">Buscar comprobante, cliente o artículo</label>
       <input id="cc-v45-search" type="search" maxlength="120" placeholder="Buscar en el detalle…" class="min-h-10 min-w-[12rem] flex-1 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
       <label class="sr-only" for="cc-v45-view">Vista del indicador</label>
-      <select id="cc-v45-view" class="hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+      <select id="cc-v45-view" class="cc-v45-select hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
         <option value="ranking">Resumen y gráfico</option><option value="documentos">Documentos</option><option value="comparacion">Análisis por períodos</option>
       </select>
       <label class="sr-only" for="cc-v45-group">Ranking por</label>
-      <select id="cc-v45-group" class="hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+      <select id="cc-v45-group" class="cc-v45-select hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
         <option value="entidad">Cliente / entidad</option><option value="vendedor">Vendedor</option><option value="marca">Marca</option>
       </select>
       <label class="sr-only" for="cc-v45-chart-mode">Tipo de gráfico</label>
-      <select id="cc-v45-chart-mode" class="hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+      <select id="cc-v45-chart-mode" class="cc-v45-select hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
         <option value="auto">Gráfico automático</option><option value="barras">Barras</option><option value="torta">Torta</option><option value="linea">Línea</option><option value="area">Área</option>
       </select>
       <label class="sr-only" for="cc-v45-order">Orden</label>
-      <select id="cc-v45-order" class="min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+      <select id="cc-v45-order" class="cc-v45-select min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
         <option value="fecha_desc">Fecha ↓</option><option value="fecha_asc">Fecha ↑</option>
         <option value="cliente">Cliente/artículo</option><option value="importe_desc">Importe ↓</option><option value="importe_asc">Importe ↑</option>
       </select>
