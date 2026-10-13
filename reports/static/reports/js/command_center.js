@@ -700,13 +700,10 @@
     delete window.__ccPendingFilterIds;
   }
 
-  function applyPeriodFromStorage() {
+  function applyScopeFromStorage() {
     const saved = loadPersistedFilters();
     if (!saved) return;
     // La selección territorial se conserva; cada visita nueva empieza en el mes actual.
-    if (saved.comparacion_inicio && el("cc-comparacion-inicio")) el("cc-comparacion-inicio").value = saved.comparacion_inicio;
-    if (saved.comparacion_fin && el("cc-comparacion-fin")) el("cc-comparacion-fin").value = saved.comparacion_fin;
-    if (saved.comparacion_inicio || saved.comparacion_fin) el("cc-custom-comparison")?.setAttribute("open", "");
     if (saved.sucursales?.length || saved.puntos_venta?.length || saved.depositos?.length) {
       window.__ccPendingFilterIds = {
         sucursales: saved.sucursales || [],
@@ -2769,7 +2766,7 @@
     const fromUrl = applyPeriodFromUrl();
     const saved = loadPersistedFilters();
     if (!fromUrl && saved) {
-      applyPeriodFromStorage();
+      applyScopeFromStorage();
     } else if (saved && (saved.sucursales?.length || saved.puntos_venta?.length || saved.depositos?.length)) {
       if (!window.__ccPendingFilterIds) {
         window.__ccPendingFilterIds = {
