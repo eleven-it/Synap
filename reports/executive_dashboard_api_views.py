@@ -47,6 +47,7 @@ from .services.executive_dashboard.financiero_v45 import fetch_financiero_v45
 from .services.executive_dashboard.contable_v45 import fetch_contable_v45
 from .services.executive_dashboard.contable_v45_detail import CONTABLE_V45_VIEWS, list_contable_v45_detail
 from .services.executive_dashboard.impositivo_v45 import fetch_impositivo_v45
+from .services.executive_dashboard.impositivo_v45_detail import IMPOSITIVO_V45_VIEWS, list_impositivo_v45_detail
 from .services.executive_dashboard.libros_v45 import fetch_libros_v45
 from .services.executive_dashboard.libros_v45_detail import LIBROS_V45_VIEWS, list_libros_v45_detail
 from .services.executive_dashboard.logistica_v45 import fetch_logistica_v45
@@ -573,6 +574,31 @@ class ExecutiveDashboardImpositivoV45APIView(ExecutiveDashboardMixin, APIView):
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
                 payload = fetch_impositivo_v45(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response(payload)
+
+
+class ExecutiveDashboardImpositivoV45DetailAPIView(ExecutiveDashboardMixin, APIView):
+    """Libros IVA y documentos fiscales con el alcance del tablero."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("impositivo")
+        if disabled:
+            return disabled
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        view = request.query_params.get("vista", "")
+        if view not in IMPOSITIVO_V45_VIEWS:
+            return Response({"detail": "Vista fiscal inválida."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_impositivo_v45_detail(cursor, filters, view=view)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:

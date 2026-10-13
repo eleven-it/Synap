@@ -1251,7 +1251,14 @@
         ];
       },
       afterMetrics: (a) => renderImpositivoV45Chart(a),
-      details: [],
+      details: [
+        { label: "Libro IVA ventas", urlKey: "impositivo_v45", vista: "ventas" },
+        { label: "Libro IVA compras", urlKey: "impositivo_v45", vista: "compras" },
+        { label: "Percepciones", urlKey: "impositivo_v45", vista: "percepciones" },
+        { label: "Retenciones", urlKey: "impositivo_v45", vista: "retenciones" },
+        { label: "Determinaciones", urlKey: "impositivo_v45", vista: "determinados" },
+        { label: "Pagos fiscales", urlKey: "impositivo_v45", vista: "pagados" },
+      ],
     },
     {
       key: "libros_contables",
@@ -2466,6 +2473,13 @@
     try {
       const data = await fetchJson(`${state.base}?${buildQuery(extra)}`);
       if (genericV45Detail !== state || state.offset !== Number(extra.offset)) return;
+      if (data.disponible === false) {
+        renderGenericDetailTable({ filas: [], total_registros: 0 });
+        el("cc-detail-summary").textContent = data.motivo === "sin_alcance_territorial"
+          ? "Este origen fiscal no tiene sucursal ni punto de venta. Quitá el filtro para consultar sus documentos generales."
+          : "Detalle no disponible para esta empresa.";
+        return;
+      }
       genericV45DetailData = data;
       renderGenericDetailTable(data);
       const pagination = el("cc-v45-pagination");
@@ -2516,7 +2530,7 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
-    if (["libros_v45", "gastos_v45", "contable_v45"].includes(urlKey) && vista) {
+    if (["libros_v45", "gastos_v45", "contable_v45", "impositivo_v45"].includes(urlKey) && vista) {
       genericV45Detail = { base, vista, offset: 0 };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");

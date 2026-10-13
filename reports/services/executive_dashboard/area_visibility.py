@@ -115,6 +115,7 @@ DETAIL_KEY_TO_AREA: Dict[str, str] = {
     "libros_v45": "libros_contables",
     "gastos_v45": "gastos",
     "contable_v45": "gestion_contable",
+    "impositivo_v45": "impositivo",
     "backorder": "cruzados",
     "cobros_detalle": "ventas_cobros",
     "movimientos_caja": "tesoreria",
