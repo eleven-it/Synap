@@ -1329,7 +1329,15 @@
         ];
       },
       afterMetrics: (a) => renderGastosV45Composition(a),
-      details: [],
+      details: [
+        { label: "Documentos", urlKey: "gastos_v45", vista: "documentos" },
+        { label: "Por grupo", urlKey: "gastos_v45", vista: "grupo" },
+        { label: "Por gasto", urlKey: "gastos_v45", vista: "gasto" },
+        { label: "Por fuente", urlKey: "gastos_v45", vista: "fuente" },
+        { label: "Por sucursal", urlKey: "gastos_v45", vista: "sucursal" },
+        { label: "Por día", urlKey: "gastos_v45", vista: "dia" },
+        { label: "Por mes", urlKey: "gastos_v45", vista: "mes" },
+      ],
     },
     {
       key: "manufactura",
@@ -2503,7 +2511,7 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
-    if (urlKey === "libros_v45" && vista) {
+    if (["libros_v45", "gastos_v45"].includes(urlKey) && vista) {
       genericV45Detail = { base, vista, offset: 0 };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");

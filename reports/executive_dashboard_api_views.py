@@ -50,6 +50,7 @@ from .services.executive_dashboard.libros_v45 import fetch_libros_v45
 from .services.executive_dashboard.libros_v45_detail import LIBROS_V45_VIEWS, list_libros_v45_detail
 from .services.executive_dashboard.logistica_v45 import fetch_logistica_v45
 from .services.executive_dashboard.gastos_v45 import fetch_gastos_v45
+from .services.executive_dashboard.gastos_v45_detail import GASTOS_V45_VIEWS, list_gastos_v45_detail
 from .services.executive_dashboard.banco_metrics import fetch_tesoreria_banco_resumen
 from .services.executive_dashboard.tesoreria_metrics import (
     fetch_tesoreria_resumen,
@@ -651,6 +652,38 @@ class ExecutiveDashboardGastosV45APIView(ExecutiveDashboardMixin, APIView):
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
                 payload = fetch_gastos_v45(cursor, filters, fuente=source)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response(payload)
+
+
+class ExecutiveDashboardGastosV45DetailAPIView(ExecutiveDashboardMixin, APIView):
+    """Documentos y ranking de gastos, con el permiso y alcance del tablero."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("gastos")
+        if disabled:
+            return disabled
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        view = request.query_params.get("vista", "")
+        if view not in GASTOS_V45_VIEWS:
+            return Response({"detail": "Vista de gastos inválida."}, status=status.HTTP_400_BAD_REQUEST)
+        raw = request.query_params.get("fuente", "0")
+        try:
+            source = int(raw)
+            if source not in (0, 1, 2, 3):
+                raise ValueError
+        except ValueError:
+            return Response({"detail": "Fuente de gastos inválida."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_gastos_v45_detail(cursor, filters, fuente=source, view=view)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:
