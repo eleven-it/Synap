@@ -6,7 +6,7 @@
 {% block content %}
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
-<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=5">
 
 <section class="pm-matrix-viewport pm-matrix-viewport--sin-desc flex min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible {% if pm_embed %}h-full{% else %}h-[calc(100dvh-4.5rem)]{% endif %}"
          x-data="pedidoMasivoApp()"
@@ -890,12 +890,6 @@
                  x-ref="pmArtDropdownMob"
                  class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800"
                  role="listbox">
-              <div x-show="modoSimple && cantidadSeleccionados > 0" x-cloak class="pm-simple-search-review">
-                <button type="button" @mousedown.stop.prevent="null" @click.stop.prevent="abrirSeleccionSimple()">
-                  <span class="material-icons" aria-hidden="true">playlist_add_check</span>
-                  <span x-text="'Revisar ' + cantidadSeleccionados + ' seleccionados'"></span>
-                </button>
-              </div>
               <ul class="pm-art-dropdown-list max-h-56 overflow-y-auto overscroll-contain py-1">
                 <template x-for="(a, i) in articulosBusqueda" :key="'mob-' + a.id_articulo">
                   <li role="option"
@@ -930,6 +924,12 @@
                    </li>
                 </template>
               </ul>
+              <div x-show="modoSimple && cantidadSeleccionados > 0" x-cloak class="pm-simple-search-review">
+                <button type="button" @mousedown.stop.prevent="null" @click.stop.prevent="abrirSeleccionSimple()">
+                  <span class="material-icons" aria-hidden="true">playlist_add_check</span>
+                  <span x-text="'Revisar ' + cantidadSeleccionados + ' seleccionados'"></span>
+                </button>
+              </div>
               <div x-show="!modoSimple && cantidadSeleccionados > 0" x-cloak
                    class="pm-art-dropdown-footer">
                 <button type="button"
