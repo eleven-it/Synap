@@ -342,6 +342,10 @@
 
   function renderGenericDetailTable(data) {
     resetDetailPanelsLayout();
+    const tableWrap = el("cc-detail-table-wrap");
+    const cards = el("cc-detail-cards");
+    if (tableWrap) tableWrap.className = DETAIL_TABLE_WRAP_DESKTOP_CLASS;
+    if (cards) cards.className = DETAIL_CARDS_MOBILE_CLASS;
     const total = data.total_registros ?? 0;
     let sumTxt = `${total} registro(s)`;
     if (data.total_monto != null) sumTxt += ` · Total ${fmtMoney.format(data.total_monto)}`;
@@ -356,11 +360,32 @@
     if (!tbody || !thead) return;
 
     if (!filas.length) {
+      if (cards) cards.innerHTML = '<p class="py-4 text-sm text-slate-500">Sin registros en el período.</p>';
+      thead.innerHTML = "";
       tbody.innerHTML =
         '<tr><td class="py-4 text-slate-500" colspan="99">Sin registros en el período.</td></tr>';
       return;
     }
     const keys = Object.keys(filas[0]);
+    const cellText = (key, value) => {
+      if (value == null || value === "") return "—";
+      if (typeof value === "number" && (key.includes("monto") || key.includes("importe") || key === "subtotal_desc")) {
+        return fmtMoney.format(value);
+      }
+      return String(value);
+    };
+    if (cards) {
+      cards.innerHTML = filas.map((row) => `
+        <article class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800" role="listitem">
+          <dl class="grid grid-cols-2 gap-x-3 gap-y-2">
+            ${keys.map((key) => `
+              <div class="min-w-0 ${/nombre|descripcion|articulo|cliente/i.test(key) ? "col-span-2" : ""}">
+                <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">${escHtml(key.replace(/_/g, " "))}</dt>
+                <dd class="break-words text-sm font-medium tabular-nums text-slate-800 dark:text-slate-100">${escHtml(cellText(key, row[key]))}</dd>
+              </div>`).join("")}
+          </dl>
+        </article>`).join("");
+    }
     thead.innerHTML =
       "<tr>" +
       keys
@@ -376,18 +401,12 @@
           '<tr class="border-b border-slate-100 dark:border-slate-800">' +
           keys
             .map((k) => {
-              let v = row[k];
-              if (
-                typeof v === "number" &&
-                (k.includes("monto") || k.includes("importe") || k === "subtotal_desc")
-              ) {
-                v = fmtMoney.format(v);
-              }
+              const v = cellText(k, row[k]);
               const wrap = /nombre|descripcion|articulo|cliente/i.test(k);
               const cls = wrap
                 ? "max-w-[12rem] break-words px-2 py-1.5 text-sm"
                 : "whitespace-nowrap px-2 py-1.5 text-sm tabular-nums";
-              return `<td class="${cls}">${escHtml(v ?? "")}</td>`;
+              return `<td class="${cls}">${escHtml(v)}</td>`;
             })
             .join("") +
           "</tr>"
@@ -887,6 +906,13 @@
     return fmtMoney.format(value);
   }
 
+  function globalKpiValue(area, key, kind = "money", fallbackKey = "") {
+    if (!area || area.disponible === false) return "No disponible";
+    const value = area.kpis?.[key] ?? (fallbackKey ? area[fallbackKey] : null);
+    if (value == null) return "No disponible";
+    return kind === "count" ? fmtNum.format(value) : fmtMoney.format(value);
+  }
+
   function stripAreaMeta(payload) {
     if (!payload || typeof payload !== "object") return payload || {};
     const out = { ...payload };
@@ -930,54 +956,52 @@
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
-    const ventasFirstVal = v.disponible === false
-      ? "No disponible"
-      : fmtMoney.format(v.kpis?.ventas_netas ?? v.ventas_netas ?? 0);
+    const ventasFirstVal = globalKpiValue(v, "ventas_netas", "money", "ventas_netas");
 
     const cards = [];
     if (isAreaVisible("resumen_general")) {
-      cards.push(kpiCard("Ventas del período", resumen.disponible === false ? "No disponible" : fmtMoney.format(resumen.kpis?.ventas ?? 0), "sky"));
-      cards.push(kpiCard("Pedidos", resumen.disponible === false ? "No disponible" : fmtNum.format(resumen.kpis?.pedidos ?? 0), "indigo"));
+      cards.push(kpiCard("Ventas del período", globalKpiValue(resumen, "ventas"), "sky"));
+      cards.push(kpiCard("Pedidos", globalKpiValue(resumen, "pedidos", "count"), "indigo"));
     }
     if (isAreaVisible("preparacion_pedidos")) {
-      cards.push(kpiCard("Pedidos ingresados", preparacion.disponible === false ? "No disponible" : fmtNum.format(preparacion.kpis?.pedidos_ingresados ?? 0), "sky"));
-      cards.push(kpiCard("Pedidos pendientes", preparacion.disponible === false ? "No disponible" : fmtNum.format(preparacion.kpis?.pendientes ?? 0), "amber"));
+      cards.push(kpiCard("Pedidos ingresados", globalKpiValue(preparacion, "pedidos_ingresados", "count"), "sky"));
+      cards.push(kpiCard("Pedidos pendientes", globalKpiValue(preparacion, "pendientes", "count"), "amber"));
     }
     if (isAreaVisible("ventas")) {
       cards.push(kpiCard(ventasFirstLabel, ventasFirstVal, "sky"));
-      cards.push(kpiCard("Facturas", v.disponible === false ? "No disponible" : fmtNum.format(v.kpis?.facturas ?? 0), "indigo"));
+      cards.push(kpiCard("Facturas", globalKpiValue(v, "facturas", "count"), "indigo"));
     }
     if (isAreaVisible("inventario")) {
       cards.push(kpiCard("Valor stock", stockValueLabel(inv), "emerald"));
     }
     if (isAreaVisible("compras")) {
       cards.push(
-        kpiCard("Compras netas", comp.disponible === false ? "No disponible" : fmtMoney.format(comp.kpis?.compras_netas ?? 0), "amber")
+        kpiCard("Compras netas", globalKpiValue(comp, "compras_netas"), "amber")
       );
     }
     if (isAreaVisible("financiero")) {
-      cards.push(kpiCard("Flujo neto", fin.disponible === false ? "No disponible" : fmtMoney.format(fin.kpis?.flujo_neto ?? 0), "teal"));
-      cards.push(kpiCard("Vencido a cobrar", fin.disponible === false ? "No disponible" : fmtMoney.format(fin.kpis?.vencido_cobrar ?? 0), "amber"));
+      cards.push(kpiCard("Flujo neto", globalKpiValue(fin, "flujo_neto"), "teal"));
+      cards.push(kpiCard("Vencido a cobrar", globalKpiValue(fin, "vencido_cobrar"), "amber"));
     }
     if (isAreaVisible("gestion_contable")) {
-      cards.push(kpiCard("Asientos", account.disponible === false ? "No disponible" : fmtNum.format(account.kpis?.asientos ?? 0), "indigo"));
-      cards.push(kpiCard("Diferencia Debe/Haber", account.disponible === false ? "No disponible" : fmtMoney.format(account.kpis?.diferencia ?? 0), "emerald"));
+      cards.push(kpiCard("Asientos", globalKpiValue(account, "asientos", "count"), "indigo"));
+      cards.push(kpiCard("Diferencia Debe/Haber", globalKpiValue(account, "diferencia"), "emerald"));
     }
     if (isAreaVisible("impositivo")) {
-      cards.push(kpiCard("Posición IVA", tax.disponible === false ? "No disponible" : fmtMoney.format(tax.kpis?.posicion_iva ?? 0), "amber"));
-      cards.push(kpiCard("IVA débito", tax.disponible === false ? "No disponible" : fmtMoney.format(tax.kpis?.iva_debito ?? 0), "sky"));
+      cards.push(kpiCard("Posición IVA", globalKpiValue(tax, "posicion_iva"), "amber"));
+      cards.push(kpiCard("IVA débito", globalKpiValue(tax, "iva_debito"), "sky"));
     }
     if (isAreaVisible("libros_contables")) {
-      cards.push(kpiCard("Asientos del Diario", books.disponible === false ? "No disponible" : fmtNum.format(books.kpis?.asientos ?? 0), "indigo"));
-      cards.push(kpiCard("Resultado del período", books.disponible === false ? "No disponible" : fmtMoney.format(books.kpis?.resultado_periodo ?? 0), "purple"));
+      cards.push(kpiCard("Asientos del Diario", globalKpiValue(books, "asientos", "count"), "indigo"));
+      cards.push(kpiCard("Resultado del período", globalKpiValue(books, "resultado_periodo"), "purple"));
     }
     if (isAreaVisible("logistica")) {
-      cards.push(kpiCard("Hojas de ruta", routes.disponible === false ? "No disponible" : fmtNum.format(routes.kpis?.hojas_ruta ?? 0), "sky"));
-      cards.push(kpiCard("Facturación en rutas", routes.disponible === false ? "No disponible" : fmtMoney.format(routes.kpis?.facturacion_rutas ?? 0), "emerald"));
+      cards.push(kpiCard("Hojas de ruta", globalKpiValue(routes, "hojas_ruta", "count"), "sky"));
+      cards.push(kpiCard("Facturación en rutas", globalKpiValue(routes, "facturacion_rutas"), "emerald"));
     }
     if (isAreaVisible("gastos")) {
-      cards.push(kpiCard("Total de gastos", expenses.disponible === false ? "No disponible" : fmtMoney.format(expenses.kpis?.total_gastos ?? 0), "rose"));
-      cards.push(kpiCard("Documentos de gasto", expenses.disponible === false ? "No disponible" : fmtNum.format(expenses.kpis?.documentos ?? 0), "indigo"));
+      cards.push(kpiCard("Total de gastos", globalKpiValue(expenses, "total_gastos"), "rose"));
+      cards.push(kpiCard("Documentos de gasto", globalKpiValue(expenses, "documentos", "count"), "indigo"));
     }
     if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
@@ -2082,11 +2106,9 @@
           </div>
         </header>
         <div class="flex-1 px-4 py-2">${body}</div>
-        <footer class="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap dark:border-slate-700">
-          ${detailBtns}
-          ${cashFlowBtn}
-          ${mprBtn}
-        </footer>
+        ${detailBtns || cashFlowBtn || mprBtn ? `<footer class="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap dark:border-slate-700">
+          ${detailBtns}${cashFlowBtn}${mprBtn}
+        </footer>` : ""}
       </article>`;
   }
 

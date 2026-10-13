@@ -1,6 +1,6 @@
 # Command Center: auditoría de la línea base V45
 
-Estado: investigación y preparación en `codex/command-center-v45`. Ninguno de los once tableros de administraNET se considera entregado por esta auditoría.
+Estado: implementación y validación parcial en `codex/command-center-v45`. Los once tableros están en la rama local; ninguno se considera desplegado en Best Sox por esta auditoría.
 
 ## Fuentes y trazabilidad
 
@@ -20,13 +20,13 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 
 | Tablero administraNET | KPI históricos | Permiso heredado | Estado en Synap `Desarrollo` |
 |---|---:|---|---|
-| Resumen general | 16 | `tablero_resumen_general` | 16 KPI, comparación automática o personalizada, dos gráficos y dieciséis aperturas conciliadas; falta validación Django/web. |
+| Resumen general | 16 | `tablero_resumen_general` | 16 KPI, comparación automática o personalizada, dos gráficos y dieciséis aperturas conciliadas; pasó pruebas Django aisladas, falta prueba web integrada. |
 | Comercial — Ventas | 16 | `tablero_comercial_ventas` | Implementación V45 en rama de trabajo: KPI, comparación, gráfico y detalles. Validación Django y revisión del PR pendientes. |
-| Comercial — Preparación de pedidos | 16 | `tablero_comercial_prep_pedidos` | 16 KPI, comparación, gráficos y nueve aperturas de pedidos por estado/vínculo; faltan prueba Django/web y conciliación visual con ERP. |
-| Abastecimiento — Compras | 14 | `tablero_abastecimiento_compras` | 14 KPI, evolución de compras/OC y cinco aperturas documentales en rama de trabajo; faltan validación Django/web y alcance de sucursal para usuarios restringidos. |
-| Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | Resumen y detalle paginado de 14 KPI, tres presentaciones, comparación de movimientos y gráficos en rama de trabajo. Falta prueba Django, revisión visual móvil y revisión del PR. |
-| Análisis financiero | 15 | `tablero_gestion_financiera` | 15 KPI, aging, flujo, comparación y seis aperturas de movimientos/cartera; faltan validación Django/web y contraste visual con ERP. |
-| Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI, serie Debe/Haber, comparación de períodos y aperturas de asientos, impuestos, períodos y ejercicios; falta validación Django/web. |
+| Comercial — Preparación de pedidos | 16 | `tablero_comercial_prep_pedidos` | 16 KPI, comparación, gráficos y nueve aperturas de pedidos por estado/vínculo; falta prueba web y conciliación visual con ERP. |
+| Abastecimiento — Compras | 14 | `tablero_abastecimiento_compras` | 14 KPI, evolución de compras/OC y cinco aperturas documentales en rama de trabajo; alcance de sucursal probado, falta prueba web. |
+| Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | Resumen y detalle paginado de 14 KPI, tres presentaciones, comparación de movimientos y gráficos en rama de trabajo. Faltan revisión visual móvil y revisión del PR. |
+| Análisis financiero | 15 | `tablero_gestion_financiera` | 15 KPI, aging, flujo, comparación y seis aperturas de movimientos/cartera; faltan prueba web y contraste visual con ERP. |
+| Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI, serie Debe/Haber, comparación de períodos y aperturas de asientos, impuestos, períodos y ejercicios; pasó pruebas Django aisladas, falta prueba web. |
 | Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI, composición, comparación, series mensuales de IVA/IIBB y siete aperturas documentales, incluida Posición IVA; falta prueba web. |
 | Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI, dos series con comparación, y Diario, Mayor, Balance y Resultados paginados en rama de trabajo; falta prueba web. |
 | Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI, comparación de estados y aperturas de rutas, comprobantes, chofer, unidad y zona; falta contraste con rutas recientes. |
@@ -53,7 +53,7 @@ Período 01–08/10/2026 en el backup Best Sox, importes sin impuestos, todos lo
 
 El resumen de Stock se contrastó en el mismo backup para unidad, display y bulto. En depósito 6, del 01 al 08/10/2026 se registraron 55.803 entradas y 38.467 salidas expresadas en unidades, con valores de costo de $259.911.163,90 y $210.232.913,90. La comparación usa el período inmediatamente anterior de igual duración. Los indicadores de existencias son una foto actual y no se presentan como si fueran históricos. La serie, la distribución por depósito y los catorce detalles se ejecutaron contra MySQL 5.7 aislado. Las sumas de cada detalle coincidieron con su indicador (tolerancia de centavo); los datos de costo requieren permiso en el endpoint de detalle. También se corrigió el mapeo del enlace de detalle de Ventas, que antes no llegaba al frontend.
 
-El PR continúa en borrador: aún falta ejecutar el suite Django integrado, revisar la experiencia móvil y completar los nueve tableros restantes antes de cualquier promoción. No se ha instalado este código en Best Sox.
+El PR continúa en borrador: las 74 pruebas Django focalizadas pasan con configuración aislada, pero falta ejecutar la suite integrada del proyecto y revisar la experiencia móvil en la instalación web antes de cualquier promoción. No se ha instalado este código en Best Sox.
 
 ## Conciliación inicial de Resumen general
 
