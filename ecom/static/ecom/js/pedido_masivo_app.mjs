@@ -577,7 +577,7 @@ function pedidoMasivoCore() {
       this.cerrarBusquedaMovil('pm-cli');
     },
     prepararBusquedaMovil(event) {
-      if (!window.matchMedia('(max-width: 1023px)').matches) return;
+      if (!this.modoSimple || !window.matchMedia('(max-width: 1023px)').matches) return;
       this.busquedaMovilActiva = true;
       this._mobileSearchInput = event.target;
       const ajustar = () => {
@@ -586,34 +586,48 @@ function pedidoMasivoCore() {
         const viewport = window.visualViewport;
         const visibleTop = viewport ? viewport.offsetTop : 0;
         const visibleBottom = visibleTop + (viewport ? viewport.height : window.innerHeight);
-        const topDeseado = visibleTop + 84;
         const rect = input.getBoundingClientRect();
-        if (rect.top > topDeseado + 24) {
-          input.scrollIntoView({ block: 'start', behavior: 'auto' });
-          window.scrollBy(0, -84);
-        } else if (rect.top < topDeseado - 24) {
-          window.scrollBy(0, rect.top - topDeseado);
-        }
-        const actual = input.getBoundingClientRect();
-        const espacio = Math.max(72, Math.floor(visibleBottom - actual.bottom - 12));
-        this.$el.style.setProperty('--pm-search-space', `${espacio}px`);
+        const esArticulo = input.id === 'pm-art-mob';
+        // Artículos abre hacia arriba; clientes y sucursales conservan la lista abajo.
+        const topDeseado = esArticulo
+          ? Math.max(visibleTop + 96, visibleBottom - rect.height - 16)
+          : visibleTop + 120;
+        const desplazamiento = rect.top - topDeseado;
+        if (Math.abs(desplazamiento) > 16) window.scrollBy(0, desplazamiento);
+        requestAnimationFrame(() => {
+          if (this._mobileSearchInput !== input) return;
+          const actual = input.getBoundingClientRect();
+          const contenedor = esArticulo
+            ? input.closest('.pm-art-search-mobile')?.getBoundingClientRect()
+            : null;
+          const espacio = esArticulo
+            ? (contenedor?.top ?? actual.top) - visibleTop - 8
+            : visibleBottom - actual.bottom - 12;
+          this.$el.style.setProperty('--pm-search-space', `${Math.max(56, Math.floor(espacio))}px`);
+        });
       };
+      this._mobileSearchAdjust = ajustar;
       if (!this._mobileSearchResize) {
-        this._mobileSearchResize = () => requestAnimationFrame(ajustar);
+        this._mobileSearchResize = () => {
+          clearTimeout(this._mobileSearchTimer);
+          this._mobileSearchTimer = setTimeout(() => {
+            requestAnimationFrame(() => this._mobileSearchAdjust?.());
+          }, 180);
+        };
         window.visualViewport?.addEventListener('resize', this._mobileSearchResize);
-        window.visualViewport?.addEventListener('scroll', this._mobileSearchResize);
       }
-      requestAnimationFrame(ajustar);
-      setTimeout(ajustar, 320);
+      clearTimeout(this._mobileSearchTimer);
+      this._mobileSearchTimer = setTimeout(() => requestAnimationFrame(ajustar), 300);
     },
     cerrarBusquedaMovil(idInput) {
       if (this._mobileSearchInput?.id !== idInput) return;
       this.busquedaMovilActiva = false;
       this._mobileSearchInput = null;
+      this._mobileSearchAdjust = null;
+      clearTimeout(this._mobileSearchTimer);
       this.$el.style.removeProperty('--pm-search-space');
       if (this._mobileSearchResize) {
         window.visualViewport?.removeEventListener('resize', this._mobileSearchResize);
-        window.visualViewport?.removeEventListener('scroll', this._mobileSearchResize);
         this._mobileSearchResize = null;
       }
     },

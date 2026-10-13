@@ -6,7 +6,7 @@
 {% block content %}
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
-<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=4">
 
 <section class="pm-matrix-viewport pm-matrix-viewport--sin-desc flex min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible {% if pm_embed %}h-full{% else %}h-[calc(100dvh-4.5rem)]{% endif %}"
          x-data="pedidoMasivoApp()"
@@ -875,7 +875,7 @@
                      @keydown.enter.prevent="elegirResaltadoArt()"
                      @keydown.space.prevent="onSpaceArt()"
                      @keydown.escape="cerrarPanelArt()"
-                     placeholder="Buscar artículo… (↓ todos)"
+                     :placeholder="modoSimple ? 'Buscar artículo… (↑ todos)' : 'Buscar artículo… (↓ todos)'"
                      class="pm-input-dense min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-sky-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800"/>
               <button type="button"
                       @mousedown.prevent="listarTodosArticulos()"
@@ -883,7 +883,7 @@
                       class="pm-touch-target inline-flex shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
                       title="Ver todos los artículos"
                       aria-label="Ver todos los artículos disponibles">
-                <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
+                <span class="material-icons text-base leading-none" aria-hidden="true" x-text="modoSimple ? 'expand_less' : 'expand_more'"></span>
               </button>
             </div>
             <div x-show="panelArt && (!modoSimple || vistaCatalogoSimple === 'lista') && (articulosBusqueda.length || cantidadSeleccionados > 0)" x-cloak
@@ -1512,5 +1512,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple49"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple50"></script>
 {% endblock %}
