@@ -1060,7 +1060,7 @@
         const k = a.kpis || {};
         const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
         const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
-        return [
+        const rows = [
           ["Ventas", money("ventas")], ["Compras netas", money("compras_netas")],
           ["Cobranzas", money("cobranzas")], ["Pagos", money("pagos")],
           ["Presupuestos", count("presupuestos")], ["Pedidos", count("pedidos")],
@@ -1074,26 +1074,17 @@
           ["Venta cuenta corriente", money("venta_cuenta_corriente")],
           ["Compra cuenta corriente", money("compra_cuenta_corriente")],
         ];
+        const keys = [
+          "ventas", "compras_netas", "cobranzas", "pagos", "presupuestos",
+          "pedidos", "facturas", "remitos", "vencimiento_cobrar",
+          "vencimiento_pagar", "efectivo_actual", "tarjetas_actual",
+          "cheques_actual", "bancos_actual", "venta_cuenta_corriente",
+          "compra_cuenta_corriente",
+        ];
+        return rows.map((row, index) => [...row, keys[index]]);
       },
       afterMetrics: (a) => renderResumenV45Charts(a),
-      details: [
-        { label: "Ventas", urlKey: "resumen_v45", vista: "ventas" },
-        { label: "Compras netas", urlKey: "resumen_v45", vista: "compras_netas" },
-        { label: "Cobranzas", urlKey: "resumen_v45", vista: "cobranzas" },
-        { label: "Pagos", urlKey: "resumen_v45", vista: "pagos" },
-        { label: "Presupuestos", urlKey: "resumen_v45", vista: "presupuestos" },
-        { label: "Pedidos", urlKey: "resumen_v45", vista: "pedidos" },
-        { label: "Facturas", urlKey: "resumen_v45", vista: "facturas" },
-        { label: "Remitos", urlKey: "resumen_v45", vista: "remitos" },
-        { label: "Vencimientos a cobrar", urlKey: "resumen_v45", vista: "vencimiento_cobrar" },
-        { label: "Vencimientos a pagar", urlKey: "resumen_v45", vista: "vencimiento_pagar" },
-        { label: "Efectivo actual", urlKey: "resumen_v45", vista: "efectivo_actual" },
-        { label: "Tarjetas actual", urlKey: "resumen_v45", vista: "tarjetas_actual" },
-        { label: "Cheques actual", urlKey: "resumen_v45", vista: "cheques_actual" },
-        { label: "Bancos actual", urlKey: "resumen_v45", vista: "bancos_actual" },
-        { label: "Venta cuenta corriente", urlKey: "resumen_v45", vista: "venta_cuenta_corriente" },
-        { label: "Compra cuenta corriente", urlKey: "resumen_v45", vista: "compra_cuenta_corriente" },
-      ],
+      details: [],
     },
     {
       key: "ventas",
@@ -2048,7 +2039,7 @@
           ([k, val, kpi]) => `
         <div class="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0 dark:border-slate-800">
           <span class="min-w-0 shrink text-sm text-slate-500 dark:text-slate-400">${k}
-            ${kpi && val !== "Sin permiso de costos" ? `<button type="button" class="cc-v45-kpi-detail ml-1 align-middle text-sky-600 dark:text-sky-300" data-area="${def.key}" data-kpi="${kpi}" data-title="${escHtml(k)}" aria-label="Ver detalle de ${escHtml(k)}"><span class="material-icons text-sm" aria-hidden="true">open_in_new</span></button>` : ""}
+            ${kpi && !["Sin permiso de costos", "No disponible", "N/D"].includes(val) ? `<button type="button" class="cc-v45-kpi-detail ml-1 align-middle text-sky-600 dark:text-sky-300" data-area="${def.key}" data-kpi="${kpi}" data-title="${escHtml(k)}" aria-label="Ver detalle de ${escHtml(k)}"><span class="material-icons text-sm" aria-hidden="true">open_in_new</span></button>` : ""}
           </span>
           <span class="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-white">${val}</span>
         </div>`
@@ -2148,7 +2139,8 @@
     });
     scope?.querySelectorAll(".cc-v45-kpi-detail").forEach((btn) => {
       btn.addEventListener("click", () => {
-        if (btn.dataset.area === "inventario") openStockDetail(btn.dataset.kpi, btn.dataset.title);
+        if (btn.dataset.area === "resumen_general") openDetail("resumen_v45", btn.dataset.title, btn.dataset.kpi);
+        else if (btn.dataset.area === "inventario") openStockDetail(btn.dataset.kpi, btn.dataset.title);
         else openComercialDetail(btn.dataset.kpi, btn.dataset.title);
       });
     });

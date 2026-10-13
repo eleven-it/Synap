@@ -75,10 +75,11 @@ CC_AREA_PERMISSION_CODES: Dict[str, tuple[str, ...]] = {
 
 # Estos tableros aplican el alcance territorial a sus documentos. Los saldos
 # generales sin origen territorial comprobado se devuelven como no disponibles.
-# Contabilidad y Logística siguen restringidos por sus indicadores globales.
+# Los indicadores sin alcance territorial verificable se muestran N/D.
 CC_TERRITORIAL_READY_AREAS = frozenset({
     "resumen_general", "ventas", "preparacion_pedidos", "inventario",
-    "compras", "financiero", "impositivo", "libros_contables", "gastos",
+    "compras", "financiero", "gestion_contable", "impositivo",
+    "libros_contables", "logistica", "gastos",
 })
 
 

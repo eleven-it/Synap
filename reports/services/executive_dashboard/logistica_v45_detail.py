@@ -97,6 +97,12 @@ def _doc_source(filters, date_expr):
 def list_logistica_v45_detail(cursor, filters: DashboardFilters, *, view: str) -> dict:
     if view not in LOGISTICA_V45_VIEWS:
         raise ValueError("Vista logística inválida")
+    restricted = bool(filters.puntos_venta or filters.sucursales_filtro)
+    if restricted and view in {"por_chofer", "por_unidad", "por_zona"}:
+        return {
+            "disponible": False, "motivo": "sin_alcance_territorial",
+            "filas": [], "vista": view,
+        }
     if not _table_exists(cursor, "logi_hoja_ruta"):
         return {"disponible": False, "motivo": "sin_logistica", "filas": []}
     date_expr = _route_date(cursor)
@@ -115,11 +121,16 @@ def list_logistica_v45_detail(cursor, filters: DashboardFilters, *, view: str) -
         order = "q.rutas DESC,q.nombre"
     elif view == "rutas":
         scope, scope_params = _scope(filters)
+        route_private = (
+            "NULL chofer,NULL unidad,NULL importe"
+            if restricted else
+            "r.id_chofer chofer,r.id_unidad unidad,"
+            "ABS(COALESCE(r.diferencia_rendicion,0)) importe"
+        )
         source = (
             f"SELECT r.id_ruta ruta,{date_expr} fecha,COALESCE(r.desc_ruta,'') descripcion_ruta,"
             "COALESCE(r.estado_ruta,'') estado,COALESCE(r.rendida,'') rendida,"
-            "r.id_chofer chofer,r.id_unidad unidad,"
-            "ABS(COALESCE(r.diferencia_rendicion,0)) importe "
+            f"{route_private} "
             "FROM logi_hoja_ruta r "
             f"WHERE {date_expr} >= %s AND {date_expr} < %s "
             f"AND UPPER(COALESCE(r.anulado,'NO'))<>'SI'{scope}"
@@ -145,7 +156,11 @@ def list_logistica_v45_detail(cursor, filters: DashboardFilters, *, view: str) -
     if filters.busqueda:
         search = " WHERE (" + " OR ".join(f"CAST(q.{field} AS CHAR) LIKE %s" for field in search_fields) + ")"
         params += [f"%{filters.busqueda}%"] * len(search_fields)
-    amount = "COALESCE(SUM(q.importe),0)" if view not in {"por_chofer", "por_unidad", "por_zona"} else "NULL"
+    amount = (
+        "NULL" if view in {"por_chofer", "por_unidad", "por_zona"}
+        or (restricted and view == "rutas")
+        else "COALESCE(SUM(q.importe),0)"
+    )
     cursor.execute(f"SELECT COUNT(*),{amount} FROM ({source}) q{search}", params)
     count, total = cursor.fetchone() or (0, 0)
     cursor.execute(

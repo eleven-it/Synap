@@ -76,16 +76,23 @@ def _route_counts(cursor, filters, date_expr, *, previous=False):
     open_state = "UPPER(TRIM(COALESCE(r.estado_ruta,''))) LIKE 'ABIER%'"
     closed = "UPPER(TRIM(COALESCE(r.estado_ruta,''))) IN ('CERRADO','CERRADA','FINALIZADO','FINALIZADA')"
     rendered = "UPPER(COALESCE(r.rendida,'NO'))='SI'"
-    has_drivers = _table_exists(cursor, "logi_ruta_chofer")
-    driver = "0" if has_drivers else "COUNT(DISTINCT NULLIF(UPPER(TRIM(r.descripcion_chofer)),''))"
+    restricted = bool(filters.puntos_venta or filters.sucursales_filtro)
+    has_drivers = not restricted and _table_exists(cursor, "logi_ruta_chofer")
+    driver = "NULL" if restricted else (
+        "0" if has_drivers else "COUNT(DISTINCT NULLIF(UPPER(TRIM(r.descripcion_chofer)),''))"
+    )
+    units_expr = "NULL" if restricted else "COUNT(DISTINCT r.id_unidad)"
+    difference_expr = (
+        "NULL" if restricted
+        else "COALESCE(SUM(ABS(COALESCE(r.diferencia_rendicion,0))),0)"
+    )
     cursor.execute(
         "SELECT COUNT(*),"
         f"COALESCE(SUM(IF({open_state},1,0)),0),"
         f"COALESCE(SUM(IF({closed},1,0)),0),"
         f"COALESCE(SUM(IF({rendered},1,0)),0),"
         f"COALESCE(SUM(IF({closed} AND NOT({rendered}),1,0)),0),"
-        f"{driver},COUNT(DISTINCT r.id_unidad),"
-        "COALESCE(SUM(ABS(COALESCE(r.diferencia_rendicion,0))),0) "
+        f"{driver},{units_expr},{difference_expr} "
         f"FROM logi_hoja_ruta r WHERE {date_expr} >= %s AND {date_expr} < %s "
         f"AND UPPER(COALESCE(r.anulado,'NO'))<>'SI'{scope}", params + scope_params,
     )
@@ -104,8 +111,10 @@ def _route_counts(cursor, filters, date_expr, *, previous=False):
     return {
         "hojas_ruta": int(count), "rutas_abiertas": int(opened),
         "rutas_cerradas": int(closed_count), "rutas_rendidas": int(rendered_count),
-        "pendientes_rendir": int(pending), "choferes": int(drivers),
-        "unidades": int(units), "diferencia_rendicion": round_money(difference),
+        "pendientes_rendir": int(pending),
+        "choferes": int(drivers) if drivers is not None else None,
+        "unidades": int(units) if units is not None else None,
+        "diferencia_rendicion": round_money(difference) if difference is not None else None,
     }
 
 

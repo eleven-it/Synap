@@ -110,6 +110,23 @@ class AreaVisibilityUnitTests(SimpleTestCase):
         "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
         return_value=dict(DEFAULT_CC_AREAS),
     )
+    def test_usuario_logistica_ve_solo_su_tablero(self, _areas):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_superuser=False,
+            cod_usuario="logistica",
+            get_permisos_totales=lambda: {"tablero_logistica_hoja_ruta"},
+        )
+        allowed = resolve_cc_areas_for_user(user, mpr_active=True)
+        self.assertEqual(
+            [key for key, enabled in allowed.items() if enabled],
+            ["logistica"],
+        )
+
+    @patch(
+        "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
+        return_value=dict(DEFAULT_CC_AREAS),
+    )
     def test_sin_permiso_no_hay_tableros(self, _areas):
         user = SimpleNamespace(
             is_authenticated=True,

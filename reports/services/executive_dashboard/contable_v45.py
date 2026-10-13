@@ -75,6 +75,11 @@ def _result(cursor, filters: DashboardFilters, grupo_contable: int | None) -> fl
 
 
 def _tax(cursor, filters: DashboardFilters) -> dict:
+    if filters.puntos_venta or filters.sucursales_filtro:
+        return {key: None for key in (
+            "impuestos_determinados", "impuestos_pagar",
+            "impuestos_favor", "impuestos_vencidos",
+        )}
     if not _table_exists(cursor, "impuesto_detalle"):
         return {key: None for key in (
             "impuestos_determinados", "impuestos_pagar", "impuestos_favor", "impuestos_vencidos",
@@ -110,6 +115,8 @@ def _tax(cursor, filters: DashboardFilters) -> dict:
 
 
 def _open_periods(cursor, filters: DashboardFilters, *, exercise: bool) -> int | None:
+    if filters.puntos_venta or filters.sucursales_filtro:
+        return None
     if exercise:
         table, first, last = "cont_ejercicio", "fecdesde_ejercicio", "fechasta_ejercicio"
     else:
@@ -182,7 +189,10 @@ def fetch_contable_v45(cursor, filters: DashboardFilters, *, grupo_contable: int
         },
         "alcance": {
             "asientos": "sucursal y grupo contable" if filters.sucursales_filtro or grupo_contable else "general",
-            "impuestos_y_periodos": "general",
+            "impuestos_y_periodos": (
+                "no disponible con filtro territorial"
+                if filters.puntos_venta or filters.sucursales_filtro else "general"
+            ),
         },
         "disponible": True,
         "meta": build_meta(filters, fuente="modCM_ContableDatos.bas/V45"),

@@ -30,7 +30,8 @@ def constrain_filters_to_user(
 
     if area_key not in {
         "resumen_general", "ventas", "inventario", "preparacion_pedidos",
-        "compras", "financiero", "impositivo", "libros_contables", "gastos",
+        "compras", "financiero", "gestion_contable", "impositivo",
+        "libros_contables", "logistica", "gastos",
     }:
         raise TerritoryAccessDenied("Este tablero aún no tiene alcance territorial verificado.")
 

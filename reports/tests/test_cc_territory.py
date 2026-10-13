@@ -91,7 +91,7 @@ class CommandCenterTerritoryTests(SimpleTestCase):
 
     def test_area_sin_consultas_territoriales_se_cierra(self):
         with self.assertRaises(TerritoryAccessDenied):
-            constrain_filters_to_user(_user(), _filters(), area_key="logistica")
+            constrain_filters_to_user(_user(), _filters(), area_key="cruzados")
 
     def test_stock_sql_lleva_filtro_a_resumen_y_detalle(self):
         cursor = MagicMock()

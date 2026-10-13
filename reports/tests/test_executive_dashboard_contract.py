@@ -331,7 +331,7 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         "reports.services.executive_dashboard.command_center.fetch_ventas_cobros_resumen",
     )
     @patch("reports.services.executive_dashboard.command_center.fetch_cruzados_resumen")
-    @patch("reports.services.executive_dashboard.command_center.fetch_compras_resumen")
+    @patch("reports.services.executive_dashboard.command_center.fetch_compras_v45")
     @patch("reports.services.executive_dashboard.command_center.fetch_inventario_resumen")
     @patch(
         "reports.services.executive_dashboard.command_center.fetch_ventas_resumen",
@@ -381,7 +381,7 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         return_value={"disponible": True, "meta": {}, "backorder_importe": 0},
     )
     @patch(
-        "reports.services.executive_dashboard.command_center.fetch_compras_resumen",
+        "reports.services.executive_dashboard.command_center.fetch_compras_v45",
         return_value={"disponible": True, "meta": {}, "oc_pendientes_cantidad": 0},
     )
     @patch(

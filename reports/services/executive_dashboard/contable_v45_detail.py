@@ -59,6 +59,11 @@ def list_contable_v45_detail(cursor, filters: DashboardFilters, *, view: str,
                              grupo_contable: int | None = None) -> dict:
     if view not in CONTABLE_V45_VIEWS:
         raise ValueError("Vista contable inválida")
+    if view != "asientos" and (filters.puntos_venta or filters.sucursales_filtro):
+        return {
+            "disponible": False, "motivo": "sin_alcance_territorial",
+            "filas": [], "vista": view,
+        }
     table = {"asientos": "cont_asiento", "impuestos": "impuesto_detalle",
              "periodos": "cont_periodo", "ejercicios": "cont_ejercicio"}[view]
     if not _table_exists(cursor, table):
