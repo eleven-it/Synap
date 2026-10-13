@@ -25,7 +25,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Comercial — Preparación de pedidos | 16 | `tablero_comercial_prep_pedidos` | 16 KPI, comparación de períodos y gráficos por estado en rama de trabajo; faltan detalles, prueba Django/web y conciliación visual con ERP. |
 | Abastecimiento — Compras | 14 | `tablero_abastecimiento_compras` | 14 KPI y evolución de compras/OC en rama de trabajo; faltan detalles, validación Django/web y alcance de sucursal para usuarios restringidos. |
 | Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | Resumen y detalle paginado de 14 KPI, tres presentaciones, comparación de movimientos y gráficos en rama de trabajo. Falta prueba Django, revisión visual móvil y revisión del PR. |
-| Análisis financiero | 15 | `tablero_gestion_financiera` | `tesoreria` y `ventas_cobros` son subconjuntos; falta paridad. |
+| Análisis financiero | 15 | `tablero_gestion_financiera` | 15 KPI, aging, flujo y comparación en rama de trabajo; faltan detalles, validación Django/web y contraste visual con ERP. |
 | Gestión contable | 14 | `tablero_gestion_contable` | Pendiente de migrar; validar con Best Sox. |
 | Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | Pendiente de migrar. |
 | Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | Pendiente de migrar; validar con Best Sox. |
@@ -66,3 +66,7 @@ Sobre el mismo backup y período 01–12/10/2026, el servicio V45 devolvió 180 
 ## Conciliación inicial de Compras
 
 Contra la misma copia Best Sox y período 01–12/10/2026: compras netas $145.509.780,59, 39 facturas, ticket medio $3.731.020,02 y 28 proveedores distintos. La cifra de compras coincide con Resumen gerencial. La copia no contiene OC ingresadas durante el período, ni OC abiertas; el importe de OC y pendiente es cero. El estado de remitos indica 8 sin factura, como foto actual. No hay recepciones válidas para plazo promedio, que se expone como `N/D`. Este tablero aplica sólo sucursal; el filtro de PV no interviene en sus SQL. Todavía se muestra únicamente a usuarios con acceso completo mientras se verifica la autorización de sucursales sin PV, que existen en V45. Faltan detalles y prueba web.
+
+## Conciliación inicial de Análisis financiero
+
+En Best Sox 01–12/10/2026, cobranzas $177.508.146,64 y pagos $153.688.170,16 producen un flujo neto de $23.819.976,48; los dos primeros importes coinciden con Resumen gerencial. Los saldos a corte se reconstruyen desde el último movimiento por entidad, como en V45: clientes $2.326.472.757,89 y proveedores $383.360.504,23. El aging de documentos abiertos entrega vencido a cobrar $1.198.315.625,60, vencido a pagar $146.503.148,58; +60 días $431.200.189,10 y $41.863.884,35 respectivamente. Bancos $1.289.836.286,82 coincide con la captura. Los saldos históricos y la cartera de documentos abiertos responden a universos distintos, por lo que no deben presentarse como una conciliación directa. Con PV/sucursal seleccionados, cajas, cheques y bancos devuelven no disponible para impedir exponer el saldo global. Faltan detalles, prueba web y contraste visual con el tablero financiero.

@@ -707,6 +707,7 @@
       ventas: "ventas",
       inventario: "inventario",
       compras: "compras",
+      financiero: "análisis financiero",
       manufactura: "manufactura",
       cruzados: "demanda pendiente",
       tesoreria: "tesorería",
@@ -869,6 +870,7 @@
     const v = a.ventas || {};
     const inv = a.inventario || {};
     const comp = a.compras || {};
+    const fin = a.financiero || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
@@ -896,6 +898,10 @@
       cards.push(
         kpiCard("Compras netas", comp.disponible === false ? "No disponible" : fmtMoney.format(comp.kpis?.compras_netas ?? 0), "amber")
       );
+    }
+    if (isAreaVisible("financiero")) {
+      cards.push(kpiCard("Flujo neto", fin.disponible === false ? "No disponible" : fmtMoney.format(fin.kpis?.flujo_neto ?? 0), "teal"));
+      cards.push(kpiCard("Vencido a cobrar", fin.disponible === false ? "No disponible" : fmtMoney.format(fin.kpis?.vencido_cobrar ?? 0), "amber"));
     }
     if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
@@ -934,6 +940,10 @@
     }
     if (isAreaVisible("compras")) {
       loadingCards.push(kpiCardLoading("Compras netas", "amber"));
+    }
+    if (isAreaVisible("financiero")) {
+      loadingCards.push(kpiCardLoading("Flujo neto", "emerald"));
+      loadingCards.push(kpiCardLoading("Vencido a cobrar", "amber"));
     }
     if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
@@ -1100,6 +1110,33 @@
       details: [],
     },
     {
+      key: "financiero",
+      title: "Análisis financiero (V45)",
+      icon: "account_balance",
+      color: "teal",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        return [
+          ["Cobranzas", money("cobranzas")], ["Pagos", money("pagos")],
+          ["Flujo neto", money("flujo_neto")],
+          ["Saldo a cobrar", money("saldo_cobrar")],
+          ["Saldo a pagar", money("saldo_pagar")],
+          ["Vencido a cobrar", money("vencido_cobrar")],
+          ["Vencido a pagar", money("vencido_pagar")],
+          ["Efectivo", money("efectivo")], ["Tarjetas", money("tarjetas")],
+          ["Cheques en cartera", money("cheques_cartera")],
+          ["Cheques emitidos", money("cheques_emitidos")],
+          ["Cheques rechazados", money("cheques_rechazados")],
+          ["Bancos", money("bancos")],
+          ["A cobrar +60 días", money("cobrar_mas_60")],
+          ["A pagar +60 días", money("pagar_mas_60")],
+        ];
+      },
+      afterMetrics: (a) => renderFinancieroV45Charts(a),
+      details: [],
+    },
+    {
       key: "manufactura",
       title: "Manufactura",
       icon: "precision_manufacturing",
@@ -1200,6 +1237,40 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderFinancieroV45Charts(areaData) {
+    const rows = (areaData.serie_flujo?.filas || []).slice(-30);
+    const maxFlow = Math.max(1, ...rows.flatMap((row) => [Number(row.cobranzas || 0), Number(row.pagos || 0)]));
+    const step = rows.length ? 304 / rows.length : 304;
+    const width = Math.max(1, step / 2 - 1);
+    const bars = rows.map((row, index) => {
+      const collected = Math.max(0, Number(row.cobranzas || 0)) / maxFlow * 83;
+      const paid = Math.max(0, Number(row.pagos || 0)) / maxFlow * 83;
+      const x = 8 + index * step;
+      return `<rect x="${x.toFixed(1)}" y="${(96 - collected).toFixed(1)}" width="${width.toFixed(1)}" height="${collected.toFixed(1)}" fill="#0d9488" />
+        <rect x="${(x + width).toFixed(1)}" y="${(96 - paid).toFixed(1)}" width="${width.toFixed(1)}" height="${paid.toFixed(1)}" fill="#f97316" />`;
+    }).join("");
+    const buckets = [
+      ["Por vencer", "por_vencer"], ["0–7 días", "d0_7"],
+      ["8–30 días", "d8_30"], ["31–60 días", "d31_60"],
+      ["+60 días", "mas_60"],
+    ];
+    const receivable = areaData.aging?.cobrar || {};
+    const payable = areaData.aging?.pagar || {};
+    const maxAging = Math.max(1, ...buckets.flatMap(([, key]) => [Number(receivable[key] || 0), Number(payable[key] || 0)]));
+    const agingRows = buckets.map(([name, key]) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+      <p class="text-[11px] font-medium">${name}</p>
+      <div class="mt-1 flex items-center gap-2"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-teal-600" style="width:${Math.max(0, Number(receivable[key] || 0)) / maxAging * 100}%"></div></div><span class="w-24 text-right text-[10px] tabular-nums">${receivable[key] == null ? "N/D" : fmtMoney.format(receivable[key])}</span></div>
+      <div class="mt-1 flex items-center gap-2"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-orange-400" style="width:${Math.max(0, Number(payable[key] || 0)) / maxAging * 100}%"></div></div><span class="w-24 text-right text-[10px] tabular-nums">${payable[key] == null ? "N/D" : fmtMoney.format(payable[key])}</span></div>
+    </div>`).join("");
+    const seriesRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="px-2 py-1.5 text-left">${escHtml(row.fecha)}</th><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.cobranzas)}</td><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.pagos)}</td></tr>`).join("");
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
+      <div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Flujo del período</h3><svg viewBox="0 0 320 102" role="img" aria-label="Cobranzas y pagos por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg><p class="text-[11px] text-slate-500">● Turquesa: cobranzas · ● Naranja: pagos</p>
+        <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead><tbody>${seriesRows}</tbody></table></div></details>
+      </div>
+      <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Antigüedad de saldos</h3><p class="text-[11px] text-slate-500">● Turquesa: cobrar · ● Naranja: pagar</p>${agingRows}</div>
+    </div>`;
+  }
 
   function renderComprasV45Charts(areaData) {
     const rows = (areaData.serie_evolucion?.filas || []).slice(-30);
@@ -1742,8 +1813,8 @@
     document.querySelectorAll(".cc-pv-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey === "compras" || selectedAreaKey === "inventario");
     });
-    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras"].includes(selectedAreaKey));
-    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras"].includes(selectedAreaKey));
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero"].includes(selectedAreaKey));
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey !== "inventario");
       node.classList.toggle("flex", selectedAreaKey === "inventario");
