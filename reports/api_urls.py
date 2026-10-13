@@ -45,6 +45,7 @@ from .executive_dashboard_api_views import (
     ExecutiveDashboardFilterOptionsAPIView,
     ExecutiveDashboardResumenV45APIView,
     ExecutiveDashboardPreparacionV45APIView,
+    ExecutiveDashboardPreparacionV45DetailAPIView,
     ExecutiveDashboardFinancieroV45APIView,
     ExecutiveDashboardGestionContableV45APIView,
     ExecutiveDashboardGestionContableV45DetailAPIView,
@@ -63,6 +64,7 @@ from .executive_dashboard_api_views import (
     ExecutiveDashboardStockV45DetailAPIView,
     ExecutiveDashboardInventarioResumenAPIView,
     ExecutiveDashboardComprasResumenAPIView,
+    ExecutiveDashboardComprasV45DetailAPIView,
     ExecutiveDashboardManufacturaResumenAPIView,
     ExecutiveDashboardCruzadosResumenAPIView,
     ExecutiveDashboardVentasPedidosPendientesAPIView,
@@ -201,6 +203,11 @@ urlpatterns = [
         name="reports-executive-dashboard-preparacion-v45",
     ),
     path(
+        "executive-dashboard/preparacion-pedidos/v45/detalle/",
+        ExecutiveDashboardPreparacionV45DetailAPIView.as_view(),
+        name="reports-executive-dashboard-preparacion-v45-detail",
+    ),
+    path(
         "executive-dashboard/financiero/v45/",
         ExecutiveDashboardFinancieroV45APIView.as_view(),
         name="reports-executive-dashboard-financiero-v45",
@@ -329,6 +336,11 @@ urlpatterns = [
         "executive-dashboard/compras/resumen/",
         ExecutiveDashboardComprasResumenAPIView.as_view(),
         name="reports-executive-dashboard-compras-resumen",
+    ),
+    path(
+        "executive-dashboard/compras/v45/detalle/",
+        ExecutiveDashboardComprasV45DetailAPIView.as_view(),
+        name="reports-executive-dashboard-compras-v45-detail",
     ),
     path(
         "executive-dashboard/manufactura/resumen/",

@@ -1110,7 +1110,17 @@
         ];
       },
       afterMetrics: (a) => renderPreparacionV45Charts(a),
-      details: [],
+      details: [
+        { label: "Todos los pedidos", urlKey: "preparacion_v45", vista: "pedidos" },
+        { label: "Pendientes", urlKey: "preparacion_v45", vista: "pendientes" },
+        { label: "En preparación", urlKey: "preparacion_v45", vista: "en_preparacion" },
+        { label: "Preparados", urlKey: "preparacion_v45", vista: "preparados" },
+        { label: "Backorder", urlKey: "preparacion_v45", vista: "backorder" },
+        { label: "En remito", urlKey: "preparacion_v45", vista: "en_remito" },
+        { label: "Facturados", urlKey: "preparacion_v45", vista: "facturados" },
+        { label: "Cerrados", urlKey: "preparacion_v45", vista: "cerrados" },
+        { label: "Anulados", urlKey: "preparacion_v45", vista: "anulados" },
+      ],
     },
     {
       key: "inventario",
@@ -1168,7 +1178,13 @@
         ];
       },
       afterMetrics: (a) => renderComprasV45Charts(a),
-      details: [],
+      details: [
+        { label: "Comprobantes", urlKey: "compras_v45", vista: "comprobantes" },
+        { label: "Proveedores", urlKey: "compras_v45", vista: "proveedores" },
+        { label: "Órdenes de compra", urlKey: "compras_v45", vista: "ordenes" },
+        { label: "OC abiertas", urlKey: "compras_v45", vista: "ordenes_abiertas" },
+        { label: "Remitos", urlKey: "compras_v45", vista: "remitos" },
+      ],
     },
     {
       key: "financiero",
@@ -2534,7 +2550,7 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
-    if (["libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45"].includes(urlKey) && vista) {
+    if (["libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45", "compras_v45", "preparacion_v45"].includes(urlKey) && vista) {
       genericV45Detail = { base, vista, offset: 0 };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");

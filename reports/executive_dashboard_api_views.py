@@ -41,8 +41,10 @@ from .services.executive_dashboard.stock_v45 import STOCK_V45_KEYS, fetch_stock_
 from .services.executive_dashboard.stock_v45_detail import list_stock_v45_detail
 from .services.executive_dashboard.resumen_v45 import fetch_resumen_v45
 from .services.executive_dashboard.preparacion_v45 import fetch_preparacion_v45
+from .services.executive_dashboard.preparacion_v45_detail import PREPARACION_V45_VIEWS, list_preparacion_v45_detail
 from .services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
 from .services.executive_dashboard.compras_v45 import fetch_compras_v45
+from .services.executive_dashboard.compras_v45_detail import COMPRAS_V45_VIEWS, list_compras_v45_detail
 from .services.executive_dashboard.financiero_v45 import fetch_financiero_v45
 from .services.executive_dashboard.contable_v45 import fetch_contable_v45
 from .services.executive_dashboard.contable_v45_detail import CONTABLE_V45_VIEWS, list_contable_v45_detail
@@ -320,6 +322,31 @@ class ExecutiveDashboardPreparacionV45APIView(ExecutiveDashboardMixin, APIView):
         return Response(payload)
 
 
+class ExecutiveDashboardPreparacionV45DetailAPIView(ExecutiveDashboardMixin, APIView):
+    """Listado paginado de pedidos por estado, con el mismo alcance del KPI."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("preparacion_pedidos")
+        if disabled:
+            return disabled
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        view = request.query_params.get("vista", "")
+        if view not in PREPARACION_V45_VIEWS:
+            return Response({"detail": "Estado de pedido inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_preparacion_v45_detail(cursor, filters, view=view)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response(payload)
+
+
 class ExecutiveDashboardComercialVentasV45APIView(ExecutiveDashboardMixin, APIView):
     """Los 16 KPI de Comercial/Ventas, con permiso de costos independiente."""
 
@@ -470,6 +497,31 @@ class ExecutiveDashboardComprasResumenAPIView(ExecutiveDashboardMixin, APIView):
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
                 payload = fetch_compras_v45(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response(payload)
+
+
+class ExecutiveDashboardComprasV45DetailAPIView(ExecutiveDashboardMixin, APIView):
+    """Facturas, OC, remitos y proveedores según el permiso de Compras."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("compras")
+        if disabled:
+            return disabled
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        view = request.query_params.get("vista", "")
+        if view not in COMPRAS_V45_VIEWS:
+            return Response({"detail": "Vista de compras inválida."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_compras_v45_detail(cursor, filters, view=view)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:

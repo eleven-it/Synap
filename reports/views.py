@@ -390,6 +390,12 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "stock_v45": reverse(
                     "reports-api:reports-executive-dashboard-stock-v45-detalle"
                 ),
+                "preparacion_v45": reverse(
+                    "reports-api:reports-executive-dashboard-preparacion-v45-detail"
+                ),
+                "compras_v45": reverse(
+                    "reports-api:reports-executive-dashboard-compras-v45-detail"
+                ),
                 "libros_v45": reverse(
                     "reports-api:reports-executive-dashboard-libros-v45-detail"
                 ),
