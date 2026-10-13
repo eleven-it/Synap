@@ -354,6 +354,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "impositivo": reverse(
                     "reports-api:reports-executive-dashboard-impositivo-v45"
                 ),
+                "libros_contables": reverse(
+                    "reports-api:reports-executive-dashboard-libros-v45"
+                ),
                 "cruzados": reverse(
                     "reports-api:reports-executive-dashboard-cruzados-resumen"
                 ),

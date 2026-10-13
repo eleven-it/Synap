@@ -563,7 +563,7 @@
       q.set("presentacion", el("cc-stock-presentacion")?.value || "unidad");
       if (el("cc-stock-comparar")?.checked) q.set("comparar", "anterior");
     }
-    if (selectedAreaKey === "gestion_contable" && el("cc-grupo-contable")?.value) {
+    if (["gestion_contable", "libros_contables"].includes(selectedAreaKey) && el("cc-grupo-contable")?.value) {
       q.set("grupo_contable", el("cc-grupo-contable").value);
     }
     return q.toString();
@@ -713,6 +713,7 @@
       financiero: "análisis financiero",
       gestion_contable: "gestión contable",
       impositivo: "impuestos y posiciones fiscales",
+      libros_contables: "libros y estados contables",
       manufactura: "manufactura",
       cruzados: "demanda pendiente",
       tesoreria: "tesorería",
@@ -878,6 +879,7 @@
     const fin = a.financiero || {};
     const account = a.gestion_contable || {};
     const tax = a.impositivo || {};
+    const books = a.libros_contables || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
@@ -917,6 +919,10 @@
     if (isAreaVisible("impositivo")) {
       cards.push(kpiCard("Posición IVA", tax.disponible === false ? "No disponible" : fmtMoney.format(tax.kpis?.posicion_iva ?? 0), "amber"));
       cards.push(kpiCard("IVA débito", tax.disponible === false ? "No disponible" : fmtMoney.format(tax.kpis?.iva_debito ?? 0), "sky"));
+    }
+    if (isAreaVisible("libros_contables")) {
+      cards.push(kpiCard("Asientos del Diario", books.disponible === false ? "No disponible" : fmtNum.format(books.kpis?.asientos ?? 0), "indigo"));
+      cards.push(kpiCard("Resultado del período", books.disponible === false ? "No disponible" : fmtMoney.format(books.kpis?.resultado_periodo ?? 0), "purple"));
     }
     if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
@@ -967,6 +973,10 @@
     if (isAreaVisible("impositivo")) {
       loadingCards.push(kpiCardLoading("Posición IVA", "amber"));
       loadingCards.push(kpiCardLoading("IVA débito", "sky"));
+    }
+    if (isAreaVisible("libros_contables")) {
+      loadingCards.push(kpiCardLoading("Asientos del Diario", "indigo"));
+      loadingCards.push(kpiCardLoading("Resultado del período", "purple"));
     }
     if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
@@ -1211,6 +1221,31 @@
       details: [],
     },
     {
+      key: "libros_contables",
+      title: "Contabilidad · libros y estados (V45)",
+      icon: "menu_book",
+      color: "indigo",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        const audit = k.sin_clasificar_conflicto || {};
+        return [
+          ["Asientos · Diario", count("asientos")], ["Total Debe", money("total_debe")],
+          ["Total Haber", money("total_haber")], ["Diferencia", money("diferencia")],
+          ["Cuentas · Mayor", count("cuentas_movimiento")],
+          ["Saldo neto · Mayor", money("saldo_neto_mayor")],
+          ["Saldo deudor", money("saldo_deudor")], ["Saldo acreedor", money("saldo_acreedor")],
+          ["Resultado del período", money("resultado_periodo")],
+          ["Ingresos", money("ingresos")], ["Egresos", money("egresos")],
+          ["Activo", money("activo")], ["Pasivo", money("pasivo")],
+          ["Sin clasificar / conflicto", `${fmtNum.format(audit.sin_clasificar || 0)} / ${fmtNum.format(audit.conflictos || 0)}`],
+        ];
+      },
+      afterMetrics: (a) => renderLibrosV45Charts(a),
+      details: [],
+    },
+    {
       key: "manufactura",
       title: "Manufactura",
       icon: "precision_manufacturing",
@@ -1311,6 +1346,28 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderLibrosV45Charts(areaData) {
+    const rows = (areaData.series?.filas || []).slice(-30);
+    const panels = [
+      ["Libro Diario · Debe vs Haber", "debe", "haber", "#4f46e5", "#14b8a6"],
+      ["Resultados · Ingresos vs Egresos", "ingresos", "egresos", "#0ea5e9", "#f59e0b"],
+    ];
+    const chart = ([title, first, second, c1, c2]) => {
+      const max = Math.max(1, ...rows.flatMap((row) => [Math.abs(Number(row[first] || 0)), Math.abs(Number(row[second] || 0))]));
+      const step = rows.length ? 304 / rows.length : 304;
+      const barWidth = Math.max(1, step / 2 - 1);
+      const bars = rows.map((row, index) => {
+        const x = 8 + index * step;
+        const h1 = Math.abs(Number(row[first] || 0)) / max * 80;
+        const h2 = Math.abs(Number(row[second] || 0)) / max * 80;
+        return `<rect x="${x}" y="${96 - h1}" width="${barWidth}" height="${h1}" fill="${c1}"/><rect x="${x + barWidth}" y="${96 - h2}" width="${barWidth}" height="${h2}" fill="${c2}"/>`;
+      }).join("");
+      const table = rows.map((row) => `<tr><th scope="row" class="p-1 text-left">${escHtml(row.fecha)}</th><td class="p-1 text-right tabular-nums">${fmtMoney.format(row[first])}</td><td class="p-1 text-right tabular-nums">${fmtMoney.format(row[second])}</td></tr>`).join("");
+      return `<div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${title}</h3><svg viewBox="0 0 320 102" role="img" aria-label="${title}" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8"/>${bars}</svg><p class="text-[11px] text-slate-500">● ${first} · ● ${second}</p><details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700">Ver serie completa</summary><div class="max-h-56 overflow-auto"><table class="w-full min-w-[25rem] text-xs"><thead><tr><th class="p-1 text-left">Fecha</th><th class="p-1 text-right">${first}</th><th class="p-1 text-right">${second}</th></tr></thead><tbody>${table}</tbody></table></div></details></div>`;
+    };
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">${panels.map(chart).join("")}</div>`;
+  }
 
   function renderImpositivoV45Chart(areaData) {
     const k = areaData.kpis || {};
@@ -1928,14 +1985,14 @@
       node.classList.toggle("hidden", selectedAreaKey === "inventario");
     });
     document.querySelectorAll(".cc-pv-filter").forEach((node) => {
-      node.classList.toggle("hidden", ["compras", "inventario", "gestion_contable"].includes(selectedAreaKey));
+      node.classList.toggle("hidden", ["compras", "inventario", "gestion_contable", "libros_contables"].includes(selectedAreaKey));
     });
     document.querySelectorAll(".cc-account-filter").forEach((node) => {
-      node.classList.toggle("hidden", selectedAreaKey !== "gestion_contable");
-      node.classList.toggle("flex", selectedAreaKey === "gestion_contable");
+      node.classList.toggle("hidden", !["gestion_contable", "libros_contables"].includes(selectedAreaKey));
+      node.classList.toggle("flex", ["gestion_contable", "libros_contables"].includes(selectedAreaKey));
     });
-    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo"].includes(selectedAreaKey));
-    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo"].includes(selectedAreaKey));
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables"].includes(selectedAreaKey));
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey !== "inventario");
       node.classList.toggle("flex", selectedAreaKey === "inventario");

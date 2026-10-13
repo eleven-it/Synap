@@ -18,6 +18,7 @@ from .compras_v45 import fetch_compras_v45
 from .financiero_v45 import fetch_financiero_v45
 from .contable_v45 import fetch_contable_v45
 from .impositivo_v45 import fetch_impositivo_v45
+from .libros_v45 import fetch_libros_v45
 from .banco_metrics import fetch_tesoreria_banco_resumen
 from .tesoreria_metrics import fetch_tesoreria_resumen, list_movimientos_caja
 from .ventas_cobros_metrics import fetch_ventas_cobros_resumen, list_cobros_detalle
@@ -39,6 +40,7 @@ ENDPOINTS_RELATIVOS = {
     "financiero": "/api/reports/executive-dashboard/financiero/v45/",
     "gestion_contable": "/api/reports/executive-dashboard/gestion-contable/v45/",
     "impositivo": "/api/reports/executive-dashboard/impositivo/v45/",
+    "libros_contables": "/api/reports/executive-dashboard/libros-contables/v45/",
     "manufactura": "/api/reports/executive-dashboard/manufactura/resumen/",
     "cruzados": "/api/reports/executive-dashboard/cruzados/resumen/",
     "cruzados_backorder": "/api/reports/executive-dashboard/cruzados/backorder/",
@@ -62,6 +64,7 @@ ENDPOINT_AREA = {
     "financiero": "financiero",
     "gestion_contable": "gestion_contable",
     "impositivo": "impositivo",
+    "libros_contables": "libros_contables",
     "manufactura": "manufactura",
     "cruzados": "cruzados",
     "cruzados_backorder": "cruzados",
@@ -185,6 +188,12 @@ def run_command_center(
             tax = _safe_legacy_area("impositivo", fetch_impositivo_v45, cursor, filters)
             areas["impositivo"] = (
                 _area_sin_meta_interno(tax) if tax.get("disponible") is not False else tax
+            )
+
+        if areas_habilitadas.get("libros_contables"):
+            books = _safe_legacy_area("libros_contables", fetch_libros_v45, cursor, filters)
+            areas["libros_contables"] = (
+                _area_sin_meta_interno(books) if books.get("disponible") is not False else books
             )
 
         if areas_habilitadas.get("tesoreria"):
