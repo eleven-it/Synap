@@ -28,3 +28,5 @@ jobs:
         run: python reports/tests/run_command_center_ci.py
       - name: Check JavaScript syntax
         run: node --check reports/static/reports/js/command_center.js
+      - name: Check V45 browser rendering
+        run: node reports/tests/test_cc_v45_render.js
