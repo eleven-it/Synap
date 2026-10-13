@@ -43,6 +43,7 @@ from .services.executive_dashboard.resumen_v45 import fetch_resumen_v45
 from .services.executive_dashboard.resumen_v45_detail import (
     RESUMEN_V45_DETAIL_KEYS,
     list_resumen_v45_detail,
+    list_resumen_v45_ranking,
 )
 from .services.executive_dashboard.preparacion_v45 import fetch_preparacion_v45
 from .services.executive_dashboard.preparacion_v45_detail import PREPARACION_V45_VIEWS, list_preparacion_v45_detail
@@ -319,9 +320,20 @@ class ExecutiveDashboardResumenV45DetailAPIView(ExecutiveDashboardMixin, APIView
         if err:
             return err
         gross = str(request.query_params.get("incluir_impuestos", "")).lower() in {"1", "true", "si"}
+        mode = request.query_params.get("modo", "documentos")
+        dimension = request.query_params.get("agrupar_por", "entidad")
+        if mode not in {"documentos", "ranking", "comparacion"}:
+            return Response({"detail": "Vista de detalle inválida."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
-                payload = list_resumen_v45_detail(cursor, filters, key=key, gross=gross)
+                payload = (
+                    list_resumen_v45_detail(cursor, filters, key=key, gross=gross)
+                    if mode == "documentos" else
+                    list_resumen_v45_ranking(cursor, filters, key=key, dimension=dimension,
+                                            gross=gross, compare=mode == "comparacion")
+                )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:
