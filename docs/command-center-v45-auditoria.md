@@ -22,7 +22,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 |---|---:|---|---|
 | Resumen general | 16 | `tablero_resumen_general` | 16 KPI, período anterior y dos gráficos integrados en rama de trabajo; faltan detalles y validación Django/web. |
 | Comercial — Ventas | 16 | `tablero_comercial_ventas` | Implementación V45 en rama de trabajo: KPI, comparación, gráfico y detalles. Validación Django y revisión del PR pendientes. |
-| Comercial — Preparación de pedidos | 16 | `tablero_comercial_prep_pedidos` | Pendiente de migrar. |
+| Comercial — Preparación de pedidos | 16 | `tablero_comercial_prep_pedidos` | 16 KPI, comparación de períodos y gráficos por estado en rama de trabajo; faltan detalles, prueba Django/web y conciliación visual con ERP. |
 | Abastecimiento — Compras | 14 | `tablero_abastecimiento_compras` | `compras` existente es un subconjunto; falta paridad. |
 | Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | Resumen y detalle paginado de 14 KPI, tres presentaciones, comparación de movimientos y gráficos en rama de trabajo. Falta prueba Django, revisión visual móvil y revisión del PR. |
 | Análisis financiero | 15 | `tablero_gestion_financiera` | `tesoreria` y `ventas_cobros` son subconjuntos; falta paridad. |
@@ -58,3 +58,7 @@ El PR continúa en borrador: aún falta ejecutar el suite Django integrado, revi
 ## Conciliación inicial de Resumen general
 
 Se ejecutó `fetch_resumen_v45` contra la copia aislada Best Sox del 09/10/2026, período 01–12/10/2026. Los ocho indicadores documentales del período fueron ventas $171.207.874,10; compras netas $145.509.780,59; cobranzas $177.508.146,64; pagos $153.688.170,16; 0 presupuestos, 180 pedidos, 82 facturas y 95 remitos. La foto de vencimientos devolvió $33.410.146,54 a cobrar (3) y $41.087.933,52 a pagar (15); cheques $89.378.273,30 y bancos $1.289.836.286,82. Estas cuatro cifras coinciden con la captura del tablero V45. La venta de cuenta corriente calculada desde el backup fue $171.207.874,10, mientras la captura en vivo muestra $171.102.874,10: la diferencia de $105.000 requiere cotejar la misma fecha y base antes de declarar paridad. El backend evita consultar saldos globales cuando hay filtro de PV o sucursal, porque V45 no documenta una relación territorial para esos saldos. Faltan detalles por indicador, prueba web responsive y suite Django integrado; este tablero sigue en desarrollo.
+
+## Conciliación inicial de Preparación de pedidos
+
+Sobre el mismo backup y período 01–12/10/2026, el servicio V45 devolvió 180 pedidos válidos, 108 pendientes, 72 vinculados a remito y 50 vinculados a factura. Los últimos dos valores coinciden con el tablero Comercial/Ventas y se determinan por `stock.codmov_pedido`, sin confiar en el texto del estado. El monto de pedidos por `ImporteVenta` fue $621.786.442,25; Comercial/Ventas usa `SubtotalDesc` y por eso informa un neto distinto. Las unidades pendientes fueron 43.083. No existen pares válidos de horas de preparación en ese período, por lo que el tiempo promedio es `N/D`. Estos resultados se ejecutaron contra MySQL 5.7 aislado; falta contraste visual con AdministraNET y cierre de detalles. El filtro de PV/sucursal se aplica a la cabecera del pedido también al cruzar remitos y facturas.

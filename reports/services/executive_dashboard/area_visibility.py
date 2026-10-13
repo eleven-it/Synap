@@ -19,6 +19,7 @@ from reports.services.report_visibility import COMMAND_CENTER_SLUG
 CC_AREA_KEYS = (
     "resumen_general",
     "ventas",
+    "preparacion_pedidos",
     "inventario",
     "compras",
     "manufactura",
@@ -32,6 +33,7 @@ DEFAULT_CC_AREAS: Dict[str, bool] = {key: True for key in CC_AREA_KEYS}
 CC_AREA_LABELS: Dict[str, str] = {
     "resumen_general": "Resumen gerencial",
     "ventas": "Ventas",
+    "preparacion_pedidos": "Preparación de pedidos",
     "inventario": "Inventario",
     "compras": "Compras",
     "manufactura": "Manufactura (MPR)",
@@ -45,6 +47,7 @@ CC_AREA_LABELS: Dict[str, str] = {
 CC_AREA_PERMISSION_CODES: Dict[str, tuple[str, ...]] = {
     "resumen_general": ("tablero_resumen_general",),
     "ventas": ("tablero_comercial_ventas",),
+    "preparacion_pedidos": ("tablero_comercial_prep_pedidos",),
     "inventario": ("tablero_abastecimiento_stock",),
     "compras": ("tablero_abastecimiento_compras",),
     "cruzados": ("tablero_comercial_ventas", "tablero_abastecimiento_stock"),
@@ -54,7 +57,7 @@ CC_AREA_PERMISSION_CODES: Dict[str, tuple[str, ...]] = {
 
 # Los otros servicios existentes no aplican aún el alcance del usuario en todas
 # sus consultas; no se publican a usuarios restringidos hasta completar esa capa.
-CC_TERRITORIAL_READY_AREAS = frozenset({"ventas", "inventario"})
+CC_TERRITORIAL_READY_AREAS = frozenset({"ventas", "inventario", "preparacion_pedidos"})
 
 
 def user_has_cc_area_permission(user, area_key: str) -> bool:

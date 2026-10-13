@@ -62,6 +62,17 @@ class CommandCenterTerritoryTests(SimpleTestCase):
         self.assertEqual(out.sucursales_filtro, (10,))
 
     @patch("reports.services.executive_dashboard.territory.legacy_cursor")
+    def test_preparacion_restringe_pv_como_ventas(self, legacy):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [(1, 10), (2, 20)]
+        legacy.return_value.__enter__.return_value = cursor
+        out = constrain_filters_to_user(
+            _user(), _filters(), area_key="preparacion_pedidos"
+        )
+        self.assertEqual(out.puntos_venta, (1, 2))
+        self.assertEqual(out.sucursales_filtro, (10, 20))
+
+    @patch("reports.services.executive_dashboard.territory.legacy_cursor")
     def test_sin_asignaciones_no_equivale_a_todos(self, legacy):
         cursor = MagicMock()
         cursor.fetchall.return_value = []

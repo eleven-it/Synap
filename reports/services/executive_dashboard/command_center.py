@@ -12,6 +12,7 @@ from .exceptions import is_legacy_db_error, legacy_area_failure_payload
 from .inventory_metrics import fetch_inventario_resumen
 from .stock_v45 import fetch_stock_v45
 from .resumen_v45 import fetch_resumen_v45
+from .preparacion_v45 import fetch_preparacion_v45
 from .manufacturing_metrics import fetch_manufactura_resumen
 from .purchase_metrics import fetch_compras_resumen
 from .banco_metrics import fetch_tesoreria_banco_resumen
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 ENDPOINTS_RELATIVOS = {
     "resumen_general": "/api/reports/executive-dashboard/resumen-general/v45/",
     "ventas": "/api/reports/executive-dashboard/ventas/resumen/",
+    "preparacion_pedidos": "/api/reports/executive-dashboard/preparacion-pedidos/v45/",
     "ventas_pedidos_pendientes": "/api/reports/executive-dashboard/ventas/pedidos-pendientes/",
     "ventas_remitos_nf": "/api/reports/executive-dashboard/ventas/remitos-no-facturados/",
     "inventario": "/api/reports/executive-dashboard/inventario/resumen/",
@@ -45,6 +47,7 @@ ENDPOINTS_RELATIVOS = {
 ENDPOINT_AREA = {
     "resumen_general": "resumen_general",
     "ventas": "ventas",
+    "preparacion_pedidos": "preparacion_pedidos",
     "ventas_pedidos_pendientes": "ventas",
     "ventas_remitos_nf": "ventas",
     "inventario": "inventario",
@@ -118,6 +121,15 @@ def run_command_center(
                 notas_globales.extend(ventas_full.get("meta", {}).get("notas_semanticas") or [])
             else:
                 areas["ventas"] = ventas_full
+
+        if areas_habilitadas.get("preparacion_pedidos"):
+            prep = _safe_legacy_area(
+                "preparacion_pedidos", fetch_preparacion_v45, cursor, filters,
+            )
+            areas["preparacion_pedidos"] = (
+                _area_sin_meta_interno(prep)
+                if prep.get("disponible") is not False else prep
+            )
 
         for area_name, fetch_fn in (
             ("inventario", fetch_inventario_resumen),

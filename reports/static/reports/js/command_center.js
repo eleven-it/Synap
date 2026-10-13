@@ -703,6 +703,7 @@
   function dashboardWaitSubtitle() {
     const labelMap = {
       resumen_general: "resumen gerencial",
+      preparacion_pedidos: "preparación de pedidos",
       ventas: "ventas",
       inventario: "inventario",
       compras: "compras",
@@ -864,6 +865,7 @@
     const singleDay = isSingleDayPeriod(f);
     const a = areas || {};
     const resumen = a.resumen_general || {};
+    const preparacion = a.preparacion_pedidos || {};
     const v = a.ventas || {};
     const inv = a.inventario || {};
     const comp = a.compras || {};
@@ -878,6 +880,10 @@
     if (isAreaVisible("resumen_general")) {
       cards.push(kpiCard("Ventas del período", resumen.disponible === false ? "No disponible" : fmtMoney.format(resumen.kpis?.ventas ?? 0), "sky"));
       cards.push(kpiCard("Pedidos", resumen.disponible === false ? "No disponible" : fmtNum.format(resumen.kpis?.pedidos ?? 0), "indigo"));
+    }
+    if (isAreaVisible("preparacion_pedidos")) {
+      cards.push(kpiCard("Pedidos ingresados", preparacion.disponible === false ? "No disponible" : fmtNum.format(preparacion.kpis?.pedidos_ingresados ?? 0), "sky"));
+      cards.push(kpiCard("Pedidos pendientes", preparacion.disponible === false ? "No disponible" : fmtNum.format(preparacion.kpis?.pendientes ?? 0), "amber"));
     }
     if (isAreaVisible("ventas")) {
       cards.push(kpiCard(ventasFirstLabel, ventasFirstVal, "sky"));
@@ -914,6 +920,10 @@
     if (isAreaVisible("resumen_general")) {
       loadingCards.push(kpiCardLoading("Ventas del período", "sky"));
       loadingCards.push(kpiCardLoading("Pedidos", "indigo"));
+    }
+    if (isAreaVisible("preparacion_pedidos")) {
+      loadingCards.push(kpiCardLoading("Pedidos ingresados", "sky"));
+      loadingCards.push(kpiCardLoading("Pedidos pendientes", "amber"));
     }
     if (isAreaVisible("ventas")) {
       loadingCards.push(kpiCardLoading(ventasLabel, "sky"));
@@ -998,6 +1008,37 @@
         return rows.map((row, index) => [...row, keys[index]]);
       },
       afterMetrics: (a) => renderComercialV45Comparison(a),
+      details: [],
+    },
+    {
+      key: "preparacion_pedidos",
+      title: "Comercial · Preparación de pedidos (V45)",
+      icon: "assignment_turned_in",
+      color: "amber",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        return [
+          ["Pedidos ingresados", count("pedidos_ingresados")],
+          ["Monto pedidos", money("monto_pedidos")],
+          ["Pendientes", count("pendientes")],
+          ["Monto pendiente", money("monto_pendiente")],
+          ["En preparación", count("en_preparacion")],
+          ["Preparados", count("preparados")],
+          ["Backorder", count("backorder")],
+          ["Monto backorder", money("monto_backorder")],
+          ["En remito", count("en_remito")],
+          ["Facturados", count("facturados")],
+          ["Cerrados", count("cerrados")],
+          ["Anulados", count("anulados")],
+          ["Unidades pendientes", count("unidades_pendientes")],
+          ["Tiempo promedio", k.tiempo_promedio == null ? "N/D" : `${fmtNum.format(k.tiempo_promedio)} h`],
+          ["Monto facturado", money("monto_facturado")],
+          ["Monto en remito", money("monto_en_remito")],
+        ];
+      },
+      afterMetrics: (a) => renderPreparacionV45Charts(a),
       details: [],
     },
     {
@@ -1142,6 +1183,27 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderPreparacionV45Charts(areaData) {
+    const states = areaData.serie_estados || [];
+    const amounts = areaData.serie_importes || [];
+    const maxCount = Math.max(1, ...states.flatMap((row) => [Number(row.actual || 0), Number(row.anterior || 0)]));
+    const maxAmount = Math.max(1, ...amounts.map((row) => Number(row.importe || 0)));
+    const stateRows = states.map((row) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+      <p class="text-xs font-medium">${escHtml(row.estado)}</p>
+      <div class="mt-1 flex items-center gap-2 text-[11px]"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-sky-600" style="width:${Math.max(0, Number(row.actual || 0)) / maxCount * 100}%"></div></div><span class="w-10 text-right tabular-nums">${fmtNum.format(row.actual)}</span></div>
+      <div class="mt-1 flex items-center gap-2 text-[11px]"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-orange-400" style="width:${Math.max(0, Number(row.anterior || 0)) / maxCount * 100}%"></div></div><span class="w-10 text-right tabular-nums">${fmtNum.format(row.anterior)}</span></div>
+    </div>`).join("");
+    const amountRows = amounts.map((row) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+      <p class="text-xs font-medium">${escHtml(row.estado)}</p>
+      <div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-emerald-600" style="width:${Math.max(0, Number(row.importe || 0)) / maxAmount * 100}%"></div></div>
+      <p class="mt-1 text-right text-xs font-semibold tabular-nums">${row.importe == null ? "No disponible" : fmtMoney.format(row.importe)}</p>
+    </div>`).join("");
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
+      <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Estados · <span class="text-sky-600">actual</span> / <span class="text-orange-500">anterior</span></h3>${stateRows}</section>
+      <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Importes por estado</h3>${amountRows}</section>
+    </div>`;
+  }
 
   function renderResumenV45Charts(areaData) {
     const series = (areaData.series?.filas || []).slice(-30);
@@ -1632,6 +1694,8 @@
     document.querySelectorAll(".cc-sales-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey === "inventario");
     });
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", selectedAreaKey === "preparacion_pedidos");
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey !== "inventario");
       node.classList.toggle("flex", selectedAreaKey === "inventario");

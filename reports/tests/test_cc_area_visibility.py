@@ -78,6 +78,23 @@ class AreaVisibilityUnitTests(SimpleTestCase):
         "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
         return_value=dict(DEFAULT_CC_AREAS),
     )
+    def test_usuario_preparacion_solo_ve_su_tablero(self, _areas):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_superuser=False,
+            cod_usuario="preparador",
+            get_permisos_totales=lambda: {"tablero_comercial_prep_pedidos"},
+        )
+        allowed = resolve_cc_areas_for_user(user, mpr_active=True)
+        self.assertEqual(
+            [key for key, enabled in allowed.items() if enabled],
+            ["preparacion_pedidos"],
+        )
+
+    @patch(
+        "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
+        return_value=dict(DEFAULT_CC_AREAS),
+    )
     def test_sin_permiso_no_hay_tableros(self, _areas):
         user = SimpleNamespace(
             is_authenticated=True,

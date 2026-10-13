@@ -338,6 +338,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                     "reports-api:reports-executive-dashboard-resumen-v45"
                 ),
                 "ventas": reverse("reports-api:reports-executive-dashboard-comercial-ventas-v45"),
+                "preparacion_pedidos": reverse(
+                    "reports-api:reports-executive-dashboard-preparacion-v45"
+                ),
                 "inventario": reverse(
                     "reports-api:reports-executive-dashboard-stock-v45"
                 ),

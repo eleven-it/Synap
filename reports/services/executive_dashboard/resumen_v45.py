@@ -271,13 +271,13 @@ def _series(cursor, filters: DashboardFilters, *, gross: bool) -> dict:
     days = (filters.fecha_fin - filters.fecha_inicio).days + 1
     if days <= 45:
         bucket = "dia"
-        expression = "DATE_FORMAT({alias}.Fecha,'%Y-%m-%d')"
+        expression = "DATE_FORMAT({alias}.Fecha,'%%Y-%%m-%%d')"
     elif days <= 200:
         bucket = "semana"
-        expression = "DATE_FORMAT(DATE_SUB({alias}.Fecha,INTERVAL WEEKDAY({alias}.Fecha) DAY),'%Y-%m-%d')"
+        expression = "DATE_FORMAT(DATE_SUB({alias}.Fecha,INTERVAL WEEKDAY({alias}.Fecha) DAY),'%%Y-%%m-%%d')"
     else:
         bucket = "mes"
-        expression = "DATE_FORMAT({alias}.Fecha,'%Y-%m-01')"
+        expression = "DATE_FORMAT({alias}.Fecha,'%%Y-%%m-01')"
     sales_expr = expression.format(alias="cc")
     purchase_expr = expression.format(alias="cp")
     sales_scope, sales_params = _sales_scope("cc", filters)
