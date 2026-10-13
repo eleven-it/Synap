@@ -14,7 +14,7 @@ from .stock_v45 import fetch_stock_v45
 from .resumen_v45 import fetch_resumen_v45
 from .preparacion_v45 import fetch_preparacion_v45
 from .manufacturing_metrics import fetch_manufactura_resumen
-from .purchase_metrics import fetch_compras_resumen
+from .compras_v45 import fetch_compras_v45
 from .banco_metrics import fetch_tesoreria_banco_resumen
 from .tesoreria_metrics import fetch_tesoreria_resumen, list_movimientos_caja
 from .ventas_cobros_metrics import fetch_ventas_cobros_resumen, list_cobros_detalle
@@ -133,7 +133,7 @@ def run_command_center(
 
         for area_name, fetch_fn in (
             ("inventario", fetch_inventario_resumen),
-            ("compras", fetch_compras_resumen),
+            ("compras", fetch_compras_v45),
             ("cruzados", fetch_cruzados_resumen),
             ("ventas_cobros", fetch_ventas_cobros_resumen),
         ):

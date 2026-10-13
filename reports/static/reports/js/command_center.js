@@ -894,7 +894,7 @@
     }
     if (isAreaVisible("compras")) {
       cards.push(
-        kpiCard("OC pendientes", fmtNum.format(comp.oc_pendientes_cantidad || 0), "amber")
+        kpiCard("Compras netas", comp.disponible === false ? "No disponible" : fmtMoney.format(comp.kpis?.compras_netas ?? 0), "amber")
       );
     }
     if (isAreaVisible("manufactura")) {
@@ -933,7 +933,7 @@
       loadingCards.push(kpiCardLoading("Valor stock", "emerald"));
     }
     if (isAreaVisible("compras")) {
-      loadingCards.push(kpiCardLoading("OC pendientes", "amber"));
+      loadingCards.push(kpiCardLoading("Compras netas", "amber"));
     }
     if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
@@ -1072,14 +1072,31 @@
     },
     {
       key: "compras",
-      title: "Compras",
+      title: "Abastecimiento · Compras (V45)",
       icon: "shopping_cart",
       color: "amber",
-      metrics: (a) => [
-        ["OC pendientes", fmtNum.format(a.oc_pendientes_cantidad || 0)],
-        ["Unidades OC", fmtNum.format(a.oc_pendientes_unidades || 0)],
-        ["Importe OC", fmtMoney.format(a.oc_pendientes_importe || 0)],
-      ],
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Compras netas", money("compras_netas")],
+          ["Facturas", count("facturas")],
+          ["Ticket promedio", money("ticket_promedio")],
+          ["Notas de crédito", count("notas_credito")],
+          ["Órdenes de compra", count("ordenes_compra")],
+          ["Monto en OC", money("monto_oc")],
+          ["OC pendientes", count("oc_pendientes")],
+          ["Monto pendiente", money("monto_pendiente")],
+          ["OC parciales", count("oc_parciales")],
+          ["Remitos recibidos", count("remitos_recibidos")],
+          ["Remitos sin factura", count("remitos_sin_factura")],
+          ["OC vencidas", count("oc_vencidas")],
+          ["Proveedores", count("proveedores")],
+          ["Plazo promedio", k.plazo_promedio == null ? "N/D" : `${fmtNum.format(k.plazo_promedio)} días`],
+        ];
+      },
+      afterMetrics: (a) => renderComprasV45Charts(a),
       details: [],
     },
     {
@@ -1183,6 +1200,34 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderComprasV45Charts(areaData) {
+    const rows = (areaData.serie_evolucion?.filas || []).slice(-30);
+    const maxValue = Math.max(1, ...rows.flatMap((row) => [Number(row.compras || 0), Number(row.ordenes || 0)]));
+    const step = rows.length ? 304 / rows.length : 304;
+    const width = Math.max(1, step / 2 - 1);
+    const bars = rows.map((row, index) => {
+      const buy = Math.max(0, Number(row.compras || 0)) / maxValue * 83;
+      const order = Math.max(0, Number(row.ordenes || 0)) / maxValue * 83;
+      const x = 8 + index * step;
+      return `<rect x="${x.toFixed(1)}" y="${(96 - buy).toFixed(1)}" width="${width.toFixed(1)}" height="${buy.toFixed(1)}" fill="#d97706" />
+        <rect x="${(x + width).toFixed(1)}" y="${(96 - order).toFixed(1)}" width="${width.toFixed(1)}" height="${order.toFixed(1)}" fill="#0284c7" />`;
+    }).join("");
+    const tableRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800">
+      <th scope="row" class="px-2 py-1.5 text-left font-medium">${escHtml(row.fecha)}</th>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.compras)}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.ordenes)}</td>
+    </tr>`).join("");
+    const previous = areaData.comparacion?.kpis?.compras_netas;
+    return `<div class="mt-4 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="text-xs font-semibold">Evolución de compras y OC · ${areaData.serie_evolucion?.agrupacion || "período"}</p>
+      <svg viewBox="0 0 320 102" role="img" aria-label="Compras y órdenes de compra por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg>
+      <p class="text-[11px] text-slate-500">🟠 Compras · 🔵 Órdenes de compra</p>
+      <p class="mt-2 text-xs">Compras período anterior: <strong class="tabular-nums">${previous == null ? "No disponible" : fmtMoney.format(previous)}</strong></p>
+      <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary>
+        <div class="mt-2 max-h-72 overflow-auto"><table class="w-full min-w-[30rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Compras</th><th class="px-2 py-2 text-right">OC</th></tr></thead><tbody>${tableRows}</tbody></table></div>
+      </details></div>`;
+  }
 
   function renderPreparacionV45Charts(areaData) {
     const states = areaData.serie_estados || [];
@@ -1694,8 +1739,11 @@
     document.querySelectorAll(".cc-sales-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey === "inventario");
     });
-    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", selectedAreaKey === "preparacion_pedidos");
-    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos"].includes(selectedAreaKey));
+    document.querySelectorAll(".cc-pv-filter").forEach((node) => {
+      node.classList.toggle("hidden", selectedAreaKey === "compras" || selectedAreaKey === "inventario");
+    });
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras"].includes(selectedAreaKey));
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey !== "inventario");
       node.classList.toggle("flex", selectedAreaKey === "inventario");
