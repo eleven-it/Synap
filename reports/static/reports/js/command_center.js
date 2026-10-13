@@ -2822,6 +2822,8 @@
     el("cc-comparar-anterior")?.addEventListener("change", onFilterChange);
     el("cc-stock-presentacion")?.addEventListener("change", onFilterChange);
     el("cc-stock-comparar")?.addEventListener("change", onFilterChange);
+    el("cc-grupo-contable")?.addEventListener("change", onFilterChange);
+    el("cc-gastos-fuente")?.addEventListener("change", onFilterChange);
     el("cc-comparacion-inicio")?.addEventListener("change", onFilterChange);
     el("cc-comparacion-fin")?.addEventListener("change", onFilterChange);
     rememberFilters();
