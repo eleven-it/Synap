@@ -95,6 +95,21 @@ class AreaVisibilityUnitTests(SimpleTestCase):
         "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
         return_value=dict(DEFAULT_CC_AREAS),
     )
+    def test_usuario_compras_ve_tablero_con_alcance_territorial(self, _areas):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_superuser=False,
+            cod_usuario="comprador",
+            get_permisos_totales=lambda: {"tablero_abastecimiento_compras"},
+        )
+        allowed = resolve_cc_areas_for_user(user, mpr_active=True)
+        self.assertTrue(allowed["compras"])
+        self.assertFalse(allowed["logistica"])
+
+    @patch(
+        "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
+        return_value=dict(DEFAULT_CC_AREAS),
+    )
     def test_sin_permiso_no_hay_tableros(self, _areas):
         user = SimpleNamespace(
             is_authenticated=True,

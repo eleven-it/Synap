@@ -80,9 +80,18 @@ class CommandCenterTerritoryTests(SimpleTestCase):
         with self.assertRaises(TerritoryAccessDenied):
             constrain_filters_to_user(_user(), _filters(), area_key="ventas")
 
+    @patch("reports.services.executive_dashboard.territory.legacy_cursor")
+    def test_compras_usa_sucursales_derivadas_de_pv_autorizados(self, legacy):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [(1, 10), (2, 20)]
+        legacy.return_value.__enter__.return_value = cursor
+        out = constrain_filters_to_user(_user(), _filters(), area_key="compras")
+        self.assertEqual(out.puntos_venta, (1, 2))
+        self.assertEqual(out.sucursales_filtro, (10, 20))
+
     def test_area_sin_consultas_territoriales_se_cierra(self):
         with self.assertRaises(TerritoryAccessDenied):
-            constrain_filters_to_user(_user(), _filters(), area_key="compras")
+            constrain_filters_to_user(_user(), _filters(), area_key="logistica")
 
     def test_stock_sql_lleva_filtro_a_resumen_y_detalle(self):
         cursor = MagicMock()

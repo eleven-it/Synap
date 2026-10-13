@@ -28,7 +28,10 @@ def constrain_filters_to_user(
     if not id_usuario:
         raise TerritoryAccessDenied("No se pudo verificar el alcance territorial del usuario.")
 
-    if area_key not in {"ventas", "inventario", "preparacion_pedidos"}:
+    if area_key not in {
+        "resumen_general", "ventas", "inventario", "preparacion_pedidos",
+        "compras", "financiero", "impositivo", "libros_contables", "gastos",
+    }:
         raise TerritoryAccessDenied("Este tablero aún no tiene alcance territorial verificado.")
 
     with legacy_cursor(filters.base_empresa) as cursor:

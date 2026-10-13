@@ -73,9 +73,13 @@ CC_AREA_PERMISSION_CODES: Dict[str, tuple[str, ...]] = {
     "ventas_cobros": ("tablero_gestion_financiera",),
 }
 
-# Los otros servicios existentes no aplican aún el alcance del usuario en todas
-# sus consultas; no se publican a usuarios restringidos hasta completar esa capa.
-CC_TERRITORIAL_READY_AREAS = frozenset({"ventas", "inventario", "preparacion_pedidos"})
+# Estos tableros aplican el alcance territorial a sus documentos. Los saldos
+# generales sin origen territorial comprobado se devuelven como no disponibles.
+# Contabilidad y Logística siguen restringidos por sus indicadores globales.
+CC_TERRITORIAL_READY_AREAS = frozenset({
+    "resumen_general", "ventas", "preparacion_pedidos", "inventario",
+    "compras", "financiero", "impositivo", "libros_contables", "gastos",
+})
 
 
 def user_has_cc_area_permission(user, area_key: str) -> bool:
