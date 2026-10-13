@@ -72,18 +72,16 @@ class CommandCenterVisibleTests(SimpleTestCase):
         self.assertFalse(command_center_visible_for_user(user))
 
     @patch("reports.services.report_visibility.get_report_definition")
-    def test_puesto_supervisor_reporte_activado(self, mock_get):
-        from core.services.administranet_permisos_usuario import get_permisos_totales_administranet
-
+    def test_permiso_stock_reporte_activado(self, mock_get):
         mock_get.return_value = MagicMock(slug=COMMAND_CENTER_SLUG, is_visible=True)
-        permisos = get_permisos_totales_administranet(
-            base_empresa="",
-            id_puesto=None,
-            cod_usuario="lvillanueva",
-            nombre_puesto="Supervisor",
-        )
-        user = _UserStub(permisos=permisos)
+        user = _UserStub(permisos={"tablero_abastecimiento_stock"})
         self.assertTrue(command_center_visible_for_user(user))
+
+    @patch("reports.services.report_visibility.get_report_definition")
+    def test_permiso_gerencial_generico_no_habilita_tableros(self, mock_get):
+        mock_get.return_value = MagicMock(slug=COMMAND_CENTER_SLUG, is_visible=True)
+        user = _UserStub(permisos={"reports.view_managerial"})
+        self.assertFalse(command_center_visible_for_user(user))
 
     @patch("reports.services.report_visibility.get_report_definition")
     def test_usuario_supervisor_reporte_desactivado(self, mock_get):

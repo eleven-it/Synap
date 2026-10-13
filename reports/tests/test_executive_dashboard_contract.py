@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 from django.utils import timezone
 
-from reports.services.executive_dashboard.base import DashboardFilters, resolve_filters_from_query_params
+from reports.services.executive_dashboard.base import DashboardFilters, comparison_filters, resolve_filters_from_query_params
 from reports.services.executive_dashboard.command_center import run_command_center, _safe_legacy_area
 from reports.services.executive_dashboard.cross_metrics import (
     fetch_cruzados_resumen,
@@ -60,10 +60,10 @@ def _cursor_zeros():
 
 
 class ExecutiveDashboardContractTests(SimpleTestCase):
-    def test_resolve_filters_periodo_default_hoy(self):
+    def test_resolve_filters_periodo_default_mes_a_hoy(self):
         with patch.object(timezone, "localdate", return_value=date(2026, 5, 11)):
             f = resolve_filters_from_query_params({}, base_empresa="be1")
-        self.assertEqual(f.fecha_inicio, date(2026, 5, 11))
+        self.assertEqual(f.fecha_inicio, date(2026, 5, 1))
         self.assertEqual(f.fecha_fin, date(2026, 5, 11))
         self.assertEqual(f.fecha_referencia, date(2026, 5, 11))
 
@@ -91,6 +91,27 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
                     "fecha_fin": "2026-05-01",
                 },
                 base_empresa="be1",
+            )
+
+    def test_comparacion_personalizada_y_automatica(self):
+        custom = resolve_filters_from_query_params(
+            {"fecha_inicio": "2026-10-01", "fecha_fin": "2026-10-12",
+             "comparacion_inicio": "2025-10-01", "comparacion_fin": "2025-10-12"},
+            base_empresa="be1",
+        )
+        self.assertEqual(comparison_filters(custom).fecha_inicio, date(2025, 10, 1))
+        self.assertEqual(comparison_filters(custom).fecha_fin, date(2025, 10, 12))
+        auto = resolve_filters_from_query_params(
+            {"fecha_inicio": "2026-10-01", "fecha_fin": "2026-10-12"},
+            base_empresa="be1",
+        )
+        self.assertEqual(comparison_filters(auto).fecha_inicio, date(2026, 9, 19))
+        self.assertEqual(comparison_filters(auto).fecha_fin, date(2026, 9, 30))
+
+    def test_comparacion_requiere_rango_completo(self):
+        with self.assertRaises(InvalidDashboardFilters):
+            resolve_filters_from_query_params(
+                {"comparacion_inicio": "2025-10-01"}, base_empresa="be1",
             )
 
     def test_fetch_ventas_resumen_estructura(self):
@@ -126,12 +147,15 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertIn("valor_stock", out)
         sql_valor = cursor.execute.call_args_list[0][0][0]
         self.assertIn("PrecioCosto", sql_valor)
+        self.assertIn("articulo_prov", sql_valor)
+        self.assertIn("cantidad_unidad_display", sql_valor)
+        self.assertIn("x.saldo > 0", sql_valor)
         self.assertNotIn("Precio1V", sql_valor)
         self.assertIn("suma_stock", sql_valor)
         self.assertIn("productos_bajo_minimo", out)
         self.assertTrue(out["disponible"])
         sql_bajo_min = cursor.execute.call_args_list[1][0][0]
-        self.assertIn("cp_res.Fecha >= %s", sql_bajo_min)
+        self.assertIn("deposito_reposicion", sql_bajo_min)
         self.assertIn("suma_stock", sql_bajo_min)
         self.assertIn("depositos", out)
         self.assertEqual(len(out["depositos"]), 2)
@@ -266,6 +290,31 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
     @patch(
         "reports.services.executive_dashboard.command_center.resolve_cc_areas",
         return_value={
+            "ventas": True, "inventario": True, "compras": True,
+            "manufactura": False, "cruzados": True,
+            "tesoreria": True, "ventas_cobros": True,
+        },
+    )
+    @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=False)
+    @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
+    @patch("reports.services.executive_dashboard.command_center.fetch_ventas_resumen")
+    @patch("reports.services.executive_dashboard.command_center.fetch_inventario_resumen")
+    def test_seleccion_stock_no_consulta_ventas_ni_publica_sus_endpoints(
+        self, mock_stock, mock_ventas, mock_legacy, _mpr, _areas
+    ):
+        mock_legacy.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
+        mock_stock.return_value = {"disponible": True, "meta": {}, "stock_total": 5}
+        out = run_command_center(_filters(), allowed_areas={"inventario": True})
+        mock_stock.assert_called_once()
+        mock_ventas.assert_not_called()
+        self.assertEqual(list(out["areas"]), ["inventario"])
+        self.assertNotIn("ventas", out["meta"]["endpoints"])
+        self.assertNotIn("ventas_cobros", out["meta"]["endpoints"])
+
+    @patch(
+        "reports.services.executive_dashboard.command_center.resolve_cc_areas",
+        return_value={
             "ventas": True,
             "inventario": False,
             "compras": False,
@@ -282,7 +331,7 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         "reports.services.executive_dashboard.command_center.fetch_ventas_cobros_resumen",
     )
     @patch("reports.services.executive_dashboard.command_center.fetch_cruzados_resumen")
-    @patch("reports.services.executive_dashboard.command_center.fetch_compras_resumen")
+    @patch("reports.services.executive_dashboard.command_center.fetch_compras_v45")
     @patch("reports.services.executive_dashboard.command_center.fetch_inventario_resumen")
     @patch(
         "reports.services.executive_dashboard.command_center.fetch_ventas_resumen",
@@ -332,7 +381,7 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         return_value={"disponible": True, "meta": {}, "backorder_importe": 0},
     )
     @patch(
-        "reports.services.executive_dashboard.command_center.fetch_compras_resumen",
+        "reports.services.executive_dashboard.command_center.fetch_compras_v45",
         return_value={"disponible": True, "meta": {}, "oc_pendientes_cantidad": 0},
     )
     @patch(

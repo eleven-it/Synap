@@ -220,6 +220,13 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
         elif report.slug == INVENTARIO_DEPOSITO_SLUG:
             if not user_can_access_inventario_deposito(self.request.user):
                 raise Http404("Not authorized for inventario por depósito")
+        elif report.slug == self.COMMAND_CENTER_SLUG:
+            from reports.services.report_visibility import command_center_visible_for_user
+
+            if not command_center_visible_for_user(
+                self.request.user, empresa_id=empresa.id if empresa else None
+            ):
+                raise Http404("Not authorized for Command Center")
         elif report.is_operational() and not OperationalReportsPermission().has_permission(self.request, self):
             raise Http404("Not authorized for operational reports")
         elif report.is_managerial() and not ManagerialReportsPermission().has_permission(self.request, self):
@@ -288,12 +295,12 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 DETAIL_KEY_TO_AREA,
                 filter_urls_by_areas,
                 read_cc_areas_config,
-                resolve_cc_areas,
+                resolve_cc_areas_for_user,
             )
             from reports.services.executive_dashboard.base import mpr_modulo_activo
 
             mpr_active = mpr_modulo_activo()
-            cc_areas = resolve_cc_areas(mpr_active=mpr_active)
+            cc_areas = resolve_cc_areas_for_user(self.request.user, mpr_active=mpr_active)
             cc_areas_config = read_cc_areas_config()
             can_edit_cc_areas = user_has_full_access(self.request.user)
 
@@ -301,7 +308,14 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["command_center_areas_api_url"] = reverse(
                 "reports-api:reports-executive-dashboard-areas"
             )
-            context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
+            context["command_center_filter_options_api_url"] = reverse(
+                "reports-api:reports-executive-dashboard-filter-options"
+            )
+            context["executive_summary_api_url"] = (
+                reverse("reports-api:reports-executive-summary")
+                if cc_areas.get("ventas") and user_has_permission(self.request.user, "reports.view_managerial")
+                else ""
+            )
             context["executive_sales_page_url"] = reverse(
                 "reports:dashboard_detail", kwargs={"slug": self.EXECUTIVE_SLUG}
             )
@@ -313,14 +327,42 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["cc_areas"] = cc_areas
             context["cc_areas_config"] = cc_areas_config
             context["cc_area_labels"] = CC_AREA_LABELS
+            context["cc_tablero_options"] = [
+                {"key": key, "label": CC_AREA_LABELS[key]}
+                for key, enabled in cc_areas.items() if enabled
+            ]
             context["can_edit_cc_areas"] = can_edit_cc_areas
 
             area_urls = {
-                "ventas": reverse("reports-api:reports-executive-dashboard-ventas-resumen"),
+                "resumen_general": reverse(
+                    "reports-api:reports-executive-dashboard-resumen-v45"
+                ),
+                "ventas": reverse("reports-api:reports-executive-dashboard-comercial-ventas-v45"),
+                "preparacion_pedidos": reverse(
+                    "reports-api:reports-executive-dashboard-preparacion-v45"
+                ),
                 "inventario": reverse(
-                    "reports-api:reports-executive-dashboard-inventario-resumen"
+                    "reports-api:reports-executive-dashboard-stock-v45"
                 ),
                 "compras": reverse("reports-api:reports-executive-dashboard-compras-resumen"),
+                "financiero": reverse(
+                    "reports-api:reports-executive-dashboard-financiero-v45"
+                ),
+                "gestion_contable": reverse(
+                    "reports-api:reports-executive-dashboard-gestion-contable-v45"
+                ),
+                "impositivo": reverse(
+                    "reports-api:reports-executive-dashboard-impositivo-v45"
+                ),
+                "libros_contables": reverse(
+                    "reports-api:reports-executive-dashboard-libros-v45"
+                ),
+                "logistica": reverse(
+                    "reports-api:reports-executive-dashboard-logistica-v45"
+                ),
+                "gastos": reverse(
+                    "reports-api:reports-executive-dashboard-gastos-v45"
+                ),
                 "cruzados": reverse(
                     "reports-api:reports-executive-dashboard-cruzados-resumen"
                 ),
@@ -342,6 +384,39 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 else ""
             )
             detail_urls = {
+                "resumen_v45": reverse(
+                    "reports-api:reports-executive-dashboard-resumen-v45-detail"
+                ),
+                "comercial_v45": reverse(
+                    "reports-api:reports-executive-dashboard-comercial-ventas-v45-detalle"
+                ),
+                "stock_v45": reverse(
+                    "reports-api:reports-executive-dashboard-stock-v45-detalle"
+                ),
+                "preparacion_v45": reverse(
+                    "reports-api:reports-executive-dashboard-preparacion-v45-detail"
+                ),
+                "compras_v45": reverse(
+                    "reports-api:reports-executive-dashboard-compras-v45-detail"
+                ),
+                "financiero_v45": reverse(
+                    "reports-api:reports-executive-dashboard-financiero-v45-detail"
+                ),
+                "libros_v45": reverse(
+                    "reports-api:reports-executive-dashboard-libros-v45-detail"
+                ),
+                "gastos_v45": reverse(
+                    "reports-api:reports-executive-dashboard-gastos-v45-detail"
+                ),
+                "contable_v45": reverse(
+                    "reports-api:reports-executive-dashboard-gestion-contable-v45-detail"
+                ),
+                "impositivo_v45": reverse(
+                    "reports-api:reports-executive-dashboard-impositivo-v45-detail"
+                ),
+                "logistica_v45": reverse(
+                    "reports-api:reports-executive-dashboard-logistica-v45-detail"
+                ),
                 "pedidos_pendientes": reverse(
                     "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"
                 ),

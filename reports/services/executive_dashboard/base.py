@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
-from datetime import date, datetime
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta
 from typing import Any, Generator, Iterator
 
 from django.utils import timezone
@@ -23,9 +23,12 @@ class DashboardFilters:
     fecha_fin: date
     sucursales_filtro: tuple[int, ...] = ()
     puntos_venta: tuple[int, ...] = ()
+    depositos_filtro: tuple[int, ...] = ()
     limit: int = 100
     offset: int = 0
     busqueda: str | None = None
+    comparacion_inicio: date | None = None
+    comparacion_fin: date | None = None
 
     @property
     def cod_sucursal(self) -> int | None:
@@ -85,7 +88,7 @@ def resolve_filters_from_query_params(
     base_empresa: str,
     default_fecha: date | None = None,
 ) -> DashboardFilters:
-    """Resuelve período canónico ``fecha_inicio`` / ``fecha_fin`` (default: hoy).
+    """Resuelve período canónico ``fecha_inicio`` / ``fecha_fin`` (default: mes a hoy).
 
     ``fecha`` (legacy) sin intervalo explícito equivale a un solo día (inicio = fin).
     ``fecha_referencia`` se deriva siempre de ``fecha_fin`` (compatibilidad meta/API).
@@ -100,10 +103,20 @@ def resolve_filters_from_query_params(
     elif fecha_legacy:
         fecha_inicio = fecha_fin = fecha_legacy
     else:
-        fecha_inicio = fecha_fin = hoy
+        fecha_inicio, fecha_fin = hoy.replace(day=1), hoy
 
     if fecha_inicio > fecha_fin:
         raise InvalidDashboardFilters("fecha_inicio no puede ser posterior a fecha_fin.")
+
+    cmp_inicio_raw = qp.get("comparacion_inicio") if qp else None
+    cmp_fin_raw = qp.get("comparacion_fin") if qp else None
+    comparacion_inicio = _parse_fecha(cmp_inicio_raw)
+    comparacion_fin = _parse_fecha(cmp_fin_raw)
+    if cmp_inicio_raw or cmp_fin_raw:
+        if not comparacion_inicio or not comparacion_fin:
+            raise InvalidDashboardFilters("La comparación necesita ambas fechas válidas.")
+        if comparacion_inicio > comparacion_fin:
+            raise InvalidDashboardFilters("comparacion_inicio no puede ser posterior a comparacion_fin.")
 
     sucursales_filtro = _parse_int_list_qp(qp, "sucursales")
     if not sucursales_filtro and qp:
@@ -114,6 +127,7 @@ def resolve_filters_from_query_params(
                 sucursales_filtro = (int(sid),)
 
     puntos_venta = _parse_int_list_qp(qp, "puntos_venta", "punto_venta")
+    depositos_filtro = _parse_int_list_qp(qp, "depositos", "deposito")
 
     limit = to_int_or_none(qp.get("limit") if qp else None) or 100
     offset = to_int_or_none(qp.get("offset") if qp else None) or 0
@@ -135,9 +149,26 @@ def resolve_filters_from_query_params(
         fecha_fin=fecha_fin,
         sucursales_filtro=sucursales_filtro,
         puntos_venta=puntos_venta,
+        depositos_filtro=depositos_filtro,
         limit=limit,
         offset=offset,
         busqueda=busqueda,
+        comparacion_inicio=comparacion_inicio,
+        comparacion_fin=comparacion_fin,
+    )
+
+
+def comparison_filters(filters: DashboardFilters) -> DashboardFilters:
+    """Período B elegido por el usuario o intervalo anterior de igual duración."""
+    if filters.comparacion_inicio and filters.comparacion_fin:
+        start, end = filters.comparacion_inicio, filters.comparacion_fin
+    else:
+        days = (filters.fecha_fin - filters.fecha_inicio).days + 1
+        start = filters.fecha_inicio - timedelta(days=days)
+        end = filters.fecha_inicio - timedelta(days=1)
+    return replace(
+        filters, fecha_inicio=start, fecha_fin=end, fecha_referencia=end,
+        comparacion_inicio=None, comparacion_fin=None,
     )
 
 
@@ -150,10 +181,15 @@ def build_meta(filters: DashboardFilters, **extra: Any) -> dict[str, Any]:
             "inicio": filters.fecha_inicio.isoformat(),
             "fin": filters.fecha_fin.isoformat(),
         },
+        "comparacion_personalizada": (
+            {"inicio": filters.comparacion_inicio.isoformat(), "fin": filters.comparacion_fin.isoformat()}
+            if filters.comparacion_inicio and filters.comparacion_fin else None
+        ),
         "cod_sucursal_filtro": list(filters.sucursales_filtro)
         if filters.sucursales_filtro
         else None,
         "punto_venta_filtros": list(filters.puntos_venta) if filters.puntos_venta else None,
+        "depositos_autorizados": list(filters.depositos_filtro) if filters.depositos_filtro else None,
         "notas_semanticas": [],
     }
     meta.update(extra)

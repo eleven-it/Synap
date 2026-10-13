@@ -1,5 +1,6 @@
 """Config global de áreas del Command Center."""
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
 from django.test import SimpleTestCase, TestCase
 
@@ -11,6 +12,7 @@ from reports.services.executive_dashboard.area_visibility import (
     filter_urls_by_areas,
     read_cc_areas_config,
     resolve_cc_areas,
+    resolve_cc_areas_for_user,
     set_cc_areas,
 )
 from reports.services.report_visibility import COMMAND_CENTER_SLUG
@@ -43,6 +45,8 @@ class AreaVisibilityUnitTests(SimpleTestCase):
             "ventas": "/v/",
             "inventario": "/i/",
             "existencias": "/e/",
+            "comercial_v45": "/ventas/detalle/",
+            "stock_v45": "/stock/detalle/",
         }
         areas = {**DEFAULT_CC_AREAS, "inventario": False}
         out = filter_urls_by_areas(
@@ -51,8 +55,86 @@ class AreaVisibilityUnitTests(SimpleTestCase):
             key_to_area={**{k: k for k in urls}, **DETAIL_KEY_TO_AREA},
         )
         self.assertIn("ventas", out)
+        self.assertIn("comercial_v45", out)
         self.assertNotIn("inventario", out)
         self.assertNotIn("existencias", out)
+        self.assertNotIn("stock_v45", out)
+
+    @patch(
+        "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
+        return_value=dict(DEFAULT_CC_AREAS),
+    )
+    def test_usuario_solo_stock_no_recibe_otras_areas(self, _areas):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_superuser=False,
+            cod_usuario="operador_stock",
+            get_permisos_totales=lambda: {"tablero_abastecimiento_stock"},
+        )
+        allowed = resolve_cc_areas_for_user(user, mpr_active=True)
+        self.assertEqual([key for key, enabled in allowed.items() if enabled], ["inventario"])
+
+    @patch(
+        "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
+        return_value=dict(DEFAULT_CC_AREAS),
+    )
+    def test_usuario_preparacion_solo_ve_su_tablero(self, _areas):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_superuser=False,
+            cod_usuario="preparador",
+            get_permisos_totales=lambda: {"tablero_comercial_prep_pedidos"},
+        )
+        allowed = resolve_cc_areas_for_user(user, mpr_active=True)
+        self.assertEqual(
+            [key for key, enabled in allowed.items() if enabled],
+            ["preparacion_pedidos"],
+        )
+
+    @patch(
+        "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
+        return_value=dict(DEFAULT_CC_AREAS),
+    )
+    def test_usuario_compras_ve_tablero_con_alcance_territorial(self, _areas):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_superuser=False,
+            cod_usuario="comprador",
+            get_permisos_totales=lambda: {"tablero_abastecimiento_compras"},
+        )
+        allowed = resolve_cc_areas_for_user(user, mpr_active=True)
+        self.assertTrue(allowed["compras"])
+        self.assertFalse(allowed["logistica"])
+
+    @patch(
+        "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
+        return_value=dict(DEFAULT_CC_AREAS),
+    )
+    def test_usuario_logistica_ve_solo_su_tablero(self, _areas):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_superuser=False,
+            cod_usuario="logistica",
+            get_permisos_totales=lambda: {"tablero_logistica_hoja_ruta"},
+        )
+        allowed = resolve_cc_areas_for_user(user, mpr_active=True)
+        self.assertEqual(
+            [key for key, enabled in allowed.items() if enabled],
+            ["logistica"],
+        )
+
+    @patch(
+        "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",
+        return_value=dict(DEFAULT_CC_AREAS),
+    )
+    def test_sin_permiso_no_hay_tableros(self, _areas):
+        user = SimpleNamespace(
+            is_authenticated=True,
+            is_superuser=False,
+            cod_usuario="operador",
+            get_permisos_totales=lambda: set(),
+        )
+        self.assertFalse(any(resolve_cc_areas_for_user(user, mpr_active=True).values()))
 
 
 class AreaVisibilityPersistTests(TestCase):
@@ -94,7 +176,7 @@ class AreaVisibilityApiTests(TestCase):
         user.is_admin = MagicMock(return_value=False)
         user.cod_usuario = "supervisor" if supervisor else "vendedor"
         user.empresa_activa = None
-        perms = set()
+        perms = {"tablero_abastecimiento_stock"}
         if managerial:
             perms.add("reports.view_managerial")
         if supervisor:
@@ -117,23 +199,70 @@ class AreaVisibilityApiTests(TestCase):
         "reports.executive_dashboard_api_views.mpr_modulo_activo",
         return_value=True,
     )
-    @patch(
-        "core.utils.permissions.user_has_permission",
-        return_value=True,
-    )
-    def test_get_areas_ok(self, _perm, _mpr, _vis):
+    def test_get_areas_ok(self, _mpr, _vis):
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from reports.executive_dashboard_api_views import ExecutiveDashboardAreasAPIView
 
         factory = APIRequestFactory()
         request = factory.get("/api/reports/executive-dashboard/areas/")
-        force_authenticate(request, user=self._user())
+        force_authenticate(request, user=self._user(managerial=False))
         response = ExecutiveDashboardAreasAPIView.as_view()(request)
         self.assertEqual(response.status_code, 200)
         self.assertIn("areas", response.data)
-        self.assertIn("areas_config", response.data)
+        self.assertNotIn("areas_config", response.data)
+        self.assertTrue(response.data["areas"]["inventario"])
+        self.assertFalse(response.data["areas"]["ventas"])
+        self.assertEqual(response.data["keys"], ["inventario"])
         self.assertFalse(response.data["can_edit"])
+
+    @patch(
+        "reports.services.report_visibility.command_center_visible_for_user",
+        return_value=True,
+    )
+    @patch(
+        "reports.executive_dashboard_api_views.mpr_modulo_activo",
+        return_value=True,
+    )
+    def test_usuario_solo_stock_no_puede_consultar_ventas(self, _mpr, _vis):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.executive_dashboard_api_views import ExecutiveDashboardVentasResumenAPIView
+
+        request = APIRequestFactory().get("/api/reports/executive-dashboard/ventas/resumen/")
+        force_authenticate(request, user=self._user())
+        response = ExecutiveDashboardVentasResumenAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 403)
+
+    @patch(
+        "reports.services.report_visibility.command_center_visible_for_user",
+        return_value=True,
+    )
+    @patch("reports.executive_dashboard_api_views.mpr_modulo_activo", return_value=False)
+    @patch("reports.executive_dashboard_api_views.legacy_cursor")
+    @patch(
+        "reports.executive_dashboard_api_views.fetch_inventario_resumen",
+        return_value={"disponible": True, "valor_stock": 12345, "productos_con_stock": 4},
+    )
+    @patch(
+        "reports.executive_dashboard_api_views.ExecutiveDashboardMixin._filters_or_error",
+        return_value=(SimpleNamespace(base_empresa="test"), None),
+    )
+    def test_usuario_solo_stock_no_recibe_valorizacion(
+        self, _filters, _fetch, mock_legacy, _mpr, _vis
+    ):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from reports.executive_dashboard_api_views import ExecutiveDashboardInventarioResumenAPIView
+
+        mock_legacy.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
+        request = APIRequestFactory().get("/api/reports/executive-dashboard/inventario/resumen/")
+        force_authenticate(request, user=self._user(managerial=False))
+        response = ExecutiveDashboardInventarioResumenAPIView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["valor_stock"])
+        self.assertEqual(response.data["productos_con_stock"], 4)
 
     @patch(
         "reports.services.report_visibility.command_center_visible_for_user",
@@ -147,11 +276,7 @@ class AreaVisibilityApiTests(TestCase):
         "reports.executive_dashboard_api_views.user_has_full_access",
         return_value=True,
     )
-    @patch(
-        "core.utils.permissions.user_has_permission",
-        return_value=True,
-    )
-    def test_patch_areas_supervisor(self, _perm, _full, _mpr, _vis):
+    def test_patch_areas_supervisor(self, _full, _mpr, _vis):
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from reports.executive_dashboard_api_views import ExecutiveDashboardAreasAPIView
@@ -175,11 +300,7 @@ class AreaVisibilityApiTests(TestCase):
         "reports.executive_dashboard_api_views.user_has_full_access",
         return_value=False,
     )
-    @patch(
-        "core.utils.permissions.user_has_permission",
-        return_value=True,
-    )
-    def test_patch_areas_no_supervisor_403(self, _perm, _full, _vis):
+    def test_patch_areas_no_supervisor_403(self, _full, _vis):
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from reports.executive_dashboard_api_views import ExecutiveDashboardAreasAPIView
