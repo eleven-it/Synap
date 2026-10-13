@@ -44,12 +44,12 @@ class FinancieroV45ScopeTests(SimpleTestCase):
         cartera = _check_source("cheques_cartera")
         propios = _check_source("cheques_emitidos")
         rechazados = _check_source("cheques_rechazados")
-        self.assertIn("ch.Encartera,'')='SI'", cartera)
-        self.assertIn("ch.pagado,'')='NO'", propios)
-        self.assertIn("ch.en_nd_proveedor,'')='NO'", propios)
+        self.assertIn("COALESCE(ch.Encartera,''))='SI'", cartera)
+        self.assertIn("COALESCE(ch.pagado,''))='NO'", propios)
+        self.assertIn("COALESCE(ch.en_nd_proveedor,''))='NO'", propios)
         self.assertIn("UNION ALL", rechazados)
-        self.assertEqual(rechazados.count("ch.rechazado,'')='SI'"), 1)
-        self.assertEqual(rechazados.count("ch.Rechazado,'')='SI'"), 1)
+        self.assertEqual(rechazados.count("COALESCE(ch.rechazado,''))='SI'"), 1)
+        self.assertEqual(rechazados.count("COALESCE(ch.Rechazado,''))='SI'"), 1)
 
     def test_ranking_cheques_concilia_total_y_agrupacion(self):
         class Cursor:
