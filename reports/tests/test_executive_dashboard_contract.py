@@ -126,12 +126,15 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertIn("valor_stock", out)
         sql_valor = cursor.execute.call_args_list[0][0][0]
         self.assertIn("PrecioCosto", sql_valor)
+        self.assertIn("articulo_prov", sql_valor)
+        self.assertIn("cantidad_unidad_display", sql_valor)
+        self.assertIn("x.saldo > 0", sql_valor)
         self.assertNotIn("Precio1V", sql_valor)
         self.assertIn("suma_stock", sql_valor)
         self.assertIn("productos_bajo_minimo", out)
         self.assertTrue(out["disponible"])
         sql_bajo_min = cursor.execute.call_args_list[1][0][0]
-        self.assertIn("cp_res.Fecha >= %s", sql_bajo_min)
+        self.assertIn("deposito_reposicion", sql_bajo_min)
         self.assertIn("suma_stock", sql_bajo_min)
         self.assertIn("depositos", out)
         self.assertEqual(len(out["depositos"]), 2)
