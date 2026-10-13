@@ -26,7 +26,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Abastecimiento — Compras | 14 | `tablero_abastecimiento_compras` | 14 KPI y evolución de compras/OC en rama de trabajo; faltan detalles, validación Django/web y alcance de sucursal para usuarios restringidos. |
 | Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | Resumen y detalle paginado de 14 KPI, tres presentaciones, comparación de movimientos y gráficos en rama de trabajo. Falta prueba Django, revisión visual móvil y revisión del PR. |
 | Análisis financiero | 15 | `tablero_gestion_financiera` | 15 KPI, aging, flujo y comparación en rama de trabajo; faltan detalles, validación Django/web y contraste visual con ERP. |
-| Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI y serie Debe/Haber en rama de trabajo; faltan detalles, comparación y validación Django/web. |
+| Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI, serie Debe/Haber y aperturas de asientos, impuestos, períodos y ejercicios; faltan comparación y validación Django/web. |
 | Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI fiscales y composición de IVA en rama de trabajo; faltan libros y detalles, series mensuales y comparación. |
 | Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI, dos series y Diario, Mayor, Balance y Resultados paginados en rama de trabajo; faltan comparación y prueba web. |
 | Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI y comparación de estados en rama de trabajo; faltan ranking, detalles y contraste con rutas recientes. |
@@ -73,7 +73,7 @@ En Best Sox 01–12/10/2026, cobranzas $177.508.146,64 y pagos $153.688.170,16 p
 
 ## Conciliación inicial de Gestión contable
 
-En Best Sox 01–12/10/2026, `cont_asiento` devuelve 253 asientos, Debe y Haber de $1.008.193.355,56 cada uno, diferencia cero, 253 de proceso y resultado contable de -$796.354,24. Los importes y resultado coinciden con la captura V45 de Contabilidad. Hay un ejercicio abierto y ningún período abierto en el rango. La serie diaria se ejecutó en MySQL 5.7 aislado. La selección de grupo y sucursal se aplica a los asientos; los impuestos y períodos son datos generales y se identifican así en la respuesta y la vista. Faltan detalles, comparación, contraste visual del tablero específico y prueba Django/web.
+En Best Sox 01–12/10/2026, `cont_asiento` devuelve 253 asientos, Debe y Haber de $1.008.193.355,56 cada uno, diferencia cero, 253 de proceso y resultado contable de -$796.354,24. Los importes y resultado coinciden con la captura V45 de Contabilidad. Hay un ejercicio abierto y ningún período abierto en el rango. La serie diaria se ejecutó en MySQL 5.7 aislado. La selección de grupo y sucursal se aplica a los asientos; los impuestos y períodos son datos generales y se identifican así en la respuesta y la vista. Las aperturas de asientos (684 renglones), impuestos (0), períodos (0) y ejercicios (1) se ejecutaron contra la misma copia. Faltan comparación, contraste visual del tablero específico y prueba Django/web.
 
 ## Conciliación inicial de Impuestos y posiciones fiscales
 

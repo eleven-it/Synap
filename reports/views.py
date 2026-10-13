@@ -396,6 +396,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "gastos_v45": reverse(
                     "reports-api:reports-executive-dashboard-gastos-v45-detail"
                 ),
+                "contable_v45": reverse(
+                    "reports-api:reports-executive-dashboard-gestion-contable-v45-detail"
+                ),
                 "pedidos_pendientes": reverse(
                     "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"
                 ),

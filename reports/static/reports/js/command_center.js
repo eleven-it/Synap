@@ -1222,7 +1222,12 @@
         ];
       },
       afterMetrics: (a) => renderContableV45Charts(a),
-      details: [],
+      details: [
+        { label: "Renglones de asiento", urlKey: "contable_v45", vista: "asientos" },
+        { label: "Determinaciones", urlKey: "contable_v45", vista: "impuestos" },
+        { label: "Períodos", urlKey: "contable_v45", vista: "periodos" },
+        { label: "Ejercicios", urlKey: "contable_v45", vista: "ejercicios" },
+      ],
     },
     {
       key: "impositivo",
@@ -2511,7 +2516,7 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
-    if (["libros_v45", "gastos_v45"].includes(urlKey) && vista) {
+    if (["libros_v45", "gastos_v45", "contable_v45"].includes(urlKey) && vista) {
       genericV45Detail = { base, vista, offset: 0 };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");
