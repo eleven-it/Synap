@@ -74,6 +74,8 @@ function pedidoMasivoCore() {
     clienteSel: '',
     qCliente: '',
     panelCli: false,
+    busquedaMovilActiva: false,
+    _mobileSearchInput: null,
     idxCli: 0,
     cargandoCli: false,
     opcionesSucursal: [],
@@ -456,7 +458,7 @@ function pedidoMasivoCore() {
       }
       // Al hacer scroll de la matriz, cerrar el dropdown (evita menú desfasado).
       this._onMatrixScrollCloseArt = () => {
-        if (this.panelArt) this.cerrarPanelArt();
+        if (this.panelArt && !this._scrollBuscadorProgramatico) this.cerrarPanelArt();
       };
       this.$watch('draftId', () => {
         this.$nextTick(() => {
@@ -570,7 +572,49 @@ function pedidoMasivoCore() {
       if (totMid) totMid.scrollLeft = mid.scrollLeft;
     },
     abrirPanelCli() { this.panelCli = true; },
-    cerrarPanelCli() { this.panelCli = false; },
+    cerrarPanelCli() {
+      this.panelCli = false;
+      this.cerrarBusquedaMovil('pm-cli');
+    },
+    prepararBusquedaMovil(event) {
+      if (!window.matchMedia('(max-width: 1023px)').matches) return;
+      this.busquedaMovilActiva = true;
+      this._mobileSearchInput = event.target;
+      const ajustar = () => {
+        const input = this._mobileSearchInput;
+        if (!input || !input.isConnected || document.activeElement !== input) return;
+        const viewport = window.visualViewport;
+        const visibleTop = viewport ? viewport.offsetTop : 0;
+        const visibleBottom = visibleTop + (viewport ? viewport.height : window.innerHeight);
+        const topDeseado = visibleTop + 84;
+        const rect = input.getBoundingClientRect();
+        if (rect.top > topDeseado + 24) {
+          input.scrollIntoView({ block: 'start', behavior: 'auto' });
+          window.scrollBy(0, -84);
+        }
+        const actual = input.getBoundingClientRect();
+        const espacio = Math.max(72, Math.floor(visibleBottom - actual.bottom - 12));
+        this.$el.style.setProperty('--pm-search-space', `${espacio}px`);
+      };
+      if (!this._mobileSearchResize) {
+        this._mobileSearchResize = () => requestAnimationFrame(ajustar);
+        window.visualViewport?.addEventListener('resize', this._mobileSearchResize);
+        window.visualViewport?.addEventListener('scroll', this._mobileSearchResize);
+      }
+      requestAnimationFrame(ajustar);
+      setTimeout(ajustar, 320);
+    },
+    cerrarBusquedaMovil(idInput) {
+      if (this._mobileSearchInput?.id !== idInput) return;
+      this.busquedaMovilActiva = false;
+      this._mobileSearchInput = null;
+      this.$el.style.removeProperty('--pm-search-space');
+      if (this._mobileSearchResize) {
+        window.visualViewport?.removeEventListener('resize', this._mobileSearchResize);
+        window.visualViewport?.removeEventListener('scroll', this._mobileSearchResize);
+        this._mobileSearchResize = null;
+      }
+    },
     abrirPanelSuc() {
       if (!this.clienteSel) return;
       this.panelSuc = true;
@@ -578,7 +622,10 @@ function pedidoMasivoCore() {
         this.cargarOpcionesSucursal(this.clienteSel);
       }
     },
-    cerrarPanelSuc() { this.panelSuc = false; },
+    cerrarPanelSuc() {
+      this.panelSuc = false;
+      this.cerrarBusquedaMovil('pm-sucursal');
+    },
     _etiquetaSucursal(s) {
       return String(
         s?.etiqueta || s?.nombre || s?.NroCalle || s?.nro || s?.id_cliente_domicilio || '',
@@ -2430,19 +2477,25 @@ function pedidoMasivoCore() {
       }
       this.panelArt = false;
       this.artDropdownStyle = '';
+      this.cerrarBusquedaMovil('pm-art-mob');
     },
     actualizarPosDropdownArt() {
       // Dropdown anclado con CSS absolute al input; no requiere coords fixed.
     },
-    /** Baja la matriz hasta la fila-buscador (línea nueva al pie). */
+    /** El buscador está en la primera fila de la matriz. */
     scrollBuscadorIntoView() {
       const mid = this.$refs.pmZoneMid;
       const leftScroll = this.$refs.pmZoneLeftScroll;
       const rightScroll = this.$refs.pmZoneRightScroll;
-      if (mid) mid.scrollTop = mid.scrollHeight;
+      this._scrollBuscadorProgramatico = true;
+      if (mid) mid.scrollTop = 0;
       const top = mid ? mid.scrollTop : 0;
       if (leftScroll) leftScroll.scrollTop = top;
       if (rightScroll) rightScroll.scrollTop = top;
+      clearTimeout(this._scrollBuscadorTimer);
+      this._scrollBuscadorTimer = setTimeout(() => {
+        this._scrollBuscadorProgramatico = false;
+      }, 120);
     },
     focusBuscadorArt() {
       this.$nextTick(() => {
