@@ -37,6 +37,7 @@ from .services.executive_dashboard.inventory_metrics import (
     fetch_inventario_resumen,
     list_existencias,
 )
+from .services.executive_dashboard.stock_v45 import fetch_stock_v45
 from .services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
 from .services.executive_dashboard.purchase_metrics import fetch_compras_resumen
 from .services.executive_dashboard.banco_metrics import fetch_tesoreria_banco_resumen
@@ -220,6 +221,9 @@ class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
         filters, err = self._filters_or_error(request)
         if err:
             return err
+        presentation = request.query_params.get("presentacion", "unidad")
+        if area_key == "inventario" and presentation not in {"unidad", "display", "bulto"}:
+            return Response({"detail": "Presentación desconocida."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             payload = run_command_center(
                 filters,
@@ -228,6 +232,9 @@ class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
                 v45_sales=area_key == "ventas",
                 gross_sales=str(request.query_params.get("incluir_impuestos", "")).lower() in {"1", "true", "si"},
                 compare_sales=request.query_params.get("comparar") == "anterior",
+                v45_stock=area_key == "inventario",
+                stock_presentation=presentation,
+                compare_stock=request.query_params.get("comparar") == "anterior",
             )
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
@@ -329,6 +336,35 @@ class ExecutiveDashboardInventarioResumenAPIView(ExecutiveDashboardMixin, APIVie
                 payload["valor_stock"] = None
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardStockV45APIView(ExecutiveDashboardMixin, APIView):
+    """Los 14 KPI de Abastecimiento/Stock V45."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("inventario")
+        if disabled:
+            return disabled
+        presentation = request.query_params.get("presentacion", "unidad")
+        if presentation not in {"unidad", "display", "bulto"}:
+            return Response({"detail": "Presentación desconocida."}, status=status.HTTP_400_BAD_REQUEST)
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_stock_v45(
+                    cursor, filters, presentation=presentation,
+                    show_costs=user_has_permission(request.user, "reports.view_managerial"),
+                    compare_previous=request.query_params.get("comparar") == "anterior",
+                )
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
         return Response(payload)
 
 

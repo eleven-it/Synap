@@ -10,6 +10,7 @@ from .cross_metrics import fetch_cruzados_resumen
 from .comercial_v45 import fetch_comercial_ventas_v45
 from .exceptions import is_legacy_db_error, legacy_area_failure_payload
 from .inventory_metrics import fetch_inventario_resumen
+from .stock_v45 import fetch_stock_v45
 from .manufacturing_metrics import fetch_manufactura_resumen
 from .purchase_metrics import fetch_compras_resumen
 from .banco_metrics import fetch_tesoreria_banco_resumen
@@ -77,6 +78,8 @@ def run_command_center(
     filters: DashboardFilters, *, allowed_areas: dict[str, bool] | None = None,
     show_stock_costs: bool = True,
     v45_sales: bool = False, gross_sales: bool = False, compare_sales: bool = False,
+    v45_stock: bool = False, stock_presentation: str = "unidad",
+    compare_stock: bool = False,
 ) -> dict[str, Any]:
     areas: dict[str, Any] = {}
     notas_globales: list[str] = []
@@ -113,8 +116,15 @@ def run_command_center(
         ):
             if not areas_habilitadas.get(area_name):
                 continue
-            area_full = _safe_legacy_area(area_name, fetch_fn, cursor, filters)
-            if area_name == "inventario" and not show_stock_costs:
+            if area_name == "inventario" and v45_stock:
+                area_full = _safe_legacy_area(
+                    area_name, fetch_stock_v45, cursor, filters,
+                    presentation=stock_presentation, show_costs=show_stock_costs,
+                    compare_previous=compare_stock,
+                )
+            else:
+                area_full = _safe_legacy_area(area_name, fetch_fn, cursor, filters)
+            if area_name == "inventario" and not show_stock_costs and not v45_stock:
                 area_full["valor_stock"] = None
             if area_full.get("disponible") is not False:
                 areas[area_name] = _area_sin_meta_interno(area_full)

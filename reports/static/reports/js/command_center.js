@@ -555,6 +555,9 @@
     if (selectedAreaKey === "ventas") {
       if (el("cc-incluir-impuestos")?.checked) q.set("incluir_impuestos", "1");
       if (el("cc-comparar-anterior")?.checked) q.set("comparar", "anterior");
+    } else if (selectedAreaKey === "inventario") {
+      q.set("presentacion", el("cc-stock-presentacion")?.value || "unidad");
+      if (el("cc-stock-comparar")?.checked) q.set("comparar", "anterior");
     }
     return q.toString();
   }
@@ -821,8 +824,9 @@
 
   function stockValueLabel(area) {
     if (!area || area.disponible === false) return "No disponible";
-    if (area.valor_stock == null) return "Sin permiso";
-    return fmtMoney.format(area.valor_stock);
+    const value = area.kpis?.stock_valorizado ?? area.valor_stock;
+    if (value == null) return "Sin permiso";
+    return fmtMoney.format(value);
   }
 
   function stripAreaMeta(payload) {
@@ -957,16 +961,31 @@
     },
     {
       key: "inventario",
-      title: "Inventario",
+      title: "Abastecimiento · Stock (V45)",
       icon: "inventory_2",
       color: "emerald",
-      metrics: (a) => [
-        ["Valor stock", stockValueLabel(a)],
-        ["Con stock", fmtNum.format(a.productos_con_stock || 0)],
-        ["Bajo mínimo", a.productos_bajo_minimo == null ? "No disponible" : fmtNum.format(a.productos_bajo_minimo)],
-        ["Sin stock", fmtNum.format(a.productos_sin_stock || 0)],
-      ],
-      afterMetrics: (a) => renderInventarioDepositosBlock(a),
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "Sin permiso de costos" : fmtMoney.format(k[key]);
+        const qty = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Stock valorizado", money("stock_valorizado")],
+          ["Disponible", qty("unidades_disponibles")],
+          ["Artículos con stock", qty("articulos_con_stock")],
+          ["Stock negativo", qty("articulos_stock_negativo")],
+          ["Bajo mínimo", qty("bajo_minimo")],
+          ["Punto pedido", qty("punto_pedido")],
+          ["Sobre máximo", qty("sobre_maximo")],
+          ["Reservado", qty("stock_reservado")],
+          ["Pendiente recibir", qty("pendiente_recibir")],
+          ["Entradas período", qty("entradas_periodo")],
+          ["Salidas período", qty("salidas_periodo")],
+          ["Valor entradas", money("valor_entradas")],
+          ["Valor salidas", money("valor_salidas")],
+          ["Sin movimiento 90 días", qty("sin_movimiento_90d")],
+        ];
+      },
+      afterMetrics: (a) => renderStockV45Charts(a),
       details: [{ label: "Existencias", urlKey: "existencias" }],
     },
     {
@@ -1147,6 +1166,71 @@
         <thead class="sticky top-0 bg-slate-50 dark:bg-slate-900"><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Anterior</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div></details>`;
+  }
+
+  function renderStockV45Charts(areaData) {
+    const movement = areaData?.serie_movimientos || {};
+    const rows = Array.isArray(movement.filas) ? movement.filas : [];
+    const lastRows = rows.slice(-30);
+    const previousRows = Array.isArray(areaData?.serie_movimientos_anterior?.filas)
+      ? areaData.serie_movimientos_anterior.filas : [];
+    const priorLast = previousRows.slice(-30);
+    const plotRows = Math.max(lastRows.length, priorLast.length);
+    const maxValue = Math.max(1, ...[...lastRows, ...priorLast].flatMap((row) => [Number(row.entradas || 0), Number(row.salidas || 0)]));
+    const step = plotRows ? 304 / plotRows : 304;
+    const bars = Array.from({ length: plotRows }, (_, index) => {
+      const row = lastRows[index] || {};
+      const prior = priorLast[index] || {};
+      const inHeight = Math.max(0, Number(row.entradas || 0)) / maxValue * 84;
+      const outHeight = Math.max(0, Number(row.salidas || 0)) / maxValue * 84;
+      const priorInHeight = Math.max(0, Number(prior.entradas || 0)) / maxValue * 84;
+      const priorOutHeight = Math.max(0, Number(prior.salidas || 0)) / maxValue * 84;
+      const x = 8 + index * step;
+      const width = Math.max(1, step / (previousRows.length ? 4 : 2) - 0.5);
+      return `<rect x="${x.toFixed(1)}" y="${(98 - inHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${inHeight.toFixed(1)}" fill="#059669" />
+        <rect x="${(x + width).toFixed(1)}" y="${(98 - outHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${outHeight.toFixed(1)}" fill="#f97316" />
+        ${previousRows.length ? `<rect x="${(x + width * 2).toFixed(1)}" y="${(98 - priorInHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${priorInHeight.toFixed(1)}" fill="#86efac" />
+        <rect x="${(x + width * 3).toFixed(1)}" y="${(98 - priorOutHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${priorOutHeight.toFixed(1)}" fill="#fdba74" />` : ""}`;
+    }).join("");
+    const seriesTable = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800">
+      <th class="py-1.5 text-left font-normal">${escHtml(row.fecha)}</th>
+      <td class="py-1.5 text-right">${fmtNum.format(row.entradas)}</td>
+      <td class="py-1.5 text-right">${fmtNum.format(row.salidas)}</td>
+    </tr>`).join("");
+    const graph = `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Movimientos por ${movement.agrupacion || "período"} · ${escHtml(areaData.presentacion || "unidad")}</p>
+      <svg viewBox="0 0 320 105" role="img" aria-label="Entradas en verde y salidas en naranja" class="h-28 w-full">
+        <line x1="8" y1="98" x2="312" y2="98" stroke="#94a3b8" />${bars}
+      </svg>
+      <div class="flex flex-wrap gap-3 text-[10px] text-slate-500"><span>● Verde: entradas</span><span>● Naranja: salidas</span>${previousRows.length ? "<span>● Verde claro: entradas anteriores</span><span>● Naranja claro: salidas anteriores</span>" : ""}</div>
+      <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa (${rows.length})</summary>
+        <div class="max-h-60 overflow-auto"><table class="w-full text-xs"><thead><tr><th class="text-left">Fecha</th><th class="text-right">Entradas</th><th class="text-right">Salidas</th></tr></thead><tbody>${seriesTable}</tbody></table></div>
+      </details>
+      ${previousRows.length ? `<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie anterior (${previousRows.length})</summary>
+        <div class="max-h-60 overflow-auto"><table class="w-full text-xs"><thead><tr><th class="text-left">Fecha</th><th class="text-right">Entradas</th><th class="text-right">Salidas</th></tr></thead><tbody>${previousRows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="py-1.5 text-left font-normal">${escHtml(row.fecha)}</th><td class="py-1.5 text-right">${fmtNum.format(row.entradas)}</td><td class="py-1.5 text-right">${fmtNum.format(row.salidas)}</td></tr>`).join("")}</tbody></table></div>
+      </details>` : ""}
+    </div>`;
+    const deposits = Array.isArray(areaData?.series_depositos) ? areaData.series_depositos : [];
+    const maxDeposit = Math.max(1, ...deposits.map((dep) => Number(dep.valor || 0)));
+    const depositChart = deposits.length ? `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Valorización por depósito</p>
+      ${deposits.map((dep) => `<div class="mb-2 text-xs"><div class="flex justify-between gap-2"><span class="truncate">${escHtml(dep.nombre)}</span><strong class="tabular-nums">${fmtMoney.format(dep.valor)}</strong></div><div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-700"><div class="h-2 rounded bg-emerald-600" style="width:${(Math.max(0, Number(dep.valor || 0)) / maxDeposit * 100).toFixed(1)}%"></div></div></div>`).join("")}
+    </div>` : "";
+    const compare = areaData?.comparacion;
+    const flowFields = [
+      ["Entradas", "entradas_periodo", "qty"], ["Salidas", "salidas_periodo", "qty"],
+      ["Valor entradas", "valor_entradas", "money"], ["Valor salidas", "valor_salidas", "money"],
+    ];
+    const comparison = compare ? `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Comparación de movimientos</p>
+      <div class="overflow-x-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="text-left">Indicador</th><th class="text-right">Actual</th><th class="text-right">Anterior</th><th class="text-right">Variación</th></tr></thead><tbody>
+      ${flowFields.map(([label, key, kind]) => {
+        const fmt = (value) => value == null ? "Sin permiso" : kind === "money" ? fmtMoney.format(value) : fmtNum.format(value);
+        return `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="py-1.5 text-left font-medium">${label}</th><td class="text-right">${fmt(areaData.kpis?.[key])}</td><td class="text-right">${fmt(compare.kpis?.[key])}</td><td class="text-right">${fmt(compare.diferencias?.[key])}</td></tr>`;
+      }).join("")}
+      </tbody></table></div><p class="mt-2 text-[11px] text-slate-500">Las existencias son una foto actual y no se comparan como período.</p>
+    </div>` : "";
+    return graph + depositChart + comparison;
   }
 
   function renderInventarioDepositosBlock(areaData) {
@@ -1769,6 +1853,8 @@
     el("depositos")?.addEventListener("change", onFilterChange);
     el("cc-incluir-impuestos")?.addEventListener("change", onFilterChange);
     el("cc-comparar-anterior")?.addEventListener("change", onFilterChange);
+    el("cc-stock-presentacion")?.addEventListener("change", onFilterChange);
+    el("cc-stock-comparar")?.addEventListener("change", onFilterChange);
     rememberFilters();
     syncReportLinks();
   }

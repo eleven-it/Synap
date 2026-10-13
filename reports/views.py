@@ -336,7 +336,7 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             area_urls = {
                 "ventas": reverse("reports-api:reports-executive-dashboard-comercial-ventas-v45"),
                 "inventario": reverse(
-                    "reports-api:reports-executive-dashboard-inventario-resumen"
+                    "reports-api:reports-executive-dashboard-stock-v45"
                 ),
                 "compras": reverse("reports-api:reports-executive-dashboard-compras-resumen"),
                 "cruzados": reverse(

@@ -46,6 +46,7 @@ from .executive_dashboard_api_views import (
     ExecutiveDashboardVentasResumenAPIView,
     ExecutiveDashboardComercialVentasV45APIView,
     ExecutiveDashboardComercialVentasV45DetailAPIView,
+    ExecutiveDashboardStockV45APIView,
     ExecutiveDashboardInventarioResumenAPIView,
     ExecutiveDashboardComprasResumenAPIView,
     ExecutiveDashboardManufacturaResumenAPIView,
@@ -234,6 +235,11 @@ urlpatterns = [
         "executive-dashboard/inventario/resumen/",
         ExecutiveDashboardInventarioResumenAPIView.as_view(),
         name="reports-executive-dashboard-inventario-resumen",
+    ),
+    path(
+        "executive-dashboard/inventario/stock-v45/",
+        ExecutiveDashboardStockV45APIView.as_view(),
+        name="reports-executive-dashboard-stock-v45",
     ),
     path(
         "executive-dashboard/compras/resumen/",
