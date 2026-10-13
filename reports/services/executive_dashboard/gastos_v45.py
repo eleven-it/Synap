@@ -179,6 +179,30 @@ def _sales_net(cursor, filters):
     return round_money(row[0] if row else 0)
 
 
+def _series(cursor, sql, params, filters: DashboardFilters) -> dict:
+    days = (filters.fecha_fin - filters.fecha_inicio).days + 1
+    if days <= 45:
+        bucket, expression = "dia", "DATE_FORMAT(x.fecha,'%%Y-%%m-%%d')"
+    elif days <= 200:
+        bucket = "semana"
+        expression = "DATE_FORMAT(DATE_SUB(x.fecha,INTERVAL WEEKDAY(x.fecha) DAY),'%%Y-%%m-%%d')"
+    else:
+        bucket, expression = "mes", "DATE_FORMAT(x.fecha,'%%Y-%%m-01')"
+    cursor.execute(
+        f"SELECT {expression} fecha,COALESCE(SUM(x.importe),0) importe,"
+        "COUNT(DISTINCT CONCAT(x.origen,'|',x.id_origen)) documentos "
+        f"FROM ({sql}) x GROUP BY {expression} ORDER BY {expression}",
+        params,
+    )
+    return {
+        "agrupacion": bucket,
+        "filas": [
+            {"fecha": str(day), "importe": round_money(amount), "documentos": int(count or 0)}
+            for day, amount, count in cursor.fetchall() or []
+        ],
+    }
+
+
 def fetch_gastos_v45(cursor, filters: DashboardFilters, *, fuente: int = 0) -> dict:
     if fuente not in (0, 1, 2, 3):
         raise ValueError("Fuente de gastos inválida")
@@ -209,6 +233,8 @@ def fetch_gastos_v45(cursor, filters: DashboardFilters, *, fuente: int = 0) -> d
     }
     return {
         "disponible": True, "kpis": kpis, "fuente": fuente,
+        "serie": _series(cursor, sql, params, filters),
+        "serie_comparacion": _series(cursor, previous_sql, previous_params, previous_period),
         "comparacion": {
             "periodo": {"inicio": previous_period.fecha_inicio_str, "fin": previous_period.fecha_fin_str},
             "kpis": previous,

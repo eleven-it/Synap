@@ -1560,7 +1560,13 @@
     const max = Math.max(1, ...sources.map(([, key]) => Math.abs(Number(k[key] || 0))));
     const rows = sources.map(([label, key, color]) => `<div class="grid grid-cols-[9rem_1fr] items-center gap-2 py-1 text-xs"><span>${label}</span><div class="h-3 rounded bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded ${color}" style="width:${Math.abs(Number(k[key] || 0)) / max * 100}%"></div></div><strong class="col-span-2 text-right tabular-nums">${k[key] == null ? "N/D" : fmtMoney.format(k[key])}</strong></div>`).join("");
     const previous = areaData.comparacion?.kpis?.total_gastos;
-    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición por fuente</h3><p class="text-[11px] text-slate-500">Los impuestos se muestran separados y no integran «Todos».</p>${rows}<p class="mt-2 text-xs">Gasto del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "N/D" : fmtMoney.format(previous)}</strong></p></section>`;
+    const seriesRows = [
+      ...(areaData.serie?.filas || []).map((row) => ({ ...row, periodo: "Actual" })),
+      ...(areaData.serie_comparacion?.filas || []).map((row) => ({ ...row, periodo: "Comparación" })),
+    ].map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${escHtml(row.periodo)}</th><td class="p-2">${escHtml(row.fecha)}</td><td class="p-2 text-right tabular-nums">${fmtNum.format(row.documentos)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.importe)}</td></tr>`).join("");
+    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición por fuente</h3><p class="text-[11px] text-slate-500">Los impuestos se muestran separados y no integran «Todos».</p>${rows}<p class="mt-2 text-xs">Gasto del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "N/D" : fmtMoney.format(previous)}</strong></p></section>`
+      + renderV45SeriesComparison(areaData, areaData.serie, areaData.serie_comparacion, "importe", "Evolución de gastos")
+      + `<details class="mt-2 rounded-lg border border-slate-200 p-2 dark:border-slate-700"><summary class="cursor-pointer text-xs font-semibold">Ver serie de gastos</summary><div class="mt-2 max-h-64 overflow-auto"><table class="w-full min-w-[27rem] text-xs"><thead><tr><th class="p-2 text-left">Período</th><th class="p-2 text-left">Fecha</th><th class="p-2 text-right">Documentos</th><th class="p-2 text-right">Importe</th></tr></thead><tbody>${seriesRows || '<tr><td class="p-2" colspan="4">Sin gastos en los períodos.</td></tr>'}</tbody></table></div></details>`;
   }
 
   function renderLogisticaV45Comparison(areaData) {
