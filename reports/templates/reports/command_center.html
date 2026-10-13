@@ -102,13 +102,14 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
   }
-  .cc-summary-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .45rem; }
-  .cc-summary-kpi { min-width: 0; min-height: 5.1rem; padding: .4rem .55rem; border: 1px solid var(--cc-kpi-accent); border-radius: .45rem; background: #fff; }
+  .cc-summary-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+  .cc-summary-kpi { position: relative; min-width: 0; min-height: 7.25rem; padding: 1rem; border: 1px solid #e2e8f0; border-radius: .9rem; background: #fff; box-shadow: 0 3px 12px rgba(15, 23, 42, .04); overflow: hidden; }
+  .cc-summary-kpi::before { content: ""; position: absolute; inset: 0 0 auto; height: .23rem; background: var(--cc-kpi-accent); }
   .cc-summary-kpi-head { display: flex; align-items: baseline; justify-content: space-between; gap: .25rem; }
-  .cc-summary-kpi-title { color: var(--cc-kpi-accent); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .025em; line-height: 1.15; }
-  .cc-summary-kpi-value { font-size: clamp(1rem, 1.5vw, 1.32rem); line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .cc-summary-kpi-title { color: #475569; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; line-height: 1.25; }
+  .cc-summary-kpi-value { color: #0f172a; font-size: clamp(1.05rem, 1.55vw, 1.45rem); line-height: 1.25; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .cc-summary-kpi-middle { display: flex; align-items: center; justify-content: space-between; gap: .25rem; }
-  .cc-summary-kpi-note { font-size: .67rem; line-height: 1.2; color: #64748b; }
+  .cc-summary-kpi-note { margin-top: .5rem; font-size: .72rem; line-height: 1.35; color: #64748b; }
   .cc-trend { display: inline-flex; align-items: center; gap: .25rem; flex: none; font-size: .68rem; font-weight: 600; }
   .cc-trend-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border-radius: 999px; color: #fff; }
   .cc-trend-icon .material-icons { font-size: .98rem; }
@@ -122,22 +123,26 @@
   .cc-summary-kpi-note.cc-trend-down, .dark .cc-summary-kpi-note.cc-trend-down { color: #b91c1c; }
   .cc-summary-legend { margin: .4rem .15rem .55rem; color: #475569; font-size: .65rem; text-align: center; }
   .cc-summary-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
-  .cc-summary-chart { min-width: 0; border: 1px solid #cbd5e1; border-radius: .5rem; background: #fff; padding: .6rem; }
-  .cc-summary-chart svg { width: 100%; height: auto; min-height: 11rem; }
-  .cc-summary-chart-title { margin-bottom: .2rem; color: #334155; font-size: .7rem; font-weight: 700; text-transform: uppercase; }
-  .cc-chart-grid { stroke: #64748b; stroke-width: .75; }
+  .cc-summary-chart { min-width: 0; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: .9rem; background: #fff; padding: 1rem; box-shadow: 0 3px 12px rgba(15, 23, 42, .04); }
+  .cc-summary-chart svg { display: block; width: 100%; height: auto; min-height: 11rem; }
+  .cc-summary-chart-title { margin-bottom: .5rem; color: #0f172a; font-size: .82rem; font-weight: 700; }
+  .cc-chart-grid { stroke: #e2e8f0; stroke-width: .75; }
   .cc-chart-zero { stroke: #334155; stroke-width: 1.1; }
   .cc-chart-axis { fill: #334155; font-size: 9px; }
   .cc-summary-readout { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem 1rem; padding: .8rem .3rem; font-size: .83rem; font-weight: 600; }
-  .dark .cc-summary-kpi, .dark .cc-summary-chart { background: #0f172a; }
+  .dark .cc-summary-kpi, .dark .cc-summary-chart { background: #0f172a; border-color: #334155; box-shadow: none; }
+  .dark .cc-summary-kpi-title { color: #cbd5e1; }
+  .dark .cc-summary-kpi-value { color: #f8fafc; }
   .dark .cc-summary-kpi-note { color: #cbd5e1; }
+  .dark .cc-summary-kpi-note.cc-trend-up { color: #86efac; }
+  .dark .cc-summary-kpi-note.cc-trend-down { color: #fca5a5; }
   .dark .cc-summary-legend, .dark .cc-summary-chart-title { color: #cbd5e1; }
-  .dark .cc-chart-grid { stroke: #64748b; }
+  .dark .cc-chart-grid { stroke: #334155; }
   .dark .cc-chart-zero { stroke: #cbd5e1; }
   .dark .cc-chart-axis { fill: #cbd5e1; }
   @media (max-width: 1100px) { .cc-summary-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 700px) { .cc-summary-charts { grid-template-columns: 1fr; } }
-  @media (max-width: 520px) { .cc-summary-kpis { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) { .cc-summary-kpis { grid-template-columns: 1fr; } .cc-hero-nav { width: 100%; } .cc-hero-refresh { order: -1; width: 100%; } .cc-summary-chart .cc-v45-chart-svg { min-width: 29rem; } }
 </style>
 {% endblock %}
 
@@ -163,7 +168,7 @@
               Vista consolidada por área. Datos legacy AdministraNET en tiempo de consulta.
             </p>
           </div>
-          <nav class="flex shrink-0 flex-wrap gap-2 md:justify-end" aria-label="Accesos relacionados">
+          <nav class="cc-hero-nav flex shrink-0 flex-wrap gap-2 md:justify-end" aria-label="Accesos relacionados">
             {% if can_edit_cc_areas %}
             <button type="button" id="cc-btn-areas-config"
                     class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:border-amber-400/60 hover:bg-amber-900/50"
@@ -182,6 +187,9 @@
               Tablero MPR
             </a>
             {% endif %}
+            <button type="button" id="cc-refresh" class="cc-hero-refresh inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-sky-400 hover:to-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60">
+              <span class="material-icons text-lg" aria-hidden="true">refresh</span>Actualizar
+            </button>
           </nav>
         </div>
 
@@ -328,10 +336,6 @@
                 <label class="inline-flex items-center gap-1.5"><input id="cc-incluir-impuestos" type="checkbox" class="rounded border-slate-500">Importes con impuestos</label>
                 <label class="inline-flex items-center gap-1.5"><input id="cc-comparar-anterior" type="checkbox" checked class="rounded border-slate-500">Comparar período anterior</label>
               </div>
-              <button type="button" id="cc-refresh" class="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-sky-950/40 transition hover:from-sky-400 hover:to-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[9.5rem]">
-                <span class="material-icons text-lg" aria-hidden="true">refresh</span>
-                Actualizar
-              </button>
             </div>
           </div>
         </div>
@@ -431,7 +435,7 @@
       </select>
       <label class="sr-only" for="cc-v45-chart-mode">Tipo de gráfico</label>
       <select id="cc-v45-chart-mode" class="hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-        <option value="auto">Gráfico automático</option><option value="barras">Barras</option><option value="torta">Torta</option>
+        <option value="auto">Gráfico automático</option><option value="barras">Barras</option><option value="torta">Torta</option><option value="linea">Línea</option><option value="area">Área</option>
       </select>
       <label class="sr-only" for="cc-v45-order">Orden</label>
       <select id="cc-v45-order" class="min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">

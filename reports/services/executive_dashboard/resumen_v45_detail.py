@@ -21,7 +21,34 @@ GLOBAL_KEYS = frozenset({
     "vencimiento_cobrar", "vencimiento_pagar",
     "efectivo_actual", "tarjetas_actual", "cheques_actual", "bancos_actual",
 })
-RANKING_DIMENSIONS = frozenset({"entidad", "vendedor", "marca"})
+RANKING_DIMENSIONS = frozenset({
+    "entidad", "vendedor", "marca", "fecha", "tipo", "sucursal",
+    "punto_venta", "condicion_venta", "articulo", "proveedor_habitual",
+    "rubro", "subrubro", "categoria", "actividad_iibb", "zona",
+    "provincia", "departamento", "distrito", "jurisdiccion_iibb", "usuario",
+    "medio_cobro", "tipo_entrega",
+})
+_SALES_KEYS = frozenset({"ventas", "cobranzas", "facturas"})
+_PURCHASE_KEYS = frozenset({"compras_netas", "pagos"})
+_DOCUMENT_COUNT_KEYS = frozenset({"presupuestos", "pedidos", "remitos"})
+
+
+def _allowed_dimensions(key: str) -> frozenset[str]:
+    if key == "ventas":
+        return frozenset({"entidad", "vendedor", "marca", "fecha", "tipo",
+                          "sucursal", "punto_venta", "condicion_venta", "articulo",
+                          "proveedor_habitual", "rubro", "subrubro", "categoria",
+                          "actividad_iibb", "zona", "provincia", "departamento",
+                          "distrito", "jurisdiccion_iibb", "usuario",
+                          "medio_cobro", "tipo_entrega"})
+    if key == "compras_netas":
+        return frozenset({"entidad", "fecha", "tipo", "sucursal", "punto_venta",
+                          "articulo", "marca", "rubro", "subrubro", "categoria"})
+    if key in _SALES_KEYS | _PURCHASE_KEYS | _DOCUMENT_COUNT_KEYS:
+        return frozenset({"entidad", "fecha", "tipo", "sucursal", "punto_venta"})
+    if key in GLOBAL_KEYS:
+        return frozenset({"entidad", "tipo"})
+    return frozenset({"entidad", "fecha", "tipo"})
 
 
 def _source(filters: DashboardFilters, key: str, gross: bool, *, has_rv: bool = False):
@@ -61,8 +88,7 @@ def _source(filters: DashboardFilters, key: str, gross: bool, *, has_rv: bool = 
             kinds = f"cc.TipoComprobante IN ({_INVOICE_TYPES})"
         sale_columns = (
             "COALESCE(c.CUIT,'') cuit,cc.CondVenta condicion_venta,"
-            "COALESCE(v.Nombre,'') vendedor,cc.CodSucursal sucursal,"
-            "cc.id_pv punto_venta,"
+            "COALESCE(v.Nombre,'') vendedor,"
             f"{_sales_amount(False)} importe_neto,"
             f"{_sales_amount(True)} importe_final,"
             if key == "ventas" else ""
@@ -72,6 +98,7 @@ def _source(filters: DashboardFilters, key: str, gross: bool, *, has_rv: bool = 
             "SELECT cc.Fecha fecha,cc.CodigoMovimiento movimiento,"
             "cc.TipoComprobante tipo,cc.NroComprobante comprobante,"
             "COALESCE(c.nombre_cliente,'') entidad,"
+            "cc.CodSucursal sucursal,cc.id_pv punto_venta,"
             f"{sale_columns}{amount} importe FROM cuentacliente cc "
             "LEFT JOIN cliente c ON c.Codigo=cc.Codigo "
             f"{seller_join}"
@@ -95,7 +122,7 @@ def _source(filters: DashboardFilters, key: str, gross: bool, *, has_rv: bool = 
         sql = (
             "SELECT cp.Fecha fecha,cp.CodigoMovimiento movimiento,"
             "cp.TipoComprobante tipo,cp.NroComprobante comprobante,"
-            "COALESCE(p.Nombre,'') entidad,"
+            "COALESCE(p.Nombre,'') entidad,cp.CodSucursal sucursal,cp.id_pv punto_venta,"
             f"{amount} importe FROM cuentaproveedor cp "
             "LEFT JOIN proveedor p ON p.Codigo=cp.Codigo "
             "WHERE cp.Fecha >= %s AND cp.Fecha < %s "
@@ -109,7 +136,8 @@ def _source(filters: DashboardFilters, key: str, gross: bool, *, has_rv: bool = 
         sql = (
             "SELECT cp.Fecha fecha,cp.CodigoMovimiento movimiento,"
             "cp.TipoComprobante tipo,cp.NroComprobante comprobante,"
-            "COALESCE(c.nombre_cliente,'') entidad,1 importe FROM comp_ped cp "
+            "COALESCE(c.nombre_cliente,'') entidad,cp.CodSucursal sucursal,"
+            "cp.id_pv punto_venta,1 importe FROM comp_ped cp "
             "LEFT JOIN cliente c ON c.Codigo=cp.Codigo "
             "WHERE cp.Fecha >= %s AND cp.Fecha < %s "
             f"AND cp.CodigoMovimiento<>0 AND cp.Anulado='No' AND cp.TipoComprobante='{kind}'{scope}"
@@ -207,6 +235,67 @@ def list_resumen_v45_detail(
     return payload
 
 
+def _sales_payment_method_source(filters: DashboardFilters, gross: bool):
+    scope, scope_params = _sales_scope("cc", filters)
+    fields = (
+        "total_efectivo", "total_ctacte", "total_tarjeta", "total_cheque",
+        "total_transferencia", "total_otro_medio",
+    )
+    amounts = [f"ABS(COALESCE(rv.{field},0))" for field in fields]
+    total = "(" + "+".join(amounts) + ")"
+    per_method = "CASE medios.n " + " ".join(
+        f"WHEN {index} THEN {amount}" for index, amount in enumerate(amounts, 1)
+    ) + " END"
+    label = (
+        "CASE WHEN " + total + "=0 AND medios.n=1 THEN 'Sin medio informado' "
+        "WHEN medios.n=1 THEN 'Efectivo' WHEN medios.n=2 THEN 'Cuenta corriente' "
+        "WHEN medios.n=3 THEN 'Tarjeta' WHEN medios.n=4 THEN 'Cheque' "
+        "WHEN medios.n=5 THEN 'Transferencia' ELSE 'Otro medio' END"
+    )
+    summary = ",".join(f"MAX({field}) {field}" for field in fields)
+    ratio = f"CASE WHEN {total}=0 THEN CASE WHEN medios.n=1 THEN 1 ELSE 0 END ELSE {per_method}/{total} END"
+    return (
+        f"SELECT {label} etiqueta,({_sales_amount(gross)})*({ratio}) importe,"
+        f"CASE WHEN {per_method}<>0 OR ({total}=0 AND medios.n=1) THEN 1 ELSE 0 END cantidad "
+        "FROM cuentacliente cc LEFT JOIN (SELECT codigo_movimiento," + summary +
+        " FROM resumen_venta_cv WHERE UPPER(COALESCE(anulado,'NO'))<>'SI' "
+        "GROUP BY codigo_movimiento) rv ON rv.codigo_movimiento=cc.CodigoMovimiento "
+        "CROSS JOIN (SELECT 1 n UNION ALL SELECT 2 UNION ALL SELECT 3 "
+        "UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) medios "
+        "WHERE cc.Fecha >= %s AND cc.Fecha < %s AND cc.CodigoMovimiento<>0 "
+        "AND cc.Anulado='No' "
+        f"AND cc.TipoComprobante IN ({_CREDIT_TYPES},{_DEBIT_TYPES}){scope}",
+        _period(filters) + scope_params, ("cuentacliente", "resumen_venta_cv"),
+        "El importe se distribuye proporcionalmente entre los medios informados.",
+    )
+
+
+def _sales_delivery_source(filters: DashboardFilters, gross: bool):
+    scope, scope_params = _sales_scope("cc", filters)
+    label = (
+        "COALESCE(NULLIF(TRIM(cd.FormaEntrega),''),"
+        "NULLIF(TRIM(cp.FormaEntrega),''),'Sin tipo de entrega')"
+    )
+    orders = (
+        "(SELECT CodigoMovimiento,MAX(FormaEntrega) FormaEntrega FROM comp_ped "
+        "WHERE UPPER(COALESCE(Anulado,'NO'))<>'SI' GROUP BY CodigoMovimiento)"
+    )
+    return (
+        f"SELECT {label} etiqueta,{_sales_amount(gross)} importe,1 cantidad "
+        "FROM cuentacliente cc LEFT JOIN " + orders +
+        " cd ON cd.CodigoMovimiento=cc.CodigoMovimiento "
+        "LEFT JOIN (SELECT CodigoMovimientoF,MAX(CodigoMovimientoP) CodigoMovimientoP "
+        "FROM ped_fact WHERE UPPER(COALESCE(Anulado,'NO'))<>'SI' "
+        "GROUP BY CodigoMovimientoF) pf ON pf.CodigoMovimientoF=cc.CodigoMovimiento "
+        "LEFT JOIN " + orders + " cp ON cp.CodigoMovimiento=pf.CodigoMovimientoP "
+        "WHERE cc.Fecha >= %s AND cc.Fecha < %s AND cc.CodigoMovimiento<>0 "
+        "AND cc.Anulado='No' "
+        f"AND cc.TipoComprobante IN ({_CREDIT_TYPES},{_DEBIT_TYPES}){scope}",
+        _period(filters) + scope_params, ("cuentacliente", "comp_ped", "ped_fact"),
+        "Forma de entrega del comprobante o del pedido relacionado.",
+    )
+
+
 def _ranking_source(cursor, filters: DashboardFilters, key: str, gross: bool,
                     dimension: str):
     """Agrupa documentos del KPI; ventas por marca usa renglones y se declara aparte."""
@@ -224,41 +313,141 @@ def _ranking_source(cursor, filters: DashboardFilters, key: str, gross: bool,
             _period(filters) + scope_params, ("cuentacliente", "viajantes"),
             "Mismo importe de cabecera que Ventas netas.",
         )
-    if dimension == "marca":
-        if key != "ventas":
-            raise ValueError("Marca sólo corresponde a ventas")
+    if key == "ventas" and dimension == "medio_cobro":
+        return _sales_payment_method_source(filters, gross)
+    if key == "ventas" and dimension == "tipo_entrega":
+        return _sales_delivery_source(filters, gross)
+    product_dimensions = {
+        "marca": ("LEFT JOIN marca m ON m.CodMarca=a.CodigoMarca ",
+                  "m.NombreMarca", ("marca",), "Sin marca"),
+        "articulo": ("", "a.NombreArticulo", (), "Sin artículo"),
+        "proveedor_habitual": ("LEFT JOIN proveedor p ON p.Codigo=a.CodigoProveedor ",
+                               "p.Nombre", ("proveedor",), "Sin proveedor"),
+        "rubro": ("LEFT JOIN rubro r ON r.CodigoRubro=a.CodigoRubro ",
+                  "r.NombreRubro", ("rubro",), "Sin rubro"),
+        "subrubro": ("LEFT JOIN subrubro sr ON sr.IDSubRubro=a.IDSubRubro ",
+                     "sr.NombreSubRubro", ("subrubro",), "Sin subrubro"),
+        "categoria": ("LEFT JOIN rubro r ON r.CodigoRubro=a.CodigoRubro "
+                      "LEFT JOIN rubro_categoria rc ON rc.id_categoria=r.id_categoria ",
+                      "rc.nombre_categoria", ("rubro", "rubro_categoria"), "Sin categoría"),
+        "actividad_iibb": ("LEFT JOIN activ_iibb ai ON ai.ID=a.cod_act_iibb ",
+                           "ai.nombre_iibb", ("activ_iibb",), "Sin actividad IIBB"),
+    }
+    if dimension in product_dimensions and key in {"ventas", "compras_netas"}:
+        if key == "compras_netas":
+            if dimension not in {"articulo", "marca", "rubro", "subrubro", "categoria"}:
+                raise ValueError("Agrupación por producto no disponible para compras")
+            scope, scope_params = _purchase_scope("st", filters)
+            joins, field, needed, fallback = product_dimensions[dimension]
+            label = f"COALESCE(NULLIF(TRIM({field}),''),'{fallback}')"
+            amount = (
+                "CASE WHEN st.TipoComp IN ('Devol - Proveedor','Anul Compra') "
+                "THEN -COALESCE(st.PrecioCostoxR,0) ELSE COALESCE(st.PrecioCostoxR,0) END"
+            )
+            return (
+                f"SELECT {label} etiqueta,{amount} importe,"
+                "ABS(COALESCE(st.Cantidad,0)) cantidad "
+                "FROM stock st JOIN articulo a ON a.IDArt=st.IDArt " + joins +
+                "WHERE st.Fecha >= %s AND st.Fecha < %s "
+                "AND st.CodigoMovimiento<>0 AND st.Anulado='No' "
+                "AND st.TipoComp IN ('Compra','Devol - Proveedor','ND Anul NC',"
+                f"'Anul NC Devol','Anul Compra'){scope}",
+                _period(filters) + scope_params, ("stock", "articulo") + needed,
+                "Importes por renglón de stock a costo; descuentos de cabecera pueden diferir del KPI.",
+            )
         scope, scope_params = _sales_scope("cc", filters)
+        joins, field, needed, fallback = product_dimensions[dimension]
+        label = f"COALESCE(NULLIF(TRIM({field}),''),'{fallback}')"
         line = (
             "COALESCE(st.PrecioNetoxR,0)+COALESCE(st.PrecioIVAxR,0)+"
             "COALESCE(st.ImpIB,0)+COALESCE(st.impuesto_interno_subtotal,0)"
             if gross else "COALESCE(st.PrecioNetoxR,0)"
         )
         return (
-            "SELECT COALESCE(NULLIF(m.NombreMarca,''),'Sin marca') etiqueta,"
+            f"SELECT {label} etiqueta,"
             f"CASE WHEN cc.TipoComprobante IN ({_CREDIT_TYPES}) "
             f"THEN -({line}) ELSE ({line}) END importe,"
-            f"CASE WHEN cc.TipoComprobante IN ({_CREDIT_TYPES}) "
-            "THEN -COALESCE(st.Cantidad,0) ELSE COALESCE(st.Cantidad,0) END cantidad "
+            "ABS(COALESCE(st.Cantidad,0)) cantidad "
             "FROM stock st JOIN cuentacliente cc ON cc.CodigoMovimiento=st.CodigoMovimiento "
             "JOIN articulo a ON a.IDArt=st.IDArt "
-            "LEFT JOIN marca m ON m.CodMarca=a.CodigoMarca "
+            f"{joins}"
             "WHERE cc.Fecha >= %s AND cc.Fecha < %s AND cc.CodigoMovimiento<>0 "
             "AND cc.Anulado='No' AND st.Anulado='No' "
             "AND COALESCE(st.visualiza_ensamble,'No')='No' "
             "AND st.TipoComp IN ('Venta','Venta TPV','Devol - Cliente','ND Anul NC') "
             f"AND cc.TipoComprobante IN ({_CREDIT_TYPES},{_DEBIT_TYPES}){scope}",
             _period(filters) + scope_params,
-            ("stock", "cuentacliente", "articulo", "marca"),
+            ("stock", "cuentacliente", "articulo") + needed,
             "Importes por renglón de stock; ajustes de cabecera sin artículo pueden diferir del KPI.",
+        )
+    territory_dimensions = {
+        "zona": ("LEFT JOIN cliente c ON c.Codigo=cc.Codigo "
+                 "LEFT JOIN erp_zona z ON z.id_zona=c.id_zona ",
+                 "z.nombre_zona", ("cliente", "erp_zona"), "Sin zona"),
+        "provincia": ("LEFT JOIN cliente c ON c.Codigo=cc.Codigo "
+                      "LEFT JOIN provincia p ON p.CodProvincia=c.CodProvincia ",
+                      "p.Provincia", ("cliente", "provincia"), "Sin provincia"),
+        "departamento": ("LEFT JOIN cliente c ON c.Codigo=cc.Codigo "
+                         "LEFT JOIN provincia p ON p.CodProvincia=c.CodProvincia "
+                         "LEFT JOIN departamento d ON d.IDDepartamento=c.IDDepartamento ",
+                         "CONCAT(COALESCE(NULLIF(p.Provincia,''),'Sin provincia'),' - ',"
+                         "COALESCE(NULLIF(d.NombreDepartamento,''),'Sin departamento'))",
+                         ("cliente", "provincia", "departamento"), "Sin departamento"),
+        "distrito": ("LEFT JOIN cliente c ON c.Codigo=cc.Codigo "
+                     "LEFT JOIN provincia p ON p.CodProvincia=c.CodProvincia "
+                     "LEFT JOIN departamento d ON d.IDDepartamento=c.IDDepartamento "
+                     "LEFT JOIN distrito di ON di.IDDistrito=c.IDDistrito ",
+                     "CONCAT(COALESCE(NULLIF(p.Provincia,''),'Sin provincia'),' - ',"
+                     "COALESCE(NULLIF(d.NombreDepartamento,''),'Sin departamento'),' - ',"
+                     "COALESCE(NULLIF(di.NombreDistrito,''),'Sin distrito'))",
+                     ("cliente", "provincia", "departamento", "distrito"), "Sin distrito"),
+        "jurisdiccion_iibb": (
+            "LEFT JOIN cliente c ON c.Codigo=cc.Codigo "
+            "LEFT JOIN provincia p ON p.CodProvincia=c.CodProvincia "
+            "LEFT JOIN retencion_juridic_convenio j "
+            "ON j.id_juridic_convenio=p.id_juridic_convenio ",
+            "COALESCE(NULLIF(TRIM(j.nombre_juridiccion),''),"
+            "NULLIF(TRIM(p.Provincia),''),'Sin jurisdicción IIBB')",
+            ("cliente", "provincia", "retencion_juridic_convenio"), "Sin jurisdicción IIBB"),
+        "usuario": ("LEFT JOIN usuarios u ON u.id_usuario=cc.IdUsuario ",
+                    "COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.nombre_usuario,''),' ',"
+                    "COALESCE(u.apellido_usuario,''))),''),"
+                    "NULLIF(TRIM(u.cod_usuario),''),'Sin usuario')",
+                    ("usuarios",), "Sin usuario"),
+    }
+    if dimension in territory_dimensions:
+        if key != "ventas":
+            raise ValueError("Agrupación territorial sólo corresponde a ventas")
+        scope, scope_params = _sales_scope("cc", filters)
+        joins, field, needed, fallback = territory_dimensions[dimension]
+        label = field if dimension in {"departamento", "distrito", "jurisdiccion_iibb", "usuario"} else (
+            f"COALESCE(NULLIF(TRIM({field}),''),'{fallback}')"
+        )
+        return (
+            f"SELECT {label} etiqueta,{_sales_amount(gross)} importe,1 cantidad "
+            "FROM cuentacliente cc " + joins +
+            "WHERE cc.Fecha >= %s AND cc.Fecha < %s AND cc.CodigoMovimiento<>0 "
+            "AND cc.Anulado='No' "
+            f"AND cc.TipoComprobante IN ({_CREDIT_TYPES},{_DEBIT_TYPES}){scope}",
+            _period(filters) + scope_params, ("cuentacliente",) + needed,
+            "Mismo importe de cabecera que Ventas netas.",
         )
     source, params, required = _source(
         filters, key, gross,
         has_rv=_table_exists(cursor, "resumen_venta_cv")
         if key == "venta_cuenta_corriente" else False,
     )
-    return (f"SELECT COALESCE(NULLIF(q.entidad,''),'Sin especificar') etiqueta,"
-            "q.importe importe,1 cantidad FROM (" + source + ") q",
-            params, required, "Agrupado por entidad del documento.")
+    expression = {
+        "entidad": "COALESCE(NULLIF(q.entidad,''),'Sin especificar')",
+        "fecha": "COALESCE(DATE_FORMAT(q.fecha,'%%d/%%m/%%Y'),'Sin fecha')",
+        "tipo": "COALESCE(NULLIF(q.tipo,''),'Sin tipo')",
+        "sucursal": "COALESCE(CAST(q.sucursal AS CHAR),'Sin sucursal')",
+        "punto_venta": "COALESCE(CAST(q.punto_venta AS CHAR),'Sin punto de venta')",
+        "condicion_venta": "COALESCE(NULLIF(q.condicion_venta,''),'Sin condición')",
+    }[dimension]
+    return (f"SELECT {expression} etiqueta,q.importe importe,1 cantidad "
+            "FROM (" + source + ") q",
+            params, required, "Agrupado por " + dimension.replace("_", " ") + ".")
 
 
 def list_resumen_v45_ranking(cursor, filters: DashboardFilters, *, key: str,
@@ -267,7 +456,7 @@ def list_resumen_v45_ranking(cursor, filters: DashboardFilters, *, key: str,
     """Ranking y comparación de períodos para la apertura visual de cada KPI."""
     if key not in RESUMEN_V45_DETAIL_KEYS or dimension not in RANKING_DIMENSIONS:
         raise ValueError("Indicador o agrupación inválida")
-    if dimension in {"vendedor", "marca"} and key != "ventas":
+    if dimension not in _allowed_dimensions(key):
         raise ValueError("Agrupación no disponible para este indicador")
     if key in GLOBAL_KEYS and (filters.puntos_venta or filters.sucursales_filtro):
         return {"disponible": False, "motivo": "sin_alcance_territorial", "filas": []}
