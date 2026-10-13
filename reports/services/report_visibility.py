@@ -34,8 +34,13 @@ def get_report_definition(slug: str, empresa_id: int | None = None) -> ReportDef
 
 
 def command_center_visible_for_user(user, empresa_id: int | None = None) -> bool:
-    """Command Center en inicio/API: permiso gerencial + is_visible (o usuario supervisor)."""
-    if not user_has_permission(user, "reports.view_managerial"):
+    """Acceso al selector con al menos un permiso de tablero específico."""
+    from reports.services.executive_dashboard.area_visibility import (
+        CC_AREA_KEYS,
+        user_has_cc_area_permission,
+    )
+
+    if not any(user_has_cc_area_permission(user, key) for key in CC_AREA_KEYS):
         return False
     report = get_report_definition(COMMAND_CENTER_SLUG, empresa_id=empresa_id)
     return report_visible_for_user(report, user)

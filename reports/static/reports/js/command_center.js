@@ -29,6 +29,11 @@
   /** Detalle comp_ped en ventas: tarjetas en móvil, tabla en lg+. */
   const COMP_PED_DETAIL_KEYS = new Set(["pedidos_pendientes", "remitos_nf"]);
   const BACKORDER_DETAIL_KEYS = new Set(["backorder"]);
+  const CUSTOM_COMPARE_AREAS = new Set([
+    "resumen_general", "ventas", "preparacion_pedidos", "inventario",
+    "compras", "financiero", "gestion_contable", "impositivo",
+    "libros_contables", "logistica", "gastos",
+  ]);
   const DETAIL_TABLE_WRAP_CLASS =
     "cc-detail-scroll -mx-3 overflow-x-auto px-3 sm:-mx-4 sm:px-4";
   const DETAIL_TABLE_WRAP_DESKTOP_CLASS =
@@ -57,6 +62,13 @@
   let existenciasAbort = null;
   let existenciasDebounce = null;
   let existenciasSearchBound = false;
+  let comercialDetail = null;
+  let comercialDetailData = null;
+  let stockDetail = null;
+  let stockDetailData = null;
+  let genericV45Detail = null;
+  let genericV45DetailData = null;
+  let comercialSearchTimer = null;
 
   function resetDetailPanelsLayout() {
     const tableWrap = el("cc-detail-table-wrap");
@@ -68,14 +80,15 @@
   function formatTabularCell(key, value) {
     if (value == null || value === "") return "—";
     if (
-      key === "subtotal_desc" ||
+      key === "subtotal_desc" || key === "importe" || key === "venta" ||
+      key === "costo" || key === "rentabilidad" ||
       key === "bo_importe" ||
       key.endsWith("_importe") ||
       (typeof value === "number" && (key.includes("monto") || key.includes("importe")))
     ) {
       return fmtMoney.format(Number(value));
     }
-    if (typeof value === "number" && (key.includes("qty") || key.includes("stock") || key === "disponible" || key === "oc_pendiente")) {
+    if (typeof value === "number" && (key.includes("qty") || key.includes("stock") || key === "disponible" || key === "oc_pendiente" || key === "cantidad")) {
       return fmtNum.format(Number(value));
     }
     return escHtml(String(value));
@@ -139,10 +152,10 @@
         </article>`;
   }
 
-  function renderTabularDetail(data, columns, cardHtmlFn) {
+  function renderTabularDetail(data, columns, cardHtmlFn, totalFormatter = fmtMoney.format.bind(fmtMoney)) {
     const total = data.total_registros ?? 0;
     let sumTxt = `${total} registro(s)`;
-    if (data.total_monto != null) sumTxt += ` · Total ${fmtMoney.format(data.total_monto)}`;
+    if (data.total_monto != null) sumTxt += ` · Total ${totalFormatter(data.total_monto)}`;
     const summaryEl = el("cc-detail-summary");
     if (summaryEl) summaryEl.textContent = sumTxt;
 
@@ -222,6 +235,17 @@
     const searchInput = el("cc-detail-search");
     if (searchInput) searchInput.value = "";
     updateExistenciasSearchClear();
+    el("cc-v45-detail-controls")?.classList.add("hidden");
+    el("cc-v45-detail-controls")?.classList.remove("flex");
+    el("cc-v45-pagination")?.classList.add("hidden");
+    el("cc-v45-pagination")?.classList.remove("flex");
+    comercialDetail = null;
+    comercialDetailData = null;
+    stockDetail = null;
+    stockDetailData = null;
+    genericV45Detail = null;
+    genericV45DetailData = null;
+    el("cc-v45-order")?.classList.remove("hidden");
     if (existenciasAbort) {
       existenciasAbort.abort();
       existenciasAbort = null;
@@ -318,9 +342,15 @@
 
   function renderGenericDetailTable(data) {
     resetDetailPanelsLayout();
+    const tableWrap = el("cc-detail-table-wrap");
+    const cards = el("cc-detail-cards");
+    if (tableWrap) tableWrap.className = DETAIL_TABLE_WRAP_DESKTOP_CLASS;
+    if (cards) cards.className = DETAIL_CARDS_MOBILE_CLASS;
     const total = data.total_registros ?? 0;
     let sumTxt = `${total} registro(s)`;
     if (data.total_monto != null) sumTxt += ` · Total ${fmtMoney.format(data.total_monto)}`;
+    if (data.meta?.alcance) sumTxt += ` · ${data.meta.alcance}`;
+    if (data.meta?.notas_semanticas?.length) sumTxt += ` · ${data.meta.notas_semanticas.join(" ")}`;
     const summaryEl = el("cc-detail-summary");
     if (summaryEl) summaryEl.textContent = sumTxt;
 
@@ -330,17 +360,38 @@
     if (!tbody || !thead) return;
 
     if (!filas.length) {
+      if (cards) cards.innerHTML = '<p class="py-4 text-sm text-slate-500">Sin registros en el período.</p>';
+      thead.innerHTML = "";
       tbody.innerHTML =
         '<tr><td class="py-4 text-slate-500" colspan="99">Sin registros en el período.</td></tr>';
       return;
     }
     const keys = Object.keys(filas[0]);
+    const cellText = (key, value) => {
+      if (value == null || value === "") return "—";
+      if (typeof value === "number" && (key.includes("monto") || key.includes("importe") || key === "subtotal_desc")) {
+        return fmtMoney.format(value);
+      }
+      return String(value);
+    };
+    if (cards) {
+      cards.innerHTML = filas.map((row) => `
+        <article class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800" role="listitem">
+          <dl class="grid grid-cols-2 gap-x-3 gap-y-2">
+            ${keys.map((key) => `
+              <div class="min-w-0 ${/nombre|descripcion|articulo|cliente/i.test(key) ? "col-span-2" : ""}">
+                <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">${escHtml(key.replace(/_/g, " "))}</dt>
+                <dd class="break-words text-sm font-medium tabular-nums text-slate-800 dark:text-slate-100">${escHtml(cellText(key, row[key]))}</dd>
+              </div>`).join("")}
+          </dl>
+        </article>`).join("");
+    }
     thead.innerHTML =
       "<tr>" +
       keys
         .map(
           (k) =>
-            `<th scope="col" class="px-2 py-2 text-[10px] font-semibold uppercase tracking-wide">${k.replace(/_/g, " ")}</th>`,
+            `<th scope="col" class="px-2 py-2 text-[10px] font-semibold uppercase tracking-wide">${escHtml(k.replace(/_/g, " "))}</th>`,
         )
         .join("") +
       "</tr>";
@@ -350,18 +401,12 @@
           '<tr class="border-b border-slate-100 dark:border-slate-800">' +
           keys
             .map((k) => {
-              let v = row[k];
-              if (
-                typeof v === "number" &&
-                (k.includes("monto") || k.includes("importe") || k === "subtotal_desc")
-              ) {
-                v = fmtMoney.format(v);
-              }
+              const v = cellText(k, row[k]);
               const wrap = /nombre|descripcion|articulo|cliente/i.test(k);
               const cls = wrap
                 ? "max-w-[12rem] break-words px-2 py-1.5 text-sm"
                 : "whitespace-nowrap px-2 py-1.5 text-sm tabular-nums";
-              return `<td class="${cls}">${v ?? ""}</td>`;
+              return `<td class="${cls}">${escHtml(v)}</td>`;
             })
             .join("") +
           "</tr>"
@@ -394,7 +439,7 @@
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
   /** Persistencia local de filtros (mismo navegador / perfil). */
   const FILTERS_STORAGE_KEY = "synap_cc_filters_v2";
-  const FILTERS_API_URL = "/api/reports/filters/";
+  const FILTERS_API_URL = cfg.filtersUrl;
   let filterTagsReady = false;
   /** Presentación unidades / unidades+docenas en tarjeta Inventario. */
   const INV_PRESENTACION_KEY = "synap_cc_inv_presentacion_v1";
@@ -433,8 +478,11 @@
     return {
       fecha_inicio: fi,
       fecha_fin: ff,
+      comparacion_inicio: el("cc-comparacion-inicio")?.value || "",
+      comparacion_fin: el("cc-comparacion-fin")?.value || "",
       sucursales: selectedFilterIds("sucursales"),
       puntos_venta: selectedFilterIds("punto_venta"),
+      depositos: selectedFilterIds("depositos"),
     };
   }
 
@@ -449,8 +497,11 @@
             return {
               fecha_inicio: legacy.fecha_inicio || "",
               fecha_fin: legacy.fecha_fin || "",
+              comparacion_inicio: "",
+              comparacion_fin: "",
               sucursales: [String(legacy.sucursal)],
               puntos_venta: [],
+              depositos: [],
             };
           }
         }
@@ -460,8 +511,12 @@
       if (!parsed || typeof parsed !== "object") return null;
       const fi = String(parsed.fecha_inicio || "").trim();
       const ff = String(parsed.fecha_fin || "").trim();
+      const ci = String(parsed.comparacion_inicio || "").trim();
+      const cf = String(parsed.comparacion_fin || "").trim();
       if (fi && !ISO_DATE.test(fi)) return null;
       if (ff && !ISO_DATE.test(ff)) return null;
+      if (ci && !ISO_DATE.test(ci)) return null;
+      if (cf && !ISO_DATE.test(cf)) return null;
       const sucursales = Array.isArray(parsed.sucursales)
         ? parsed.sucursales.map(String).filter(Boolean)
         : parsed.sucursal
@@ -470,11 +525,17 @@
       const puntos_venta = Array.isArray(parsed.puntos_venta)
         ? parsed.puntos_venta.map(String).filter(Boolean)
         : [];
+      const depositos = Array.isArray(parsed.depositos)
+        ? parsed.depositos.map(String).filter(Boolean)
+        : [];
       return {
         fecha_inicio: fi || "",
         fecha_fin: ff || "",
+        comparacion_inicio: ci || "",
+        comparacion_fin: cf || "",
         sucursales,
         puntos_venta,
+        depositos,
       };
     } catch (e) {
       return null;
@@ -489,8 +550,11 @@
         JSON.stringify({
           fecha_inicio: f.fecha_inicio || "",
           fecha_fin: f.fecha_fin || "",
+          comparacion_inicio: f.comparacion_inicio || "",
+          comparacion_fin: f.comparacion_fin || "",
           sucursales: f.sucursales || [],
           puntos_venta: f.puntos_venta || [],
+          depositos: f.depositos || [],
         }),
       );
     } catch (e) {
@@ -505,12 +569,18 @@
       const url = new URL(window.location.href);
       url.searchParams.set("fecha_inicio", f.fecha_inicio);
       url.searchParams.set("fecha_fin", f.fecha_fin);
+      url.searchParams.delete("comparacion_inicio");
+      url.searchParams.delete("comparacion_fin");
+      if (f.comparacion_inicio) url.searchParams.set("comparacion_inicio", f.comparacion_inicio);
+      if (f.comparacion_fin) url.searchParams.set("comparacion_fin", f.comparacion_fin);
       url.searchParams.delete("sucursal");
       url.searchParams.delete("sucursales");
       url.searchParams.delete("punto_venta");
       url.searchParams.delete("puntos_venta");
+      url.searchParams.delete("depositos");
       (f.sucursales || []).forEach((id) => url.searchParams.append("sucursales", id));
       (f.puntos_venta || []).forEach((id) => url.searchParams.append("punto_venta", id));
+      (f.depositos || []).forEach((id) => url.searchParams.append("depositos", id));
       url.searchParams.delete("fecha");
       window.history.replaceState({}, "", url.pathname + url.search + url.hash);
     } catch (e) {
@@ -522,6 +592,7 @@
     const f = filters || readFilters();
     (f.sucursales || []).forEach((id) => q.append("sucursales", id));
     (f.puntos_venta || []).forEach((id) => q.append("punto_venta", id));
+    (f.depositos || []).forEach((id) => q.append("depositos", id));
   }
 
   function buildQuery(extra) {
@@ -532,6 +603,23 @@
       ...(extra || {}),
     });
     appendFilterParams(q, f);
+    if (CUSTOM_COMPARE_AREAS.has(selectedAreaKey)) {
+      if (f.comparacion_inicio) q.set("comparacion_inicio", f.comparacion_inicio);
+      if (f.comparacion_fin) q.set("comparacion_fin", f.comparacion_fin);
+    }
+    if (selectedAreaKey === "ventas" || selectedAreaKey === "resumen_general") {
+      if (el("cc-incluir-impuestos")?.checked) q.set("incluir_impuestos", "1");
+      if (el("cc-comparar-anterior")?.checked) q.set("comparar", "anterior");
+    } else if (selectedAreaKey === "inventario") {
+      q.set("presentacion", el("cc-stock-presentacion")?.value || "unidad");
+      if (el("cc-stock-comparar")?.checked) q.set("comparar", "anterior");
+    }
+    if (["gestion_contable", "libros_contables"].includes(selectedAreaKey) && el("cc-grupo-contable")?.value) {
+      q.set("grupo_contable", el("cc-grupo-contable").value);
+    }
+    if (selectedAreaKey === "gastos") {
+      q.set("fuente", el("cc-gastos-fuente")?.value || "0");
+    }
     return q.toString();
   }
 
@@ -578,9 +666,15 @@
     const ffEl = el("cc-fecha-fin");
     if (fiEl) fiEl.value = fi;
     if (ffEl) ffEl.value = ff;
+    const ci = (params.get("comparacion_inicio") || "").trim();
+    const cf = (params.get("comparacion_fin") || "").trim();
+    if (ci && ISO_DATE.test(ci) && el("cc-comparacion-inicio")) el("cc-comparacion-inicio").value = ci;
+    if (cf && ISO_DATE.test(cf) && el("cc-comparacion-fin")) el("cc-comparacion-fin").value = cf;
+    if (ci || cf) el("cc-custom-comparison")?.setAttribute("open", "");
     const pending = {
       sucursales: params.getAll("sucursales"),
       puntos_venta: params.getAll("punto_venta"),
+      depositos: params.getAll("depositos"),
     };
     const legacySuc = (params.get("sucursal") || "").trim();
     if (!pending.sucursales.length && legacySuc) {
@@ -593,7 +687,7 @@
   function applyPendingFilterSelections() {
     const pending = window.__ccPendingFilterIds;
     if (!pending) return;
-    [["sucursales", pending.sucursales], ["punto_venta", pending.puntos_venta]].forEach(
+    [["sucursales", pending.sucursales], ["punto_venta", pending.puntos_venta], ["depositos", pending.depositos]].forEach(
       ([selectId, ids]) => {
         const sel = el(selectId);
         if (!sel || !Array.isArray(ids) || !ids.length) return;
@@ -620,19 +714,37 @@
       ffEl.value = saved.fecha_fin;
       applied = true;
     }
-    if (saved.sucursales?.length || saved.puntos_venta?.length) {
+    if (saved.comparacion_inicio && el("cc-comparacion-inicio")) el("cc-comparacion-inicio").value = saved.comparacion_inicio;
+    if (saved.comparacion_fin && el("cc-comparacion-fin")) el("cc-comparacion-fin").value = saved.comparacion_fin;
+    if (saved.comparacion_inicio || saved.comparacion_fin) el("cc-custom-comparison")?.setAttribute("open", "");
+    if (saved.sucursales?.length || saved.puntos_venta?.length || saved.depositos?.length) {
       window.__ccPendingFilterIds = {
         sucursales: saved.sucursales || [],
         puntos_venta: saved.puntos_venta || [],
+        depositos: saved.depositos || [],
       };
     }
     return applied;
   }
 
   let waitModalLocks = 0;
-  let ventasDiaCache = null;
   let areasCache = {};
   let dashboardLoadToken = 0;
+  let selectedAreaKey = "";
+  let autoRefreshTimer = null;
+
+  function scheduleAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+    const minutes = Number(el("cc-refresh-interval")?.value || 0);
+    if (![1, 5, 10, 15].includes(minutes)) return;
+    autoRefreshTimer = setInterval(() => {
+      if (!selectedAreaKey || document.visibilityState === "hidden") return;
+      const detail = el("cc-detail-modal");
+      if (el("cc-refresh")?.disabled || (detail && !detail.classList.contains("hidden"))) return;
+      void loadDashboard();
+    }, minutes * 60 * 1000);
+  }
 
   const WAIT_LABELS = {
     dashboard: {
@@ -660,8 +772,7 @@
 
   function isAreaVisible(key) {
     const vis = cfg.areasVisible;
-    if (!vis || typeof vis !== "object") return true;
-    return vis[key] !== false;
+    return key === selectedAreaKey && !!vis && vis[key] === true;
   }
 
   function visibleAreaDefs() {
@@ -670,9 +781,17 @@
 
   function dashboardWaitSubtitle() {
     const labelMap = {
+      resumen_general: "resumen gerencial",
+      preparacion_pedidos: "preparación de pedidos",
       ventas: "ventas",
       inventario: "inventario",
       compras: "compras",
+      financiero: "análisis financiero",
+      gestion_contable: "gestión contable",
+      impositivo: "impuestos y posiciones fiscales",
+      libros_contables: "libros y estados contables",
+      logistica: "logística y hojas de ruta",
+      gastos: "análisis de gastos",
       manufactura: "manufactura",
       cruzados: "demanda pendiente",
       tesoreria: "tesorería",
@@ -747,17 +866,21 @@
 
   async function initFilterTags() {
     try {
-      const [sucRes, pvRes] = await Promise.all([
+      const [sucRes, pvRes, depRes] = await Promise.all([
         fetch(`${FILTERS_API_URL}?type=sucursales`, { credentials: "same-origin" }),
         fetch(`${FILTERS_API_URL}?type=puntos_venta`, { credentials: "same-origin" }),
+        fetch(`${FILTERS_API_URL}?type=depositos`, { credentials: "same-origin" }),
       ]);
       const sucPayload = sucRes.ok ? await sucRes.json() : {};
       const pvPayload = pvRes.ok ? await pvRes.json() : {};
+      const depPayload = depRes.ok ? await depRes.json() : {};
       poblarSelectTags("sucursales", sucPayload.sucursales || [], "value", "label");
       poblarSelectTags("punto_venta", pvPayload.puntos_venta || [], "value", "label");
+      poblarSelectTags("depositos", depPayload.depositos || [], "value", "label");
       if (typeof window.initializeTagsFilter === "function") {
         window.initializeTagsFilter("sucursales", "sucursales");
         window.initializeTagsFilter("punto_venta", "puntos_venta");
+        window.initializeTagsFilter("depositos", "depositos");
         filterTagsReady = true;
       }
       applyPendingFilterSelections();
@@ -790,6 +913,20 @@
     return kpiCard(label, "…", theme);
   }
 
+  function stockValueLabel(area) {
+    if (!area || area.disponible === false) return "No disponible";
+    const value = area.kpis?.stock_valorizado ?? area.valor_stock;
+    if (value == null) return "Sin permiso";
+    return fmtMoney.format(value);
+  }
+
+  function globalKpiValue(area, key, kind = "money", fallbackKey = "") {
+    if (!area || area.disponible === false) return "No disponible";
+    const value = area.kpis?.[key] ?? (fallbackKey ? area[fallbackKey] : null);
+    if (value == null) return "No disponible";
+    return kind === "count" ? fmtNum.format(value) : fmtMoney.format(value);
+  }
+
   function stripAreaMeta(payload) {
     if (!payload || typeof payload !== "object") return payload || {};
     const out = { ...payload };
@@ -813,39 +950,72 @@
     lbl.textContent = loading ? `${full} · Cargando áreas…` : full;
   }
 
-  function renderGlobalKpis(areas, ventasDia) {
+  function renderGlobalKpis(areas) {
     const grid = el("cc-global-kpis");
     if (!grid) return;
     const f = readFilters();
     const singleDay = isSingleDayPeriod(f);
     const a = areas || {};
+    const resumen = a.resumen_general || {};
+    const preparacion = a.preparacion_pedidos || {};
     const v = a.ventas || {};
     const inv = a.inventario || {};
     const comp = a.compras || {};
+    const fin = a.financiero || {};
+    const account = a.gestion_contable || {};
+    const tax = a.impositivo || {};
+    const books = a.libros_contables || {};
+    const routes = a.logistica || {};
+    const expenses = a.gastos || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
-    const vd = ventasDia?.kpis || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
-    const ventasFirstVal = singleDay
-      ? ventasDia === null
-        ? "…"
-        : fmtMoney.format(vd.ventas_netas_dia || 0)
-      : fmtMoney.format(v.ventas_netas || 0);
+    const ventasFirstVal = globalKpiValue(v, "ventas_netas", "money", "ventas_netas");
 
     const cards = [];
+    if (isAreaVisible("resumen_general")) {
+      cards.push(kpiCard("Ventas del período", globalKpiValue(resumen, "ventas"), "sky"));
+      cards.push(kpiCard("Pedidos", globalKpiValue(resumen, "pedidos", "count"), "indigo"));
+    }
+    if (isAreaVisible("preparacion_pedidos")) {
+      cards.push(kpiCard("Pedidos ingresados", globalKpiValue(preparacion, "pedidos_ingresados", "count"), "sky"));
+      cards.push(kpiCard("Pedidos pendientes", globalKpiValue(preparacion, "pendientes", "count"), "amber"));
+    }
     if (isAreaVisible("ventas")) {
       cards.push(kpiCard(ventasFirstLabel, ventasFirstVal, "sky"));
-      cards.push(
-        kpiCard("Total operativo (período)", fmtMoney.format(v.total_operativo || 0), "indigo")
-      );
+      cards.push(kpiCard("Facturas", globalKpiValue(v, "facturas", "count"), "indigo"));
     }
     if (isAreaVisible("inventario")) {
-      cards.push(kpiCard("Valor stock", fmtMoney.format(inv.valor_stock || 0), "emerald"));
+      cards.push(kpiCard("Valor stock", stockValueLabel(inv), "emerald"));
     }
     if (isAreaVisible("compras")) {
       cards.push(
-        kpiCard("OC pendientes", fmtNum.format(comp.oc_pendientes_cantidad || 0), "amber")
+        kpiCard("Compras netas", globalKpiValue(comp, "compras_netas"), "amber")
       );
+    }
+    if (isAreaVisible("financiero")) {
+      cards.push(kpiCard("Flujo neto", globalKpiValue(fin, "flujo_neto"), "teal"));
+      cards.push(kpiCard("Vencido a cobrar", globalKpiValue(fin, "vencido_cobrar"), "amber"));
+    }
+    if (isAreaVisible("gestion_contable")) {
+      cards.push(kpiCard("Asientos", globalKpiValue(account, "asientos", "count"), "indigo"));
+      cards.push(kpiCard("Diferencia Debe/Haber", globalKpiValue(account, "diferencia"), "emerald"));
+    }
+    if (isAreaVisible("impositivo")) {
+      cards.push(kpiCard("Posición IVA", globalKpiValue(tax, "posicion_iva"), "amber"));
+      cards.push(kpiCard("IVA débito", globalKpiValue(tax, "iva_debito"), "sky"));
+    }
+    if (isAreaVisible("libros_contables")) {
+      cards.push(kpiCard("Asientos del Diario", globalKpiValue(books, "asientos", "count"), "indigo"));
+      cards.push(kpiCard("Resultado del período", globalKpiValue(books, "resultado_periodo"), "purple"));
+    }
+    if (isAreaVisible("logistica")) {
+      cards.push(kpiCard("Hojas de ruta", globalKpiValue(routes, "hojas_ruta", "count"), "sky"));
+      cards.push(kpiCard("Facturación en rutas", globalKpiValue(routes, "facturacion_rutas"), "emerald"));
+    }
+    if (isAreaVisible("gastos")) {
+      cards.push(kpiCard("Total de gastos", globalKpiValue(expenses, "total_gastos"), "rose"));
+      cards.push(kpiCard("Documentos de gasto", globalKpiValue(expenses, "documentos", "count"), "indigo"));
     }
     if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
@@ -867,15 +1037,47 @@
     const singleDay = isSingleDayPeriod(readFilters());
     const ventasLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
     const loadingCards = [];
+    if (isAreaVisible("resumen_general")) {
+      loadingCards.push(kpiCardLoading("Ventas del período", "sky"));
+      loadingCards.push(kpiCardLoading("Pedidos", "indigo"));
+    }
+    if (isAreaVisible("preparacion_pedidos")) {
+      loadingCards.push(kpiCardLoading("Pedidos ingresados", "sky"));
+      loadingCards.push(kpiCardLoading("Pedidos pendientes", "amber"));
+    }
     if (isAreaVisible("ventas")) {
       loadingCards.push(kpiCardLoading(ventasLabel, "sky"));
-      loadingCards.push(kpiCardLoading("Total operativo (período)", "indigo"));
+      loadingCards.push(kpiCardLoading("Facturas", "indigo"));
     }
     if (isAreaVisible("inventario")) {
       loadingCards.push(kpiCardLoading("Valor stock", "emerald"));
     }
     if (isAreaVisible("compras")) {
-      loadingCards.push(kpiCardLoading("OC pendientes", "amber"));
+      loadingCards.push(kpiCardLoading("Compras netas", "amber"));
+    }
+    if (isAreaVisible("financiero")) {
+      loadingCards.push(kpiCardLoading("Flujo neto", "emerald"));
+      loadingCards.push(kpiCardLoading("Vencido a cobrar", "amber"));
+    }
+    if (isAreaVisible("gestion_contable")) {
+      loadingCards.push(kpiCardLoading("Asientos", "indigo"));
+      loadingCards.push(kpiCardLoading("Diferencia Debe/Haber", "emerald"));
+    }
+    if (isAreaVisible("impositivo")) {
+      loadingCards.push(kpiCardLoading("Posición IVA", "amber"));
+      loadingCards.push(kpiCardLoading("IVA débito", "sky"));
+    }
+    if (isAreaVisible("libros_contables")) {
+      loadingCards.push(kpiCardLoading("Asientos del Diario", "indigo"));
+      loadingCards.push(kpiCardLoading("Resultado del período", "purple"));
+    }
+    if (isAreaVisible("logistica")) {
+      loadingCards.push(kpiCardLoading("Hojas de ruta", "sky"));
+      loadingCards.push(kpiCardLoading("Facturación en rutas", "emerald"));
+    }
+    if (isAreaVisible("gastos")) {
+      loadingCards.push(kpiCardLoading("Total de gastos", "rose"));
+      loadingCards.push(kpiCardLoading("Documentos de gasto", "indigo"));
     }
     if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
@@ -888,47 +1090,378 @@
 
   const AREA_DEFS = [
     {
+      key: "resumen_general",
+      title: "Resumen gerencial (V45)",
+      icon: "dashboard",
+      color: "sky",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        const rows = [
+          ["Ventas", money("ventas")], ["Compras netas", money("compras_netas")],
+          ["Cobranzas", money("cobranzas")], ["Pagos", money("pagos")],
+          ["Presupuestos", count("presupuestos")], ["Pedidos", count("pedidos")],
+          ["Facturas", count("facturas")], ["Remitos", count("remitos")],
+          ["Vencimiento a cobrar", money("vencimiento_cobrar")],
+          ["Vencimiento a pagar", money("vencimiento_pagar")],
+          ["Efectivo actual", money("efectivo_actual")],
+          ["Tarjetas actual", money("tarjetas_actual")],
+          ["Cheques actual", money("cheques_actual")],
+          ["Bancos actual", money("bancos_actual")],
+          ["Venta cuenta corriente", money("venta_cuenta_corriente")],
+          ["Compra cuenta corriente", money("compra_cuenta_corriente")],
+        ];
+        const keys = [
+          "ventas", "compras_netas", "cobranzas", "pagos", "presupuestos",
+          "pedidos", "facturas", "remitos", "vencimiento_cobrar",
+          "vencimiento_pagar", "efectivo_actual", "tarjetas_actual",
+          "cheques_actual", "bancos_actual", "venta_cuenta_corriente",
+          "compra_cuenta_corriente",
+        ];
+        return rows.map((row, index) => [...row, keys[index]]);
+      },
+      afterMetrics: (a) => renderResumenV45Charts(a),
+      details: [],
+    },
+    {
       key: "ventas",
-      title: "Ventas",
+      title: "Comercial · Ventas (V45)",
       icon: "point_of_sale",
       color: "sky",
-      metrics: (a) => [
-        ["Ventas netas", fmtMoney.format(a.ventas_netas || 0)],
-        ["Pedidos pend.", fmtMoney.format(a.pedidos_pendientes_monto || 0)],
-        ["Remitos s/ fact.", fmtMoney.format(a.remitos_no_facturados_monto || 0)],
-        ["Total operativo", fmtMoney.format(a.total_operativo || 0)],
-      ],
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const m = (name) => k[name] == null ? "No disponible" : fmtMoney.format(k[name]);
+        const n = (name) => k[name] == null ? "No disponible" : fmtNum.format(k[name]);
+        const rows = [
+          ["Ventas netas", m("ventas_netas")],
+          ["Rentabilidad", k.rentabilidad == null ? "Sin permiso de costos" : m("rentabilidad")],
+          ["Margen %", k.margen_porcentaje == null ? "Sin permiso de costos" : `${k.margen_porcentaje} %`],
+          ["Ticket promedio", m("ticket_promedio")],
+          ["Presupuestos", n("presupuestos")],
+          ["Monto presupuestos", m("monto_presupuestos")],
+          ["Pedidos", n("pedidos")],
+          ["Monto pedidos", m("monto_pedidos")],
+          ["Pedidos pendientes", n("pedidos_pendientes")],
+          ["Monto pendiente", m("monto_pendientes")],
+          ["Pedidos en remito", n("pedidos_en_remito")],
+          ["Pedidos facturados", n("pedidos_facturados")],
+          ["Remitos", n("remitos")],
+          ["Facturas", n("facturas")],
+          ["Créditos/devoluciones", m("creditos_devoluciones")],
+          ["Notas de débito", m("notas_debito")],
+        ];
+        const keys = [
+          "ventas_netas", "rentabilidad", "margen_porcentaje", "ticket_promedio",
+          "presupuestos", "monto_presupuestos", "pedidos", "monto_pedidos",
+          "pedidos_pendientes", "monto_pendientes", "pedidos_en_remito",
+          "pedidos_facturados", "remitos", "facturas", "creditos_devoluciones", "notas_debito",
+        ];
+        return rows.map((row, index) => [...row, keys[index]]);
+      },
+      afterMetrics: (a) => renderComercialV45Comparison(a),
+      details: [],
+    },
+    {
+      key: "preparacion_pedidos",
+      title: "Comercial · Preparación de pedidos (V45)",
+      icon: "assignment_turned_in",
+      color: "amber",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        return [
+          ["Pedidos ingresados", count("pedidos_ingresados")],
+          ["Monto pedidos", money("monto_pedidos")],
+          ["Pendientes", count("pendientes")],
+          ["Monto pendiente", money("monto_pendiente")],
+          ["En preparación", count("en_preparacion")],
+          ["Preparados", count("preparados")],
+          ["Backorder", count("backorder")],
+          ["Monto backorder", money("monto_backorder")],
+          ["En remito", count("en_remito")],
+          ["Facturados", count("facturados")],
+          ["Cerrados", count("cerrados")],
+          ["Anulados", count("anulados")],
+          ["Unidades pendientes", count("unidades_pendientes")],
+          ["Tiempo promedio", k.tiempo_promedio == null ? "N/D" : `${fmtNum.format(k.tiempo_promedio)} h`],
+          ["Monto facturado", money("monto_facturado")],
+          ["Monto en remito", money("monto_en_remito")],
+        ];
+      },
+      afterMetrics: (a) => renderPreparacionV45Charts(a),
       details: [
-        { label: "Pedidos pendientes", urlKey: "pedidos_pendientes" },
-        { label: "Remitos no facturados", urlKey: "remitos_nf" },
-        { label: "Ventas marcas mensual", urlKey: "ventas_marcas_mensual", navigate: true },
+        { label: "Todos los pedidos", urlKey: "preparacion_v45", vista: "pedidos" },
+        { label: "Pendientes", urlKey: "preparacion_v45", vista: "pendientes" },
+        { label: "En preparación", urlKey: "preparacion_v45", vista: "en_preparacion" },
+        { label: "Preparados", urlKey: "preparacion_v45", vista: "preparados" },
+        { label: "Backorder", urlKey: "preparacion_v45", vista: "backorder" },
+        { label: "En remito", urlKey: "preparacion_v45", vista: "en_remito" },
+        { label: "Facturados", urlKey: "preparacion_v45", vista: "facturados" },
+        { label: "Cerrados", urlKey: "preparacion_v45", vista: "cerrados" },
+        { label: "Anulados", urlKey: "preparacion_v45", vista: "anulados" },
       ],
     },
     {
       key: "inventario",
-      title: "Inventario",
+      title: "Abastecimiento · Stock (V45)",
       icon: "inventory_2",
       color: "emerald",
-      metrics: (a) => [
-        ["Valor stock", fmtMoney.format(a.valor_stock || 0)],
-        ["Con stock", fmtNum.format(a.productos_con_stock || 0)],
-        ["Bajo mínimo", fmtNum.format(a.productos_bajo_minimo || 0)],
-        ["Sin stock", fmtNum.format(a.productos_sin_stock || 0)],
-      ],
-      afterMetrics: (a) => renderInventarioDepositosBlock(a),
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "Sin permiso de costos" : fmtMoney.format(k[key]);
+        const qty = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Stock valorizado", money("stock_valorizado"), "stock_valorizado"],
+          ["Disponible", qty("unidades_disponibles"), "unidades_disponibles"],
+          ["Artículos con stock", qty("articulos_con_stock"), "articulos_con_stock"],
+          ["Stock negativo", qty("articulos_stock_negativo"), "articulos_stock_negativo"],
+          ["Bajo mínimo", qty("bajo_minimo"), "bajo_minimo"],
+          ["Punto pedido", qty("punto_pedido"), "punto_pedido"],
+          ["Sobre máximo", qty("sobre_maximo"), "sobre_maximo"],
+          ["Reservado", qty("stock_reservado"), "stock_reservado"],
+          ["Pendiente recibir", qty("pendiente_recibir"), "pendiente_recibir"],
+          ["Entradas período", qty("entradas_periodo"), "entradas_periodo"],
+          ["Salidas período", qty("salidas_periodo"), "salidas_periodo"],
+          ["Valor entradas", money("valor_entradas"), "valor_entradas"],
+          ["Valor salidas", money("valor_salidas"), "valor_salidas"],
+          ["Sin movimiento 90 días", qty("sin_movimiento_90d"), "sin_movimiento_90d"],
+        ];
+      },
+      afterMetrics: (a) => renderStockV45Charts(a),
       details: [{ label: "Existencias", urlKey: "existencias" }],
     },
     {
       key: "compras",
-      title: "Compras",
+      title: "Abastecimiento · Compras (V45)",
       icon: "shopping_cart",
       color: "amber",
-      metrics: (a) => [
-        ["OC pendientes", fmtNum.format(a.oc_pendientes_cantidad || 0)],
-        ["Unidades OC", fmtNum.format(a.oc_pendientes_unidades || 0)],
-        ["Importe OC", fmtMoney.format(a.oc_pendientes_importe || 0)],
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Compras netas", money("compras_netas")],
+          ["Facturas", count("facturas")],
+          ["Ticket promedio", money("ticket_promedio")],
+          ["Notas de crédito", count("notas_credito")],
+          ["Órdenes de compra", count("ordenes_compra")],
+          ["Monto en OC", money("monto_oc")],
+          ["OC pendientes", count("oc_pendientes")],
+          ["Monto pendiente", money("monto_pendiente")],
+          ["OC parciales", count("oc_parciales")],
+          ["Remitos recibidos", count("remitos_recibidos")],
+          ["Remitos sin factura", count("remitos_sin_factura")],
+          ["OC vencidas", count("oc_vencidas")],
+          ["Proveedores", count("proveedores")],
+          ["Plazo promedio", k.plazo_promedio == null ? "N/D" : `${fmtNum.format(k.plazo_promedio)} días`],
+        ];
+      },
+      afterMetrics: (a) => renderComprasV45Charts(a),
+      details: [
+        { label: "Comprobantes", urlKey: "compras_v45", vista: "comprobantes" },
+        { label: "Proveedores", urlKey: "compras_v45", vista: "proveedores" },
+        { label: "Órdenes de compra", urlKey: "compras_v45", vista: "ordenes" },
+        { label: "OC abiertas", urlKey: "compras_v45", vista: "ordenes_abiertas" },
+        { label: "Remitos", urlKey: "compras_v45", vista: "remitos" },
       ],
-      details: [],
+    },
+    {
+      key: "financiero",
+      title: "Análisis financiero (V45)",
+      icon: "account_balance",
+      color: "teal",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        return [
+          ["Cobranzas", money("cobranzas")], ["Pagos", money("pagos")],
+          ["Flujo neto", money("flujo_neto")],
+          ["Saldo a cobrar", money("saldo_cobrar")],
+          ["Saldo a pagar", money("saldo_pagar")],
+          ["Vencido a cobrar", money("vencido_cobrar")],
+          ["Vencido a pagar", money("vencido_pagar")],
+          ["Efectivo", money("efectivo")], ["Tarjetas", money("tarjetas")],
+          ["Cheques en cartera", money("cheques_cartera")],
+          ["Cheques emitidos", money("cheques_emitidos")],
+          ["Cheques rechazados", money("cheques_rechazados")],
+          ["Bancos", money("bancos")],
+          ["A cobrar +60 días", money("cobrar_mas_60")],
+          ["A pagar +60 días", money("pagar_mas_60")],
+        ];
+      },
+      afterMetrics: (a) => renderFinancieroV45Charts(a),
+      details: [
+        { label: "Cobranzas", urlKey: "financiero_v45", vista: "cobranzas" },
+        { label: "Pagos", urlKey: "financiero_v45", vista: "pagos" },
+        { label: "Cartera a cobrar", urlKey: "financiero_v45", vista: "cartera_cobrar" },
+        { label: "Cartera a pagar", urlKey: "financiero_v45", vista: "cartera_pagar" },
+        { label: "Vencido a cobrar", urlKey: "financiero_v45", vista: "vencido_cobrar" },
+        { label: "Vencido a pagar", urlKey: "financiero_v45", vista: "vencido_pagar" },
+      ],
+    },
+    {
+      key: "gestion_contable",
+      title: "Gestión contable (V45)",
+      icon: "account_balance_wallet",
+      color: "purple",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Asientos", count("asientos")], ["Total Debe", money("total_debe")],
+          ["Total Haber", money("total_haber")], ["Diferencia", money("diferencia")],
+          ["Desbalanceados", count("desbalanceados")],
+          ["Asientos manuales", count("manuales")],
+          ["Asientos de proceso", count("proceso")],
+          ["Resultado contable", money("resultado_contable")],
+          ["Impuestos determinados", money("impuestos_determinados")],
+          ["Impuestos a pagar", money("impuestos_pagar")],
+          ["Saldos a favor", money("impuestos_favor")],
+          ["Impuestos vencidos", money("impuestos_vencidos")],
+          ["Períodos abiertos", count("periodos_abiertos")],
+          ["Ejercicios abiertos", count("ejercicios_abiertos")],
+        ];
+      },
+      afterMetrics: (a) => renderContableV45Charts(a),
+      details: [
+        { label: "Renglones de asiento", urlKey: "contable_v45", vista: "asientos" },
+        { label: "Determinaciones", urlKey: "contable_v45", vista: "impuestos" },
+        { label: "Períodos", urlKey: "contable_v45", vista: "periodos" },
+        { label: "Ejercicios", urlKey: "contable_v45", vista: "ejercicios" },
+      ],
+    },
+    {
+      key: "impositivo",
+      title: "Impuestos · posiciones fiscales (V45)",
+      icon: "receipt_long",
+      color: "amber",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Posición IVA", money("posicion_iva")], ["IVA débito", money("iva_debito")],
+          ["IVA crédito", money("iva_credito")], ["Percep. IVA ventas", money("percep_iva_ventas")],
+          ["Percep. IVA compras", money("percep_iva_compras")], ["Retenciones IVA", money("retenciones_iva")],
+          ["Libro IVA ventas", count("libro_ventas")], ["Libro IVA compras", count("libro_compras")],
+          ["IIBB ventas", money("iibb_ventas")], ["Percep. IIBB ventas", money("percep_iibb_ventas")],
+          ["Percep. IIBB compras", money("percep_iibb_compras")],
+          ["Retenciones IIBB", money("retenciones_iibb")],
+          ["Impuestos determinados", money("impuestos_determinados")],
+          ["Impuestos pagados", money("impuestos_pagados")],
+        ];
+      },
+      afterMetrics: (a) => renderImpositivoV45Chart(a),
+      details: [
+        { label: "Posición IVA", urlKey: "impositivo_v45", vista: "posicion_iva" },
+        { label: "Libro IVA ventas", urlKey: "impositivo_v45", vista: "ventas" },
+        { label: "Libro IVA compras", urlKey: "impositivo_v45", vista: "compras" },
+        { label: "Percepciones", urlKey: "impositivo_v45", vista: "percepciones" },
+        { label: "Retenciones", urlKey: "impositivo_v45", vista: "retenciones" },
+        { label: "Determinaciones", urlKey: "impositivo_v45", vista: "determinados" },
+        { label: "Pagos fiscales", urlKey: "impositivo_v45", vista: "pagados" },
+      ],
+    },
+    {
+      key: "libros_contables",
+      title: "Contabilidad · libros y estados (V45)",
+      icon: "menu_book",
+      color: "indigo",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        const audit = k.sin_clasificar_conflicto || {};
+        return [
+          ["Asientos · Diario", count("asientos")], ["Total Debe", money("total_debe")],
+          ["Total Haber", money("total_haber")], ["Diferencia", money("diferencia")],
+          ["Cuentas · Mayor", count("cuentas_movimiento")],
+          ["Saldo neto · Mayor", money("saldo_neto_mayor")],
+          ["Saldo deudor", money("saldo_deudor")], ["Saldo acreedor", money("saldo_acreedor")],
+          ["Resultado del período", money("resultado_periodo")],
+          ["Ingresos", money("ingresos")], ["Egresos", money("egresos")],
+          ["Activo", money("activo")], ["Pasivo", money("pasivo")],
+          ["Sin clasificar / conflicto", `${fmtNum.format(audit.sin_clasificar || 0)} / ${fmtNum.format(audit.conflictos || 0)}`],
+        ];
+      },
+      afterMetrics: (a) => renderLibrosV45Charts(a),
+      details: [
+        { label: "Libro Diario", urlKey: "libros_v45", vista: "diario" },
+        { label: "Libro Mayor", urlKey: "libros_v45", vista: "mayor" },
+        { label: "Balance", urlKey: "libros_v45", vista: "balance" },
+        { label: "Resultados", urlKey: "libros_v45", vista: "resultados" },
+      ],
+    },
+    {
+      key: "logistica",
+      title: "Logística · hojas de ruta (V45)",
+      icon: "local_shipping",
+      color: "sky",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Hojas de ruta", count("hojas_ruta")], ["Rutas abiertas", count("rutas_abiertas")],
+          ["Rutas cerradas", count("rutas_cerradas")], ["Rutas rendidas", count("rutas_rendidas")],
+          ["Pendientes de rendir", count("pendientes_rendir")],
+          ["Documentos valorizados", count("documentos_valorizados")],
+          ["Facturas en ruta", count("facturas_ruta")], ["Notas de crédito", count("notas_credito")],
+          ["Facturación en rutas", money("facturacion_rutas")],
+          ["Promedio por ruta", money("promedio_ruta")],
+          ["Promedio por factura", money("promedio_factura")],
+          ["Choferes utilizados", count("choferes")], ["Unidades utilizadas", count("unidades")],
+          ["Dif. de rendición", money("diferencia_rendicion")],
+        ];
+      },
+      afterMetrics: (a) => renderLogisticaV45Comparison(a),
+      details: [
+        { label: "Hojas de ruta", urlKey: "logistica_v45", vista: "rutas" },
+        { label: "Comprobantes", urlKey: "logistica_v45", vista: "documentos" },
+        { label: "Facturación por ruta", urlKey: "logistica_v45", vista: "por_ruta" },
+        { label: "Por chofer", urlKey: "logistica_v45", vista: "por_chofer" },
+        { label: "Por unidad", urlKey: "logistica_v45", vista: "por_unidad" },
+        { label: "Por zona", urlKey: "logistica_v45", vista: "por_zona" },
+      ],
+    },
+    {
+      key: "gastos",
+      title: "Análisis de gastos (V45)",
+      icon: "receipt",
+      color: "rose",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (value) => value == null ? "No disponible" : fmtMoney.format(value);
+        const named = (value) => value?.nombre ? `${escHtml(value.nombre)} · ${money(value.importe)}` : "No disponible";
+        return [
+          ["Total de gastos", money(k.total_gastos)],
+          ["Operativos", money(k.operativos)], ["Bancarios", money(k.bancarios)],
+          ["Impuestos pagados", money(k.impuestos_pagados)],
+          ["NC / Ajustes", money(k.nc_ajustes)], ["Documentos", fmtNum.format(k.documentos || 0)],
+          ["Promedio por documento", money(k.promedio_documento)],
+          ["Promedio diario", money(k.promedio_diario)],
+          ["Gastos sobre ventas", k.gastos_sobre_ventas == null ? "No disponible" : `${k.gastos_sobre_ventas} %`],
+          ["Variación vs anterior", k.variacion?.importe == null ? "No disponible" : `${money(k.variacion.importe)} · ${k.variacion.porcentaje == null ? "Nuevo" : `${k.variacion.porcentaje} %`}`],
+          ["Sin grupo", `${money(k.sin_grupo?.importe)} · ${fmtNum.format(k.sin_grupo?.documentos || 0)} docs`],
+          ["Sin cuenta contable", `${money(k.sin_cuenta?.importe)} · ${fmtNum.format(k.sin_cuenta?.documentos || 0)} docs`],
+          ["Grupo principal", named(k.grupo_principal)],
+          ["Gasto principal", named(k.gasto_principal)],
+          ["Sucursal principal", named(k.sucursal_principal)],
+        ];
+      },
+      afterMetrics: (a) => renderGastosV45Composition(a),
+      details: [
+        { label: "Documentos", urlKey: "gastos_v45", vista: "documentos" },
+        { label: "Por grupo", urlKey: "gastos_v45", vista: "grupo" },
+        { label: "Por gasto", urlKey: "gastos_v45", vista: "gasto" },
+        { label: "Por fuente", urlKey: "gastos_v45", vista: "fuente" },
+        { label: "Por sucursal", urlKey: "gastos_v45", vista: "sucursal" },
+        { label: "Por día", urlKey: "gastos_v45", vista: "dia" },
+        { label: "Por mes", urlKey: "gastos_v45", vista: "mes" },
+      ],
     },
     {
       key: "manufactura",
@@ -1032,6 +1565,443 @@
     },
   ];
 
+  function comparisonPeriodLabel(areaData) {
+    const period = areaData?.comparacion?.periodo;
+    if (!period?.inicio || !period?.fin) return "período anterior";
+    return `${isoToDisplay(period.inicio)} al ${isoToDisplay(period.fin)}`;
+  }
+
+  function renderV45ComparisonTable(areaData, fields) {
+    const previous = areaData.comparacion?.kpis;
+    if (!previous) return "";
+    const current = areaData.kpis || {};
+    const rows = fields.map(([label, key, kind = "money"]) => {
+      const format = (value) => value == null ? "N/D" : kind === "count" ? fmtNum.format(value) : fmtMoney.format(value);
+      return `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="p-2 text-left font-medium">${escHtml(label)}</th><td class="p-2 text-right tabular-nums">${format(current[key])}</td><td class="p-2 text-right tabular-nums">${format(previous[key])}</td><td class="p-2 text-right tabular-nums">${format(areaData.comparacion?.diferencias?.[key])}</td></tr>`;
+    }).join("");
+    return `<div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Comparación · ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="p-2 text-left">Indicador</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th><th class="p-2 text-right">Variación</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function renderV45SeriesComparison(areaData, currentSeries, previousSeries, field, title) {
+    const actual = (currentSeries?.filas || []).slice(-24);
+    const prior = (previousSeries?.filas || []).slice(-24);
+    if (!actual.length && !prior.length) return "";
+    const count = Math.max(actual.length, prior.length);
+    const max = Math.max(1, ...[...actual, ...prior].map((row) => Math.abs(Number(row[field] || 0))));
+    const step = 304 / count;
+    const width = Math.max(1, step / 2 - 1);
+    const bars = Array.from({ length: count }, (_, index) => {
+      const a = Math.abs(Number(actual[index]?.[field] || 0)) / max * 80;
+      const b = Math.abs(Number(prior[index]?.[field] || 0)) / max * 80;
+      const x = 8 + index * step;
+      return `<rect x="${x}" y="${96 - a}" width="${width}" height="${a}" fill="#0284c7"/><rect x="${x + width}" y="${96 - b}" width="${width}" height="${b}" fill="#f97316"/>`;
+    }).join("");
+    return `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${escHtml(title)} · comparación</h3><svg viewBox="0 0 320 102" role="img" aria-label="${escHtml(title)} actual y comparación" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8"/>${bars}</svg><p class="text-[11px] text-slate-500">● Azul: actual · ● Naranja: ${escHtml(comparisonPeriodLabel(areaData))}. Barras alineadas por posición en cada período.</p></div>`;
+  }
+
+  function renderGastosV45Composition(areaData) {
+    const k = areaData.kpis || {};
+    const sources = [
+      ["Operativos", "operativos", "bg-rose-500"],
+      ["Bancarios", "bancarios", "bg-indigo-500"],
+      ["Impuestos pagados · separados", "impuestos_pagados", "bg-amber-500"],
+    ];
+    const max = Math.max(1, ...sources.map(([, key]) => Math.abs(Number(k[key] || 0))));
+    const rows = sources.map(([label, key, color]) => `<div class="grid grid-cols-[9rem_1fr] items-center gap-2 py-1 text-xs"><span>${label}</span><div class="h-3 rounded bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded ${color}" style="width:${Math.abs(Number(k[key] || 0)) / max * 100}%"></div></div><strong class="col-span-2 text-right tabular-nums">${k[key] == null ? "N/D" : fmtMoney.format(k[key])}</strong></div>`).join("");
+    const previous = areaData.comparacion?.kpis?.total_gastos;
+    const seriesRows = [
+      ...(areaData.serie?.filas || []).map((row) => ({ ...row, periodo: "Actual" })),
+      ...(areaData.serie_comparacion?.filas || []).map((row) => ({ ...row, periodo: "Comparación" })),
+    ].map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${escHtml(row.periodo)}</th><td class="p-2">${escHtml(row.fecha)}</td><td class="p-2 text-right tabular-nums">${fmtNum.format(row.documentos)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.importe)}</td></tr>`).join("");
+    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición por fuente</h3><p class="text-[11px] text-slate-500">Los impuestos se muestran separados y no integran «Todos».</p>${rows}<p class="mt-2 text-xs">Gasto del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "N/D" : fmtMoney.format(previous)}</strong></p></section>`
+      + renderV45SeriesComparison(areaData, areaData.serie, areaData.serie_comparacion, "importe", "Evolución de gastos")
+      + `<details class="mt-2 rounded-lg border border-slate-200 p-2 dark:border-slate-700"><summary class="cursor-pointer text-xs font-semibold">Ver serie de gastos</summary><div class="mt-2 max-h-64 overflow-auto"><table class="w-full min-w-[27rem] text-xs"><thead><tr><th class="p-2 text-left">Período</th><th class="p-2 text-left">Fecha</th><th class="p-2 text-right">Documentos</th><th class="p-2 text-right">Importe</th></tr></thead><tbody>${seriesRows || '<tr><td class="p-2" colspan="4">Sin gastos en los períodos.</td></tr>'}</tbody></table></div></details>`;
+  }
+
+  function renderLogisticaV45Comparison(areaData) {
+    const k = areaData.kpis || {};
+    const previous = areaData.comparacion || {};
+    const pairs = [
+      ["Hojas de ruta", "hojas_ruta"], ["Abiertas", "rutas_abiertas"],
+      ["Cerradas", "rutas_cerradas"], ["Rendidas", "rutas_rendidas"],
+      ["Pendientes", "pendientes_rendir"],
+    ];
+    const rows = pairs.map(([label, key]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${label}</th><td class="p-2 text-right tabular-nums">${fmtNum.format(k[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtNum.format(previous[key] || 0)}</td></tr>`).join("");
+    return `<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="mb-2 text-xs font-semibold">Rutas · actual y ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[24rem] text-xs"><thead><tr><th class="p-2 text-left">Estado</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function renderLibrosV45Charts(areaData) {
+    const rows = (areaData.series?.filas || []).slice(-30);
+    const panels = [
+      ["Libro Diario · Debe vs Haber", "debe", "haber", "#4f46e5", "#14b8a6"],
+      ["Resultados · Ingresos vs Egresos", "ingresos", "egresos", "#0ea5e9", "#f59e0b"],
+    ];
+    const chart = ([title, first, second, c1, c2]) => {
+      const max = Math.max(1, ...rows.flatMap((row) => [Math.abs(Number(row[first] || 0)), Math.abs(Number(row[second] || 0))]));
+      const step = rows.length ? 304 / rows.length : 304;
+      const barWidth = Math.max(1, step / 2 - 1);
+      const bars = rows.map((row, index) => {
+        const x = 8 + index * step;
+        const h1 = Math.abs(Number(row[first] || 0)) / max * 80;
+        const h2 = Math.abs(Number(row[second] || 0)) / max * 80;
+        return `<rect x="${x}" y="${96 - h1}" width="${barWidth}" height="${h1}" fill="${c1}"/><rect x="${x + barWidth}" y="${96 - h2}" width="${barWidth}" height="${h2}" fill="${c2}"/>`;
+      }).join("");
+      const table = rows.map((row) => `<tr><th scope="row" class="p-1 text-left">${escHtml(row.fecha)}</th><td class="p-1 text-right tabular-nums">${fmtMoney.format(row[first])}</td><td class="p-1 text-right tabular-nums">${fmtMoney.format(row[second])}</td></tr>`).join("");
+      return `<div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${title}</h3><svg viewBox="0 0 320 102" role="img" aria-label="${title}" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8"/>${bars}</svg><p class="text-[11px] text-slate-500">● ${first} · ● ${second}</p><details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700">Ver serie completa</summary><div class="max-h-56 overflow-auto"><table class="w-full min-w-[25rem] text-xs"><thead><tr><th class="p-1 text-left">Fecha</th><th class="p-1 text-right">${first}</th><th class="p-1 text-right">${second}</th></tr></thead><tbody>${table}</tbody></table></div></details></div>`;
+    };
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">${panels.map(chart).join("")}</div>`
+      + renderV45SeriesComparison(areaData, areaData.series, areaData.series_comparacion, "debe", "Libro Diario · Debe")
+      + renderV45SeriesComparison(areaData, areaData.series, areaData.series_comparacion, "ingresos", "Resultados · Ingresos")
+      + renderV45ComparisonTable(areaData, [
+        ["Asientos", "asientos", "count"], ["Total Debe", "total_debe"],
+        ["Total Haber", "total_haber"], ["Resultado", "resultado_periodo"],
+        ["Ingresos", "ingresos"], ["Egresos", "egresos"],
+        ["Activo", "activo"], ["Pasivo", "pasivo"],
+      ]);
+  }
+
+  function renderImpositivoV45Chart(areaData) {
+    const k = areaData.kpis || {};
+    const metrics = [
+      ["IVA débito", "iva_debito", "bg-sky-500"],
+      ["Percep. IVA ventas", "percep_iva_ventas", "bg-sky-400"],
+      ["IVA crédito", "iva_credito", "bg-amber-500"],
+      ["Percep. IVA compras", "percep_iva_compras", "bg-amber-400"],
+      ["Retenciones IVA", "retenciones_iva", "bg-amber-300"],
+    ];
+    const max = Math.max(1, ...metrics.map(([, key]) => Math.abs(Number(k[key] || 0))));
+    const bars = metrics.map(([label, key, color]) => `<div class="grid grid-cols-[8.5rem_1fr] items-center gap-2 py-1 text-xs"><span>${label}</span><div class="h-3 rounded bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded ${color}" style="width:${Math.abs(Number(k[key] || 0)) / max * 100}%"></div></div><strong class="col-span-2 text-right tabular-nums">${fmtMoney.format(k[key] || 0)}</strong></div>`).join("");
+    const fiscalRows = (areaData.serie_mensual?.filas || []).map((row) =>
+      `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${escHtml(row.fecha)}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_credito)}</td><td class="p-2 text-right font-semibold tabular-nums">${fmtMoney.format(row.iva_posicion)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_credito)}</td></tr>`
+    ).join("");
+    const previousRows = (areaData.serie_mensual_comparacion?.filas || []).map((row) =>
+      `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${escHtml(row.fecha)}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_credito)}</td><td class="p-2 text-right font-semibold tabular-nums">${fmtMoney.format(row.iva_posicion)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_credito)}</td></tr>`
+    ).join("");
+    const fiscalTable = (title, rows) => `<section class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${escHtml(title)}</h3><table class="w-full min-w-[42rem] text-xs"><thead><tr><th class="p-2 text-left">Mes</th><th class="p-2 text-right">IVA débito</th><th class="p-2 text-right">IVA crédito</th><th class="p-2 text-right">Posición IVA</th><th class="p-2 text-right">IIBB ventas</th><th class="p-2 text-right">IIBB crédito</th></tr></thead><tbody>${rows || '<tr><td class="p-2" colspan="6">Sin movimientos en el período.</td></tr>'}</tbody></table></section>`;
+    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición de la posición IVA</h3><p class="mb-2 text-xs text-slate-500">Débito + percepciones de ventas − crédito − percepciones de compras − retenciones</p>${bars}</section>`
+      + fiscalTable("Evolución fiscal mensual · período actual", fiscalRows)
+      + fiscalTable(`Evolución fiscal mensual · ${comparisonPeriodLabel(areaData)}`, previousRows)
+      + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iva_debito", "IVA débito mensual")
+      + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iva_credito", "IVA crédito mensual")
+      + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iibb_debito", "IIBB ventas mensual")
+      + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iibb_credito", "IIBB crédito mensual")
+      + renderV45ComparisonTable(areaData, [
+        ["Posición IVA", "posicion_iva"], ["IVA débito", "iva_debito"],
+        ["IVA crédito", "iva_credito"], ["Percep. IVA ventas", "percep_iva_ventas"],
+        ["Percep. IVA compras", "percep_iva_compras"], ["Retenciones IVA", "retenciones_iva"],
+        ["Libro IVA ventas", "libro_ventas", "count"], ["Libro IVA compras", "libro_compras", "count"],
+        ["IIBB ventas", "iibb_ventas"], ["Impuestos determinados", "impuestos_determinados"],
+        ["Impuestos pagados", "impuestos_pagados"],
+      ]);
+  }
+
+  function renderContableV45Charts(areaData) {
+    const rows = (areaData.serie_asientos?.filas || []).slice(-30);
+    const maxValue = Math.max(1, ...rows.flatMap((row) => [Number(row.debe || 0), Number(row.haber || 0)]));
+    const step = rows.length ? 304 / rows.length : 304;
+    const width = Math.max(1, step / 2 - 1);
+    const bars = rows.map((row, index) => {
+      const debit = Math.max(0, Number(row.debe || 0)) / maxValue * 83;
+      const credit = Math.max(0, Number(row.haber || 0)) / maxValue * 83;
+      const x = 8 + index * step;
+      return `<rect x="${x.toFixed(1)}" y="${(96 - debit).toFixed(1)}" width="${width.toFixed(1)}" height="${debit.toFixed(1)}" fill="#7c3aed" />
+        <rect x="${(x + width).toFixed(1)}" y="${(96 - credit).toFixed(1)}" width="${width.toFixed(1)}" height="${credit.toFixed(1)}" fill="#14b8a6" />`;
+    }).join("");
+    const tableRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="px-2 py-1.5 text-left">${escHtml(row.fecha)}</th><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.debe)}</td><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.haber)}</td></tr>`).join("");
+    const k = areaData.kpis || {};
+    const tax = [
+      ["Determinados", "impuestos_determinados"],
+      ["A pagar", "impuestos_pagar"],
+      ["A favor", "impuestos_favor"],
+      ["Vencidos", "impuestos_vencidos"],
+    ];
+    const taxMax = Math.max(1, ...tax.map(([, key]) => Number(k[key] || 0)));
+    const taxRows = tax.map(([label, key]) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800"><p class="text-[11px]">${label}</p><div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-amber-500" style="width:${Math.max(0, Number(k[key] || 0)) / taxMax * 100}%"></div></div><p class="mt-1 text-right text-xs font-semibold tabular-nums">${k[key] == null ? "N/D" : fmtMoney.format(k[key])}</p></div>`).join("");
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
+      <div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Libro Diario · Debe y Haber</h3><svg viewBox="0 0 320 102" role="img" aria-label="Debe y Haber por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg><p class="text-[11px] text-slate-500">● Violeta: Debe · ● Turquesa: Haber</p>
+        <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Debe</th><th class="px-2 py-2 text-right">Haber</th></tr></thead><tbody>${tableRows}</tbody></table></div></details>
+      </div><div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Situación fiscal · alcance general</h3>${taxRows}</div>
+    </div><p class="mt-2 text-[11px] text-slate-500">Impuestos, períodos y ejercicios son generales para la empresa.</p>`
+      + renderV45SeriesComparison(areaData, areaData.serie_asientos, areaData.serie_asientos_comparacion, "debe", "Libro Diario · Debe")
+      + renderV45ComparisonTable(areaData, [
+        ["Asientos", "asientos", "count"], ["Total Debe", "total_debe"],
+        ["Total Haber", "total_haber"], ["Desbalanceados", "desbalanceados", "count"],
+        ["Resultado contable", "resultado_contable"],
+        ["Impuestos determinados", "impuestos_determinados"],
+        ["Impuestos a pagar", "impuestos_pagar"],
+      ]);
+  }
+
+  function renderFinancieroV45Charts(areaData) {
+    const rows = (areaData.serie_flujo?.filas || []).slice(-30);
+    const maxFlow = Math.max(1, ...rows.flatMap((row) => [Number(row.cobranzas || 0), Number(row.pagos || 0)]));
+    const step = rows.length ? 304 / rows.length : 304;
+    const width = Math.max(1, step / 2 - 1);
+    const bars = rows.map((row, index) => {
+      const collected = Math.max(0, Number(row.cobranzas || 0)) / maxFlow * 83;
+      const paid = Math.max(0, Number(row.pagos || 0)) / maxFlow * 83;
+      const x = 8 + index * step;
+      return `<rect x="${x.toFixed(1)}" y="${(96 - collected).toFixed(1)}" width="${width.toFixed(1)}" height="${collected.toFixed(1)}" fill="#0d9488" />
+        <rect x="${(x + width).toFixed(1)}" y="${(96 - paid).toFixed(1)}" width="${width.toFixed(1)}" height="${paid.toFixed(1)}" fill="#f97316" />`;
+    }).join("");
+    const buckets = [
+      ["Por vencer", "por_vencer"], ["0–7 días", "d0_7"],
+      ["8–30 días", "d8_30"], ["31–60 días", "d31_60"],
+      ["+60 días", "mas_60"],
+    ];
+    const receivable = areaData.aging?.cobrar || {};
+    const payable = areaData.aging?.pagar || {};
+    const maxAging = Math.max(1, ...buckets.flatMap(([, key]) => [Number(receivable[key] || 0), Number(payable[key] || 0)]));
+    const agingRows = buckets.map(([name, key]) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+      <p class="text-[11px] font-medium">${name}</p>
+      <div class="mt-1 flex items-center gap-2"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-teal-600" style="width:${Math.max(0, Number(receivable[key] || 0)) / maxAging * 100}%"></div></div><span class="w-24 text-right text-[10px] tabular-nums">${receivable[key] == null ? "N/D" : fmtMoney.format(receivable[key])}</span></div>
+      <div class="mt-1 flex items-center gap-2"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-orange-400" style="width:${Math.max(0, Number(payable[key] || 0)) / maxAging * 100}%"></div></div><span class="w-24 text-right text-[10px] tabular-nums">${payable[key] == null ? "N/D" : fmtMoney.format(payable[key])}</span></div>
+    </div>`).join("");
+    const seriesRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="px-2 py-1.5 text-left">${escHtml(row.fecha)}</th><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.cobranzas)}</td><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.pagos)}</td></tr>`).join("");
+    const compared = areaData.comparacion?.kpis || {};
+    const comparisonRows = [["Cobranzas", "cobranzas"], ["Pagos", "pagos"], ["Flujo neto", "flujo_neto"]]
+      .map(([label, key]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="p-2 text-left">${label}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(areaData.kpis?.[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(compared[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(areaData.comparacion?.diferencias?.[key] || 0)}</td></tr>`).join("");
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
+      <div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Flujo del período</h3><svg viewBox="0 0 320 102" role="img" aria-label="Cobranzas y pagos por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg><p class="text-[11px] text-slate-500">● Turquesa: cobranzas · ● Naranja: pagos</p>
+        <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead><tbody>${seriesRows}</tbody></table></div></details>
+      </div>
+      <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Antigüedad de saldos</h3><p class="text-[11px] text-slate-500">● Turquesa: cobrar · ● Naranja: pagar</p>${agingRows}</div>
+    </div><div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Flujo comparado con ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="p-2 text-left">Indicador</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th><th class="p-2 text-right">Variación</th></tr></thead><tbody>${comparisonRows}</tbody></table></div>`;
+  }
+
+  function renderComprasV45Charts(areaData) {
+    const rows = (areaData.serie_evolucion?.filas || []).slice(-30);
+    const maxValue = Math.max(1, ...rows.flatMap((row) => [Number(row.compras || 0), Number(row.ordenes || 0)]));
+    const step = rows.length ? 304 / rows.length : 304;
+    const width = Math.max(1, step / 2 - 1);
+    const bars = rows.map((row, index) => {
+      const buy = Math.max(0, Number(row.compras || 0)) / maxValue * 83;
+      const order = Math.max(0, Number(row.ordenes || 0)) / maxValue * 83;
+      const x = 8 + index * step;
+      return `<rect x="${x.toFixed(1)}" y="${(96 - buy).toFixed(1)}" width="${width.toFixed(1)}" height="${buy.toFixed(1)}" fill="#d97706" />
+        <rect x="${(x + width).toFixed(1)}" y="${(96 - order).toFixed(1)}" width="${width.toFixed(1)}" height="${order.toFixed(1)}" fill="#0284c7" />`;
+    }).join("");
+    const tableRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800">
+      <th scope="row" class="px-2 py-1.5 text-left font-medium">${escHtml(row.fecha)}</th>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.compras)}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.ordenes)}</td>
+    </tr>`).join("");
+    const previous = areaData.comparacion?.kpis?.compras_netas;
+    return `<div class="mt-4 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="text-xs font-semibold">Evolución de compras y OC · ${areaData.serie_evolucion?.agrupacion || "período"}</p>
+      <svg viewBox="0 0 320 102" role="img" aria-label="Compras y órdenes de compra por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg>
+      <p class="text-[11px] text-slate-500">🟠 Compras · 🔵 Órdenes de compra</p>
+      <p class="mt-2 text-xs">Compras del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "No disponible" : fmtMoney.format(previous)}</strong></p>
+      <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary>
+        <div class="mt-2 max-h-72 overflow-auto"><table class="w-full min-w-[30rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Compras</th><th class="px-2 py-2 text-right">OC</th></tr></thead><tbody>${tableRows}</tbody></table></div>
+      </details></div>`;
+  }
+
+  function renderPreparacionV45Charts(areaData) {
+    const states = areaData.serie_estados || [];
+    const amounts = areaData.serie_importes || [];
+    const maxCount = Math.max(1, ...states.flatMap((row) => [Number(row.actual || 0), Number(row.anterior || 0)]));
+    const maxAmount = Math.max(1, ...amounts.map((row) => Number(row.importe || 0)));
+    const stateRows = states.map((row) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+      <p class="text-xs font-medium">${escHtml(row.estado)}</p>
+      <div class="mt-1 flex items-center gap-2 text-[11px]"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-sky-600" style="width:${Math.max(0, Number(row.actual || 0)) / maxCount * 100}%"></div></div><span class="w-10 text-right tabular-nums">${fmtNum.format(row.actual)}</span></div>
+      <div class="mt-1 flex items-center gap-2 text-[11px]"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-orange-400" style="width:${Math.max(0, Number(row.anterior || 0)) / maxCount * 100}%"></div></div><span class="w-10 text-right tabular-nums">${fmtNum.format(row.anterior)}</span></div>
+    </div>`).join("");
+    const amountRows = amounts.map((row) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+      <p class="text-xs font-medium">${escHtml(row.estado)}</p>
+      <div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-emerald-600" style="width:${Math.max(0, Number(row.importe || 0)) / maxAmount * 100}%"></div></div>
+      <p class="mt-1 text-right text-xs font-semibold tabular-nums">${row.importe == null ? "No disponible" : fmtMoney.format(row.importe)}</p>
+    </div>`).join("");
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
+      <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Estados · <span class="text-sky-600">actual</span> / <span class="text-orange-500">${escHtml(comparisonPeriodLabel(areaData))}</span></h3>${stateRows}</section>
+      <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Importes por estado</h3>${amountRows}</section>
+    </div>`;
+  }
+
+  function renderResumenV45Charts(areaData) {
+    const series = (areaData.series?.filas || []).slice(-30);
+    const chart = (title, left, right, leftLabel, rightLabel) => {
+      const maxValue = Math.max(1, ...series.flatMap((row) => [
+        Number(row[left] || 0), Number(row[right] || 0),
+      ]));
+      const step = series.length ? 304 / series.length : 304;
+      const width = Math.max(1, step / 2 - 1);
+      const bars = series.map((row, index) => {
+        const leftHeight = Math.max(0, Number(row[left] || 0)) / maxValue * 83;
+        const rightHeight = Math.max(0, Number(row[right] || 0)) / maxValue * 83;
+        const x = 8 + index * step;
+        return `<rect x="${x.toFixed(1)}" y="${(96 - leftHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${leftHeight.toFixed(1)}" fill="#0284c7" />
+          <rect x="${(x + width).toFixed(1)}" y="${(96 - rightHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${rightHeight.toFixed(1)}" fill="#f97316" />`;
+      }).join("");
+      return `<div class="min-w-0 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+        <p class="text-xs font-semibold">${title}</p>
+        <svg viewBox="0 0 320 102" role="img" aria-label="${title}" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg>
+        <p class="text-[11px] text-slate-500">🔵 ${leftLabel} · 🟠 ${rightLabel}</p>
+      </div>`;
+    };
+    const prior = areaData.comparacion?.kpis || {};
+    const current = areaData.kpis || {};
+    const fields = ["ventas", "compras_netas", "cobranzas", "pagos", "presupuestos", "pedidos", "facturas", "remitos", "venta_cuenta_corriente", "compra_cuenta_corriente"];
+    const names = ["Ventas", "Compras netas", "Cobranzas", "Pagos", "Presupuestos", "Pedidos", "Facturas", "Remitos", "Venta cta. cte.", "Compra cta. cte."];
+    const countKeys = new Set(["presupuestos", "pedidos", "facturas", "remitos"]);
+    const format = (key, value) => value == null ? "No disponible" : countKeys.has(key) ? fmtNum.format(value) : fmtMoney.format(value);
+    const rows = fields.map((key, index) => `<tr class="border-t border-slate-100 dark:border-slate-800">
+      <th scope="row" class="px-2 py-1.5 text-left font-medium">${names[index]}</th>
+      <td class="px-2 py-1.5 text-right tabular-nums">${format(key, current[key])}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${format(key, prior[key])}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${format(key, areaData.comparacion?.diferencias?.[key])}</td>
+    </tr>`).join("");
+    const seriesRows = series.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800">
+      <th scope="row" class="px-2 py-1.5 text-left font-medium">${escHtml(row.fecha)}</th>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.ventas)}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.compras)}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.cobranzas)}</td>
+      <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.pagos)}</td>
+    </tr>`).join("");
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
+      ${chart("Gestión comercial", "ventas", "compras", "Ventas", "Compras")}
+      ${chart("Tesorería", "cobranzas", "pagos", "Cobranzas", "Pagos")}
+    </div><details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Ver serie completa (${areaData.series?.agrupacion || "período"})</summary>
+      <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[38rem] text-xs text-slate-700 dark:text-slate-200">
+        <thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Ventas</th><th class="px-2 py-2 text-right">Compras</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead>
+        <tbody>${seriesRows}</tbody></table></div></details>
+    <details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Comparar con ${escHtml(comparisonPeriodLabel(areaData))}</summary>
+      <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[34rem] text-xs text-slate-700 dark:text-slate-200">
+        <thead><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Comparación</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
+        <tbody>${rows}</tbody></table></div></details>`;
+  }
+
+  function renderComercialV45Comparison(areaData) {
+    const comparison = areaData?.comparacion;
+    if (!comparison?.kpis) return "";
+    const actual = areaData.kpis || {};
+    const previous = comparison.kpis;
+    const fields = [
+      ["Ventas netas", "ventas_netas", "money"],
+      ["Rentabilidad", "rentabilidad", "money"],
+      ["Margen", "margen_porcentaje", "percent"],
+      ["Ticket promedio", "ticket_promedio", "money"],
+      ["Presupuestos", "presupuestos", "count"],
+      ["Monto presupuestos", "monto_presupuestos", "money"],
+      ["Pedidos", "pedidos", "count"],
+      ["Monto pedidos", "monto_pedidos", "money"],
+      ["Pedidos pendientes", "pedidos_pendientes", "count"],
+      ["Monto pendiente", "monto_pendientes", "money"],
+      ["En remito", "pedidos_en_remito", "count"],
+      ["Facturados", "pedidos_facturados", "count"],
+      ["Remitos", "remitos", "count"],
+      ["Facturas", "facturas", "count"],
+      ["Créditos/devoluciones", "creditos_devoluciones", "money"],
+      ["Notas de débito", "notas_debito", "money"],
+    ];
+    const formatValue = (value, kind) => {
+      if (value == null) return "Sin permiso";
+      if (kind === "money") return fmtMoney.format(value);
+      if (kind === "percent") return `${Number(value).toFixed(2)} %`;
+      return fmtNum.format(value);
+    };
+    const rows = fields.map(([label, key, kind]) => {
+      const delta = comparison.diferencias?.[key];
+      return `<tr class="border-t border-slate-100 dark:border-slate-800">
+        <th scope="row" class="px-2 py-1.5 text-left font-medium">${label}</th>
+        <td class="px-2 py-1.5 text-right tabular-nums">${formatValue(actual[key], kind)}</td>
+        <td class="px-2 py-1.5 text-right tabular-nums">${formatValue(previous[key], kind)}</td>
+        <td class="px-2 py-1.5 text-right tabular-nums">${formatValue(delta, kind)}</td>
+      </tr>`;
+    }).join("");
+    const currentSeries = areaData.series?.ventas_actual || [];
+    const previousSeries = areaData.series?.ventas_anterior || [];
+    const pointCount = Math.max(currentSeries.length, previousSeries.length, 2);
+    const allValues = [...currentSeries, ...previousSeries].map((item) => Number(item.valor || 0));
+    const minValue = Math.min(0, ...allValues);
+    const maxValue = Math.max(1, ...allValues);
+    const range = Math.max(1, maxValue - minValue);
+    const points = (series) => series.map((item, index) => {
+      const x = 8 + (index / (pointCount - 1)) * 304;
+      const y = 103 - ((Number(item.valor || 0) - minValue) / range) * 88;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    const graph = `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="mb-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Evolución de ventas por ${areaData.series?.agrupacion === "mes" ? "mes" : "día"}</p>
+      <svg viewBox="0 0 320 112" role="img" aria-label="Ventas diarias: período actual azul y comparación naranja" class="h-28 w-full">
+        <line x1="8" y1="103" x2="312" y2="103" stroke="#94a3b8" />
+        <polyline points="${points(previousSeries)}" fill="none" stroke="#f97316" stroke-width="2.5" />
+        <polyline points="${points(currentSeries)}" fill="none" stroke="#0284c7" stroke-width="2.5" />
+      </svg>
+      <div class="flex flex-wrap gap-4 text-[10px] text-slate-500"><span>● Azul: actual</span><span>● Naranja: ${escHtml(comparisonPeriodLabel(areaData))}</span></div>
+    </div>`;
+    return `${graph}<details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Comparar los 16 indicadores</summary>
+      <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[34rem] text-xs text-slate-700 dark:text-slate-200">
+        <thead class="sticky top-0 bg-slate-50 dark:bg-slate-900"><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Comparación</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div></details>`;
+  }
+
+  function renderStockV45Charts(areaData) {
+    const movement = areaData?.serie_movimientos || {};
+    const rows = Array.isArray(movement.filas) ? movement.filas : [];
+    const lastRows = rows.slice(-30);
+    const previousRows = Array.isArray(areaData?.serie_movimientos_anterior?.filas)
+      ? areaData.serie_movimientos_anterior.filas : [];
+    const priorLast = previousRows.slice(-30);
+    const plotRows = Math.max(lastRows.length, priorLast.length);
+    const maxValue = Math.max(1, ...[...lastRows, ...priorLast].flatMap((row) => [Number(row.entradas || 0), Number(row.salidas || 0)]));
+    const step = plotRows ? 304 / plotRows : 304;
+    const bars = Array.from({ length: plotRows }, (_, index) => {
+      const row = lastRows[index] || {};
+      const prior = priorLast[index] || {};
+      const inHeight = Math.max(0, Number(row.entradas || 0)) / maxValue * 84;
+      const outHeight = Math.max(0, Number(row.salidas || 0)) / maxValue * 84;
+      const priorInHeight = Math.max(0, Number(prior.entradas || 0)) / maxValue * 84;
+      const priorOutHeight = Math.max(0, Number(prior.salidas || 0)) / maxValue * 84;
+      const x = 8 + index * step;
+      const width = Math.max(1, step / (previousRows.length ? 4 : 2) - 0.5);
+      return `<rect x="${x.toFixed(1)}" y="${(98 - inHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${inHeight.toFixed(1)}" fill="#059669" />
+        <rect x="${(x + width).toFixed(1)}" y="${(98 - outHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${outHeight.toFixed(1)}" fill="#f97316" />
+        ${previousRows.length ? `<rect x="${(x + width * 2).toFixed(1)}" y="${(98 - priorInHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${priorInHeight.toFixed(1)}" fill="#86efac" />
+        <rect x="${(x + width * 3).toFixed(1)}" y="${(98 - priorOutHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${priorOutHeight.toFixed(1)}" fill="#fdba74" />` : ""}`;
+    }).join("");
+    const seriesTable = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800">
+      <th class="py-1.5 text-left font-normal">${escHtml(row.fecha)}</th>
+      <td class="py-1.5 text-right">${fmtNum.format(row.entradas)}</td>
+      <td class="py-1.5 text-right">${fmtNum.format(row.salidas)}</td>
+    </tr>`).join("");
+    const graph = `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Movimientos por ${movement.agrupacion || "período"} · ${escHtml(areaData.presentacion || "unidad")}</p>
+      <svg viewBox="0 0 320 105" role="img" aria-label="Entradas en verde y salidas en naranja" class="h-28 w-full">
+        <line x1="8" y1="98" x2="312" y2="98" stroke="#94a3b8" />${bars}
+      </svg>
+      <div class="flex flex-wrap gap-3 text-[10px] text-slate-500"><span>● Verde: entradas</span><span>● Naranja: salidas</span>${previousRows.length ? `<span>● Verde claro / naranja claro: ${escHtml(comparisonPeriodLabel(areaData))}</span>` : ""}</div>
+      <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa (${rows.length})</summary>
+        <div class="max-h-60 overflow-auto"><table class="w-full text-xs"><thead><tr><th class="text-left">Fecha</th><th class="text-right">Entradas</th><th class="text-right">Salidas</th></tr></thead><tbody>${seriesTable}</tbody></table></div>
+      </details>
+      ${previousRows.length ? `<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie comparada (${previousRows.length})</summary>
+        <div class="max-h-60 overflow-auto"><table class="w-full text-xs"><thead><tr><th class="text-left">Fecha</th><th class="text-right">Entradas</th><th class="text-right">Salidas</th></tr></thead><tbody>${previousRows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="py-1.5 text-left font-normal">${escHtml(row.fecha)}</th><td class="py-1.5 text-right">${fmtNum.format(row.entradas)}</td><td class="py-1.5 text-right">${fmtNum.format(row.salidas)}</td></tr>`).join("")}</tbody></table></div>
+      </details>` : ""}
+    </div>`;
+    const deposits = Array.isArray(areaData?.series_depositos) ? areaData.series_depositos : [];
+    const maxDeposit = Math.max(1, ...deposits.map((dep) => Number(dep.valor || 0)));
+    const depositChart = deposits.length ? `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Valorización por depósito</p>
+      ${deposits.map((dep) => `<div class="mb-2 text-xs"><div class="flex justify-between gap-2"><span class="truncate">${escHtml(dep.nombre)}</span><strong class="tabular-nums">${fmtMoney.format(dep.valor)}</strong></div><div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-700"><div class="h-2 rounded bg-emerald-600" style="width:${(Math.max(0, Number(dep.valor || 0)) / maxDeposit * 100).toFixed(1)}%"></div></div></div>`).join("")}
+    </div>` : "";
+    const compare = areaData?.comparacion;
+    const flowFields = [
+      ["Entradas", "entradas_periodo", "qty"], ["Salidas", "salidas_periodo", "qty"],
+      ["Valor entradas", "valor_entradas", "money"], ["Valor salidas", "valor_salidas", "money"],
+    ];
+    const comparison = compare ? `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+      <p class="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Comparación de movimientos · ${escHtml(comparisonPeriodLabel(areaData))}</p>
+      <div class="overflow-x-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="text-left">Indicador</th><th class="text-right">Actual</th><th class="text-right">Comparación</th><th class="text-right">Variación</th></tr></thead><tbody>
+      ${flowFields.map(([label, key, kind]) => {
+        const fmt = (value) => value == null ? "Sin permiso" : kind === "money" ? fmtMoney.format(value) : fmtNum.format(value);
+        return `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="py-1.5 text-left font-medium">${label}</th><td class="text-right">${fmt(areaData.kpis?.[key])}</td><td class="text-right">${fmt(compare.kpis?.[key])}</td><td class="text-right">${fmt(compare.diferencias?.[key])}</td></tr>`;
+      }).join("")}
+      </tbody></table></div><p class="mt-2 text-[11px] text-slate-500">Las existencias son una foto actual y no se comparan como período.</p>
+    </div>` : "";
+    return graph + depositChart + comparison;
+  }
+
   function renderInventarioDepositosBlock(areaData) {
     const deps = Array.isArray(areaData?.depositos) ? areaData.depositos : [];
     const modo = readInvPresentacion();
@@ -1104,9 +2074,11 @@
       const a = areaData || {};
       const rows = def.metrics(a)
         .map(
-          ([k, val]) => `
+          ([k, val, kpi]) => `
         <div class="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0 dark:border-slate-800">
-          <span class="min-w-0 shrink text-sm text-slate-500 dark:text-slate-400">${k}</span>
+          <span class="min-w-0 shrink text-sm text-slate-500 dark:text-slate-400">${k}
+            ${kpi && !["Sin permiso de costos", "No disponible", "N/D"].includes(val) ? `<button type="button" class="cc-v45-kpi-detail ml-1 align-middle text-sky-600 dark:text-sky-300" data-area="${def.key}" data-kpi="${kpi}" data-title="${escHtml(k)}" aria-label="Ver detalle de ${escHtml(k)}"><span class="material-icons text-sm" aria-hidden="true">open_in_new</span></button>` : ""}
+          </span>
           <span class="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-white">${val}</span>
         </div>`
         )
@@ -1119,7 +2091,7 @@
       .map(
         (d) => `
       <button type="button" class="cc-detail-btn inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:w-auto sm:justify-start sm:py-1"
-        data-url-key="${d.urlKey}" data-title="${def.title}: ${d.label}">
+        data-url-key="${d.urlKey}" data-vista="${d.vista || ""}" data-title="${def.title}: ${d.label}">
         ${d.label}
       </button>`
       )
@@ -1148,12 +2120,9 @@
           </div>
         </header>
         <div class="flex-1 px-4 py-2">${body}</div>
-        <footer class="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap dark:border-slate-700">
-          ${detailBtns}
-          ${def.key === "ventas" ? `<a href="${buildReportLink(cfg.executiveSalesPageUrl || "#")}" class="cc-report-link inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-2 text-[11px] font-medium text-white hover:bg-sky-500 sm:w-auto sm:py-1" data-base-url="${cfg.executiveSalesPageUrl || ""}">Panel del día</a>` : ""}
-          ${cashFlowBtn}
-          ${mprBtn}
-        </footer>
+        ${detailBtns || cashFlowBtn || mprBtn ? `<footer class="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap dark:border-slate-700">
+          ${detailBtns}${cashFlowBtn}${mprBtn}
+        </footer>` : ""}
       </article>`;
   }
 
@@ -1202,7 +2171,14 @@
   function bindDetailButtons(root) {
     const scope = root || el("cc-areas-grid");
     scope?.querySelectorAll(".cc-detail-btn").forEach((btn) => {
-      btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title));
+      btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title, btn.dataset.vista));
+    });
+    scope?.querySelectorAll(".cc-v45-kpi-detail").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.dataset.area === "resumen_general") openDetail("resumen_v45", btn.dataset.title, btn.dataset.kpi);
+        else if (btn.dataset.area === "inventario") openStockDetail(btn.dataset.kpi, btn.dataset.title);
+        else openComercialDetail(btn.dataset.kpi, btn.dataset.title);
+      });
     });
     bindInventarioPresentacion(scope);
   }
@@ -1259,34 +2235,6 @@
     return body;
   }
 
-  function buildSummaryQuery() {
-    const f = readFilters();
-    const q = new URLSearchParams({
-      fecha_inicio: f.fecha_inicio,
-      fecha_fin: f.fecha_fin,
-    });
-    appendFilterParams(q, f);
-    return q.toString();
-  }
-
-  async function loadExecutiveSummaryDeferred(loadToken) {
-    if (!cfg.executiveSummaryUrl) return;
-    if (!isSingleDayPeriod(readFilters())) return;
-    ventasDiaCache = null;
-    renderGlobalKpis(areasCache, null);
-    try {
-      const data = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
-      if (loadToken !== dashboardLoadToken) return;
-      ventasDiaCache = data;
-      renderGlobalKpis(areasCache, ventasDiaCache);
-    } catch (e) {
-      console.warn("Resumen ventas del día:", e);
-      if (loadToken !== dashboardLoadToken) return;
-      ventasDiaCache = {};
-      renderGlobalKpis(areasCache, ventasDiaCache);
-    }
-  }
-
   async function fetchArea(key, url, q, loadToken) {
     try {
       const payload = await fetchJson(`${url}?${q}`);
@@ -1326,7 +2274,7 @@
         }
         areasCache[result.key] = result.data;
         updateSingleAreaCard(result.key, result.data);
-        renderGlobalKpis(areasCache, ventasDiaCache);
+        renderGlobalKpis(areasCache);
       });
     });
     await Promise.allSettled(tasks);
@@ -1334,32 +2282,70 @@
 
   async function loadDashboardMonolith() {
     if (!cfg.dashboardUrl) return;
+    const loadToken = dashboardLoadToken;
     setLoading(true);
     showError("");
     try {
-      const q = buildQuery();
+      const q = buildQuery({ tablero: selectedAreaKey });
       const data = await fetchJson(`${cfg.dashboardUrl}?${q}`);
+      if (loadToken !== dashboardLoadToken) return;
       updatePeriodoLabel(false);
       areasCache = data.areas || {};
-      let ventasDia = null;
-      if (cfg.executiveSummaryUrl && isSingleDayPeriod(readFilters())) {
-        try {
-          ventasDia = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
-        } catch (e) {
-          console.warn("Resumen ventas del día:", e);
-        }
-      }
-      ventasDiaCache = ventasDia;
-      renderGlobalKpis(areasCache, ventasDiaCache);
+      renderGlobalKpis(areasCache);
       renderAreas({ areas: areasCache });
     } catch (e) {
+      if (loadToken !== dashboardLoadToken) return;
       showError(e.message || "No se pudo cargar el Command Center.");
     } finally {
-      setLoading(false);
+      if (loadToken === dashboardLoadToken) setLoading(false);
     }
   }
 
   async function loadDashboard() {
+    selectedAreaKey = el("cc-tablero-select")?.value || "";
+    document.querySelectorAll(".cc-sales-filter").forEach((node) => {
+      node.classList.toggle("hidden", selectedAreaKey === "inventario");
+    });
+    document.querySelectorAll(".cc-pv-filter").forEach((node) => {
+      node.classList.toggle("hidden", ["compras", "inventario", "gestion_contable", "libros_contables"].includes(selectedAreaKey));
+    });
+    document.querySelectorAll(".cc-account-filter").forEach((node) => {
+      node.classList.toggle("hidden", !["gestion_contable", "libros_contables"].includes(selectedAreaKey));
+      node.classList.toggle("flex", ["gestion_contable", "libros_contables"].includes(selectedAreaKey));
+    });
+    document.querySelectorAll(".cc-expense-filter").forEach((node) => {
+      node.classList.toggle("hidden", selectedAreaKey !== "gastos");
+      node.classList.toggle("flex", selectedAreaKey === "gastos");
+    });
+    el("cc-custom-comparison")?.classList.toggle("hidden", !CUSTOM_COMPARE_AREAS.has(selectedAreaKey));
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica", "gastos"].includes(selectedAreaKey));
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica", "gastos"].includes(selectedAreaKey));
+    document.querySelectorAll(".cc-stock-filter").forEach((node) => {
+      node.classList.toggle("hidden", selectedAreaKey !== "inventario");
+      node.classList.toggle("flex", selectedAreaKey === "inventario");
+    });
+    dashboardLoadToken += 1;
+    areasCache = {};
+    if (!selectedAreaKey || cfg.areasVisible?.[selectedAreaKey] !== true) {
+      el("cc-welcome")?.classList.remove("hidden");
+      el("cc-global-kpis")?.classList.add("hidden");
+      if (el("cc-areas-grid")) el("cc-areas-grid").innerHTML = "";
+      if (el("cc-periodo-label")) el("cc-periodo-label").textContent = "";
+      return;
+    }
+    const currentFilters = readFilters();
+    if (CUSTOM_COMPARE_AREAS.has(selectedAreaKey) &&
+        !!currentFilters.comparacion_inicio !== !!currentFilters.comparacion_fin) {
+      showError("Ingresá ambas fechas del período de comparación o dejá las dos vacías.");
+      return;
+    }
+    if (CUSTOM_COMPARE_AREAS.has(selectedAreaKey) && currentFilters.comparacion_inicio &&
+        currentFilters.comparacion_inicio > currentFilters.comparacion_fin) {
+      showError("La fecha inicial de comparación no puede ser posterior a la final.");
+      return;
+    }
+    el("cc-welcome")?.classList.add("hidden");
+    el("cc-global-kpis")?.classList.remove("hidden");
     const areaUrls = cfg.areaUrls || {};
     const hasParallel = Object.keys(areaUrls).length > 0;
     if (!hasParallel && !cfg.dashboardUrl) return;
@@ -1371,17 +2357,13 @@
       return;
     }
 
-    dashboardLoadToken += 1;
     const loadToken = dashboardLoadToken;
     showError("");
     setRefreshDisabled(true);
-    areasCache = {};
-    ventasDiaCache = null;
     updatePeriodoLabel(true);
     renderGlobalKpisLoading();
     renderAreasSkeleton();
 
-    void loadExecutiveSummaryDeferred(loadToken);
 
     try {
       await loadDashboardParallel(loadToken);
@@ -1485,7 +2467,260 @@
 
   const NAVIGATE_DETAIL_KEYS = new Set(["ventas_marcas_mensual"]);
 
-  async function openDetail(urlKey, title) {
+  const V45_DOC_COLUMNS = [
+    { key: "fecha", label: "Fecha" }, { key: "tipo_comprobante", label: "Tipo" },
+    { key: "numero", label: "Número" }, { key: "cliente", label: "Cliente" },
+    { key: "codigo_cliente", label: "Cód. cliente" }, { key: "importe", label: "Importe" },
+  ];
+  const V45_PROFIT_COLUMNS = [
+    { key: "fecha", label: "Fecha" }, { key: "tipo_comprobante", label: "Movimiento" },
+    { key: "codigo_articulo", label: "Código" }, { key: "articulo", label: "Artículo" },
+    { key: "cantidad", label: "Cantidad" }, { key: "venta", label: "Venta" },
+    { key: "costo", label: "Costo" }, { key: "rentabilidad", label: "Rentabilidad" },
+  ];
+
+  function comercialCardHtml(row) {
+    const title = escHtml(row.cliente || row.articulo || "Sin descripción");
+    const code = escHtml(row.numero || row.codigo_articulo || "");
+    const amount = row.importe ?? row.rentabilidad;
+    return `<article class="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+      <div class="flex justify-between gap-2"><strong class="min-w-0 break-words text-sm">${title}</strong><span class="shrink-0 text-sm font-semibold tabular-nums">${formatTabularCell("importe", amount)}</span></div>
+      <p class="mt-1 text-xs text-slate-500">${escHtml(row.fecha)} · ${escHtml(row.tipo_comprobante)} · ${code}</p>
+    </article>`;
+  }
+
+  const STOCK_COST_KEYS = new Set(["stock_valorizado", "valor_entradas", "valor_salidas"]);
+  const STOCK_MOVEMENT_KEYS = new Set(["entradas_periodo", "salidas_periodo", "valor_entradas", "valor_salidas"]);
+  const STOCK_LIMIT_KEYS = new Set(["bajo_minimo", "punto_pedido", "sobre_maximo"]);
+
+  function stockColumns(kpi) {
+    const value = { key: STOCK_COST_KEYS.has(kpi) ? "importe" : "cantidad", label: STOCK_COST_KEYS.has(kpi) ? "Importe" : "Cantidad" };
+    if (STOCK_MOVEMENT_KEYS.has(kpi)) return [
+      { key: "fecha", label: "Fecha" }, { key: "documento", label: "Comprobante" },
+      { key: "articulo", label: "Artículo" }, { key: "codigo_manual", label: "Código" },
+      { key: "deposito", label: "Depósito" }, value,
+    ];
+    const columns = [
+      { key: "articulo", label: "Artículo" }, { key: "codigo_manual", label: "Código" },
+      { key: "deposito", label: "Depósito" }, { key: "stock_actual", label: "Stock actual" },
+    ];
+    if (STOCK_LIMIT_KEYS.has(kpi)) columns.push(
+      { key: "stock_minimo", label: "Mínimo" }, { key: "punto_pedido", label: "Punto pedido" },
+      { key: "stock_maximo", label: "Máximo" },
+    );
+    columns.push(value);
+    return columns;
+  }
+
+  function stockCardHtml(row) {
+    const cost = STOCK_COST_KEYS.has(stockDetail?.kpi);
+    const metric = cost ? fmtMoney.format(row.importe) : fmtNum.format(row.importe);
+    const context = STOCK_MOVEMENT_KEYS.has(stockDetail?.kpi)
+      ? `${escHtml(row.fecha || "")} · ${escHtml(row.documento || "")}`
+      : `Stock ${fmtNum.format(row.stock_actual || 0)}`;
+    return `<article class="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+      <div class="flex justify-between gap-2"><strong class="min-w-0 break-words text-sm">${escHtml(row.articulo || "Sin artículo")}</strong><span class="shrink-0 text-sm font-semibold tabular-nums">${metric}</span></div>
+      <p class="mt-1 text-xs text-slate-500">${context} · ${escHtml(row.deposito || "")} · ${escHtml(row.codigo_manual || "")}</p>
+    </article>`;
+  }
+
+  async function loadStockDetail() {
+    if (!stockDetail) return;
+    const base = (cfg.detailUrls || {}).stock_v45;
+    if (!base) return;
+    const term = (el("cc-v45-search")?.value || "").trim();
+    const extra = {
+      kpi: stockDetail.kpi, limit: "100", offset: String(stockDetail.offset),
+      orden: el("cc-v45-order")?.value || "fecha_desc",
+    };
+    if (term.length >= 2) extra.busqueda = term;
+    el("cc-detail-summary").textContent = "Cargando detalle…";
+    el("cc-detail-error")?.classList.add("hidden");
+    try {
+      const data = await fetchJson(`${base}?${buildQuery(extra)}`);
+      if (!stockDetail || stockDetail.kpi !== extra.kpi || stockDetail.offset !== Number(extra.offset)) return;
+      stockDetailData = data;
+      const cost = STOCK_COST_KEYS.has(stockDetail.kpi);
+      const shown = cost ? data : { ...data, filas: data.filas.map((row) => ({ ...row, cantidad: row.importe })) };
+      renderTabularDetail(shown, stockColumns(stockDetail.kpi), stockCardHtml, cost ? fmtMoney.format.bind(fmtMoney) : fmtNum.format.bind(fmtNum));
+      const pagination = el("cc-v45-pagination");
+      pagination?.classList.remove("hidden");
+      pagination?.classList.add("flex");
+      el("cc-v45-prev").disabled = data.offset <= 0;
+      el("cc-v45-next").disabled = data.offset + data.filas.length >= data.total_registros;
+      const start = data.total_registros ? data.offset + 1 : 0;
+      el("cc-v45-page-label").textContent = `${start}–${data.offset + data.filas.length} de ${data.total_registros}`;
+    } catch (e) {
+      const err = el("cc-detail-error");
+      err.textContent = e.message || "Error al cargar detalle de Stock.";
+      err.classList.remove("hidden");
+    }
+  }
+
+  function openStockDetail(kpi, title) {
+    if (!kpi || !(cfg.detailUrls || {}).stock_v45) return;
+    openModal(true);
+    clearDetailContent();
+    stockDetail = { kpi, offset: 0 };
+    el("cc-detail-title").textContent = `Stock · ${title || kpi}`;
+    const controls = el("cc-v45-detail-controls");
+    controls?.classList.remove("hidden");
+    controls?.classList.add("flex");
+    if (el("cc-v45-search")) el("cc-v45-search").value = "";
+    if (el("cc-v45-order")) el("cc-v45-order").value = "fecha_desc";
+    void loadStockDetail();
+  }
+
+  async function loadComercialDetail() {
+    if (!comercialDetail) return;
+    const base = (cfg.detailUrls || {}).comercial_v45;
+    if (!base) return;
+    const term = (el("cc-v45-search")?.value || "").trim();
+    const extra = {
+      kpi: comercialDetail.kpi, limit: "100", offset: String(comercialDetail.offset),
+      orden: el("cc-v45-order")?.value || "fecha_desc",
+    };
+    if (term.length >= 2) extra.busqueda = term;
+    el("cc-detail-summary").textContent = "Cargando detalle…";
+    el("cc-detail-error")?.classList.add("hidden");
+    try {
+      const data = await fetchJson(`${base}?${buildQuery(extra)}`);
+      if (!comercialDetail || comercialDetail.kpi !== extra.kpi || comercialDetail.offset !== Number(extra.offset)) return;
+      comercialDetailData = data;
+      const cols = (extra.kpi === "rentabilidad" || extra.kpi === "margen_porcentaje")
+        ? V45_PROFIT_COLUMNS : V45_DOC_COLUMNS;
+      renderTabularDetail(data, cols, comercialCardHtml);
+      const pagination = el("cc-v45-pagination");
+      pagination?.classList.remove("hidden");
+      pagination?.classList.add("flex");
+      el("cc-v45-prev").disabled = data.offset <= 0;
+      el("cc-v45-next").disabled = data.offset + data.filas.length >= data.total_registros;
+      const start = data.total_registros ? data.offset + 1 : 0;
+      el("cc-v45-page-label").textContent = `${start}–${data.offset + data.filas.length} de ${data.total_registros}`;
+    } catch (e) {
+      const err = el("cc-detail-error");
+      err.textContent = e.message || "Error al cargar detalle.";
+      err.classList.remove("hidden");
+    }
+  }
+
+  function openComercialDetail(kpi, title) {
+    if (!kpi || !(cfg.detailUrls || {}).comercial_v45) return;
+    openModal(true);
+    clearDetailContent();
+    comercialDetail = { kpi, offset: 0 };
+    el("cc-detail-title").textContent = `Ventas · ${title || kpi}`;
+    el("cc-detail-error")?.classList.add("hidden");
+    const controls = el("cc-v45-detail-controls");
+    controls?.classList.remove("hidden");
+    controls?.classList.add("flex");
+    if (el("cc-v45-search")) el("cc-v45-search").value = "";
+    if (el("cc-v45-order")) el("cc-v45-order").value = "fecha_desc";
+    void loadComercialDetail();
+  }
+
+  function exportComercialCurrentPage() {
+    if (!comercialDetailData?.filas?.length || !comercialDetail) return;
+    const columns = (comercialDetail.kpi === "rentabilidad" || comercialDetail.kpi === "margen_porcentaje")
+      ? V45_PROFIT_COLUMNS : V45_DOC_COLUMNS;
+    const csvCell = (value) => {
+      let cell = String(value ?? "");
+      if (/^[=+\-@]/.test(cell)) cell = `'${cell}`;
+      return `"${cell.replace(/"/g, '""')}"`;
+    };
+    const lines = [columns.map((col) => csvCell(col.label)).join(";")];
+    comercialDetailData.filas.forEach((row) => {
+      lines.push(columns.map((col) => csvCell(row[col.key])).join(";"));
+    });
+    const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `ventas-v45-${comercialDetail.kpi}-${readFilters().fecha_inicio}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportStockCurrentPage() {
+    if (!stockDetailData?.filas?.length || !stockDetail) return;
+    const cols = stockColumns(stockDetail.kpi);
+    const csvCell = (value) => {
+      let cell = String(value ?? "");
+      if (/^[=+\-@]/.test(cell)) cell = `'${cell}`;
+      return `"${cell.replace(/"/g, '""')}"`;
+    };
+    const lines = [cols.map((col) => csvCell(col.label)).join(";")];
+    stockDetailData.filas.forEach((row) => {
+      lines.push(cols.map((col) => csvCell(col.key === "cantidad" ? row.importe : row[col.key])).join(";"));
+    });
+    const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `stock-v45-${stockDetail.kpi}-${readFilters().fecha_inicio}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function loadGenericV45Detail() {
+    const state = genericV45Detail;
+    if (!state) return;
+    const term = (el("cc-v45-search")?.value || "").trim();
+    if (term.length === 1) {
+      el("cc-detail-summary").textContent = "Escribí al menos 2 caracteres para buscar.";
+      return;
+    }
+    const extra = { vista: state.vista, limit: "100", offset: String(state.offset) };
+    if (term.length >= 2) extra.busqueda = term;
+    el("cc-detail-summary").textContent = "Cargando detalle…";
+    el("cc-detail-error")?.classList.add("hidden");
+    try {
+      const data = await fetchJson(`${state.base}?${buildQuery(extra)}`);
+      if (genericV45Detail !== state || state.offset !== Number(extra.offset)) return;
+      if (data.disponible === false) {
+        renderGenericDetailTable({ filas: [], total_registros: 0 });
+        el("cc-detail-summary").textContent = data.motivo === "sin_alcance_territorial"
+          ? "Este origen fiscal no tiene sucursal ni punto de venta. Quitá el filtro para consultar sus documentos generales."
+          : "Detalle no disponible para esta empresa.";
+        return;
+      }
+      genericV45DetailData = data;
+      renderGenericDetailTable(data);
+      const pagination = el("cc-v45-pagination");
+      pagination?.classList.remove("hidden");
+      pagination?.classList.add("flex");
+      el("cc-v45-prev").disabled = data.offset <= 0;
+      el("cc-v45-next").disabled = data.offset + data.filas.length >= data.total_registros;
+      const start = data.total_registros ? data.offset + 1 : 0;
+      el("cc-v45-page-label").textContent = `${start}–${data.offset + data.filas.length} de ${data.total_registros}`;
+    } catch (e) {
+      const err = el("cc-detail-error");
+      err.textContent = e.message || "Error al cargar detalle.";
+      err.classList.remove("hidden");
+    }
+  }
+
+  function exportGenericV45CurrentPage() {
+    if (!genericV45DetailData?.filas?.length || !genericV45Detail) return;
+    const rows = genericV45DetailData.filas;
+    const keys = Object.keys(rows[0]);
+    const csvCell = (value) => {
+      let cell = String(value ?? "");
+      if (/^[=+\-@]/.test(cell)) cell = `'${cell}`;
+      return `"${cell.replace(/"/g, '""')}"`;
+    };
+    const lines = [keys.map(csvCell).join(";")];
+    rows.forEach((row) => lines.push(keys.map((key) => csvCell(row[key])).join(";")));
+    const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${genericV45Detail.vista}-${readFilters().fecha_inicio}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function openDetail(urlKey, title, vista = "") {
     const base = (cfg.detailUrls || {})[urlKey];
     if (!base) return;
     const defDetail = visibleAreaDefs()
@@ -1499,6 +2734,16 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
+    if (["resumen_v45", "libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45", "compras_v45", "preparacion_v45", "financiero_v45"].includes(urlKey) && vista) {
+      genericV45Detail = { base, vista, offset: 0 };
+      const controls = el("cc-v45-detail-controls");
+      controls?.classList.remove("hidden");
+      controls?.classList.add("flex");
+      if (el("cc-v45-search")) el("cc-v45-search").value = "";
+      el("cc-v45-order")?.classList.add("hidden");
+      void loadGenericV45Detail();
+      return;
+    }
     setExistenciasSearchVisible(urlKey === "existencias");
     if (urlKey === "existencias") {
       bindExistenciasSearch();
@@ -1536,20 +2781,34 @@
     const saved = loadPersistedFilters();
     if (!fromUrl && saved) {
       applyPeriodFromStorage();
-    } else if (saved && (saved.sucursales?.length || saved.puntos_venta?.length)) {
+    } else if (saved && (saved.sucursales?.length || saved.puntos_venta?.length || saved.depositos?.length)) {
       if (!window.__ccPendingFilterIds) {
         window.__ccPendingFilterIds = {
           sucursales: saved.sucursales || [],
           puntos_venta: saved.puntos_venta || [],
+          depositos: saved.depositos || [],
         };
       }
     }
     const t = todayIso();
     const fi = el("cc-fecha-inicio");
     const ff = el("cc-fecha-fin");
-    if (fi && !fi.value) fi.value = t;
+    if (fi && !fi.value) fi.value = `${t.slice(0, 7)}-01`;
     if (ff && !ff.value) ff.value = t;
     const onFilterChange = () => {
+      dashboardLoadToken += 1;
+      setLoading(false);
+      setRefreshDisabled(false);
+      areasCache = {};
+      if (selectedAreaKey) {
+        if (el("cc-areas-grid")) el("cc-areas-grid").innerHTML = "";
+        if (el("cc-global-kpis")) el("cc-global-kpis").innerHTML = "";
+        const welcome = el("cc-welcome");
+        if (welcome) {
+          welcome.textContent = "Filtros modificados. Pulsá Actualizar para consultar el tablero con el nuevo período y alcance.";
+          welcome.classList.remove("hidden");
+        }
+      }
       rememberFilters();
       syncReportLinks();
       updatePeriodoLabel(false);
@@ -1558,6 +2817,15 @@
     ff?.addEventListener("change", onFilterChange);
     el("sucursales")?.addEventListener("change", onFilterChange);
     el("punto_venta")?.addEventListener("change", onFilterChange);
+    el("depositos")?.addEventListener("change", onFilterChange);
+    el("cc-incluir-impuestos")?.addEventListener("change", onFilterChange);
+    el("cc-comparar-anterior")?.addEventListener("change", onFilterChange);
+    el("cc-stock-presentacion")?.addEventListener("change", onFilterChange);
+    el("cc-stock-comparar")?.addEventListener("change", onFilterChange);
+    el("cc-grupo-contable")?.addEventListener("change", onFilterChange);
+    el("cc-gastos-fuente")?.addEventListener("change", onFilterChange);
+    el("cc-comparacion-inicio")?.addEventListener("change", onFilterChange);
+    el("cc-comparacion-fin")?.addEventListener("change", onFilterChange);
     rememberFilters();
     syncReportLinks();
   }
@@ -1693,7 +2961,41 @@
 
   function bind() {
     el("cc-refresh")?.addEventListener("click", loadDashboard);
+    el("cc-tablero-select")?.addEventListener("change", loadDashboard);
+    el("cc-refresh-interval")?.addEventListener("change", scheduleAutoRefresh);
+    scheduleAutoRefresh();
     el("cc-detail-close")?.addEventListener("click", () => openModal(false));
+    el("cc-v45-search")?.addEventListener("input", () => {
+      if (comercialSearchTimer) clearTimeout(comercialSearchTimer);
+      if (!comercialDetail && !stockDetail && !genericV45Detail) return;
+      if (comercialDetail) comercialDetail.offset = 0;
+      if (stockDetail) stockDetail.offset = 0;
+      if (genericV45Detail) genericV45Detail.offset = 0;
+      comercialSearchTimer = setTimeout(() => void (genericV45Detail ? loadGenericV45Detail() : stockDetail ? loadStockDetail() : loadComercialDetail()), 300);
+    });
+    el("cc-v45-order")?.addEventListener("change", () => {
+      if (!comercialDetail && !stockDetail) return;
+      if (comercialDetail) comercialDetail.offset = 0;
+      if (stockDetail) stockDetail.offset = 0;
+      void (stockDetail ? loadStockDetail() : loadComercialDetail());
+    });
+    el("cc-v45-prev")?.addEventListener("click", () => {
+      const state = stockDetail || comercialDetail || genericV45Detail;
+      if (!state) return;
+      state.offset = Math.max(0, state.offset - 100);
+      void (genericV45Detail ? loadGenericV45Detail() : stockDetail ? loadStockDetail() : loadComercialDetail());
+    });
+    el("cc-v45-next")?.addEventListener("click", () => {
+      const state = stockDetail || comercialDetail || genericV45Detail;
+      if (!state) return;
+      state.offset += 100;
+      void (genericV45Detail ? loadGenericV45Detail() : stockDetail ? loadStockDetail() : loadComercialDetail());
+    });
+    el("cc-v45-export")?.addEventListener("click", () => {
+      if (stockDetail) exportStockCurrentPage();
+      else if (genericV45Detail) exportGenericV45CurrentPage();
+      else exportComercialCurrentPage();
+    });
     el("cc-detail-modal")?.addEventListener("click", (ev) => {
       if (ev.target === el("cc-detail-modal")) openModal(false);
     });
@@ -1710,6 +3012,5 @@
     initDates();
     bind();
     await initFilterTags();
-    loadDashboard();
   });
 })();

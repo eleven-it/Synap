@@ -12,13 +12,22 @@ from typing import Any, Dict, Optional
 
 from django.db.models import Q
 
+from core.utils.permissions import user_has_full_access, user_has_permission
 from reports.models import ReportCategory, ReportDefinition
 from reports.services.report_visibility import COMMAND_CENTER_SLUG
 
 CC_AREA_KEYS = (
+    "resumen_general",
     "ventas",
+    "preparacion_pedidos",
     "inventario",
     "compras",
+    "financiero",
+    "gestion_contable",
+    "impositivo",
+    "libros_contables",
+    "logistica",
+    "gastos",
     "manufactura",
     "cruzados",
     "tesoreria",
@@ -28,21 +37,95 @@ CC_AREA_KEYS = (
 DEFAULT_CC_AREAS: Dict[str, bool] = {key: True for key in CC_AREA_KEYS}
 
 CC_AREA_LABELS: Dict[str, str] = {
+    "resumen_general": "Resumen gerencial",
     "ventas": "Ventas",
+    "preparacion_pedidos": "Preparación de pedidos",
     "inventario": "Inventario",
     "compras": "Compras",
+    "financiero": "Análisis financiero",
+    "gestion_contable": "Gestión contable",
+    "impositivo": "Impuestos · posiciones fiscales",
+    "libros_contables": "Contabilidad · libros y estados",
+    "logistica": "Logística · hojas de ruta",
+    "gastos": "Análisis de gastos",
     "manufactura": "Manufactura (MPR)",
     "cruzados": "Demanda pendiente",
     "tesoreria": "Tesorería",
     "ventas_cobros": "Ventas por cobro",
 }
 
+# Los códigos ya existen en el catálogo synap_permiso de administraNET.
+# Cada área web sólo se expone con sus permisos funcionales completos.
+CC_AREA_PERMISSION_CODES: Dict[str, tuple[str, ...]] = {
+    "resumen_general": ("tablero_resumen_general",),
+    "ventas": ("tablero_comercial_ventas",),
+    "preparacion_pedidos": ("tablero_comercial_prep_pedidos",),
+    "inventario": ("tablero_abastecimiento_stock",),
+    "compras": ("tablero_abastecimiento_compras",),
+    "financiero": ("tablero_gestion_financiera",),
+    "gestion_contable": ("tablero_gestion_contable",),
+    "impositivo": ("tablero_impuesto_posicion_fiscal",),
+    "libros_contables": ("tablero_contabilidad_libros_estados",),
+    "logistica": ("tablero_logistica_hoja_ruta",),
+    "gastos": ("tablero_gestion_financiera",),
+    "cruzados": ("tablero_comercial_ventas", "tablero_abastecimiento_stock"),
+    "tesoreria": ("tablero_gestion_financiera",),
+    "ventas_cobros": ("tablero_gestion_financiera",),
+}
+
+# Estos tableros aplican el alcance territorial a sus documentos. Los saldos
+# generales sin origen territorial comprobado se devuelven como no disponibles.
+# Los indicadores sin alcance territorial verificable se muestran N/D.
+CC_TERRITORIAL_READY_AREAS = frozenset({
+    "resumen_general", "ventas", "preparacion_pedidos", "inventario",
+    "compras", "financiero", "gestion_contable", "impositivo",
+    "libros_contables", "logistica", "gastos",
+})
+
+
+def user_has_cc_area_permission(user, area_key: str) -> bool:
+    """Exige cada permiso de tablero; acepta el código VB6 o su clave Synap."""
+    if area_key == "manufactura":
+        return user_has_permission(user, "mpr.reportes") or user_has_permission(user, "mpr.ver")
+    required = CC_AREA_PERMISSION_CODES.get(area_key)
+    if not required:
+        return False
+    return all(
+        user_has_permission(user, code)
+        or user_has_permission(user, f"reports.{code}")
+        for code in required
+    )
+
+
+def resolve_cc_areas_for_user(user, *, mpr_active: bool) -> Dict[str, bool]:
+    """Intersección de habilitación global, módulo y permisos efectivos del usuario."""
+    configured = resolve_cc_areas(mpr_active=mpr_active)
+    return {
+        key: bool(
+            enabled
+            and user_has_cc_area_permission(user, key)
+            and (user_has_full_access(user) or key in CC_TERRITORIAL_READY_AREAS)
+        )
+        for key, enabled in configured.items()
+    }
+
 # Detalle UI / detail_urls → área padre
 DETAIL_KEY_TO_AREA: Dict[str, str] = {
+    "resumen_v45": "resumen_general",
+    "comercial_v45": "ventas",
     "pedidos_pendientes": "ventas",
     "remitos_nf": "ventas",
     "ventas_marcas_mensual": "ventas",
     "existencias": "inventario",
+    "stock_v45": "inventario",
+    "preparacion_v45": "preparacion_pedidos",
+    "compras_v45": "compras",
+    "financiero_v45": "financiero",
+    "libros_v45": "libros_contables",
+    "gastos_v45": "gastos",
+    "contable_v45": "gestion_contable",
+    "impositivo_v45": "impositivo",
+    "logistica_v45": "logistica",
     "backorder": "cruzados",
     "cobros_detalle": "ventas_cobros",
     "movimientos_caja": "tesoreria",

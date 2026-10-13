@@ -21,15 +21,21 @@ _ORDEN_TIPO_MPR_CC: tuple[str, ...] = (
 )
 
 _SQL_DEPOSITO_SUMA_STOCK = """
-    COALESCE(dep.anulado, 'No') = 'No'
-    AND COALESCE(dep.suma_stock, 'Si') = 'Si'
+    UPPER(COALESCE(dep.anulado, 'NO')) <> 'SI'
+    AND UPPER(TRIM(COALESCE(dep.suma_stock, 'NO'))) = 'SI'
 """
 
 _SQL_ARTICULO_VENDIBLE = """
-    a.Discontinuo = 'No'
-    AND a.disponible_vta = 'Si'
-    AND a.tipo_art = 'Articulo'
+    UPPER(COALESCE(a.tipo_art, 'ARTICULO')) NOT IN ('GASTO','SERVICIO')
+    AND UPPER(COALESCE(a.Discontinuo, 'NO')) <> 'SI'
 """
+
+
+def _deposito_where(filters: DashboardFilters, alias: str = "dep") -> tuple[str, list[int]]:
+    if not filters.depositos_filtro:
+        return "", []
+    placeholders = ",".join(["%s"] * len(filters.depositos_filtro))
+    return f" AND {alias}.CodDeposito IN ({placeholders})", list(filters.depositos_filtro)
 
 
 def _like_pattern(term: str) -> str:
@@ -91,25 +97,28 @@ def _order_tipo_mpr_sql(alias: str = "dep") -> str:
 
 
 def _count_productos_bajo_minimo(cursor, filters: DashboardFilters) -> int | None:
-    """Umbral: articulo.stock_min o punto_pedido (legacy AdministraNET)."""
+    """V45: cuenta pares artículo-depósito según deposito_reposicion."""
+    dep_sql, dep_params = _deposito_where(filters)
     sql_bajo_min = f"""
-        SELECT COUNT(*) FROM (
-            SELECT a.IDArt,
-                SUM(GREATEST(0, COALESCE(sd.saldo, 0) - COALESCE(res.reservado, 0))) AS disp,
-                GREATEST(COALESCE(a.stock_min, 0), COALESCE(a.punto_pedido, 0)) AS umbral
-            FROM articulo a
-            INNER JOIN stock_deposito sd ON sd.id_articulo = a.IDArt
-            INNER JOIN deposito dep ON dep.CodDeposito = sd.id_deposito
-            {_reservado_join_sql(filters)}
-            WHERE {_SQL_ARTICULO_VENDIBLE.strip()}
-              AND {_SQL_DEPOSITO_SUMA_STOCK.strip()}
-            GROUP BY a.IDArt
-            HAVING umbral > 0 AND disp < umbral
-        ) sub
+        SELECT COUNT(DISTINCT IF(lim.stock_minimo > 0
+            AND COALESCE(sd.saldo,0) <= lim.stock_minimo,
+            CONCAT(lim.id_articulo,'|',lim.id_deposito),NULL)) AS bajo_minimo
+        FROM (
+            SELECT id_articulo,id_deposito,MAX(stock_minimo) AS stock_minimo
+            FROM deposito_reposicion GROUP BY id_articulo,id_deposito
+        ) lim
+        INNER JOIN articulo a ON a.IDArt = lim.id_articulo
+        INNER JOIN deposito dep ON dep.CodDeposito = lim.id_deposito
+        LEFT JOIN (
+            SELECT id_articulo,id_deposito,SUM(saldo) AS saldo
+            FROM stock_deposito GROUP BY id_articulo,id_deposito
+        ) sd ON sd.id_articulo = lim.id_articulo AND sd.id_deposito = lim.id_deposito
+        WHERE {_SQL_ARTICULO_VENDIBLE.strip()}
+          AND {_SQL_DEPOSITO_SUMA_STOCK.strip()}
+          {dep_sql}
     """
     try:
-        _, reservado_params = sql_fecha_en_periodo("cp_res", filters)
-        cursor.execute(sql_bajo_min, reservado_params)
+        cursor.execute(sql_bajo_min, dep_params)
         row_bm = cursor.fetchone()
         return int(row_bm[0] or 0) if row_bm else 0
     except Exception as exc:
@@ -117,28 +126,29 @@ def _count_productos_bajo_minimo(cursor, filters: DashboardFilters) -> int | Non
         return None
 
 
-def _list_depositos_suma_stock(cursor) -> list[dict[str, Any]]:
-    """Una fila por depósito Stock=Sí (anulado=No), unidades de artículos vendibles."""
+def _list_depositos_suma_stock(cursor, filters: DashboardFilters) -> list[dict[str, Any]]:
+    """Una fila por depósito Stock=Sí; existencias positivas disponibles."""
     order_sql = _order_tipo_mpr_sql("dep")
+    dep_sql, dep_params = _deposito_where(filters)
     sql = f"""
         SELECT
             dep.CodDeposito AS id_deposito,
             IFNULL(dep.NombreDeposito, CONCAT('Depósito ', dep.CodDeposito)) AS nombre,
             NULLIF(TRIM(COALESCE(dep.tipo_mpr, '')), '') AS tipo_mpr,
             COALESCE(SUM(
-                CASE WHEN a.IDArt IS NOT NULL THEN COALESCE(sd.saldo, 0) ELSE 0 END
+                CASE WHEN a.IDArt IS NOT NULL THEN GREATEST(0, COALESCE(sd.saldo, 0)) ELSE 0 END
             ), 0) AS unidades
         FROM deposito dep
         LEFT JOIN stock_deposito sd ON sd.id_deposito = dep.CodDeposito
         LEFT JOIN articulo a ON a.IDArt = sd.id_articulo
-            AND a.Discontinuo = 'No'
-            AND a.disponible_vta = 'Si'
-            AND a.tipo_art = 'Articulo'
+            AND UPPER(COALESCE(a.tipo_art, 'ARTICULO')) NOT IN ('GASTO','SERVICIO')
+            AND UPPER(COALESCE(a.Discontinuo, 'NO')) <> 'SI'
         WHERE {_SQL_DEPOSITO_SUMA_STOCK.strip()}
+          {dep_sql}
         GROUP BY dep.CodDeposito, dep.NombreDeposito, dep.tipo_mpr
         ORDER BY {order_sql} ASC, IFNULL(dep.NombreDeposito, '') ASC, dep.CodDeposito ASC
     """
-    cursor.execute(sql)
+    cursor.execute(sql, dep_params)
     rows = cursor.fetchall() or []
     cols = [d[0] for d in cursor.description] if cursor.description else []
     out: list[dict[str, Any]] = []
@@ -167,24 +177,51 @@ def _list_depositos_suma_stock(cursor) -> list[dict[str, Any]]:
 
 def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any]:
     notas = [
-        "Valor stock: saldo depósito × PrecioCosto (costo); paridad Info_Stock lista_precio=0; snapshot actual.",
+        "Valor stock: saldos positivos agrupados por artículo × PrecioCosto convertido a unidad, según modCM_StockDatos.bas/V45.",
         "Solo depósitos con Stock=Sí (suma_stock) y no anulados.",
-        "Desglose por depósito: unidades = SUM(saldo); docenas = unidades // 12.",
-        "Reservado y bajo mínimo: PED En preparación/Preparado filtrados por cp_res.Fecha en el período.",
+        "Desglose por depósito: unidades = SUM(saldos positivos); docenas = unidades // 12.",
+        "Bajo mínimo: pares artículo-depósito con saldo <= stock_minimo de deposito_reposicion (V45).",
         "Filtro sucursal no aplica a inventario en v1.",
     ]
+    dep_sql, dep_params = _deposito_where(filters)
+    factor_display = "IF(COALESCE(ap.cantidad_unidad_display,0)>0,ap.cantidad_unidad_display,1)"
+    bulto = "COALESCE(NULLIF(ap.multiplicador_comp,0),NULLIF(ap.cantidad_display_bulto,0),0)"
+    factor_bulto = (
+        "IF(COALESCE(ap.cantidad_unidad_display,0)>0 AND "
+        f"({bulto})>0,ap.cantidad_unidad_display*({bulto}),1)"
+    )
+    factor_costo = (
+        "CASE UPPER(TRIM(COALESCE(ap.precio_unidad,'UNIDAD'))) "
+        f"WHEN 'DISPLAY' THEN {factor_display} "
+        f"WHEN 'BULTO' THEN {factor_bulto} "
+        f"WHEN 'BULTO/PALLET' THEN {factor_bulto} ELSE 1 END"
+    )
     sql = f"""
         SELECT
-            COALESCE(SUM(COALESCE(sd.saldo, 0) * COALESCE(a.PrecioCosto, 0)), 0) AS valor_stock,
-            COUNT(DISTINCT CASE WHEN COALESCE(sd.saldo, 0) > 0 THEN a.IDArt END) AS productos_con_stock,
-            COUNT(DISTINCT CASE WHEN COALESCE(sd.saldo, 0) = 0 THEN a.IDArt END) AS productos_sin_stock
-        FROM stock_deposito sd
-        INNER JOIN articulo a ON a.IDArt = sd.id_articulo
-        INNER JOIN deposito dep ON dep.CodDeposito = sd.id_deposito
-        WHERE {_SQL_ARTICULO_VENDIBLE.strip()}
-          AND {_SQL_DEPOSITO_SUMA_STOCK.strip()}
+            COALESCE(SUM(IF(x.saldo > 0, x.saldo * x.costo_base, 0)), 0) AS valor_stock,
+            COALESCE(SUM(x.saldo > 0), 0) AS productos_con_stock,
+            COALESCE(SUM(x.saldo = 0), 0) AS productos_sin_stock
+        FROM (
+            SELECT a.IDArt,
+                COALESCE(a.PrecioCosto,0) / NULLIF(MAX({factor_costo}),0) AS costo_base,
+                COALESCE(SUM(sd.saldo),0) AS saldo
+            FROM stock_deposito sd
+            INNER JOIN articulo a ON a.IDArt = sd.id_articulo
+            INNER JOIN deposito dep ON dep.CodDeposito = sd.id_deposito
+            LEFT JOIN articulo_prov ap ON ap.id_articulo_prov = (
+                SELECT ap0.id_articulo_prov FROM articulo_prov ap0
+                WHERE ap0.IDArt = a.IDArt
+                ORDER BY CASE WHEN ap0.CodProveedor = a.CodigoProveedor THEN 0 ELSE 1 END,
+                    ap0.CodProveedor, ap0.id_articulo_prov LIMIT 1
+            )
+            WHERE UPPER(COALESCE(a.tipo_art,'ARTICULO')) NOT IN ('GASTO','SERVICIO')
+              AND UPPER(COALESCE(a.Discontinuo,'NO')) <> 'SI'
+              AND {_SQL_DEPOSITO_SUMA_STOCK.strip()}
+              {dep_sql}
+            GROUP BY a.IDArt, a.PrecioCosto
+        ) x
     """
-    cursor.execute(sql)
+    cursor.execute(sql, dep_params)
     row = cursor.fetchone()
     valor_stock = float(row[0] or 0) if row else 0.0
     productos_con_stock = int(row[1] or 0) if row else 0
@@ -192,14 +229,14 @@ def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any
 
     productos_bajo_minimo = _count_productos_bajo_minimo(cursor, filters)
     if productos_bajo_minimo is None:
-        notas.append("productos_bajo_minimo: no disponible (columnas stock_min/punto_pedido).")
+        notas.append("productos_bajo_minimo: no disponible (deposito_reposicion).")
 
-    depositos = _list_depositos_suma_stock(cursor)
+    depositos = _list_depositos_suma_stock(cursor, filters)
 
     return {
         "valor_stock": round_money(valor_stock),
         "productos_con_stock": productos_con_stock,
-        "productos_bajo_minimo": productos_bajo_minimo if productos_bajo_minimo is not None else 0,
+        "productos_bajo_minimo": productos_bajo_minimo,
         "productos_sin_stock": productos_sin_stock,
         "depositos": depositos,
         "disponible": True,
@@ -210,7 +247,7 @@ def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any
 def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
     """Detalle paginado existencias — depósitos Stock=Sí; búsqueda opcional vía `busqueda`."""
     notas = [
-        "Solo artículos Discontinuo=No, disponible_vta=Si y depósitos Stock=Sí (suma_stock) no anulados.",
+        "Solo artículos no discontinuados, no Gasto/Servicio y depósitos Stock=Sí no anulados.",
         "Filtro sucursal no aplica en v1.",
     ]
     if filters.busqueda:
@@ -219,10 +256,12 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
         )
     reservado_join_sql = _reservado_join_sql(filters)
     _, reservado_params = sql_fecha_en_periodo("cp_res", filters)
+    dep_sql, dep_params = _deposito_where(filters)
     where_art = f"""
         {_SQL_ARTICULO_VENDIBLE.strip()}
         AND {_SQL_DEPOSITO_SUMA_STOCK.strip()}
         AND COALESCE(sd.saldo, 0) > 0
+        {dep_sql}
     """
     search_sql, search_params = _search_where_sql(filters.busqueda)
     where_art += search_sql
@@ -238,7 +277,7 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
     """
     notas.append("Reservado: PED en período (cp_res.Fecha entre fecha_inicio y fecha_fin).")
     sql_count = f"SELECT COUNT(*) {from_clause}"
-    cursor.execute(sql_count, reservado_params + search_params)
+    cursor.execute(sql_count, reservado_params + dep_params + search_params)
     row_count = cursor.fetchone()
     total_registros = int(row_count[0] or 0) if row_count else 0
 
@@ -260,7 +299,7 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
         ORDER BY a.NombreArticulo ASC, sd.id_deposito ASC
         LIMIT %s OFFSET %s
     """
-    cursor.execute(sql, reservado_params + search_params + [filters.limit, filters.offset])
+    cursor.execute(sql, reservado_params + dep_params + search_params + [filters.limit, filters.offset])
     cols = [d[0] for d in cursor.description]
     filas = []
     for row in cursor.fetchall():

@@ -7,10 +7,20 @@ from typing import Any
 from .area_visibility import resolve_cc_areas
 from .base import DashboardFilters, build_meta, legacy_cursor, mpr_modulo_activo
 from .cross_metrics import fetch_cruzados_resumen
+from .comercial_v45 import fetch_comercial_ventas_v45
 from .exceptions import is_legacy_db_error, legacy_area_failure_payload
 from .inventory_metrics import fetch_inventario_resumen
+from .stock_v45 import fetch_stock_v45
+from .resumen_v45 import fetch_resumen_v45
+from .preparacion_v45 import fetch_preparacion_v45
 from .manufacturing_metrics import fetch_manufactura_resumen
-from .purchase_metrics import fetch_compras_resumen
+from .compras_v45 import fetch_compras_v45
+from .financiero_v45 import fetch_financiero_v45
+from .contable_v45 import fetch_contable_v45
+from .impositivo_v45 import fetch_impositivo_v45
+from .libros_v45 import fetch_libros_v45
+from .logistica_v45 import fetch_logistica_v45
+from .gastos_v45 import fetch_gastos_v45
 from .banco_metrics import fetch_tesoreria_banco_resumen
 from .tesoreria_metrics import fetch_tesoreria_resumen, list_movimientos_caja
 from .ventas_cobros_metrics import fetch_ventas_cobros_resumen, list_cobros_detalle
@@ -21,12 +31,20 @@ from .ventas_metrics import fetch_ventas_resumen
 logger = logging.getLogger(__name__)
 
 ENDPOINTS_RELATIVOS = {
+    "resumen_general": "/api/reports/executive-dashboard/resumen-general/v45/",
     "ventas": "/api/reports/executive-dashboard/ventas/resumen/",
+    "preparacion_pedidos": "/api/reports/executive-dashboard/preparacion-pedidos/v45/",
     "ventas_pedidos_pendientes": "/api/reports/executive-dashboard/ventas/pedidos-pendientes/",
     "ventas_remitos_nf": "/api/reports/executive-dashboard/ventas/remitos-no-facturados/",
     "inventario": "/api/reports/executive-dashboard/inventario/resumen/",
     "inventario_existencias": "/api/reports/executive-dashboard/inventario/existencias/",
     "compras": "/api/reports/executive-dashboard/compras/resumen/",
+    "financiero": "/api/reports/executive-dashboard/financiero/v45/",
+    "gestion_contable": "/api/reports/executive-dashboard/gestion-contable/v45/",
+    "impositivo": "/api/reports/executive-dashboard/impositivo/v45/",
+    "libros_contables": "/api/reports/executive-dashboard/libros-contables/v45/",
+    "logistica": "/api/reports/executive-dashboard/logistica/v45/",
+    "gastos": "/api/reports/executive-dashboard/gastos/v45/",
     "manufactura": "/api/reports/executive-dashboard/manufactura/resumen/",
     "cruzados": "/api/reports/executive-dashboard/cruzados/resumen/",
     "cruzados_backorder": "/api/reports/executive-dashboard/cruzados/backorder/",
@@ -36,6 +54,31 @@ ENDPOINTS_RELATIVOS = {
     "ventas_cobros": "/api/reports/executive-dashboard/ventas/cobros/resumen/",
     "ventas_cobros_detalle": "/api/reports/executive-dashboard/ventas/cobros/detalle/",
     "executive_summary_dia": "/api/reports/executive-summary/",
+}
+
+ENDPOINT_AREA = {
+    "resumen_general": "resumen_general",
+    "ventas": "ventas",
+    "preparacion_pedidos": "preparacion_pedidos",
+    "ventas_pedidos_pendientes": "ventas",
+    "ventas_remitos_nf": "ventas",
+    "inventario": "inventario",
+    "inventario_existencias": "inventario",
+    "compras": "compras",
+    "financiero": "financiero",
+    "gestion_contable": "gestion_contable",
+    "impositivo": "impositivo",
+    "libros_contables": "libros_contables",
+    "logistica": "logistica",
+    "gastos": "gastos",
+    "manufactura": "manufactura",
+    "cruzados": "cruzados",
+    "cruzados_backorder": "cruzados",
+    "tesoreria": "tesoreria",
+    "tesoreria_banco": "tesoreria",
+    "tesoreria_movimientos_caja": "tesoreria",
+    "ventas_cobros": "ventas_cobros",
+    "ventas_cobros_detalle": "ventas_cobros",
 }
 
 
@@ -55,35 +98,121 @@ def _safe_legacy_area(name: str, fn, *args, **kwargs) -> dict[str, Any]:
         return legacy_area_failure_payload(exc)
 
 
-def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
+def run_command_center(
+    filters: DashboardFilters, *, allowed_areas: dict[str, bool] | None = None,
+    show_stock_costs: bool = True,
+    v45_sales: bool = False, gross_sales: bool = False, compare_sales: bool = False,
+    v45_stock: bool = False, stock_presentation: str = "unidad",
+    compare_stock: bool = False,
+) -> dict[str, Any]:
     areas: dict[str, Any] = {}
     notas_globales: list[str] = []
     mpr_on = mpr_modulo_activo()
-    areas_habilitadas = resolve_cc_areas(mpr_active=mpr_on)
+    configured = resolve_cc_areas(mpr_active=mpr_on)
+    selected = allowed_areas if allowed_areas is not None else configured
+    areas_habilitadas = {
+        key: bool(enabled and selected.get(key))
+        for key, enabled in configured.items()
+    }
 
     sucursales_disponibles: list = []
     with legacy_cursor(filters.base_empresa) as cursor:
+        if areas_habilitadas.get("resumen_general"):
+            summary = _safe_legacy_area(
+                "resumen_general", fetch_resumen_v45, cursor, filters, gross=gross_sales,
+            )
+            areas["resumen_general"] = (
+                _area_sin_meta_interno(summary)
+                if summary.get("disponible") is not False else summary
+            )
         if areas_habilitadas.get("ventas"):
-            ventas_full = _safe_legacy_area("ventas", fetch_ventas_resumen, cursor, filters)
+            if v45_sales:
+                ventas_full = _safe_legacy_area(
+                    "ventas", fetch_comercial_ventas_v45, cursor, filters,
+                    gross=gross_sales, include_profit=show_stock_costs,
+                    compare_previous=compare_sales,
+                )
+            else:
+                ventas_full = _safe_legacy_area("ventas", fetch_ventas_resumen, cursor, filters)
             if ventas_full.get("disponible") is not False:
                 areas["ventas"] = _area_sin_meta_interno(ventas_full)
                 notas_globales.extend(ventas_full.get("meta", {}).get("notas_semanticas") or [])
             else:
                 areas["ventas"] = ventas_full
 
+        if areas_habilitadas.get("preparacion_pedidos"):
+            prep = _safe_legacy_area(
+                "preparacion_pedidos", fetch_preparacion_v45, cursor, filters,
+            )
+            areas["preparacion_pedidos"] = (
+                _area_sin_meta_interno(prep)
+                if prep.get("disponible") is not False else prep
+            )
+
         for area_name, fetch_fn in (
             ("inventario", fetch_inventario_resumen),
-            ("compras", fetch_compras_resumen),
+            ("compras", fetch_compras_v45),
             ("cruzados", fetch_cruzados_resumen),
             ("ventas_cobros", fetch_ventas_cobros_resumen),
         ):
             if not areas_habilitadas.get(area_name):
                 continue
-            area_full = _safe_legacy_area(area_name, fetch_fn, cursor, filters)
+            if area_name == "inventario" and v45_stock:
+                area_full = _safe_legacy_area(
+                    area_name, fetch_stock_v45, cursor, filters,
+                    presentation=stock_presentation, show_costs=show_stock_costs,
+                    compare_previous=compare_stock,
+                )
+            else:
+                area_full = _safe_legacy_area(area_name, fetch_fn, cursor, filters)
+            if area_name == "inventario" and not show_stock_costs and not v45_stock:
+                area_full["valor_stock"] = None
             if area_full.get("disponible") is not False:
                 areas[area_name] = _area_sin_meta_interno(area_full)
             else:
                 areas[area_name] = area_full
+
+        if areas_habilitadas.get("financiero"):
+            finance = _safe_legacy_area(
+                "financiero", fetch_financiero_v45, cursor, filters,
+            )
+            areas["financiero"] = (
+                _area_sin_meta_interno(finance)
+                if finance.get("disponible") is not False else finance
+            )
+
+        if areas_habilitadas.get("gestion_contable"):
+            account = _safe_legacy_area(
+                "gestion_contable", fetch_contable_v45, cursor, filters,
+            )
+            areas["gestion_contable"] = (
+                _area_sin_meta_interno(account)
+                if account.get("disponible") is not False else account
+            )
+
+        if areas_habilitadas.get("impositivo"):
+            tax = _safe_legacy_area("impositivo", fetch_impositivo_v45, cursor, filters)
+            areas["impositivo"] = (
+                _area_sin_meta_interno(tax) if tax.get("disponible") is not False else tax
+            )
+
+        if areas_habilitadas.get("libros_contables"):
+            books = _safe_legacy_area("libros_contables", fetch_libros_v45, cursor, filters)
+            areas["libros_contables"] = (
+                _area_sin_meta_interno(books) if books.get("disponible") is not False else books
+            )
+
+        if areas_habilitadas.get("logistica"):
+            routes = _safe_legacy_area("logistica", fetch_logistica_v45, cursor, filters)
+            areas["logistica"] = (
+                _area_sin_meta_interno(routes) if routes.get("disponible") is not False else routes
+            )
+
+        if areas_habilitadas.get("gastos"):
+            expenses = _safe_legacy_area("gastos", fetch_gastos_v45, cursor, filters)
+            areas["gastos"] = (
+                _area_sin_meta_interno(expenses) if expenses.get("disponible") is not False else expenses
+            )
 
         if areas_habilitadas.get("tesoreria"):
             tesoreria_full = _safe_legacy_area(
@@ -102,12 +231,19 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
             else:
                 areas["tesoreria"] = tesoreria_full
 
-        try:
-            sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)
-        except Exception:
-            logger.warning(
-                "No se pudieron cargar sucursales para command center", exc_info=True
-            )
+        if areas_habilitadas.get("ventas"):
+            try:
+                sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)
+                if filters.sucursales_filtro:
+                    permitidas = set(filters.sucursales_filtro)
+                    sucursales_disponibles = [
+                        row for row in sucursales_disponibles
+                        if row.get("id_sucursal") in permitidas
+                    ]
+            except Exception:
+                logger.warning(
+                    "No se pudieron cargar sucursales para command center", exc_info=True
+                )
 
     if areas_habilitadas.get("manufactura"):
         areas["manufactura"] = _area_sin_meta_interno(
@@ -117,7 +253,10 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
     meta = build_meta(
         filters,
         notas_semanticas=notas_globales,
-        endpoints=ENDPOINTS_RELATIVOS,
+        endpoints={
+            key: url for key, url in ENDPOINTS_RELATIVOS.items()
+            if areas_habilitadas.get(ENDPOINT_AREA.get(key, ""), False)
+        },
         modulos={"mpr": mpr_on},
     )
     meta["areas_habilitadas"] = areas_habilitadas
