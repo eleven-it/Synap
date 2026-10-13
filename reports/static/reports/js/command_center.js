@@ -1310,6 +1310,7 @@
       },
       afterMetrics: (a) => renderImpositivoV45Chart(a),
       details: [
+        { label: "Posición IVA", urlKey: "impositivo_v45", vista: "posicion_iva" },
         { label: "Libro IVA ventas", urlKey: "impositivo_v45", vista: "ventas" },
         { label: "Libro IVA compras", urlKey: "impositivo_v45", vista: "compras" },
         { label: "Percepciones", urlKey: "impositivo_v45", vista: "percepciones" },

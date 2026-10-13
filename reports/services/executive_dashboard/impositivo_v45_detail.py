@@ -6,7 +6,7 @@ from .impositivo_v45 import SALES_TYPES, PURCHASE_TYPES, NC_TYPES, _dates
 from .resumen_v45 import _table_exists
 
 
-IMPOSITIVO_V45_VIEWS = frozenset({"ventas", "compras", "percepciones", "retenciones", "determinados", "pagados"})
+IMPOSITIVO_V45_VIEWS = frozenset({"posicion_iva", "ventas", "compras", "percepciones", "retenciones", "determinados", "pagados"})
 
 
 def _scope(filters, *, sales=False, purchase=False, expense=False):
@@ -29,6 +29,22 @@ def _scope(filters, *, sales=False, purchase=False, expense=False):
 
 
 def _source(filters, view):
+    if view == "posicion_iva":
+        parts = []
+        params = []
+        for source_view, concept, expression, condition in (
+            ("ventas", "Débito IVA", "q.importe", ""),
+            ("percepciones", "Percepción IVA ventas", "q.importe", " WHERE q.impuesto=2"),
+            ("compras", "Crédito y percepción IVA compras", "-(q.importe+q.percepcion_iva)", ""),
+            ("retenciones", "Retención IVA", "-q.importe", " WHERE q.impuesto=1"),
+        ):
+            source, source_params = _source(filters, source_view)
+            parts.append(
+                "SELECT q.fecha,q.movimiento,q.tipo,q.comprobante,q.entidad,"
+                f"'{concept}' concepto,{expression} importe FROM ({source}) q{condition}"
+            )
+            params += source_params
+        return " UNION ALL ".join(parts), params
     nc = ",".join(["%s"] * len(NC_TYPES))
     if view == "ventas":
         scope, values = _scope(filters, sales=True)
@@ -124,6 +140,11 @@ def list_impositivo_v45_detail(cursor, filters: DashboardFilters, *, view: str) 
     if view == "determinados" and (filters.puntos_venta or filters.sucursales_filtro):
         return {"disponible": False, "motivo": "sin_alcance_territorial", "filas": []}
     required = {
+        "posicion_iva": (
+            "cuentacliente", "cliente", "cuentaproveedor", "proveedor",
+            "percep_cli", "percep_cli_tipo", "percep_cli_abm",
+            "retenciones", "tipo_retencion_cli",
+        ),
         "ventas": ("cuentacliente", "cliente"),
         "compras": ("cuentaproveedor", "proveedor"),
         "percepciones": ("percep_cli", "percep_cli_tipo", "percep_cli_abm", "cuentacliente"),
@@ -149,4 +170,9 @@ def list_impositivo_v45_detail(cursor, filters: DashboardFilters, *, view: str) 
     rows = [dict(zip(keys, row)) for row in cursor.fetchall() or []]
     payload = build_paginated_response(filters, rows, int(total[0] or 0), total[1])
     payload["vista"] = view
+    if view == "posicion_iva":
+        payload["meta"]["alcance"] = (
+            "Movimientos firmados que componen la Posición IVA: débito y percepción "
+            "de ventas menos crédito y percepción de compras y retenciones."
+        )
     return payload
