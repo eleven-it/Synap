@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 from django.utils import timezone
 
-from reports.services.executive_dashboard.base import DashboardFilters, resolve_filters_from_query_params
+from reports.services.executive_dashboard.base import DashboardFilters, comparison_filters, resolve_filters_from_query_params
 from reports.services.executive_dashboard.command_center import run_command_center, _safe_legacy_area
 from reports.services.executive_dashboard.cross_metrics import (
     fetch_cruzados_resumen,
@@ -91,6 +91,27 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
                     "fecha_fin": "2026-05-01",
                 },
                 base_empresa="be1",
+            )
+
+    def test_comparacion_personalizada_y_automatica(self):
+        custom = resolve_filters_from_query_params(
+            {"fecha_inicio": "2026-10-01", "fecha_fin": "2026-10-12",
+             "comparacion_inicio": "2025-10-01", "comparacion_fin": "2025-10-12"},
+            base_empresa="be1",
+        )
+        self.assertEqual(comparison_filters(custom).fecha_inicio, date(2025, 10, 1))
+        self.assertEqual(comparison_filters(custom).fecha_fin, date(2025, 10, 12))
+        auto = resolve_filters_from_query_params(
+            {"fecha_inicio": "2026-10-01", "fecha_fin": "2026-10-12"},
+            base_empresa="be1",
+        )
+        self.assertEqual(comparison_filters(auto).fecha_inicio, date(2026, 9, 19))
+        self.assertEqual(comparison_filters(auto).fecha_fin, date(2026, 9, 30))
+
+    def test_comparacion_requiere_rango_completo(self):
+        with self.assertRaises(InvalidDashboardFilters):
+            resolve_filters_from_query_params(
+                {"comparacion_inicio": "2025-10-01"}, base_empresa="be1",
             )
 
     def test_fetch_ventas_resumen_estructura(self):

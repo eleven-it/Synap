@@ -29,6 +29,11 @@
   /** Detalle comp_ped en ventas: tarjetas en móvil, tabla en lg+. */
   const COMP_PED_DETAIL_KEYS = new Set(["pedidos_pendientes", "remitos_nf"]);
   const BACKORDER_DETAIL_KEYS = new Set(["backorder"]);
+  const CUSTOM_COMPARE_AREAS = new Set([
+    "resumen_general", "ventas", "preparacion_pedidos", "inventario",
+    "compras", "financiero", "gestion_contable", "impositivo",
+    "libros_contables", "logistica", "gastos",
+  ]);
   const DETAIL_TABLE_WRAP_CLASS =
     "cc-detail-scroll -mx-3 overflow-x-auto px-3 sm:-mx-4 sm:px-4";
   const DETAIL_TABLE_WRAP_DESKTOP_CLASS =
@@ -454,6 +459,8 @@
     return {
       fecha_inicio: fi,
       fecha_fin: ff,
+      comparacion_inicio: el("cc-comparacion-inicio")?.value || "",
+      comparacion_fin: el("cc-comparacion-fin")?.value || "",
       sucursales: selectedFilterIds("sucursales"),
       puntos_venta: selectedFilterIds("punto_venta"),
       depositos: selectedFilterIds("depositos"),
@@ -471,6 +478,8 @@
             return {
               fecha_inicio: legacy.fecha_inicio || "",
               fecha_fin: legacy.fecha_fin || "",
+              comparacion_inicio: "",
+              comparacion_fin: "",
               sucursales: [String(legacy.sucursal)],
               puntos_venta: [],
               depositos: [],
@@ -483,8 +492,12 @@
       if (!parsed || typeof parsed !== "object") return null;
       const fi = String(parsed.fecha_inicio || "").trim();
       const ff = String(parsed.fecha_fin || "").trim();
+      const ci = String(parsed.comparacion_inicio || "").trim();
+      const cf = String(parsed.comparacion_fin || "").trim();
       if (fi && !ISO_DATE.test(fi)) return null;
       if (ff && !ISO_DATE.test(ff)) return null;
+      if (ci && !ISO_DATE.test(ci)) return null;
+      if (cf && !ISO_DATE.test(cf)) return null;
       const sucursales = Array.isArray(parsed.sucursales)
         ? parsed.sucursales.map(String).filter(Boolean)
         : parsed.sucursal
@@ -499,6 +512,8 @@
       return {
         fecha_inicio: fi || "",
         fecha_fin: ff || "",
+        comparacion_inicio: ci || "",
+        comparacion_fin: cf || "",
         sucursales,
         puntos_venta,
         depositos,
@@ -516,6 +531,8 @@
         JSON.stringify({
           fecha_inicio: f.fecha_inicio || "",
           fecha_fin: f.fecha_fin || "",
+          comparacion_inicio: f.comparacion_inicio || "",
+          comparacion_fin: f.comparacion_fin || "",
           sucursales: f.sucursales || [],
           puntos_venta: f.puntos_venta || [],
           depositos: f.depositos || [],
@@ -533,6 +550,10 @@
       const url = new URL(window.location.href);
       url.searchParams.set("fecha_inicio", f.fecha_inicio);
       url.searchParams.set("fecha_fin", f.fecha_fin);
+      url.searchParams.delete("comparacion_inicio");
+      url.searchParams.delete("comparacion_fin");
+      if (f.comparacion_inicio) url.searchParams.set("comparacion_inicio", f.comparacion_inicio);
+      if (f.comparacion_fin) url.searchParams.set("comparacion_fin", f.comparacion_fin);
       url.searchParams.delete("sucursal");
       url.searchParams.delete("sucursales");
       url.searchParams.delete("punto_venta");
@@ -563,6 +584,10 @@
       ...(extra || {}),
     });
     appendFilterParams(q, f);
+    if (CUSTOM_COMPARE_AREAS.has(selectedAreaKey)) {
+      if (f.comparacion_inicio) q.set("comparacion_inicio", f.comparacion_inicio);
+      if (f.comparacion_fin) q.set("comparacion_fin", f.comparacion_fin);
+    }
     if (selectedAreaKey === "ventas" || selectedAreaKey === "resumen_general") {
       if (el("cc-incluir-impuestos")?.checked) q.set("incluir_impuestos", "1");
       if (el("cc-comparar-anterior")?.checked) q.set("comparar", "anterior");
@@ -622,6 +647,11 @@
     const ffEl = el("cc-fecha-fin");
     if (fiEl) fiEl.value = fi;
     if (ffEl) ffEl.value = ff;
+    const ci = (params.get("comparacion_inicio") || "").trim();
+    const cf = (params.get("comparacion_fin") || "").trim();
+    if (ci && ISO_DATE.test(ci) && el("cc-comparacion-inicio")) el("cc-comparacion-inicio").value = ci;
+    if (cf && ISO_DATE.test(cf) && el("cc-comparacion-fin")) el("cc-comparacion-fin").value = cf;
+    if (ci || cf) el("cc-custom-comparison")?.setAttribute("open", "");
     const pending = {
       sucursales: params.getAll("sucursales"),
       puntos_venta: params.getAll("punto_venta"),
@@ -665,6 +695,9 @@
       ffEl.value = saved.fecha_fin;
       applied = true;
     }
+    if (saved.comparacion_inicio && el("cc-comparacion-inicio")) el("cc-comparacion-inicio").value = saved.comparacion_inicio;
+    if (saved.comparacion_fin && el("cc-comparacion-fin")) el("cc-comparacion-fin").value = saved.comparacion_fin;
+    if (saved.comparacion_inicio || saved.comparacion_fin) el("cc-custom-comparison")?.setAttribute("open", "");
     if (saved.sucursales?.length || saved.puntos_venta?.length || saved.depositos?.length) {
       window.__ccPendingFilterIds = {
         sucursales: saved.sucursales || [],
@@ -1482,6 +1515,40 @@
     },
   ];
 
+  function comparisonPeriodLabel(areaData) {
+    const period = areaData?.comparacion?.periodo;
+    if (!period?.inicio || !period?.fin) return "período anterior";
+    return `${isoToDisplay(period.inicio)} al ${isoToDisplay(period.fin)}`;
+  }
+
+  function renderV45ComparisonTable(areaData, fields) {
+    const previous = areaData.comparacion?.kpis;
+    if (!previous) return "";
+    const current = areaData.kpis || {};
+    const rows = fields.map(([label, key, kind = "money"]) => {
+      const format = (value) => value == null ? "N/D" : kind === "count" ? fmtNum.format(value) : fmtMoney.format(value);
+      return `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="p-2 text-left font-medium">${escHtml(label)}</th><td class="p-2 text-right tabular-nums">${format(current[key])}</td><td class="p-2 text-right tabular-nums">${format(previous[key])}</td><td class="p-2 text-right tabular-nums">${format(areaData.comparacion?.diferencias?.[key])}</td></tr>`;
+    }).join("");
+    return `<div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Comparación · ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="p-2 text-left">Indicador</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th><th class="p-2 text-right">Variación</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function renderV45SeriesComparison(areaData, currentSeries, previousSeries, field, title) {
+    const actual = (currentSeries?.filas || []).slice(-24);
+    const prior = (previousSeries?.filas || []).slice(-24);
+    if (!actual.length && !prior.length) return "";
+    const count = Math.max(actual.length, prior.length);
+    const max = Math.max(1, ...[...actual, ...prior].map((row) => Math.abs(Number(row[field] || 0))));
+    const step = 304 / count;
+    const width = Math.max(1, step / 2 - 1);
+    const bars = Array.from({ length: count }, (_, index) => {
+      const a = Math.abs(Number(actual[index]?.[field] || 0)) / max * 80;
+      const b = Math.abs(Number(prior[index]?.[field] || 0)) / max * 80;
+      const x = 8 + index * step;
+      return `<rect x="${x}" y="${96 - a}" width="${width}" height="${a}" fill="#0284c7"/><rect x="${x + width}" y="${96 - b}" width="${width}" height="${b}" fill="#f97316"/>`;
+    }).join("");
+    return `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${escHtml(title)} · comparación</h3><svg viewBox="0 0 320 102" role="img" aria-label="${escHtml(title)} actual y comparación" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8"/>${bars}</svg><p class="text-[11px] text-slate-500">● Azul: actual · ● Naranja: ${escHtml(comparisonPeriodLabel(areaData))}. Barras alineadas por posición en cada período.</p></div>`;
+  }
+
   function renderGastosV45Composition(areaData) {
     const k = areaData.kpis || {};
     const sources = [
@@ -1491,7 +1558,8 @@
     ];
     const max = Math.max(1, ...sources.map(([, key]) => Math.abs(Number(k[key] || 0))));
     const rows = sources.map(([label, key, color]) => `<div class="grid grid-cols-[9rem_1fr] items-center gap-2 py-1 text-xs"><span>${label}</span><div class="h-3 rounded bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded ${color}" style="width:${Math.abs(Number(k[key] || 0)) / max * 100}%"></div></div><strong class="col-span-2 text-right tabular-nums">${k[key] == null ? "N/D" : fmtMoney.format(k[key])}</strong></div>`).join("");
-    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición por fuente</h3><p class="text-[11px] text-slate-500">Los impuestos se muestran separados y no integran «Todos».</p>${rows}</section>`;
+    const previous = areaData.comparacion?.kpis?.total_gastos;
+    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición por fuente</h3><p class="text-[11px] text-slate-500">Los impuestos se muestran separados y no integran «Todos».</p>${rows}<p class="mt-2 text-xs">Gasto del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "N/D" : fmtMoney.format(previous)}</strong></p></section>`;
   }
 
   function renderLogisticaV45Comparison(areaData) {
@@ -1503,7 +1571,7 @@
       ["Pendientes", "pendientes_rendir"],
     ];
     const rows = pairs.map(([label, key]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${label}</th><td class="p-2 text-right tabular-nums">${fmtNum.format(k[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtNum.format(previous[key] || 0)}</td></tr>`).join("");
-    return `<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="mb-2 text-xs font-semibold">Rutas · período actual y anterior</h3><table class="w-full min-w-[24rem] text-xs"><thead><tr><th class="p-2 text-left">Estado</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Anterior</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="mb-2 text-xs font-semibold">Rutas · actual y ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[24rem] text-xs"><thead><tr><th class="p-2 text-left">Estado</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   function renderLibrosV45Charts(areaData) {
@@ -1525,7 +1593,15 @@
       const table = rows.map((row) => `<tr><th scope="row" class="p-1 text-left">${escHtml(row.fecha)}</th><td class="p-1 text-right tabular-nums">${fmtMoney.format(row[first])}</td><td class="p-1 text-right tabular-nums">${fmtMoney.format(row[second])}</td></tr>`).join("");
       return `<div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${title}</h3><svg viewBox="0 0 320 102" role="img" aria-label="${title}" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8"/>${bars}</svg><p class="text-[11px] text-slate-500">● ${first} · ● ${second}</p><details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700">Ver serie completa</summary><div class="max-h-56 overflow-auto"><table class="w-full min-w-[25rem] text-xs"><thead><tr><th class="p-1 text-left">Fecha</th><th class="p-1 text-right">${first}</th><th class="p-1 text-right">${second}</th></tr></thead><tbody>${table}</tbody></table></div></details></div>`;
     };
-    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">${panels.map(chart).join("")}</div>`;
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">${panels.map(chart).join("")}</div>`
+      + renderV45SeriesComparison(areaData, areaData.series, areaData.series_comparacion, "debe", "Libro Diario · Debe")
+      + renderV45SeriesComparison(areaData, areaData.series, areaData.series_comparacion, "ingresos", "Resultados · Ingresos")
+      + renderV45ComparisonTable(areaData, [
+        ["Asientos", "asientos", "count"], ["Total Debe", "total_debe"],
+        ["Total Haber", "total_haber"], ["Resultado", "resultado_periodo"],
+        ["Ingresos", "ingresos"], ["Egresos", "egresos"],
+        ["Activo", "activo"], ["Pasivo", "pasivo"],
+      ]);
   }
 
   function renderImpositivoV45Chart(areaData) {
@@ -1539,7 +1615,15 @@
     ];
     const max = Math.max(1, ...metrics.map(([, key]) => Math.abs(Number(k[key] || 0))));
     const bars = metrics.map(([label, key, color]) => `<div class="grid grid-cols-[8.5rem_1fr] items-center gap-2 py-1 text-xs"><span>${label}</span><div class="h-3 rounded bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded ${color}" style="width:${Math.abs(Number(k[key] || 0)) / max * 100}%"></div></div><strong class="col-span-2 text-right tabular-nums">${fmtMoney.format(k[key] || 0)}</strong></div>`).join("");
-    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición de la posición IVA</h3><p class="mb-2 text-xs text-slate-500">Débito + percepciones de ventas − crédito − percepciones de compras − retenciones</p>${bars}</section>`;
+    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición de la posición IVA</h3><p class="mb-2 text-xs text-slate-500">Débito + percepciones de ventas − crédito − percepciones de compras − retenciones</p>${bars}</section>`
+      + renderV45ComparisonTable(areaData, [
+        ["Posición IVA", "posicion_iva"], ["IVA débito", "iva_debito"],
+        ["IVA crédito", "iva_credito"], ["Percep. IVA ventas", "percep_iva_ventas"],
+        ["Percep. IVA compras", "percep_iva_compras"], ["Retenciones IVA", "retenciones_iva"],
+        ["Libro IVA ventas", "libro_ventas", "count"], ["Libro IVA compras", "libro_compras", "count"],
+        ["IIBB ventas", "iibb_ventas"], ["Impuestos determinados", "impuestos_determinados"],
+        ["Impuestos pagados", "impuestos_pagados"],
+      ]);
   }
 
   function renderContableV45Charts(areaData) {
@@ -1568,7 +1652,15 @@
       <div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Libro Diario · Debe y Haber</h3><svg viewBox="0 0 320 102" role="img" aria-label="Debe y Haber por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg><p class="text-[11px] text-slate-500">● Violeta: Debe · ● Turquesa: Haber</p>
         <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Debe</th><th class="px-2 py-2 text-right">Haber</th></tr></thead><tbody>${tableRows}</tbody></table></div></details>
       </div><div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Situación fiscal · alcance general</h3>${taxRows}</div>
-    </div><p class="mt-2 text-[11px] text-slate-500">Impuestos, períodos y ejercicios son generales para la empresa.</p>`;
+    </div><p class="mt-2 text-[11px] text-slate-500">Impuestos, períodos y ejercicios son generales para la empresa.</p>`
+      + renderV45SeriesComparison(areaData, areaData.serie_asientos, areaData.serie_asientos_comparacion, "debe", "Libro Diario · Debe")
+      + renderV45ComparisonTable(areaData, [
+        ["Asientos", "asientos", "count"], ["Total Debe", "total_debe"],
+        ["Total Haber", "total_haber"], ["Desbalanceados", "desbalanceados", "count"],
+        ["Resultado contable", "resultado_contable"],
+        ["Impuestos determinados", "impuestos_determinados"],
+        ["Impuestos a pagar", "impuestos_pagar"],
+      ]);
   }
 
   function renderFinancieroV45Charts(areaData) {
@@ -1597,12 +1689,15 @@
       <div class="mt-1 flex items-center gap-2"><div class="h-2 min-w-0 flex-1 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-orange-400" style="width:${Math.max(0, Number(payable[key] || 0)) / maxAging * 100}%"></div></div><span class="w-24 text-right text-[10px] tabular-nums">${payable[key] == null ? "N/D" : fmtMoney.format(payable[key])}</span></div>
     </div>`).join("");
     const seriesRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="px-2 py-1.5 text-left">${escHtml(row.fecha)}</th><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.cobranzas)}</td><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.pagos)}</td></tr>`).join("");
+    const compared = areaData.comparacion?.kpis || {};
+    const comparisonRows = [["Cobranzas", "cobranzas"], ["Pagos", "pagos"], ["Flujo neto", "flujo_neto"]]
+      .map(([label, key]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="p-2 text-left">${label}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(areaData.kpis?.[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(compared[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(areaData.comparacion?.diferencias?.[key] || 0)}</td></tr>`).join("");
     return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
       <div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Flujo del período</h3><svg viewBox="0 0 320 102" role="img" aria-label="Cobranzas y pagos por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg><p class="text-[11px] text-slate-500">● Turquesa: cobranzas · ● Naranja: pagos</p>
         <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead><tbody>${seriesRows}</tbody></table></div></details>
       </div>
       <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Antigüedad de saldos</h3><p class="text-[11px] text-slate-500">● Turquesa: cobrar · ● Naranja: pagar</p>${agingRows}</div>
-    </div>`;
+    </div><div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Flujo comparado con ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="p-2 text-left">Indicador</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th><th class="p-2 text-right">Variación</th></tr></thead><tbody>${comparisonRows}</tbody></table></div>`;
   }
 
   function renderComprasV45Charts(areaData) {
@@ -1627,7 +1722,7 @@
       <p class="text-xs font-semibold">Evolución de compras y OC · ${areaData.serie_evolucion?.agrupacion || "período"}</p>
       <svg viewBox="0 0 320 102" role="img" aria-label="Compras y órdenes de compra por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg>
       <p class="text-[11px] text-slate-500">🟠 Compras · 🔵 Órdenes de compra</p>
-      <p class="mt-2 text-xs">Compras período anterior: <strong class="tabular-nums">${previous == null ? "No disponible" : fmtMoney.format(previous)}</strong></p>
+      <p class="mt-2 text-xs">Compras del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "No disponible" : fmtMoney.format(previous)}</strong></p>
       <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary>
         <div class="mt-2 max-h-72 overflow-auto"><table class="w-full min-w-[30rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Compras</th><th class="px-2 py-2 text-right">OC</th></tr></thead><tbody>${tableRows}</tbody></table></div>
       </details></div>`;
@@ -1649,7 +1744,7 @@
       <p class="mt-1 text-right text-xs font-semibold tabular-nums">${row.importe == null ? "No disponible" : fmtMoney.format(row.importe)}</p>
     </div>`).join("");
     return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
-      <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Estados · <span class="text-sky-600">actual</span> / <span class="text-orange-500">anterior</span></h3>${stateRows}</section>
+      <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Estados · <span class="text-sky-600">actual</span> / <span class="text-orange-500">${escHtml(comparisonPeriodLabel(areaData))}</span></h3>${stateRows}</section>
       <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Importes por estado</h3>${amountRows}</section>
     </div>`;
   }
@@ -1701,9 +1796,9 @@
       <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[38rem] text-xs text-slate-700 dark:text-slate-200">
         <thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Ventas</th><th class="px-2 py-2 text-right">Compras</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead>
         <tbody>${seriesRows}</tbody></table></div></details>
-    <details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Comparar período anterior</summary>
+    <details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Comparar con ${escHtml(comparisonPeriodLabel(areaData))}</summary>
       <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[34rem] text-xs text-slate-700 dark:text-slate-200">
-        <thead><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Anterior</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
+        <thead><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Comparación</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
         <tbody>${rows}</tbody></table></div></details>`;
   }
 
@@ -1759,16 +1854,16 @@
     }).join(" ");
     const graph = `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
       <p class="mb-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Evolución de ventas por ${areaData.series?.agrupacion === "mes" ? "mes" : "día"}</p>
-      <svg viewBox="0 0 320 112" role="img" aria-label="Ventas diarias: período actual azul y anterior naranja" class="h-28 w-full">
+      <svg viewBox="0 0 320 112" role="img" aria-label="Ventas diarias: período actual azul y comparación naranja" class="h-28 w-full">
         <line x1="8" y1="103" x2="312" y2="103" stroke="#94a3b8" />
         <polyline points="${points(previousSeries)}" fill="none" stroke="#f97316" stroke-width="2.5" />
         <polyline points="${points(currentSeries)}" fill="none" stroke="#0284c7" stroke-width="2.5" />
       </svg>
-      <div class="flex gap-4 text-[10px] text-slate-500"><span>● Azul: actual</span><span>● Naranja: anterior</span></div>
+      <div class="flex flex-wrap gap-4 text-[10px] text-slate-500"><span>● Azul: actual</span><span>● Naranja: ${escHtml(comparisonPeriodLabel(areaData))}</span></div>
     </div>`;
     return `${graph}<details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Comparar los 16 indicadores</summary>
       <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[34rem] text-xs text-slate-700 dark:text-slate-200">
-        <thead class="sticky top-0 bg-slate-50 dark:bg-slate-900"><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Anterior</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
+        <thead class="sticky top-0 bg-slate-50 dark:bg-slate-900"><tr><th class="px-2 py-2 text-left">Indicador</th><th class="px-2 py-2 text-right">Actual</th><th class="px-2 py-2 text-right">Comparación</th><th class="px-2 py-2 text-right">Variación</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div></details>`;
   }
@@ -1807,11 +1902,11 @@
       <svg viewBox="0 0 320 105" role="img" aria-label="Entradas en verde y salidas en naranja" class="h-28 w-full">
         <line x1="8" y1="98" x2="312" y2="98" stroke="#94a3b8" />${bars}
       </svg>
-      <div class="flex flex-wrap gap-3 text-[10px] text-slate-500"><span>● Verde: entradas</span><span>● Naranja: salidas</span>${previousRows.length ? "<span>● Verde claro: entradas anteriores</span><span>● Naranja claro: salidas anteriores</span>" : ""}</div>
+      <div class="flex flex-wrap gap-3 text-[10px] text-slate-500"><span>● Verde: entradas</span><span>● Naranja: salidas</span>${previousRows.length ? `<span>● Verde claro / naranja claro: ${escHtml(comparisonPeriodLabel(areaData))}</span>` : ""}</div>
       <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa (${rows.length})</summary>
         <div class="max-h-60 overflow-auto"><table class="w-full text-xs"><thead><tr><th class="text-left">Fecha</th><th class="text-right">Entradas</th><th class="text-right">Salidas</th></tr></thead><tbody>${seriesTable}</tbody></table></div>
       </details>
-      ${previousRows.length ? `<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie anterior (${previousRows.length})</summary>
+      ${previousRows.length ? `<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie comparada (${previousRows.length})</summary>
         <div class="max-h-60 overflow-auto"><table class="w-full text-xs"><thead><tr><th class="text-left">Fecha</th><th class="text-right">Entradas</th><th class="text-right">Salidas</th></tr></thead><tbody>${previousRows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="py-1.5 text-left font-normal">${escHtml(row.fecha)}</th><td class="py-1.5 text-right">${fmtNum.format(row.entradas)}</td><td class="py-1.5 text-right">${fmtNum.format(row.salidas)}</td></tr>`).join("")}</tbody></table></div>
       </details>` : ""}
     </div>`;
@@ -1827,8 +1922,8 @@
       ["Valor entradas", "valor_entradas", "money"], ["Valor salidas", "valor_salidas", "money"],
     ];
     const comparison = compare ? `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
-      <p class="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Comparación de movimientos</p>
-      <div class="overflow-x-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="text-left">Indicador</th><th class="text-right">Actual</th><th class="text-right">Anterior</th><th class="text-right">Variación</th></tr></thead><tbody>
+      <p class="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Comparación de movimientos · ${escHtml(comparisonPeriodLabel(areaData))}</p>
+      <div class="overflow-x-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="text-left">Indicador</th><th class="text-right">Actual</th><th class="text-right">Comparación</th><th class="text-right">Variación</th></tr></thead><tbody>
       ${flowFields.map(([label, key, kind]) => {
         const fmt = (value) => value == null ? "Sin permiso" : kind === "money" ? fmtMoney.format(value) : fmtNum.format(value);
         return `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="py-1.5 text-left font-medium">${label}</th><td class="text-right">${fmt(areaData.kpis?.[key])}</td><td class="text-right">${fmt(compare.kpis?.[key])}</td><td class="text-right">${fmt(compare.diferencias?.[key])}</td></tr>`;
@@ -2154,6 +2249,7 @@
       node.classList.toggle("hidden", selectedAreaKey !== "gastos");
       node.classList.toggle("flex", selectedAreaKey === "gastos");
     });
+    el("cc-custom-comparison")?.classList.toggle("hidden", !CUSTOM_COMPARE_AREAS.has(selectedAreaKey));
     el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica", "gastos"].includes(selectedAreaKey));
     el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable", "impositivo", "libros_contables", "logistica", "gastos"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
@@ -2167,6 +2263,17 @@
       el("cc-global-kpis")?.classList.add("hidden");
       if (el("cc-areas-grid")) el("cc-areas-grid").innerHTML = "";
       if (el("cc-periodo-label")) el("cc-periodo-label").textContent = "";
+      return;
+    }
+    const currentFilters = readFilters();
+    if (CUSTOM_COMPARE_AREAS.has(selectedAreaKey) &&
+        !!currentFilters.comparacion_inicio !== !!currentFilters.comparacion_fin) {
+      showError("Ingresá ambas fechas del período de comparación o dejá las dos vacías.");
+      return;
+    }
+    if (CUSTOM_COMPARE_AREAS.has(selectedAreaKey) && currentFilters.comparacion_inicio &&
+        currentFilters.comparacion_inicio > currentFilters.comparacion_fin) {
+      showError("La fecha inicial de comparación no puede ser posterior a la final.");
       return;
     }
     el("cc-welcome")?.classList.add("hidden");
@@ -2647,6 +2754,8 @@
     el("cc-comparar-anterior")?.addEventListener("change", onFilterChange);
     el("cc-stock-presentacion")?.addEventListener("change", onFilterChange);
     el("cc-stock-comparar")?.addEventListener("change", onFilterChange);
+    el("cc-comparacion-inicio")?.addEventListener("change", onFilterChange);
+    el("cc-comparacion-fin")?.addEventListener("change", onFilterChange);
     rememberFilters();
     syncReportLinks();
   }

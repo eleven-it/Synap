@@ -20,15 +20,15 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 
 | Tablero administraNET | KPI históricos | Permiso heredado | Estado en Synap `Desarrollo` |
 |---|---:|---|---|
-| Resumen general | 16 | `tablero_resumen_general` | 16 KPI, período anterior y dos gráficos integrados en rama de trabajo; faltan detalles y validación Django/web. |
+| Resumen general | 16 | `tablero_resumen_general` | 16 KPI, comparación automática o personalizada y dos gráficos integrados en rama de trabajo; faltan detalles y validación Django/web. |
 | Comercial — Ventas | 16 | `tablero_comercial_ventas` | Implementación V45 en rama de trabajo: KPI, comparación, gráfico y detalles. Validación Django y revisión del PR pendientes. |
 | Comercial — Preparación de pedidos | 16 | `tablero_comercial_prep_pedidos` | 16 KPI, comparación, gráficos y nueve aperturas de pedidos por estado/vínculo; faltan prueba Django/web y conciliación visual con ERP. |
 | Abastecimiento — Compras | 14 | `tablero_abastecimiento_compras` | 14 KPI, evolución de compras/OC y cinco aperturas documentales en rama de trabajo; faltan validación Django/web y alcance de sucursal para usuarios restringidos. |
 | Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | Resumen y detalle paginado de 14 KPI, tres presentaciones, comparación de movimientos y gráficos en rama de trabajo. Falta prueba Django, revisión visual móvil y revisión del PR. |
 | Análisis financiero | 15 | `tablero_gestion_financiera` | 15 KPI, aging, flujo, comparación y seis aperturas de movimientos/cartera; faltan validación Django/web y contraste visual con ERP. |
-| Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI, serie Debe/Haber y aperturas de asientos, impuestos, períodos y ejercicios; faltan comparación y validación Django/web. |
-| Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI, composición de IVA y seis aperturas documentales; faltan posición IVA documental unificada, series mensuales y comparación. |
-| Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI, dos series y Diario, Mayor, Balance y Resultados paginados en rama de trabajo; faltan comparación y prueba web. |
+| Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI, serie Debe/Haber, comparación de períodos y aperturas de asientos, impuestos, períodos y ejercicios; falta validación Django/web. |
+| Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI, composición y comparación de IVA y seis aperturas documentales; faltan posición IVA documental unificada y series mensuales. |
+| Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI, dos series con comparación, y Diario, Mayor, Balance y Resultados paginados en rama de trabajo; falta prueba web. |
 | Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI, comparación de estados y aperturas de rutas y comprobantes; faltan dimensiones adicionales y contraste con rutas recientes. |
 | Análisis de gastos | 15 | `tablero_gestion_financiera` en V45 | 15 KPI, selector de fuente, documentos y siete agrupaciones en rama de trabajo; faltan serie comparativa y prueba web. |
 
@@ -73,19 +73,23 @@ En Best Sox 01–12/10/2026, cobranzas $177.508.146,64 y pagos $153.688.170,16 p
 
 ## Conciliación inicial de Gestión contable
 
-En Best Sox 01–12/10/2026, `cont_asiento` devuelve 253 asientos, Debe y Haber de $1.008.193.355,56 cada uno, diferencia cero, 253 de proceso y resultado contable de -$796.354,24. Los importes y resultado coinciden con la captura V45 de Contabilidad. Hay un ejercicio abierto y ningún período abierto en el rango. La serie diaria se ejecutó en MySQL 5.7 aislado. La selección de grupo y sucursal se aplica a los asientos; los impuestos y períodos son datos generales y se identifican así en la respuesta y la vista. Las aperturas de asientos (684 renglones), impuestos (0), períodos (0) y ejercicios (1) se ejecutaron contra la misma copia. Faltan comparación, contraste visual del tablero específico y prueba Django/web.
+En Best Sox 01–12/10/2026, `cont_asiento` devuelve 253 asientos, Debe y Haber de $1.008.193.355,56 cada uno, diferencia cero, 253 de proceso y resultado contable de -$796.354,24. Los importes y resultado coinciden con la captura V45 de Contabilidad. Hay un ejercicio abierto y ningún período abierto en el rango. La serie diaria se ejecutó en MySQL 5.7 aislado. La selección de grupo y sucursal se aplica a los asientos; los impuestos y períodos son datos generales y se identifican así en la respuesta y la vista. Las aperturas de asientos (684 renglones), impuestos (0), períodos (0) y ejercicios (1) se ejecutaron contra la misma copia. La comparación con un período elegido se ejecutó contra MySQL 5.7; faltan contraste visual del tablero específico y prueba Django/web.
 
 ## Conciliación inicial de Impuestos y posiciones fiscales
 
-En Best Sox 01–12/10/2026, el débito IVA fue $35.953.653,57, el crédito fiscal $30.531.853,91 y la posición $5.421.799,66. Se contaron 91 comprobantes de Libro IVA ventas y 38 de compras; las notas de crédito tienen signo negativo y compras usa `FechaRegistro`, `IVA1+IVA2+IVA3+sobretasa_iva` y excluye proveedores profesionales, como V45. El test con PV 2 y sucursal 1 devolvió una posición de $5.226.799,41 y no expuso las determinaciones fiscales generales. Las consultas se ejecutaron contra MySQL 5.7 aislado. Faltan serie fiscal temporal, comparación y prueba integrada web.
+En Best Sox 01–12/10/2026, el débito IVA fue $35.953.653,57, el crédito fiscal $30.531.853,91 y la posición $5.421.799,66. Se contaron 91 comprobantes de Libro IVA ventas y 38 de compras; las notas de crédito tienen signo negativo y compras usa `FechaRegistro`, `IVA1+IVA2+IVA3+sobretasa_iva` y excluye proveedores profesionales, como V45. El test con PV 2 y sucursal 1 devolvió una posición de $5.226.799,41 y no expuso las determinaciones fiscales generales. Las consultas se ejecutaron contra MySQL 5.7 aislado. Falta la serie fiscal temporal y la prueba integrada web.
 
 Las aperturas fiscales de ventas y compras suman respectivamente $35.953.653,57 de débito y $30.531.853,91 de crédito, iguales a sus KPI. En el rango hay 17 retenciones de distintos impuestos; su total bruto no equivale a los subtotales de IVA o IIBB, que requieren filtrar por impuesto. También se verificaron percepciones, determinaciones y pagos, todos sin registros en este rango. Los documentos generales de determinación se ocultan cuando se aplica filtro territorial. Sigue pendiente la vista unificada de Posición IVA y el contraste visual de los libros.
 
+La comparación personalizada 01–12/09/2026 se ejecutó sobre las mismas consultas: Posición IVA de -$16.676.783,76 frente a $5.421.799,66 en octubre. Se informa el rango elegido y la variación de cada KPI. La vista de composición todavía no muestra una serie fiscal mensual.
+
 ## Conciliación inicial de Libros y estados
 
-En Best Sox 01–12/10/2026, los 253 asientos suman $1.008.193.355,56 tanto en Debe como en Haber; 37 cuentas tienen movimiento. El Mayor tiene saldos deudor y acreedor de $448.845.652,63; ingresos $182.597.266,77, egresos $183.393.621,01, resultado -$796.354,24, activo $167.906.532,47 y pasivo $168.702.886,71. Estas cifras coinciden con la captura V45 de Libros y estados. Se validaron las series diarias de Diario y Resultados y una selección de sucursal sobre el asiento en MySQL 5.7 aislado. Todavía faltan la comparación de períodos y la prueba de interfaz.
+En Best Sox 01–12/10/2026, los 253 asientos suman $1.008.193.355,56 tanto en Debe como en Haber; 37 cuentas tienen movimiento. El Mayor tiene saldos deudor y acreedor de $448.845.652,63; ingresos $182.597.266,77, egresos $183.393.621,01, resultado -$796.354,24, activo $167.906.532,47 y pasivo $168.702.886,71. Estas cifras coinciden con la captura V45 de Libros y estados. Se validaron las series diarias de Diario y Resultados, la comparación con un período elegido y una selección de sucursal sobre el asiento en MySQL 5.7 aislado. Falta la prueba de interfaz.
 
 Las cuatro vistas documentales ya ejecutan consultas paginadas de solo lectura: Diario y Mayor 684 renglones cada uno, Balance 37 cuentas y Resultados 16. La búsqueda por cuenta y la segunda página del Mayor se probaron en la misma copia; el detalle hereda el permiso del tablero y el filtro histórico de sucursal/grupo.
+
+Gestión contable y Libros admiten comparación personalizada. En 01–12/09/2026, el Debe de Gestión contable fue $1.769.334.883,22 y el de Libros $1.778.919.172,23. La diferencia entre ambos tableros reproduce sus fuentes V45: Gestión contable filtra `a.anulado='No'` y Libros no aplica ese predicado en `CMAC_CargarResumen`. No deben presentarse como el mismo universo sin esa aclaración.
 
 ## Conciliación inicial de Logística
 

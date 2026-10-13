@@ -1,10 +1,9 @@
 """Resumen Abastecimiento/Stock según modCM_StockDatos.bas de V45."""
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 
 
 STOCK_V45_KEYS = (
@@ -292,12 +291,7 @@ def fetch_stock_v45(
                            snapshot="existencias actuales; el período se aplica a movimientos"),
     }
     if compare_previous:
-        days = (filters.fecha_fin - filters.fecha_inicio).days + 1
-        prior = replace(
-            filters, fecha_inicio=filters.fecha_inicio - timedelta(days=days),
-            fecha_fin=filters.fecha_inicio - timedelta(days=1),
-            fecha_referencia=filters.fecha_inicio - timedelta(days=1),
-        )
+        prior = comparison_filters(filters)
         before = _movements(cursor, prior, presentation)
         payload["serie_movimientos_anterior"] = _movement_series(cursor, prior, presentation)
         if not show_costs:

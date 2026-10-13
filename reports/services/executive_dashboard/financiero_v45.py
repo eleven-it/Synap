@@ -1,10 +1,9 @@
 """Análisis financiero V45; saldos históricos y disponibilidad de solo lectura."""
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 from .comercial_v45 import _scope as _sales_scope
 from .compras_v45 import _scope as _purchase_scope
 from .resumen_v45 import _table_exists
@@ -235,12 +234,7 @@ def _flow_series(cursor, filters: DashboardFilters) -> dict:
 
 
 def fetch_financiero_v45(cursor, filters: DashboardFilters) -> dict:
-    days = (filters.fecha_fin - filters.fecha_inicio).days + 1
-    prior = replace(
-        filters, fecha_inicio=filters.fecha_inicio - timedelta(days=days),
-        fecha_fin=filters.fecha_inicio - timedelta(days=1),
-        fecha_referencia=filters.fecha_inicio - timedelta(days=1),
-    )
+    prior = comparison_filters(filters)
     flow = _flows(cursor, filters)
     previous_flow = _flows(cursor, prior)
     cobrar = _aging(cursor, filters, clients=True)

@@ -6,10 +6,9 @@ CMCom_CargarPedidosVinculados). Las consultas son de solo lectura.
 """
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, build_paginated_response, round_money
+from .base import DashboardFilters, build_meta, build_paginated_response, comparison_filters, round_money
 
 
 FACTURAS = ("FA", "FB", "FC", "FE", "FM")
@@ -267,12 +266,7 @@ def fetch_comercial_ventas_v45(
     }
     if compare_previous:
         days = (filters.fecha_fin - filters.fecha_inicio).days + 1
-        previous = replace(
-            filters,
-            fecha_inicio=filters.fecha_inicio - timedelta(days=days),
-            fecha_fin=filters.fecha_inicio - timedelta(days=1),
-            fecha_referencia=filters.fecha_inicio - timedelta(days=1),
-        )
+        previous = comparison_filters(filters)
         before = _kpis(cursor, previous, gross=gross, include_profit=include_profit)
         payload["comparacion"] = {
             "periodo": {"inicio": previous.fecha_inicio_str, "fin": previous.fecha_fin_str},

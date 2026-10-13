@@ -1,10 +1,9 @@
 """Preparación de pedidos V45; reglas de modCM_PreparacionDatos.bas."""
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 from .comercial_v45 import _scope
 
 
@@ -213,12 +212,7 @@ def fetch_preparacion_v45(cursor, filters: DashboardFilters) -> dict:
         "remitos": stock_link and _exists(cursor, "stock", "codmov_remito"),
     }
     actual = _period_metrics(cursor, filters, states, links=links)
-    days = (filters.fecha_fin - filters.fecha_inicio).days + 1
-    previous_filters = replace(
-        filters, fecha_inicio=filters.fecha_inicio - timedelta(days=days),
-        fecha_fin=filters.fecha_inicio - timedelta(days=1),
-        fecha_referencia=filters.fecha_inicio - timedelta(days=1),
-    )
+    previous_filters = comparison_filters(filters)
     previous = _period_metrics(cursor, previous_filters, states, links=links)
     state_keys = (
         ("Pendientes", "pendientes"), ("Backorder", "backorder"),

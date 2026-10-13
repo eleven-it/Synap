@@ -1,10 +1,9 @@
 """Abastecimiento/Compras V45 según modCM_ComprasDatos.bas."""
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 
 
 COMPRAS_V45_KEYS = (
@@ -188,12 +187,7 @@ def fetch_compras_v45(cursor, filters: DashboardFilters) -> dict:
         "line_amount": _has(cursor, "stockp") and _has(cursor, "stockp", "cantidad_pendiente"),
     }
     actual = _period(cursor, filters, options)
-    days = (filters.fecha_fin - filters.fecha_inicio).days + 1
-    previous_filters = replace(
-        filters, fecha_inicio=filters.fecha_inicio - timedelta(days=days),
-        fecha_fin=filters.fecha_inicio - timedelta(days=1),
-        fecha_referencia=filters.fecha_inicio - timedelta(days=1),
-    )
+    previous_filters = comparison_filters(filters)
     previous = _period(cursor, previous_filters, options)
     return {
         "kpis": actual,

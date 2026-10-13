@@ -132,6 +132,19 @@
               </div>
             </fieldset>
 
+            <details id="cc-custom-comparison" class="cc-filter-field hidden min-w-0 flex-1 rounded-lg border border-slate-600/60 bg-slate-950/40 px-3 py-2 text-xs text-slate-200 lg:max-w-[22rem]">
+              <summary class="cursor-pointer font-medium">Comparar con otro período</summary>
+              <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label class="flex flex-col gap-1" for="cc-comparacion-inicio">Desde comparación
+                  <input type="date" id="cc-comparacion-inicio" class="min-h-10 w-full rounded-lg border border-slate-600 bg-slate-950/50 px-2 text-sm text-white" />
+                </label>
+                <label class="flex flex-col gap-1" for="cc-comparacion-fin">Hasta comparación
+                  <input type="date" id="cc-comparacion-fin" class="min-h-10 w-full rounded-lg border border-slate-600 bg-slate-950/50 px-2 text-sm text-white" />
+                </label>
+              </div>
+              <p class="mt-1 text-[11px] text-slate-400">Si dejás ambas fechas vacías, se usa el período anterior de igual duración.</p>
+            </details>
+
             <div class="flex min-w-0 flex-1 flex-col gap-3 lg:max-w-xl">
               <div class="cc-filter-field cc-sales-filter flex flex-col gap-1">
                 <label for="sucursales_search" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sucursales</label>

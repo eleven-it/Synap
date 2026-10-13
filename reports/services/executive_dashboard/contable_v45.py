@@ -2,7 +2,7 @@
 from __future__ import annotations
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 from .resumen_v45 import _table_exists
 
 
@@ -151,19 +151,35 @@ def _series(cursor, filters: DashboardFilters, grupo_contable: int | None) -> di
     }
 
 
-def fetch_contable_v45(cursor, filters: DashboardFilters, *, grupo_contable: int | None = None) -> dict:
-    if not _table_exists(cursor, "cont_asiento"):
-        return {"disponible": False, "motivo": "sin_cont_asiento", "kpis": {}}
-    values = {
+def _metrics(cursor, filters: DashboardFilters, grupo_contable: int | None) -> dict:
+    return {
         **_asientos(cursor, filters, grupo_contable),
         "resultado_contable": _result(cursor, filters, grupo_contable),
         **_tax(cursor, filters),
         "periodos_abiertos": _open_periods(cursor, filters, exercise=False),
         "ejercicios_abiertos": _open_periods(cursor, filters, exercise=True),
     }
+
+
+def fetch_contable_v45(cursor, filters: DashboardFilters, *, grupo_contable: int | None = None) -> dict:
+    if not _table_exists(cursor, "cont_asiento"):
+        return {"disponible": False, "motivo": "sin_cont_asiento", "kpis": {}}
+    values = _metrics(cursor, filters, grupo_contable)
+    prior = comparison_filters(filters)
+    previous = _metrics(cursor, prior, grupo_contable)
     return {
         "kpis": values,
         "serie_asientos": _series(cursor, filters, grupo_contable),
+        "serie_asientos_comparacion": _series(cursor, prior, grupo_contable),
+        "comparacion": {
+            "periodo": {"inicio": prior.fecha_inicio_str, "fin": prior.fecha_fin_str},
+            "kpis": previous,
+            "diferencias": {
+                key: round_money(value - previous[key])
+                for key, value in values.items()
+                if value is not None and previous.get(key) is not None
+            },
+        },
         "alcance": {
             "asientos": "sucursal y grupo contable" if filters.sucursales_filtro or grupo_contable else "general",
             "impuestos_y_periodos": "general",

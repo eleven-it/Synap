@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 from .resumen_v45 import _table_exists
 
 
@@ -21,8 +21,8 @@ _AJUSTE = "IF(UPPER(COALESCE(oe.tipo_comp,'')) LIKE 'NC%',ABS(COALESCE(oe.import
 
 def _dates(filters, previous=False):
     if previous:
-        span = (filters.fecha_fin - filters.fecha_inicio).days + 1
-        return [(filters.fecha_inicio - timedelta(days=span)).isoformat(), filters.fecha_inicio_str]
+        prior = comparison_filters(filters)
+        return [prior.fecha_inicio_str, (prior.fecha_fin + timedelta(days=1)).isoformat()]
     return [filters.fecha_inicio_str, (filters.fecha_fin + timedelta(days=1)).isoformat()]
 
 
@@ -188,6 +188,7 @@ def fetch_gastos_v45(cursor, filters: DashboardFilters, *, fuente: int = 0) -> d
     current = _totals(cursor, sql, params)
     previous_sql, previous_params, _ = _base(cursor, filters, fuente, previous=True)
     previous = _totals(cursor, previous_sql, previous_params)
+    previous_period = comparison_filters(filters)
     amount = current["total_gastos"]
     days = (filters.fecha_fin - filters.fecha_inicio).days + 1
     past = previous["total_gastos"] if previous else None
@@ -208,6 +209,10 @@ def fetch_gastos_v45(cursor, filters: DashboardFilters, *, fuente: int = 0) -> d
     }
     return {
         "disponible": True, "kpis": kpis, "fuente": fuente,
+        "comparacion": {
+            "periodo": {"inicio": previous_period.fecha_inicio_str, "fin": previous_period.fecha_fin_str},
+            "kpis": previous,
+        },
         "fuentes_disponibles": available,
         "meta": build_meta(filters, fuente="modCM_FinancieroDatos.bas/CMGas/V45"),
     }

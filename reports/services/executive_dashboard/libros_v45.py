@@ -1,7 +1,7 @@
 """Libros y estados V45 según modCM_AnalisisContableDatos.bas."""
 from __future__ import annotations
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 from .resumen_v45 import _table_exists
 from .contable_v45 import _scope, _period
 
@@ -112,17 +112,33 @@ def _series(cursor, filters, group):
     }
 
 
-def fetch_libros_v45(cursor, filters: DashboardFilters, *, grupo_contable: int | None = None) -> dict:
-    if not _table_exists(cursor, "cont_asiento") or not _table_exists(cursor, "cont_pc"):
-        return {"disponible": False, "motivo": "sin_contabilidad", "kpis": {}}
-    kpis = {
+def _metrics(cursor, filters: DashboardFilters, grupo_contable: int | None) -> dict:
+    return {
         **_main(cursor, filters, grupo_contable),
         **_balances(cursor, filters, grupo_contable),
         **_results(cursor, filters, grupo_contable),
         **_audit(cursor, filters, grupo_contable),
     }
+
+
+def fetch_libros_v45(cursor, filters: DashboardFilters, *, grupo_contable: int | None = None) -> dict:
+    if not _table_exists(cursor, "cont_asiento") or not _table_exists(cursor, "cont_pc"):
+        return {"disponible": False, "motivo": "sin_contabilidad", "kpis": {}}
+    kpis = _metrics(cursor, filters, grupo_contable)
+    prior = comparison_filters(filters)
+    previous = _metrics(cursor, prior, grupo_contable)
     return {
         "disponible": True, "kpis": kpis,
         "series": _series(cursor, filters, grupo_contable),
+        "series_comparacion": _series(cursor, prior, grupo_contable),
+        "comparacion": {
+            "periodo": {"inicio": prior.fecha_inicio_str, "fin": prior.fecha_fin_str},
+            "kpis": previous,
+            "diferencias": {
+                key: round_money(value - previous[key])
+                for key, value in kpis.items()
+                if isinstance(value, (int, float)) and isinstance(previous.get(key), (int, float))
+            },
+        },
         "meta": build_meta(filters, fuente="modCM_AnalisisContableDatos.bas/V45"),
     }

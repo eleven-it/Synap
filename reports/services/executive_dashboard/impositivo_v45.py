@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 from .resumen_v45 import _table_exists
 
 
@@ -154,11 +154,7 @@ def _paid(cursor, filters):
     return round_money(row[0] if row else 0)
 
 
-def fetch_impositivo_v45(cursor, filters: DashboardFilters) -> dict:
-    required = ("cuentacliente", "cuentaproveedor", "percep_cli", "retenciones", "impuesto_detalle", "otro_egreso")
-    missing = [table for table in required if not _table_exists(cursor, table)]
-    if missing:
-        return {"disponible": False, "motivo": "tablas_faltantes", "tablas_faltantes": missing, "kpis": {}}
+def _metrics(cursor, filters: DashboardFilters) -> dict:
     sales, where, params, sign = _sales(cursor, filters)
     purchase = _purchases(cursor, filters)
     perceptions = _perceptions(cursor, filters, where, params, sign)
@@ -168,13 +164,32 @@ def fetch_impositivo_v45(cursor, filters: DashboardFilters) -> dict:
         - purchase["iva_credito"] - purchase["percep_iva_compras"]
         - retentions["retenciones_iva"]
     )
-    kpis = {
+    return {
         "posicion_iva": iva_position, **sales, **purchase, **perceptions, **retentions,
         "impuestos_determinados": _determined(cursor, filters),
         "impuestos_pagados": _paid(cursor, filters),
     }
+
+
+def fetch_impositivo_v45(cursor, filters: DashboardFilters) -> dict:
+    required = ("cuentacliente", "cuentaproveedor", "percep_cli", "retenciones", "impuesto_detalle", "otro_egreso")
+    missing = [table for table in required if not _table_exists(cursor, table)]
+    if missing:
+        return {"disponible": False, "motivo": "tablas_faltantes", "tablas_faltantes": missing, "kpis": {}}
+    kpis = _metrics(cursor, filters)
+    prior = comparison_filters(filters)
+    previous = _metrics(cursor, prior)
     return {
         "disponible": True, "kpis": kpis,
+        "comparacion": {
+            "periodo": {"inicio": prior.fecha_inicio_str, "fin": prior.fecha_fin_str},
+            "kpis": previous,
+            "diferencias": {
+                key: round_money(value - previous[key])
+                for key, value in kpis.items()
+                if value is not None and previous.get(key) is not None
+            },
+        },
         "alcance": {"impuestos_determinados": "general" if kpis["impuestos_determinados"] is not None else "no disponible con filtro territorial"},
         "meta": build_meta(filters, fuente="modCM_ImpositivoDatos.bas/V45"),
     }

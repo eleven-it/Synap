@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, comparison_filters, round_money
 from .resumen_v45 import _table_exists
 
 
@@ -68,8 +68,8 @@ def _range(filters):
 
 def _route_counts(cursor, filters, date_expr, *, previous=False):
     if previous:
-        span = (filters.fecha_fin - filters.fecha_inicio).days + 1
-        params = [(filters.fecha_inicio - timedelta(days=span)).isoformat(), filters.fecha_inicio_str]
+        prior = comparison_filters(filters)
+        params = _range(prior)
     else:
         params = _range(filters)
     scope, scope_params = _scope(filters)
@@ -162,6 +162,12 @@ def fetch_logistica_v45(cursor, filters: DashboardFilters) -> dict:
     kpis["promedio_factura"] = round_money(amount / kpis["facturas_ruta"]) if amount is not None and kpis["facturas_ruta"] else None
     return {
         "disponible": True, "kpis": kpis,
-        "comparacion": {key: previous[key] for key in ("hojas_ruta", "rutas_abiertas", "rutas_cerradas", "rutas_rendidas", "pendientes_rendir")},
+        "comparacion": {
+            **{key: previous[key] for key in ("hojas_ruta", "rutas_abiertas", "rutas_cerradas", "rutas_rendidas", "pendientes_rendir")},
+            "periodo": {
+                "inicio": comparison_filters(filters).fecha_inicio_str,
+                "fin": comparison_filters(filters).fecha_fin_str,
+            },
+        },
         "meta": build_meta(filters, fuente="modCM_LogisticaDatos.bas/V45"),
     }

@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
-from datetime import date, datetime
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta
 from typing import Any, Generator, Iterator
 
 from django.utils import timezone
@@ -27,6 +27,8 @@ class DashboardFilters:
     limit: int = 100
     offset: int = 0
     busqueda: str | None = None
+    comparacion_inicio: date | None = None
+    comparacion_fin: date | None = None
 
     @property
     def cod_sucursal(self) -> int | None:
@@ -106,6 +108,16 @@ def resolve_filters_from_query_params(
     if fecha_inicio > fecha_fin:
         raise InvalidDashboardFilters("fecha_inicio no puede ser posterior a fecha_fin.")
 
+    cmp_inicio_raw = qp.get("comparacion_inicio") if qp else None
+    cmp_fin_raw = qp.get("comparacion_fin") if qp else None
+    comparacion_inicio = _parse_fecha(cmp_inicio_raw)
+    comparacion_fin = _parse_fecha(cmp_fin_raw)
+    if cmp_inicio_raw or cmp_fin_raw:
+        if not comparacion_inicio or not comparacion_fin:
+            raise InvalidDashboardFilters("La comparación necesita ambas fechas válidas.")
+        if comparacion_inicio > comparacion_fin:
+            raise InvalidDashboardFilters("comparacion_inicio no puede ser posterior a comparacion_fin.")
+
     sucursales_filtro = _parse_int_list_qp(qp, "sucursales")
     if not sucursales_filtro and qp:
         raw_suc = qp.get("sucursal")
@@ -141,6 +153,22 @@ def resolve_filters_from_query_params(
         limit=limit,
         offset=offset,
         busqueda=busqueda,
+        comparacion_inicio=comparacion_inicio,
+        comparacion_fin=comparacion_fin,
+    )
+
+
+def comparison_filters(filters: DashboardFilters) -> DashboardFilters:
+    """Período B elegido por el usuario o intervalo anterior de igual duración."""
+    if filters.comparacion_inicio and filters.comparacion_fin:
+        start, end = filters.comparacion_inicio, filters.comparacion_fin
+    else:
+        days = (filters.fecha_fin - filters.fecha_inicio).days + 1
+        start = filters.fecha_inicio - timedelta(days=days)
+        end = filters.fecha_inicio - timedelta(days=1)
+    return replace(
+        filters, fecha_inicio=start, fecha_fin=end, fecha_referencia=end,
+        comparacion_inicio=None, comparacion_fin=None,
     )
 
 
@@ -153,6 +181,10 @@ def build_meta(filters: DashboardFilters, **extra: Any) -> dict[str, Any]:
             "inicio": filters.fecha_inicio.isoformat(),
             "fin": filters.fecha_fin.isoformat(),
         },
+        "comparacion_personalizada": (
+            {"inicio": filters.comparacion_inicio.isoformat(), "fin": filters.comparacion_fin.isoformat()}
+            if filters.comparacion_inicio and filters.comparacion_fin else None
+        ),
         "cod_sucursal_filtro": list(filters.sucursales_filtro)
         if filters.sucursales_filtro
         else None,
