@@ -37,7 +37,8 @@ from .services.executive_dashboard.inventory_metrics import (
     fetch_inventario_resumen,
     list_existencias,
 )
-from .services.executive_dashboard.stock_v45 import fetch_stock_v45
+from .services.executive_dashboard.stock_v45 import STOCK_V45_KEYS, fetch_stock_v45
+from .services.executive_dashboard.stock_v45_detail import list_stock_v45_detail
 from .services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
 from .services.executive_dashboard.purchase_metrics import fetch_compras_resumen
 from .services.executive_dashboard.banco_metrics import fetch_tesoreria_banco_resumen
@@ -359,6 +360,38 @@ class ExecutiveDashboardStockV45APIView(ExecutiveDashboardMixin, APIView):
                     show_costs=user_has_permission(request.user, "reports.view_managerial"),
                     compare_previous=request.query_params.get("comparar") == "anterior",
                 )
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response(payload)
+
+
+class ExecutiveDashboardStockV45DetailAPIView(ExecutiveDashboardMixin, APIView):
+    """Detalle de Stock; aplica los mismos filtros y permisos del KPI padre."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("inventario")
+        if disabled:
+            return disabled
+        kpi = request.query_params.get("kpi", "")
+        presentation = request.query_params.get("presentacion", "unidad")
+        if kpi not in STOCK_V45_KEYS or presentation not in {"unidad", "display", "bulto"}:
+            return Response({"detail": "Indicador o presentación desconocida."}, status=status.HTTP_400_BAD_REQUEST)
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_stock_v45_detail(
+                    cursor, filters, kpi=kpi, presentation=presentation,
+                    allow_cost=user_has_permission(request.user, "reports.view_managerial"),
+                    order=request.query_params.get("orden", "fecha_desc"),
+                )
+        except PermissionError:
+            return Response({"detail": "Sin permiso de costos."}, status=status.HTTP_403_FORBIDDEN)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:

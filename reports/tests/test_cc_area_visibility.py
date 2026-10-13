@@ -45,6 +45,8 @@ class AreaVisibilityUnitTests(SimpleTestCase):
             "ventas": "/v/",
             "inventario": "/i/",
             "existencias": "/e/",
+            "comercial_v45": "/ventas/detalle/",
+            "stock_v45": "/stock/detalle/",
         }
         areas = {**DEFAULT_CC_AREAS, "inventario": False}
         out = filter_urls_by_areas(
@@ -53,8 +55,10 @@ class AreaVisibilityUnitTests(SimpleTestCase):
             key_to_area={**{k: k for k in urls}, **DETAIL_KEY_TO_AREA},
         )
         self.assertIn("ventas", out)
+        self.assertIn("comercial_v45", out)
         self.assertNotIn("inventario", out)
         self.assertNotIn("existencias", out)
+        self.assertNotIn("stock_v45", out)
 
     @patch(
         "reports.services.executive_dashboard.area_visibility.resolve_cc_areas",

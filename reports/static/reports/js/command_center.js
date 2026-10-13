@@ -59,6 +59,8 @@
   let existenciasSearchBound = false;
   let comercialDetail = null;
   let comercialDetailData = null;
+  let stockDetail = null;
+  let stockDetailData = null;
   let comercialSearchTimer = null;
 
   function resetDetailPanelsLayout() {
@@ -79,7 +81,7 @@
     ) {
       return fmtMoney.format(Number(value));
     }
-    if (typeof value === "number" && (key.includes("qty") || key.includes("stock") || key === "disponible" || key === "oc_pendiente")) {
+    if (typeof value === "number" && (key.includes("qty") || key.includes("stock") || key === "disponible" || key === "oc_pendiente" || key === "cantidad")) {
       return fmtNum.format(Number(value));
     }
     return escHtml(String(value));
@@ -143,10 +145,10 @@
         </article>`;
   }
 
-  function renderTabularDetail(data, columns, cardHtmlFn) {
+  function renderTabularDetail(data, columns, cardHtmlFn, totalFormatter = fmtMoney.format.bind(fmtMoney)) {
     const total = data.total_registros ?? 0;
     let sumTxt = `${total} registro(s)`;
-    if (data.total_monto != null) sumTxt += ` · Total ${fmtMoney.format(data.total_monto)}`;
+    if (data.total_monto != null) sumTxt += ` · Total ${totalFormatter(data.total_monto)}`;
     const summaryEl = el("cc-detail-summary");
     if (summaryEl) summaryEl.textContent = sumTxt;
 
@@ -232,6 +234,8 @@
     el("cc-v45-pagination")?.classList.remove("flex");
     comercialDetail = null;
     comercialDetailData = null;
+    stockDetail = null;
+    stockDetailData = null;
     if (existenciasAbort) {
       existenciasAbort.abort();
       existenciasAbort = null;
@@ -969,20 +973,20 @@
         const money = (key) => k[key] == null ? "Sin permiso de costos" : fmtMoney.format(k[key]);
         const qty = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
         return [
-          ["Stock valorizado", money("stock_valorizado")],
-          ["Disponible", qty("unidades_disponibles")],
-          ["Artículos con stock", qty("articulos_con_stock")],
-          ["Stock negativo", qty("articulos_stock_negativo")],
-          ["Bajo mínimo", qty("bajo_minimo")],
-          ["Punto pedido", qty("punto_pedido")],
-          ["Sobre máximo", qty("sobre_maximo")],
-          ["Reservado", qty("stock_reservado")],
-          ["Pendiente recibir", qty("pendiente_recibir")],
-          ["Entradas período", qty("entradas_periodo")],
-          ["Salidas período", qty("salidas_periodo")],
-          ["Valor entradas", money("valor_entradas")],
-          ["Valor salidas", money("valor_salidas")],
-          ["Sin movimiento 90 días", qty("sin_movimiento_90d")],
+          ["Stock valorizado", money("stock_valorizado"), "stock_valorizado"],
+          ["Disponible", qty("unidades_disponibles"), "unidades_disponibles"],
+          ["Artículos con stock", qty("articulos_con_stock"), "articulos_con_stock"],
+          ["Stock negativo", qty("articulos_stock_negativo"), "articulos_stock_negativo"],
+          ["Bajo mínimo", qty("bajo_minimo"), "bajo_minimo"],
+          ["Punto pedido", qty("punto_pedido"), "punto_pedido"],
+          ["Sobre máximo", qty("sobre_maximo"), "sobre_maximo"],
+          ["Reservado", qty("stock_reservado"), "stock_reservado"],
+          ["Pendiente recibir", qty("pendiente_recibir"), "pendiente_recibir"],
+          ["Entradas período", qty("entradas_periodo"), "entradas_periodo"],
+          ["Salidas período", qty("salidas_periodo"), "salidas_periodo"],
+          ["Valor entradas", money("valor_entradas"), "valor_entradas"],
+          ["Valor salidas", money("valor_salidas"), "valor_salidas"],
+          ["Sin movimiento 90 días", qty("sin_movimiento_90d"), "sin_movimiento_90d"],
         ];
       },
       afterMetrics: (a) => renderStockV45Charts(a),
@@ -1308,7 +1312,7 @@
           ([k, val, kpi]) => `
         <div class="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0 dark:border-slate-800">
           <span class="min-w-0 shrink text-sm text-slate-500 dark:text-slate-400">${k}
-            ${kpi && val !== "Sin permiso de costos" ? `<button type="button" class="cc-v45-kpi-detail ml-1 align-middle text-sky-600 dark:text-sky-300" data-kpi="${kpi}" data-title="${escHtml(k)}" aria-label="Ver detalle de ${escHtml(k)}"><span class="material-icons text-sm" aria-hidden="true">open_in_new</span></button>` : ""}
+            ${kpi && val !== "Sin permiso de costos" ? `<button type="button" class="cc-v45-kpi-detail ml-1 align-middle text-sky-600 dark:text-sky-300" data-area="${def.key}" data-kpi="${kpi}" data-title="${escHtml(k)}" aria-label="Ver detalle de ${escHtml(k)}"><span class="material-icons text-sm" aria-hidden="true">open_in_new</span></button>` : ""}
           </span>
           <span class="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-white">${val}</span>
         </div>`
@@ -1407,7 +1411,10 @@
       btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title));
     });
     scope?.querySelectorAll(".cc-v45-kpi-detail").forEach((btn) => {
-      btn.addEventListener("click", () => openComercialDetail(btn.dataset.kpi, btn.dataset.title));
+      btn.addEventListener("click", () => {
+        if (btn.dataset.area === "inventario") openStockDetail(btn.dataset.kpi, btn.dataset.title);
+        else openComercialDetail(btn.dataset.kpi, btn.dataset.title);
+      });
     });
     bindInventarioPresentacion(scope);
   }
@@ -1693,6 +1700,88 @@
     </article>`;
   }
 
+  const STOCK_COST_KEYS = new Set(["stock_valorizado", "valor_entradas", "valor_salidas"]);
+  const STOCK_MOVEMENT_KEYS = new Set(["entradas_periodo", "salidas_periodo", "valor_entradas", "valor_salidas"]);
+  const STOCK_LIMIT_KEYS = new Set(["bajo_minimo", "punto_pedido", "sobre_maximo"]);
+
+  function stockColumns(kpi) {
+    const value = { key: STOCK_COST_KEYS.has(kpi) ? "importe" : "cantidad", label: STOCK_COST_KEYS.has(kpi) ? "Importe" : "Cantidad" };
+    if (STOCK_MOVEMENT_KEYS.has(kpi)) return [
+      { key: "fecha", label: "Fecha" }, { key: "documento", label: "Comprobante" },
+      { key: "articulo", label: "Artículo" }, { key: "codigo_manual", label: "Código" },
+      { key: "deposito", label: "Depósito" }, value,
+    ];
+    const columns = [
+      { key: "articulo", label: "Artículo" }, { key: "codigo_manual", label: "Código" },
+      { key: "deposito", label: "Depósito" }, { key: "stock_actual", label: "Stock actual" },
+    ];
+    if (STOCK_LIMIT_KEYS.has(kpi)) columns.push(
+      { key: "stock_minimo", label: "Mínimo" }, { key: "punto_pedido", label: "Punto pedido" },
+      { key: "stock_maximo", label: "Máximo" },
+    );
+    columns.push(value);
+    return columns;
+  }
+
+  function stockCardHtml(row) {
+    const cost = STOCK_COST_KEYS.has(stockDetail?.kpi);
+    const metric = cost ? fmtMoney.format(row.importe) : fmtNum.format(row.importe);
+    const context = STOCK_MOVEMENT_KEYS.has(stockDetail?.kpi)
+      ? `${escHtml(row.fecha || "")} · ${escHtml(row.documento || "")}`
+      : `Stock ${fmtNum.format(row.stock_actual || 0)}`;
+    return `<article class="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+      <div class="flex justify-between gap-2"><strong class="min-w-0 break-words text-sm">${escHtml(row.articulo || "Sin artículo")}</strong><span class="shrink-0 text-sm font-semibold tabular-nums">${metric}</span></div>
+      <p class="mt-1 text-xs text-slate-500">${context} · ${escHtml(row.deposito || "")} · ${escHtml(row.codigo_manual || "")}</p>
+    </article>`;
+  }
+
+  async function loadStockDetail() {
+    if (!stockDetail) return;
+    const base = (cfg.detailUrls || {}).stock_v45;
+    if (!base) return;
+    const term = (el("cc-v45-search")?.value || "").trim();
+    const extra = {
+      kpi: stockDetail.kpi, limit: "100", offset: String(stockDetail.offset),
+      orden: el("cc-v45-order")?.value || "fecha_desc",
+    };
+    if (term.length >= 2) extra.busqueda = term;
+    el("cc-detail-summary").textContent = "Cargando detalle…";
+    el("cc-detail-error")?.classList.add("hidden");
+    try {
+      const data = await fetchJson(`${base}?${buildQuery(extra)}`);
+      if (!stockDetail || stockDetail.kpi !== extra.kpi || stockDetail.offset !== Number(extra.offset)) return;
+      stockDetailData = data;
+      const cost = STOCK_COST_KEYS.has(stockDetail.kpi);
+      const shown = cost ? data : { ...data, filas: data.filas.map((row) => ({ ...row, cantidad: row.importe })) };
+      renderTabularDetail(shown, stockColumns(stockDetail.kpi), stockCardHtml, cost ? fmtMoney.format.bind(fmtMoney) : fmtNum.format.bind(fmtNum));
+      const pagination = el("cc-v45-pagination");
+      pagination?.classList.remove("hidden");
+      pagination?.classList.add("flex");
+      el("cc-v45-prev").disabled = data.offset <= 0;
+      el("cc-v45-next").disabled = data.offset + data.filas.length >= data.total_registros;
+      const start = data.total_registros ? data.offset + 1 : 0;
+      el("cc-v45-page-label").textContent = `${start}–${data.offset + data.filas.length} de ${data.total_registros}`;
+    } catch (e) {
+      const err = el("cc-detail-error");
+      err.textContent = e.message || "Error al cargar detalle de Stock.";
+      err.classList.remove("hidden");
+    }
+  }
+
+  function openStockDetail(kpi, title) {
+    if (!kpi || !(cfg.detailUrls || {}).stock_v45) return;
+    openModal(true);
+    clearDetailContent();
+    stockDetail = { kpi, offset: 0 };
+    el("cc-detail-title").textContent = `Stock · ${title || kpi}`;
+    const controls = el("cc-v45-detail-controls");
+    controls?.classList.remove("hidden");
+    controls?.classList.add("flex");
+    if (el("cc-v45-search")) el("cc-v45-search").value = "";
+    if (el("cc-v45-order")) el("cc-v45-order").value = "fecha_desc";
+    void loadStockDetail();
+  }
+
   async function loadComercialDetail() {
     if (!comercialDetail) return;
     const base = (cfg.detailUrls || {}).comercial_v45;
@@ -1759,6 +1848,27 @@
     const link = document.createElement("a");
     link.href = url;
     link.download = `ventas-v45-${comercialDetail.kpi}-${readFilters().fecha_inicio}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportStockCurrentPage() {
+    if (!stockDetailData?.filas?.length || !stockDetail) return;
+    const cols = stockColumns(stockDetail.kpi);
+    const csvCell = (value) => {
+      let cell = String(value ?? "");
+      if (/^[=+\-@]/.test(cell)) cell = `'${cell}`;
+      return `"${cell.replace(/"/g, '""')}"`;
+    };
+    const lines = [cols.map((col) => csvCell(col.label)).join(";")];
+    stockDetailData.filas.forEach((row) => {
+      lines.push(cols.map((col) => csvCell(col.key === "cantidad" ? row.importe : row[col.key])).join(";"));
+    });
+    const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `stock-v45-${stockDetail.kpi}-${readFilters().fecha_inicio}.csv`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -1994,26 +2104,33 @@
     el("cc-detail-close")?.addEventListener("click", () => openModal(false));
     el("cc-v45-search")?.addEventListener("input", () => {
       if (comercialSearchTimer) clearTimeout(comercialSearchTimer);
-      if (!comercialDetail) return;
-      comercialDetail.offset = 0;
-      comercialSearchTimer = setTimeout(() => void loadComercialDetail(), 300);
+      if (!comercialDetail && !stockDetail) return;
+      if (comercialDetail) comercialDetail.offset = 0;
+      if (stockDetail) stockDetail.offset = 0;
+      comercialSearchTimer = setTimeout(() => void (stockDetail ? loadStockDetail() : loadComercialDetail()), 300);
     });
     el("cc-v45-order")?.addEventListener("change", () => {
-      if (!comercialDetail) return;
-      comercialDetail.offset = 0;
-      void loadComercialDetail();
+      if (!comercialDetail && !stockDetail) return;
+      if (comercialDetail) comercialDetail.offset = 0;
+      if (stockDetail) stockDetail.offset = 0;
+      void (stockDetail ? loadStockDetail() : loadComercialDetail());
     });
     el("cc-v45-prev")?.addEventListener("click", () => {
-      if (!comercialDetail) return;
-      comercialDetail.offset = Math.max(0, comercialDetail.offset - 100);
-      void loadComercialDetail();
+      const state = stockDetail || comercialDetail;
+      if (!state) return;
+      state.offset = Math.max(0, state.offset - 100);
+      void (stockDetail ? loadStockDetail() : loadComercialDetail());
     });
     el("cc-v45-next")?.addEventListener("click", () => {
-      if (!comercialDetail) return;
-      comercialDetail.offset += 100;
-      void loadComercialDetail();
+      const state = stockDetail || comercialDetail;
+      if (!state) return;
+      state.offset += 100;
+      void (stockDetail ? loadStockDetail() : loadComercialDetail());
     });
-    el("cc-v45-export")?.addEventListener("click", exportComercialCurrentPage);
+    el("cc-v45-export")?.addEventListener("click", () => {
+      if (stockDetail) exportStockCurrentPage();
+      else exportComercialCurrentPage();
+    });
     el("cc-detail-modal")?.addEventListener("click", (ev) => {
       if (ev.target === el("cc-detail-modal")) openModal(false);
     });
