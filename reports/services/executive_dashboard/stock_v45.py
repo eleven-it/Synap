@@ -230,13 +230,13 @@ def _movement_series(cursor, filters: DashboardFilters, presentation: str) -> di
     days = (filters.fecha_fin - filters.fecha_inicio).days + 1
     if days <= 45:
         bucket = "dia"
-        expr = "DATE_FORMAT(s.Fecha,'%Y-%m-%d')"
+        expr = "DATE_FORMAT(s.Fecha,'%%Y-%%m-%%d')"
     elif days <= 200:
         bucket = "semana"
-        expr = "DATE_FORMAT(DATE_SUB(s.Fecha,INTERVAL WEEKDAY(s.Fecha) DAY),'%Y-%m-%d')"
+        expr = "DATE_FORMAT(DATE_SUB(s.Fecha,INTERVAL WEEKDAY(s.Fecha) DAY),'%%Y-%%m-%%d')"
     else:
         bucket = "mes"
-        expr = "DATE_FORMAT(s.Fecha,'%Y-%m-01')"
+        expr = "DATE_FORMAT(s.Fecha,'%%Y-%%m-01')"
     factor, _ = _factors(presentation=presentation, stock_alias="s")
     where, params = _movement_filter(filters, period=True)
     cursor.execute(
