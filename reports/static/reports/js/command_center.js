@@ -1616,7 +1616,20 @@
     ];
     const max = Math.max(1, ...metrics.map(([, key]) => Math.abs(Number(k[key] || 0))));
     const bars = metrics.map(([label, key, color]) => `<div class="grid grid-cols-[8.5rem_1fr] items-center gap-2 py-1 text-xs"><span>${label}</span><div class="h-3 rounded bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded ${color}" style="width:${Math.abs(Number(k[key] || 0)) / max * 100}%"></div></div><strong class="col-span-2 text-right tabular-nums">${fmtMoney.format(k[key] || 0)}</strong></div>`).join("");
+    const fiscalRows = (areaData.serie_mensual?.filas || []).map((row) =>
+      `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${escHtml(row.fecha)}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_credito)}</td><td class="p-2 text-right font-semibold tabular-nums">${fmtMoney.format(row.iva_posicion)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_credito)}</td></tr>`
+    ).join("");
+    const previousRows = (areaData.serie_mensual_comparacion?.filas || []).map((row) =>
+      `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${escHtml(row.fecha)}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_credito)}</td><td class="p-2 text-right font-semibold tabular-nums">${fmtMoney.format(row.iva_posicion)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_credito)}</td></tr>`
+    ).join("");
+    const fiscalTable = (title, rows) => `<section class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${escHtml(title)}</h3><table class="w-full min-w-[42rem] text-xs"><thead><tr><th class="p-2 text-left">Mes</th><th class="p-2 text-right">IVA débito</th><th class="p-2 text-right">IVA crédito</th><th class="p-2 text-right">Posición IVA</th><th class="p-2 text-right">IIBB ventas</th><th class="p-2 text-right">IIBB crédito</th></tr></thead><tbody>${rows || '<tr><td class="p-2" colspan="6">Sin movimientos en el período.</td></tr>'}</tbody></table></section>`;
     return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición de la posición IVA</h3><p class="mb-2 text-xs text-slate-500">Débito + percepciones de ventas − crédito − percepciones de compras − retenciones</p>${bars}</section>`
+      + fiscalTable("Evolución fiscal mensual · período actual", fiscalRows)
+      + fiscalTable(`Evolución fiscal mensual · ${comparisonPeriodLabel(areaData)}`, previousRows)
+      + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iva_debito", "IVA débito mensual")
+      + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iva_credito", "IVA crédito mensual")
+      + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iibb_debito", "IIBB ventas mensual")
+      + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iibb_credito", "IIBB crédito mensual")
       + renderV45ComparisonTable(areaData, [
         ["Posición IVA", "posicion_iva"], ["IVA débito", "iva_debito"],
         ["IVA crédito", "iva_credito"], ["Percep. IVA ventas", "percep_iva_ventas"],

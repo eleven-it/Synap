@@ -27,7 +27,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Abastecimiento — Stock | 14 | `tablero_abastecimiento_stock` | Resumen y detalle paginado de 14 KPI, tres presentaciones, comparación de movimientos y gráficos en rama de trabajo. Falta prueba Django, revisión visual móvil y revisión del PR. |
 | Análisis financiero | 15 | `tablero_gestion_financiera` | 15 KPI, aging, flujo, comparación y seis aperturas de movimientos/cartera; faltan validación Django/web y contraste visual con ERP. |
 | Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI, serie Debe/Haber, comparación de períodos y aperturas de asientos, impuestos, períodos y ejercicios; falta validación Django/web. |
-| Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI, composición y comparación de IVA y siete aperturas documentales, incluida Posición IVA; faltan series mensuales. |
+| Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI, composición, comparación, series mensuales de IVA/IIBB y siete aperturas documentales, incluida Posición IVA; falta prueba web. |
 | Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI, dos series con comparación, y Diario, Mayor, Balance y Resultados paginados en rama de trabajo; falta prueba web. |
 | Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI, comparación de estados y aperturas de rutas y comprobantes; faltan dimensiones adicionales y contraste con rutas recientes. |
 | Análisis de gastos | 15 | `tablero_gestion_financiera` en V45 | 15 KPI, selector de fuente, documentos y siete agrupaciones en rama de trabajo; faltan serie comparativa y prueba web. |
@@ -77,11 +77,11 @@ En Best Sox 01–12/10/2026, `cont_asiento` devuelve 253 asientos, Debe y Haber 
 
 ## Conciliación inicial de Impuestos y posiciones fiscales
 
-En Best Sox 01–12/10/2026, el débito IVA fue $35.953.653,57, el crédito fiscal $30.531.853,91 y la posición $5.421.799,66. Se contaron 91 comprobantes de Libro IVA ventas y 38 de compras; las notas de crédito tienen signo negativo y compras usa `FechaRegistro`, `IVA1+IVA2+IVA3+sobretasa_iva` y excluye proveedores profesionales, como V45. El test con PV 2 y sucursal 1 devolvió una posición de $5.226.799,41 y no expuso las determinaciones fiscales generales. Las consultas se ejecutaron contra MySQL 5.7 aislado. Falta la serie fiscal temporal y la prueba integrada web.
+En Best Sox 01–12/10/2026, el débito IVA fue $35.953.653,57, el crédito fiscal $30.531.853,91 y la posición $5.421.799,66. Se contaron 91 comprobantes de Libro IVA ventas y 38 de compras; las notas de crédito tienen signo negativo y compras usa `FechaRegistro`, `IVA1+IVA2+IVA3+sobretasa_iva` y excluye proveedores profesionales, como V45. El test con PV 2 y sucursal 1 devolvió una posición de $5.226.799,41 y no expuso las determinaciones fiscales generales. Las series mensuales IVA/IIBB se conciliaron con los componentes KPI y sus fuentes V45 en MySQL 5.7 aislado. Falta prueba integrada web.
 
 Las aperturas fiscales de ventas y compras suman respectivamente $35.953.653,57 de débito y $30.531.853,91 de crédito, iguales a sus KPI. En el rango hay 17 retenciones de distintos impuestos; su total bruto no equivale a los subtotales de IVA o IIBB, que requieren filtrar por impuesto. También se verificaron percepciones, determinaciones y pagos, todos sin registros en este rango. Los documentos generales de determinación se ocultan cuando se aplica filtro territorial. La apertura unificada de Posición IVA concilia 129 movimientos firmados por $5.421.799,66 con el KPI. Sigue pendiente el contraste visual de los libros.
 
-La comparación personalizada 01–12/09/2026 se ejecutó sobre las mismas consultas: Posición IVA de -$16.676.783,76 frente a $5.421.799,66 en octubre. Se informa el rango elegido y la variación de cada KPI. La vista de composición todavía no muestra una serie fiscal mensual.
+La comparación personalizada 01–12/09/2026 se ejecutó sobre las mismas consultas: Posición IVA de -$16.676.783,76 frente a $5.421.799,66 en octubre. Se informa el rango elegido y la variación de cada KPI. La vista de composición presenta ambas series fiscales mensuales y su tabla de valores.
 
 ## Conciliación inicial de Libros y estados
 

@@ -171,6 +171,71 @@ def _metrics(cursor, filters: DashboardFilters) -> dict:
     }
 
 
+def _monthly_series(cursor, filters: DashboardFilters) -> dict:
+    """Series IVA/IIBB de V45, con los mismos documentos y filtros que los KPI."""
+    # El import local evita un ciclo: el detalle utiliza los tipos fiscales definidos aquí.
+    from .impositivo_v45_detail import _source
+
+    parts = []
+    params = []
+    for view, debit_iva, credit_iva, debit_iibb, credit_iibb, condition in (
+        ("ventas", "q.importe", "0", "q.iibb", "0", ""),
+        (
+            "percepciones", "q.importe", "0", "0", "0",
+            " WHERE q.impuesto=2",
+        ),
+        (
+            "percepciones", "0", "0", "q.importe", "0",
+            " WHERE q.impuesto IN (1,3)",
+        ),
+        (
+            "compras", "0", "q.importe+q.percepcion_iva",
+            "0", "q.percepcion_iibb", "",
+        ),
+        (
+            "retenciones", "0", "q.importe", "0", "0",
+            " WHERE q.impuesto=1",
+        ),
+        (
+            "retenciones", "0", "0", "0", "q.importe",
+            " WHERE q.impuesto IN (4,8,9,10,11,12,13)",
+        ),
+    ):
+        source, source_params = _source(filters, view)
+        parts.append(
+            "SELECT DATE_FORMAT(q.fecha,'%%Y-%%m-01') mes,"
+            f"{debit_iva} iva_debito,{credit_iva} iva_credito,"
+            f"{debit_iibb} iibb_debito,{credit_iibb} iibb_credito "
+            f"FROM ({source}) q{condition}"
+        )
+        params.extend(source_params)
+    cursor.execute(
+        "SELECT x.mes,COALESCE(SUM(x.iva_debito),0),"
+        "COALESCE(SUM(x.iva_credito),0),"
+        "COALESCE(SUM(x.iibb_debito),0),"
+        "COALESCE(SUM(x.iibb_credito),0) FROM ("
+        + " UNION ALL ".join(parts)
+        + ") x GROUP BY x.mes ORDER BY x.mes",
+        params,
+    )
+    rows = []
+    for month, iva_debit, iva_credit, iibb_debit, iibb_credit in cursor.fetchall() or []:
+        iva_debit = round_money(iva_debit)
+        iva_credit = round_money(iva_credit)
+        iibb_debit = round_money(iibb_debit)
+        iibb_credit = round_money(iibb_credit)
+        rows.append({
+            "fecha": str(month),
+            "iva_debito": iva_debit,
+            "iva_credito": iva_credit,
+            "iva_posicion": round_money(iva_debit - iva_credit),
+            "iibb_debito": iibb_debit,
+            "iibb_credito": iibb_credit,
+            "iibb_posicion": round_money(iibb_debit - iibb_credit),
+        })
+    return {"agrupacion": "mes", "filas": rows}
+
+
 def fetch_impositivo_v45(cursor, filters: DashboardFilters) -> dict:
     required = ("cuentacliente", "cuentaproveedor", "percep_cli", "retenciones", "impuesto_detalle", "otro_egreso")
     missing = [table for table in required if not _table_exists(cursor, table)]
@@ -179,8 +244,12 @@ def fetch_impositivo_v45(cursor, filters: DashboardFilters) -> dict:
     kpis = _metrics(cursor, filters)
     prior = comparison_filters(filters)
     previous = _metrics(cursor, prior)
+    monthly = _monthly_series(cursor, filters)
+    monthly_previous = _monthly_series(cursor, prior)
     return {
         "disponible": True, "kpis": kpis,
+        "serie_mensual": monthly,
+        "serie_mensual_comparacion": monthly_previous,
         "comparacion": {
             "periodo": {"inicio": prior.fecha_inicio_str, "fin": prior.fecha_fin_str},
             "kpis": previous,
