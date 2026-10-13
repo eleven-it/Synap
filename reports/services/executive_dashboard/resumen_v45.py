@@ -149,14 +149,14 @@ def _sales_account_source(filters: DashboardFilters, *, gross: bool, has_rv: boo
     base = (
         "CASE " + summary_case +
         "WHEN COALESCE(cc.tpv_importe_ctacte,0)<>0 THEN ABS(cc.tpv_importe_ctacte) "
-        f"WHEN UPPER(TRIM(COALESCE(cc.CondVenta,''))) LIKE 'CTA/CTE%' THEN {total} "
+        f"WHEN UPPER(TRIM(COALESCE(cc.CondVenta,''))) LIKE 'CTA/CTE%%' THEN {total} "
         f"WHEN cc.TipoComprobante IN {credit} AND UPPER(TRIM(COALESCE(cc.tipo_devol_nc,'')))='CREDITO' THEN {total} "
         f"WHEN cc.TipoComprobante IN {debit} AND COALESCE(cc.NroFacturaMov,0)=0 THEN {total} "
         f"WHEN cc.TipoComprobante IN {adjustment} AND (COALESCE(ccv1.tpv_importe_ctacte,0)<>0 "
-        "OR UPPER(TRIM(COALESCE(ccv1.CondVenta,''))) LIKE 'CTA/CTE%') "
+        "OR UPPER(TRIM(COALESCE(ccv1.CondVenta,''))) LIKE 'CTA/CTE%%') "
         f"THEN CASE WHEN COALESCE(ccv1.tpv_importe_ctacte,0)<>0 THEN LEAST({total},ABS(ccv1.tpv_importe_ctacte)) ELSE {total} END "
         f"WHEN cc.TipoComprobante IN {adjustment} AND (COALESCE(ccv2.tpv_importe_ctacte,0)<>0 "
-        "OR UPPER(TRIM(COALESCE(ccv2.CondVenta,''))) LIKE 'CTA/CTE%') "
+        "OR UPPER(TRIM(COALESCE(ccv2.CondVenta,''))) LIKE 'CTA/CTE%%') "
         f"THEN CASE WHEN COALESCE(ccv2.tpv_importe_ctacte,0)<>0 THEN LEAST({total},ABS(ccv2.tpv_importe_ctacte)) ELSE {total} END "
         "ELSE 0 END"
     )
@@ -192,11 +192,11 @@ def _purchase_account_source(filters: DashboardFilters) -> tuple[str, list]:
         "ELSE ABS(COALESCE(cp.ImporteCompra,0)) END"
     )
     base = (
-        f"CASE WHEN UPPER(TRIM(COALESCE(cp.CondCompra,''))) LIKE 'CTA/CTE%' THEN {total} "
+        f"CASE WHEN UPPER(TRIM(COALESCE(cp.CondCompra,''))) LIKE 'CTA/CTE%%' THEN {total} "
         f"WHEN cp.TipoComprobante='NC' AND UPPER(TRIM(COALESCE(cp.tipo_devol_nc,'')))='CREDITO' THEN {total} "
         f"WHEN cp.TipoComprobante='ND' AND COALESCE(cp.NroFacturaMov,0)=0 THEN {total} "
-        f"WHEN cp.TipoComprobante IN ('NC','ND') AND UPPER(TRIM(COALESCE(cpv1.CondCompra,''))) LIKE 'CTA/CTE%' THEN {total} "
-        f"WHEN cp.TipoComprobante IN ('NC','ND') AND UPPER(TRIM(COALESCE(cpv2.CondCompra,''))) LIKE 'CTA/CTE%' THEN {total} "
+        f"WHEN cp.TipoComprobante IN ('NC','ND') AND UPPER(TRIM(COALESCE(cpv1.CondCompra,''))) LIKE 'CTA/CTE%%' THEN {total} "
+        f"WHEN cp.TipoComprobante IN ('NC','ND') AND UPPER(TRIM(COALESCE(cpv2.CondCompra,''))) LIKE 'CTA/CTE%%' THEN {total} "
         "ELSE 0 END"
     )
     value = (

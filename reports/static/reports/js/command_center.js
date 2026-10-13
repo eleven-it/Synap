@@ -473,7 +473,7 @@
 
   function readFilters() {
     const t = todayIso();
-    const fi = el("cc-fecha-inicio")?.value || t;
+    const fi = el("cc-fecha-inicio")?.value || `${t.slice(0, 7)}-01`;
     const ff = el("cc-fecha-fin")?.value || t;
     return {
       fecha_inicio: fi,
@@ -702,18 +702,8 @@
 
   function applyPeriodFromStorage() {
     const saved = loadPersistedFilters();
-    if (!saved) return false;
-    const fiEl = el("cc-fecha-inicio");
-    const ffEl = el("cc-fecha-fin");
-    let applied = false;
-    if (fiEl && saved.fecha_inicio && ISO_DATE.test(saved.fecha_inicio)) {
-      fiEl.value = saved.fecha_inicio;
-      applied = true;
-    }
-    if (ffEl && saved.fecha_fin && ISO_DATE.test(saved.fecha_fin)) {
-      ffEl.value = saved.fecha_fin;
-      applied = true;
-    }
+    if (!saved) return;
+    // La selección territorial se conserva; cada visita nueva empieza en el mes actual.
     if (saved.comparacion_inicio && el("cc-comparacion-inicio")) el("cc-comparacion-inicio").value = saved.comparacion_inicio;
     if (saved.comparacion_fin && el("cc-comparacion-fin")) el("cc-comparacion-fin").value = saved.comparacion_fin;
     if (saved.comparacion_inicio || saved.comparacion_fin) el("cc-custom-comparison")?.setAttribute("open", "");
@@ -724,7 +714,6 @@
         depositos: saved.depositos || [],
       };
     }
-    return applied;
   }
 
   let waitModalLocks = 0;
