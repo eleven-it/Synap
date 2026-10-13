@@ -61,6 +61,8 @@
   let comercialDetailData = null;
   let stockDetail = null;
   let stockDetailData = null;
+  let genericV45Detail = null;
+  let genericV45DetailData = null;
   let comercialSearchTimer = null;
 
   function resetDetailPanelsLayout() {
@@ -236,6 +238,9 @@
     comercialDetailData = null;
     stockDetail = null;
     stockDetailData = null;
+    genericV45Detail = null;
+    genericV45DetailData = null;
+    el("cc-v45-order")?.classList.remove("hidden");
     if (existenciasAbort) {
       existenciasAbort.abort();
       existenciasAbort = null;
@@ -354,7 +359,7 @@
       keys
         .map(
           (k) =>
-            `<th scope="col" class="px-2 py-2 text-[10px] font-semibold uppercase tracking-wide">${k.replace(/_/g, " ")}</th>`,
+            `<th scope="col" class="px-2 py-2 text-[10px] font-semibold uppercase tracking-wide">${escHtml(k.replace(/_/g, " "))}</th>`,
         )
         .join("") +
       "</tr>";
@@ -375,7 +380,7 @@
               const cls = wrap
                 ? "max-w-[12rem] break-words px-2 py-1.5 text-sm"
                 : "whitespace-nowrap px-2 py-1.5 text-sm tabular-nums";
-              return `<td class="${cls}">${v ?? ""}</td>`;
+              return `<td class="${cls}">${escHtml(v ?? "")}</td>`;
             })
             .join("") +
           "</tr>"
@@ -1266,7 +1271,12 @@
         ];
       },
       afterMetrics: (a) => renderLibrosV45Charts(a),
-      details: [],
+      details: [
+        { label: "Libro Diario", urlKey: "libros_v45", vista: "diario" },
+        { label: "Libro Mayor", urlKey: "libros_v45", vista: "mayor" },
+        { label: "Balance", urlKey: "libros_v45", vista: "balance" },
+        { label: "Resultados", urlKey: "libros_v45", vista: "resultados" },
+      ],
     },
     {
       key: "logistica",
@@ -1868,7 +1878,7 @@
       .map(
         (d) => `
       <button type="button" class="cc-detail-btn inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:w-auto sm:justify-start sm:py-1"
-        data-url-key="${d.urlKey}" data-title="${def.title}: ${d.label}">
+        data-url-key="${d.urlKey}" data-vista="${d.vista || ""}" data-title="${def.title}: ${d.label}">
         ${d.label}
       </button>`
       )
@@ -1950,7 +1960,7 @@
   function bindDetailButtons(root) {
     const scope = root || el("cc-areas-grid");
     scope?.querySelectorAll(".cc-detail-btn").forEach((btn) => {
-      btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title));
+      btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title, btn.dataset.vista));
     });
     scope?.querySelectorAll(".cc-v45-kpi-detail").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -2428,7 +2438,58 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  async function openDetail(urlKey, title) {
+  async function loadGenericV45Detail() {
+    const state = genericV45Detail;
+    if (!state) return;
+    const term = (el("cc-v45-search")?.value || "").trim();
+    if (term.length === 1) {
+      el("cc-detail-summary").textContent = "Escribí al menos 2 caracteres para buscar.";
+      return;
+    }
+    const extra = { vista: state.vista, limit: "100", offset: String(state.offset) };
+    if (term.length >= 2) extra.busqueda = term;
+    el("cc-detail-summary").textContent = "Cargando detalle…";
+    el("cc-detail-error")?.classList.add("hidden");
+    try {
+      const data = await fetchJson(`${state.base}?${buildQuery(extra)}`);
+      if (genericV45Detail !== state || state.offset !== Number(extra.offset)) return;
+      genericV45DetailData = data;
+      renderGenericDetailTable(data);
+      const pagination = el("cc-v45-pagination");
+      pagination?.classList.remove("hidden");
+      pagination?.classList.add("flex");
+      el("cc-v45-prev").disabled = data.offset <= 0;
+      el("cc-v45-next").disabled = data.offset + data.filas.length >= data.total_registros;
+      const start = data.total_registros ? data.offset + 1 : 0;
+      el("cc-v45-page-label").textContent = `${start}–${data.offset + data.filas.length} de ${data.total_registros}`;
+    } catch (e) {
+      const err = el("cc-detail-error");
+      err.textContent = e.message || "Error al cargar detalle.";
+      err.classList.remove("hidden");
+    }
+  }
+
+  function exportGenericV45CurrentPage() {
+    if (!genericV45DetailData?.filas?.length || !genericV45Detail) return;
+    const rows = genericV45DetailData.filas;
+    const keys = Object.keys(rows[0]);
+    const csvCell = (value) => {
+      let cell = String(value ?? "");
+      if (/^[=+\-@]/.test(cell)) cell = `'${cell}`;
+      return `"${cell.replace(/"/g, '""')}"`;
+    };
+    const lines = [keys.map(csvCell).join(";")];
+    rows.forEach((row) => lines.push(keys.map((key) => csvCell(row[key])).join(";")));
+    const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${genericV45Detail.vista}-${readFilters().fecha_inicio}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function openDetail(urlKey, title, vista = "") {
     const base = (cfg.detailUrls || {})[urlKey];
     if (!base) return;
     const defDetail = visibleAreaDefs()
@@ -2442,6 +2503,16 @@
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
+    if (urlKey === "libros_v45" && vista) {
+      genericV45Detail = { base, vista, offset: 0 };
+      const controls = el("cc-v45-detail-controls");
+      controls?.classList.remove("hidden");
+      controls?.classList.add("flex");
+      if (el("cc-v45-search")) el("cc-v45-search").value = "";
+      el("cc-v45-order")?.classList.add("hidden");
+      void loadGenericV45Detail();
+      return;
+    }
     setExistenciasSearchVisible(urlKey === "existencias");
     if (urlKey === "existencias") {
       bindExistenciasSearch();
@@ -2659,10 +2730,11 @@
     el("cc-detail-close")?.addEventListener("click", () => openModal(false));
     el("cc-v45-search")?.addEventListener("input", () => {
       if (comercialSearchTimer) clearTimeout(comercialSearchTimer);
-      if (!comercialDetail && !stockDetail) return;
+      if (!comercialDetail && !stockDetail && !genericV45Detail) return;
       if (comercialDetail) comercialDetail.offset = 0;
       if (stockDetail) stockDetail.offset = 0;
-      comercialSearchTimer = setTimeout(() => void (stockDetail ? loadStockDetail() : loadComercialDetail()), 300);
+      if (genericV45Detail) genericV45Detail.offset = 0;
+      comercialSearchTimer = setTimeout(() => void (genericV45Detail ? loadGenericV45Detail() : stockDetail ? loadStockDetail() : loadComercialDetail()), 300);
     });
     el("cc-v45-order")?.addEventListener("change", () => {
       if (!comercialDetail && !stockDetail) return;
@@ -2671,19 +2743,20 @@
       void (stockDetail ? loadStockDetail() : loadComercialDetail());
     });
     el("cc-v45-prev")?.addEventListener("click", () => {
-      const state = stockDetail || comercialDetail;
+      const state = stockDetail || comercialDetail || genericV45Detail;
       if (!state) return;
       state.offset = Math.max(0, state.offset - 100);
-      void (stockDetail ? loadStockDetail() : loadComercialDetail());
+      void (genericV45Detail ? loadGenericV45Detail() : stockDetail ? loadStockDetail() : loadComercialDetail());
     });
     el("cc-v45-next")?.addEventListener("click", () => {
-      const state = stockDetail || comercialDetail;
+      const state = stockDetail || comercialDetail || genericV45Detail;
       if (!state) return;
       state.offset += 100;
-      void (stockDetail ? loadStockDetail() : loadComercialDetail());
+      void (genericV45Detail ? loadGenericV45Detail() : stockDetail ? loadStockDetail() : loadComercialDetail());
     });
     el("cc-v45-export")?.addEventListener("click", () => {
       if (stockDetail) exportStockCurrentPage();
+      else if (genericV45Detail) exportGenericV45CurrentPage();
       else exportComercialCurrentPage();
     });
     el("cc-detail-modal")?.addEventListener("click", (ev) => {

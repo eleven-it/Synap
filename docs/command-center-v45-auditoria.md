@@ -28,7 +28,7 @@ Los conteos son del anexo histórico R6.8.65; deben cotejarse con V45 antes de d
 | Análisis financiero | 15 | `tablero_gestion_financiera` | 15 KPI, aging, flujo y comparación en rama de trabajo; faltan detalles, validación Django/web y contraste visual con ERP. |
 | Gestión contable | 14 | `tablero_gestion_contable` | 14 KPI y serie Debe/Haber en rama de trabajo; faltan detalles, comparación y validación Django/web. |
 | Impuestos — Posiciones fiscales | 14 | `tablero_impuesto_posicion_fiscal` | 14 KPI fiscales y composición de IVA en rama de trabajo; faltan libros y detalles, series mensuales y comparación. |
-| Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI y dos series contables en rama de trabajo; faltan las cuatro vistas documentales, comparación y prueba web. |
+| Contabilidad — Libros y estados | 14 | `tablero_contabilidad_libros_estados` | 14 KPI, dos series y Diario, Mayor, Balance y Resultados paginados en rama de trabajo; faltan comparación y prueba web. |
 | Logística — Hojas de ruta | 14 | `tablero_logistica_hoja_ruta` | 14 KPI y comparación de estados en rama de trabajo; faltan ranking, detalles y contraste con rutas recientes. |
 | Análisis de gastos | 15 | `tablero_gestion_financiera` en V45 | 15 KPI y selector de fuente en rama de trabajo; faltan serie temporal, ranking, documentos y prueba web. |
 
@@ -81,7 +81,9 @@ En Best Sox 01–12/10/2026, el débito IVA fue $35.953.653,57, el crédito fisc
 
 ## Conciliación inicial de Libros y estados
 
-En Best Sox 01–12/10/2026, los 253 asientos suman $1.008.193.355,56 tanto en Debe como en Haber; 37 cuentas tienen movimiento. El Mayor tiene saldos deudor y acreedor de $448.845.652,63; ingresos $182.597.266,77, egresos $183.393.621,01, resultado -$796.354,24, activo $167.906.532,47 y pasivo $168.702.886,71. Estas cifras coinciden con la captura V45 de Libros y estados. Se validaron las series diarias de Diario y Resultados y una selección de sucursal sobre el asiento en MySQL 5.7 aislado. Todavía faltan Libro Diario, Mayor, Balance y Estado de resultados a nivel documento, comparación y prueba de interfaz.
+En Best Sox 01–12/10/2026, los 253 asientos suman $1.008.193.355,56 tanto en Debe como en Haber; 37 cuentas tienen movimiento. El Mayor tiene saldos deudor y acreedor de $448.845.652,63; ingresos $182.597.266,77, egresos $183.393.621,01, resultado -$796.354,24, activo $167.906.532,47 y pasivo $168.702.886,71. Estas cifras coinciden con la captura V45 de Libros y estados. Se validaron las series diarias de Diario y Resultados y una selección de sucursal sobre el asiento en MySQL 5.7 aislado. Todavía faltan la comparación de períodos y la prueba de interfaz.
+
+Las cuatro vistas documentales ya ejecutan consultas paginadas de solo lectura: Diario y Mayor 684 renglones cada uno, Balance 37 cuentas y Resultados 16. La búsqueda por cuenta y la segunda página del Mayor se probaron en la misma copia; el detalle hereda el permiso del tablero y el filtro histórico de sucursal/grupo.
 
 ## Conciliación inicial de Logística
 
