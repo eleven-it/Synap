@@ -44,6 +44,7 @@ from .services.executive_dashboard.preparacion_v45 import fetch_preparacion_v45
 from .services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
 from .services.executive_dashboard.compras_v45 import fetch_compras_v45
 from .services.executive_dashboard.financiero_v45 import fetch_financiero_v45
+from .services.executive_dashboard.contable_v45 import fetch_contable_v45
 from .services.executive_dashboard.banco_metrics import fetch_tesoreria_banco_resumen
 from .services.executive_dashboard.tesoreria_metrics import (
     fetch_tesoreria_resumen,
@@ -482,6 +483,35 @@ class ExecutiveDashboardFinancieroV45APIView(ExecutiveDashboardMixin, APIView):
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
                 payload = fetch_financiero_v45(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
+        return Response(payload)
+
+
+class ExecutiveDashboardGestionContableV45APIView(ExecutiveDashboardMixin, APIView):
+    """Gestión contable V45, con filtro histórico del asiento."""
+
+    def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("gestion_contable")
+        if disabled:
+            return disabled
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        group_raw = request.query_params.get("grupo_contable", "")
+        try:
+            group = int(group_raw) if group_raw else None
+            if group is not None and group <= 0:
+                raise ValueError
+        except ValueError:
+            return Response({"detail": "Grupo contable inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_contable_v45(cursor, filters, grupo_contable=group)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:

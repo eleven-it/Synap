@@ -563,6 +563,9 @@
       q.set("presentacion", el("cc-stock-presentacion")?.value || "unidad");
       if (el("cc-stock-comparar")?.checked) q.set("comparar", "anterior");
     }
+    if (selectedAreaKey === "gestion_contable" && el("cc-grupo-contable")?.value) {
+      q.set("grupo_contable", el("cc-grupo-contable").value);
+    }
     return q.toString();
   }
 
@@ -708,6 +711,7 @@
       inventario: "inventario",
       compras: "compras",
       financiero: "análisis financiero",
+      gestion_contable: "gestión contable",
       manufactura: "manufactura",
       cruzados: "demanda pendiente",
       tesoreria: "tesorería",
@@ -871,6 +875,7 @@
     const inv = a.inventario || {};
     const comp = a.compras || {};
     const fin = a.financiero || {};
+    const account = a.gestion_contable || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
@@ -902,6 +907,10 @@
     if (isAreaVisible("financiero")) {
       cards.push(kpiCard("Flujo neto", fin.disponible === false ? "No disponible" : fmtMoney.format(fin.kpis?.flujo_neto ?? 0), "teal"));
       cards.push(kpiCard("Vencido a cobrar", fin.disponible === false ? "No disponible" : fmtMoney.format(fin.kpis?.vencido_cobrar ?? 0), "amber"));
+    }
+    if (isAreaVisible("gestion_contable")) {
+      cards.push(kpiCard("Asientos", account.disponible === false ? "No disponible" : fmtNum.format(account.kpis?.asientos ?? 0), "indigo"));
+      cards.push(kpiCard("Diferencia Debe/Haber", account.disponible === false ? "No disponible" : fmtMoney.format(account.kpis?.diferencia ?? 0), "emerald"));
     }
     if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
@@ -944,6 +953,10 @@
     if (isAreaVisible("financiero")) {
       loadingCards.push(kpiCardLoading("Flujo neto", "emerald"));
       loadingCards.push(kpiCardLoading("Vencido a cobrar", "amber"));
+    }
+    if (isAreaVisible("gestion_contable")) {
+      loadingCards.push(kpiCardLoading("Asientos", "indigo"));
+      loadingCards.push(kpiCardLoading("Diferencia Debe/Haber", "emerald"));
     }
     if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
@@ -1137,6 +1150,33 @@
       details: [],
     },
     {
+      key: "gestion_contable",
+      title: "Gestión contable (V45)",
+      icon: "account_balance_wallet",
+      color: "purple",
+      metrics: (a) => {
+        const k = a.kpis || {};
+        const money = (key) => k[key] == null ? "No disponible" : fmtMoney.format(k[key]);
+        const count = (key) => k[key] == null ? "No disponible" : fmtNum.format(k[key]);
+        return [
+          ["Asientos", count("asientos")], ["Total Debe", money("total_debe")],
+          ["Total Haber", money("total_haber")], ["Diferencia", money("diferencia")],
+          ["Desbalanceados", count("desbalanceados")],
+          ["Asientos manuales", count("manuales")],
+          ["Asientos de proceso", count("proceso")],
+          ["Resultado contable", money("resultado_contable")],
+          ["Impuestos determinados", money("impuestos_determinados")],
+          ["Impuestos a pagar", money("impuestos_pagar")],
+          ["Saldos a favor", money("impuestos_favor")],
+          ["Impuestos vencidos", money("impuestos_vencidos")],
+          ["Períodos abiertos", count("periodos_abiertos")],
+          ["Ejercicios abiertos", count("ejercicios_abiertos")],
+        ];
+      },
+      afterMetrics: (a) => renderContableV45Charts(a),
+      details: [],
+    },
+    {
       key: "manufactura",
       title: "Manufactura",
       icon: "precision_manufacturing",
@@ -1237,6 +1277,35 @@
       details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
+
+  function renderContableV45Charts(areaData) {
+    const rows = (areaData.serie_asientos?.filas || []).slice(-30);
+    const maxValue = Math.max(1, ...rows.flatMap((row) => [Number(row.debe || 0), Number(row.haber || 0)]));
+    const step = rows.length ? 304 / rows.length : 304;
+    const width = Math.max(1, step / 2 - 1);
+    const bars = rows.map((row, index) => {
+      const debit = Math.max(0, Number(row.debe || 0)) / maxValue * 83;
+      const credit = Math.max(0, Number(row.haber || 0)) / maxValue * 83;
+      const x = 8 + index * step;
+      return `<rect x="${x.toFixed(1)}" y="${(96 - debit).toFixed(1)}" width="${width.toFixed(1)}" height="${debit.toFixed(1)}" fill="#7c3aed" />
+        <rect x="${(x + width).toFixed(1)}" y="${(96 - credit).toFixed(1)}" width="${width.toFixed(1)}" height="${credit.toFixed(1)}" fill="#14b8a6" />`;
+    }).join("");
+    const tableRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="px-2 py-1.5 text-left">${escHtml(row.fecha)}</th><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.debe)}</td><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.haber)}</td></tr>`).join("");
+    const k = areaData.kpis || {};
+    const tax = [
+      ["Determinados", "impuestos_determinados"],
+      ["A pagar", "impuestos_pagar"],
+      ["A favor", "impuestos_favor"],
+      ["Vencidos", "impuestos_vencidos"],
+    ];
+    const taxMax = Math.max(1, ...tax.map(([, key]) => Number(k[key] || 0)));
+    const taxRows = tax.map(([label, key]) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800"><p class="text-[11px]">${label}</p><div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-amber-500" style="width:${Math.max(0, Number(k[key] || 0)) / taxMax * 100}%"></div></div><p class="mt-1 text-right text-xs font-semibold tabular-nums">${k[key] == null ? "N/D" : fmtMoney.format(k[key])}</p></div>`).join("");
+    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
+      <div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Libro Diario · Debe y Haber</h3><svg viewBox="0 0 320 102" role="img" aria-label="Debe y Haber por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg><p class="text-[11px] text-slate-500">● Violeta: Debe · ● Turquesa: Haber</p>
+        <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Debe</th><th class="px-2 py-2 text-right">Haber</th></tr></thead><tbody>${tableRows}</tbody></table></div></details>
+      </div><div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Situación fiscal · alcance general</h3>${taxRows}</div>
+    </div><p class="mt-2 text-[11px] text-slate-500">Impuestos, períodos y ejercicios son generales para la empresa.</p>`;
+  }
 
   function renderFinancieroV45Charts(areaData) {
     const rows = (areaData.serie_flujo?.filas || []).slice(-30);
@@ -1811,10 +1880,14 @@
       node.classList.toggle("hidden", selectedAreaKey === "inventario");
     });
     document.querySelectorAll(".cc-pv-filter").forEach((node) => {
-      node.classList.toggle("hidden", selectedAreaKey === "compras" || selectedAreaKey === "inventario");
+      node.classList.toggle("hidden", ["compras", "inventario", "gestion_contable"].includes(selectedAreaKey));
     });
-    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero"].includes(selectedAreaKey));
-    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero"].includes(selectedAreaKey));
+    document.querySelectorAll(".cc-account-filter").forEach((node) => {
+      node.classList.toggle("hidden", selectedAreaKey !== "gestion_contable");
+      node.classList.toggle("flex", selectedAreaKey === "gestion_contable");
+    });
+    el("cc-incluir-impuestos")?.closest("label")?.classList.toggle("hidden", ["preparacion_pedidos", "compras", "financiero", "gestion_contable"].includes(selectedAreaKey));
+    el("cc-comparar-anterior")?.closest("label")?.classList.toggle("hidden", ["resumen_general", "preparacion_pedidos", "compras", "financiero", "gestion_contable"].includes(selectedAreaKey));
     document.querySelectorAll(".cc-stock-filter").forEach((node) => {
       node.classList.toggle("hidden", selectedAreaKey !== "inventario");
       node.classList.toggle("flex", selectedAreaKey === "inventario");

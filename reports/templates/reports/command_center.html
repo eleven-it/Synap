@@ -186,6 +186,12 @@
                 </select>
                 <label class="inline-flex items-center gap-1.5"><input id="cc-stock-comparar" type="checkbox" checked class="rounded border-slate-500">Comparar movimientos con período anterior</label>
               </div>
+              <div class="cc-account-filter hidden flex-col gap-1 text-xs text-slate-200">
+                <label for="cc-grupo-contable">Grupo contable (ID opcional)</label>
+                <input id="cc-grupo-contable" type="number" min="1" step="1" inputmode="numeric"
+                       class="min-h-10 w-full rounded-lg border border-slate-600 bg-slate-950/50 px-2.5 text-sm text-white sm:max-w-48"
+                       placeholder="Todos los grupos" />
+              </div>
               <div class="cc-sales-filter flex flex-wrap gap-3 text-xs text-slate-200">
                 <label class="inline-flex items-center gap-1.5"><input id="cc-incluir-impuestos" type="checkbox" class="rounded border-slate-500">Importes con impuestos</label>
                 <label class="inline-flex items-center gap-1.5"><input id="cc-comparar-anterior" type="checkbox" checked class="rounded border-slate-500">Comparar período anterior</label>

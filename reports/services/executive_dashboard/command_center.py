@@ -16,6 +16,7 @@ from .preparacion_v45 import fetch_preparacion_v45
 from .manufacturing_metrics import fetch_manufactura_resumen
 from .compras_v45 import fetch_compras_v45
 from .financiero_v45 import fetch_financiero_v45
+from .contable_v45 import fetch_contable_v45
 from .banco_metrics import fetch_tesoreria_banco_resumen
 from .tesoreria_metrics import fetch_tesoreria_resumen, list_movimientos_caja
 from .ventas_cobros_metrics import fetch_ventas_cobros_resumen, list_cobros_detalle
@@ -35,6 +36,7 @@ ENDPOINTS_RELATIVOS = {
     "inventario_existencias": "/api/reports/executive-dashboard/inventario/existencias/",
     "compras": "/api/reports/executive-dashboard/compras/resumen/",
     "financiero": "/api/reports/executive-dashboard/financiero/v45/",
+    "gestion_contable": "/api/reports/executive-dashboard/gestion-contable/v45/",
     "manufactura": "/api/reports/executive-dashboard/manufactura/resumen/",
     "cruzados": "/api/reports/executive-dashboard/cruzados/resumen/",
     "cruzados_backorder": "/api/reports/executive-dashboard/cruzados/backorder/",
@@ -56,6 +58,7 @@ ENDPOINT_AREA = {
     "inventario_existencias": "inventario",
     "compras": "compras",
     "financiero": "financiero",
+    "gestion_contable": "gestion_contable",
     "manufactura": "manufactura",
     "cruzados": "cruzados",
     "cruzados_backorder": "cruzados",
@@ -164,6 +167,15 @@ def run_command_center(
             areas["financiero"] = (
                 _area_sin_meta_interno(finance)
                 if finance.get("disponible") is not False else finance
+            )
+
+        if areas_habilitadas.get("gestion_contable"):
+            account = _safe_legacy_area(
+                "gestion_contable", fetch_contable_v45, cursor, filters,
+            )
+            areas["gestion_contable"] = (
+                _area_sin_meta_interno(account)
+                if account.get("disponible") is not False else account
             )
 
         if areas_habilitadas.get("tesoreria"):

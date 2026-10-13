@@ -348,6 +348,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "financiero": reverse(
                     "reports-api:reports-executive-dashboard-financiero-v45"
                 ),
+                "gestion_contable": reverse(
+                    "reports-api:reports-executive-dashboard-gestion-contable-v45"
+                ),
                 "cruzados": reverse(
                     "reports-api:reports-executive-dashboard-cruzados-resumen"
                 ),
