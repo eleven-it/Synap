@@ -69,6 +69,8 @@
   let genericV45Detail = null;
   let genericV45DetailData = null;
   let comercialSearchTimer = null;
+  const RESUMEN_COUNT_KPIS = new Set(["presupuestos", "pedidos", "facturas", "remitos"]);
+  const RESUMEN_GLOBAL_KPIS = new Set(["vencimiento_cobrar", "vencimiento_pagar", "efectivo_actual", "tarjetas_actual", "cheques_actual", "bancos_actual"]);
 
   function resetDetailPanelsLayout() {
     const tableWrap = el("cc-detail-table-wrap");
@@ -246,6 +248,11 @@
     genericV45Detail = null;
     genericV45DetailData = null;
     el("cc-v45-order")?.classList.remove("hidden");
+    for (const id of ["cc-v45-view", "cc-v45-group", "cc-v45-chart-mode", "cc-v45-visual"]) {
+      el(id)?.classList.add("hidden");
+    }
+    if (el("cc-v45-visual")) el("cc-v45-visual").innerHTML = "";
+    el("cc-detail-table-wrap")?.classList.remove("hidden");
     if (existenciasAbort) {
       existenciasAbort.abort();
       existenciasAbort = null;
@@ -939,6 +946,12 @@
   function renderGlobalKpis(areas) {
     const grid = el("cc-global-kpis");
     if (!grid) return;
+    if (CUSTOM_COMPARE_AREAS.has(selectedAreaKey)) {
+      grid.innerHTML = "";
+      grid.classList.add("hidden");
+      return;
+    }
+    grid.classList.remove("hidden");
     const f = readFilters();
     const singleDay = isSingleDayPeriod(f);
     const a = areas || {};
@@ -1020,6 +1033,12 @@
   function renderGlobalKpisLoading() {
     const grid = el("cc-global-kpis");
     if (!grid) return;
+    if (CUSTOM_COMPARE_AREAS.has(selectedAreaKey)) {
+      grid.innerHTML = "";
+      grid.classList.add("hidden");
+      return;
+    }
+    grid.classList.remove("hidden");
     const singleDay = isSingleDayPeriod(readFilters());
     const ventasLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
     const loadingCards = [];
@@ -1551,6 +1570,35 @@
     },
   ];
 
+  // Las aperturas existentes por área se ofrecen desde la tarjeta del KPI.
+  // Son datos relacionados cuando la API no expone una apertura exacta de ese cálculo.
+  const V45_RELATED_VIEWS = {
+    preparacion_pedidos: ["pedidos", "pedidos", "pendientes", "pendientes", "en_preparacion", "preparados", "backorder", "backorder", "en_remito", "facturados", "cerrados", "anulados", "pendientes", null, "facturados", "en_remito"],
+    compras: ["comprobantes", "comprobantes", "comprobantes", "comprobantes", "ordenes", "ordenes", "ordenes_abiertas", "ordenes_abiertas", "ordenes_abiertas", "remitos", "remitos", "ordenes_abiertas", "proveedores", null],
+    financiero: ["cobranzas", "pagos", null, "cartera_cobrar", "cartera_pagar", "vencido_cobrar", "vencido_pagar", null, null, null, null, null, null, "vencido_cobrar", "vencido_pagar"],
+    gestion_contable: ["asientos", "asientos", "asientos", "asientos", "asientos", "asientos", "asientos", "asientos", "impuestos", "impuestos", "impuestos", "impuestos", "periodos", "ejercicios"],
+    impositivo: ["posicion_iva", "ventas", "compras", "percepciones", "percepciones", "retenciones", "ventas", "compras", "ventas", "percepciones", "percepciones", "retenciones", "determinados", "pagados"],
+    libros_contables: ["diario", "diario", "diario", "diario", "mayor", "mayor", "balance", "balance", "resultados", "resultados", "resultados", "balance", "balance", "balance"],
+    logistica: ["rutas", "rutas", "rutas", "rutas", "rutas", "documentos", "documentos", "documentos", "por_ruta", "por_ruta", "documentos", "por_chofer", "por_unidad", "rutas"],
+    gastos: ["documentos", "fuente", "fuente", "documentos", "documentos", "documentos", "documentos", "dia", "documentos", "mes", "grupo", "documentos", "grupo", "gasto", "sucursal"],
+  };
+
+  function relatedMetricDetail(def, index) {
+    const view = V45_RELATED_VIEWS[def.key]?.[index];
+    return view ? (def.details || []).find((detail) => detail.vista === view) : null;
+  }
+
+  function metricDetailButton(def, index, label, value, kpi, compact = false) {
+    if (["Sin permiso de costos", "No disponible", "N/D"].includes(value)) return "";
+    const related = kpi ? null : relatedMetricDetail(def, index);
+    if (!kpi && !related) return "";
+    const attrs = related
+      ? `data-url-key="${related.urlKey}" data-vista="${related.vista}" data-title="${escHtml(label)} · datos relacionados"`
+      : `data-kpi="${kpi}" data-title="${escHtml(label)}"`;
+    const text = related ? "Ver datos ›" : "Ver detalle ›";
+    return `<button type="button" class="cc-v45-kpi-detail ${compact ? "ml-1 align-middle" : ""} text-xs font-semibold text-blue-700 underline dark:text-blue-300" data-area="${def.key}" ${attrs}>${text}</button>`;
+  }
+
   function comparisonPeriodLabel(areaData) {
     const period = areaData?.comparacion?.periodo;
     if (!period?.inicio || !period?.fin) return "período anterior";
@@ -1568,21 +1616,61 @@
     return `<div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Comparación · ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="p-2 text-left">Indicador</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th><th class="p-2 text-right">Variación</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
+  function renderV45GroupedChart(rows, first, second, firstLabel, secondLabel, unit = "money") {
+    const items = (rows || []).slice(-30);
+    const divisor = unit === "money" ? 1000000 : 1;
+    const values = items.flatMap((row) => [Number(row[first] || 0), ...(second ? [Number(row[second] || 0)] : [])]).map((value) => value / divisor);
+    const low = Math.min(0, ...values);
+    const high = Math.max(unit === "money" ? 1 : 1, ...values);
+    const range = high - low;
+    const plot = { x: 52, y: 10, width: 420, height: 174 };
+    const yFor = (value) => plot.y + (high - value) / range * plot.height;
+    const zeroY = yFor(0);
+    const number = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 });
+    const grid = Array.from({ length: 5 }, (_, index) => {
+      const value = high - index * range / 4;
+      const y = plot.y + index * plot.height / 4;
+      return `<line x1="${plot.x}" y1="${y}" x2="${plot.x + plot.width}" y2="${y}" class="cc-chart-grid" /><text x="${plot.x - 7}" y="${y + 3}" text-anchor="end" class="cc-chart-axis">${number.format(value)}</text>`;
+    }).join("");
+    const step = items.length ? plot.width / items.length : plot.width;
+    const barWidth = Math.max(1, Math.min(15, step * (second ? .36 : .55)));
+    const labelEvery = Math.max(1, Math.ceil(items.length / 9));
+    const bars = items.map((row, index) => {
+      const metrics = [[first, firstLabel, "#ef1717", 0], ...(second ? [[second, secondLabel, "#16d61c", barWidth]] : [])];
+      const x = plot.x + index * step + (step - metrics.length * barWidth) / 2;
+      const category = String(row.fecha || row.estado || row.nombre || "");
+      const day = category.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const month = category.match(/^(\d{4})-(\d{2})$/);
+      const shown = day ? `${day[3]}/${day[2]}` : month ? `${month[2]}/${month[1]}` : category;
+      const rects = metrics.map(([key, label, color, offset]) => {
+        const value = Number(row[key] || 0) / divisor;
+        const y = Math.min(yFor(value), zeroY);
+        const height = Math.abs(yFor(value) - zeroY);
+        const original = unit === "money" ? fmtMoney.format(row[key] || 0) : fmtNum.format(row[key] || 0);
+        return `<rect x="${(x + offset).toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${height.toFixed(1)}" fill="${color}"><title>${escHtml(category)} · ${escHtml(label)}: ${original}</title></rect>`;
+      }).join("");
+      return rects + (index % labelEvery === 0 || index === items.length - 1
+        ? `<text x="${(plot.x + (index + .5) * step).toFixed(1)}" y="202" text-anchor="middle" class="cc-chart-axis">${escHtml(shown.length > 11 ? shown.slice(0, 10) + "…" : shown)}</text>` : "");
+    }).join("");
+    const legend = `<rect x="485" y="74" width="10" height="10" fill="#ef1717" /><text x="499" y="83" class="cc-chart-axis">${escHtml(firstLabel)}</text>${second ? `<rect x="485" y="94" width="10" height="10" fill="#16d61c" /><text x="499" y="103" class="cc-chart-axis">${escHtml(secondLabel)}</text>` : ""}`;
+    return `<svg viewBox="0 0 600 217" role="img" aria-label="${escHtml(firstLabel)}${second ? ` y ${escHtml(secondLabel)}` : ""} por ${unit === "money" ? "millones" : "cantidad"}" class="cc-v45-chart-svg">
+      ${grid}<line x1="${plot.x}" y1="${zeroY.toFixed(1)}" x2="${plot.x + plot.width}" y2="${zeroY.toFixed(1)}" class="cc-chart-zero" />${bars}
+      <text x="12" y="108" transform="rotate(-90 12 108)" text-anchor="middle" class="cc-chart-axis">${unit === "money" ? "Importe (millones)" : "Cantidad"}</text>${legend}
+      ${items.length ? "" : '<text x="288" y="108" text-anchor="middle" class="cc-chart-axis">Sin datos</text>'}
+    </svg>`;
+  }
+
   function renderV45SeriesComparison(areaData, currentSeries, previousSeries, field, title) {
     const actual = (currentSeries?.filas || []).slice(-24);
     const prior = (previousSeries?.filas || []).slice(-24);
     if (!actual.length && !prior.length) return "";
     const count = Math.max(actual.length, prior.length);
-    const max = Math.max(1, ...[...actual, ...prior].map((row) => Math.abs(Number(row[field] || 0))));
-    const step = 304 / count;
-    const width = Math.max(1, step / 2 - 1);
-    const bars = Array.from({ length: count }, (_, index) => {
-      const a = Math.abs(Number(actual[index]?.[field] || 0)) / max * 80;
-      const b = Math.abs(Number(prior[index]?.[field] || 0)) / max * 80;
-      const x = 8 + index * step;
-      return `<rect x="${x}" y="${96 - a}" width="${width}" height="${a}" fill="#0284c7"/><rect x="${x + width}" y="${96 - b}" width="${width}" height="${b}" fill="#f97316"/>`;
-    }).join("");
-    return `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${escHtml(title)} · comparación</h3><svg viewBox="0 0 320 102" role="img" aria-label="${escHtml(title)} actual y comparación" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8"/>${bars}</svg><p class="text-[11px] text-slate-500">● Azul: actual · ● Naranja: ${escHtml(comparisonPeriodLabel(areaData))}. Barras alineadas por posición en cada período.</p></div>`;
+    const rows = Array.from({ length: count }, (_, index) => ({
+      fecha: actual[index]?.fecha || prior[index]?.fecha || String(index + 1),
+      actual: actual[index]?.[field] || 0,
+      anterior: prior[index]?.[field] || 0,
+    }));
+    return `<div class="cc-summary-chart mt-3"><h3 class="cc-summary-chart-title">${escHtml(title)} · comparación</h3>${renderV45GroupedChart(rows, "actual", "anterior", "Actual", comparisonPeriodLabel(areaData))}<p class="text-[11px] text-slate-500 dark:text-slate-300">Barras alineadas por posición en cada período.</p></div>`;
   }
 
   function renderGastosV45Composition(areaData) {
@@ -1599,8 +1687,18 @@
       ...(areaData.serie?.filas || []).map((row) => ({ ...row, periodo: "Actual" })),
       ...(areaData.serie_comparacion?.filas || []).map((row) => ({ ...row, periodo: "Comparación" })),
     ].map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${escHtml(row.periodo)}</th><td class="p-2">${escHtml(row.fecha)}</td><td class="p-2 text-right tabular-nums">${fmtNum.format(row.documentos)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.importe)}</td></tr>`).join("");
-    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición por fuente</h3><p class="text-[11px] text-slate-500">Los impuestos se muestran separados y no integran «Todos».</p>${rows}<p class="mt-2 text-xs">Gasto del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "N/D" : fmtMoney.format(previous)}</strong></p></section>`
-      + renderV45SeriesComparison(areaData, areaData.serie, areaData.serie_comparacion, "importe", "Evolución de gastos")
+    const actualSeries = areaData.serie?.filas || [];
+    const priorSeries = areaData.serie_comparacion?.filas || [];
+    const trendRows = Array.from({ length: Math.max(actualSeries.length, priorSeries.length) }, (_, index) => ({
+      fecha: actualSeries[index]?.fecha || priorSeries[index]?.fecha || String(index + 1),
+      actual: actualSeries[index]?.importe || 0,
+      anterior: priorSeries[index]?.importe || 0,
+    }));
+    const sourceRows = sources.slice(0, 2).map(([label, key]) => ({ estado: label, importe: k[key] || 0 }));
+    return `<div class="cc-summary-charts mt-3">
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Gastos · actual vs período anterior</h3>${renderV45GroupedChart(trendRows, "actual", "anterior", "Actual", "Anterior")}</section>
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Composición por fuente</h3>${renderV45GroupedChart(sourceRows, "importe", null, "Importe", "")}</section>
+    </div><details class="mt-2"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Ver composición y comparación</summary><p class="text-[11px] text-slate-500">Los impuestos se muestran separados y no integran «Todos».</p>${rows}<p class="mt-2 text-xs">Gasto del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "N/D" : fmtMoney.format(previous)}</strong></p></details>`
       + `<details class="mt-2 rounded-lg border border-slate-200 p-2 dark:border-slate-700"><summary class="cursor-pointer text-xs font-semibold">Ver serie de gastos</summary><div class="mt-2 max-h-64 overflow-auto"><table class="w-full min-w-[27rem] text-xs"><thead><tr><th class="p-2 text-left">Período</th><th class="p-2 text-left">Fecha</th><th class="p-2 text-right">Documentos</th><th class="p-2 text-right">Importe</th></tr></thead><tbody>${seriesRows || '<tr><td class="p-2" colspan="4">Sin gastos en los períodos.</td></tr>'}</tbody></table></div></details>`;
   }
 
@@ -1613,27 +1711,22 @@
       ["Pendientes", "pendientes_rendir"],
     ];
     const rows = pairs.map(([label, key]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${label}</th><td class="p-2 text-right tabular-nums">${fmtNum.format(k[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtNum.format(previous[key] || 0)}</td></tr>`).join("");
-    return `<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="mb-2 text-xs font-semibold">Rutas · actual y ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[24rem] text-xs"><thead><tr><th class="p-2 text-left">Estado</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const states = pairs.map(([label, key]) => ({ estado: label, actual: k[key] || 0, anterior: previous[key] || 0 }));
+    return `<div class="cc-summary-charts mt-3">
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Estado de rutas · actual vs anterior</h3>${renderV45GroupedChart(states, "actual", "anterior", "Actual", "Anterior", "count")}</section>
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Importe facturado por hoja de ruta</h3>${renderV45GroupedChart([], "importe", null, "Importe", "")}<p class="text-[11px] text-slate-500">Sin serie por hoja de ruta en este período; disponible en «Facturación por ruta».</p></section>
+    </div><div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="mb-2 text-xs font-semibold">Rutas · actual y ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[24rem] text-xs"><thead><tr><th class="p-2 text-left">Estado</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   function renderLibrosV45Charts(areaData) {
     const rows = (areaData.series?.filas || []).slice(-30);
     const panels = [
-      ["Libro Diario · Debe vs Haber", "debe", "haber", "#4f46e5", "#14b8a6"],
-      ["Resultados · Ingresos vs Egresos", "ingresos", "egresos", "#0ea5e9", "#f59e0b"],
+      ["Libro Diario · Debe vs Haber", "debe", "haber"],
+      ["Resultados · Ingresos vs Egresos", "ingresos", "egresos"],
     ];
-    const chart = ([title, first, second, c1, c2]) => {
-      const max = Math.max(1, ...rows.flatMap((row) => [Math.abs(Number(row[first] || 0)), Math.abs(Number(row[second] || 0))]));
-      const step = rows.length ? 304 / rows.length : 304;
-      const barWidth = Math.max(1, step / 2 - 1);
-      const bars = rows.map((row, index) => {
-        const x = 8 + index * step;
-        const h1 = Math.abs(Number(row[first] || 0)) / max * 80;
-        const h2 = Math.abs(Number(row[second] || 0)) / max * 80;
-        return `<rect x="${x}" y="${96 - h1}" width="${barWidth}" height="${h1}" fill="${c1}"/><rect x="${x + barWidth}" y="${96 - h2}" width="${barWidth}" height="${h2}" fill="${c2}"/>`;
-      }).join("");
+    const chart = ([title, first, second]) => {
       const table = rows.map((row) => `<tr><th scope="row" class="p-1 text-left">${escHtml(row.fecha)}</th><td class="p-1 text-right tabular-nums">${fmtMoney.format(row[first])}</td><td class="p-1 text-right tabular-nums">${fmtMoney.format(row[second])}</td></tr>`).join("");
-      return `<div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${title}</h3><svg viewBox="0 0 320 102" role="img" aria-label="${title}" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8"/>${bars}</svg><p class="text-[11px] text-slate-500">● ${first} · ● ${second}</p><details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700">Ver serie completa</summary><div class="max-h-56 overflow-auto"><table class="w-full min-w-[25rem] text-xs"><thead><tr><th class="p-1 text-left">Fecha</th><th class="p-1 text-right">${first}</th><th class="p-1 text-right">${second}</th></tr></thead><tbody>${table}</tbody></table></div></details></div>`;
+      return `<div class="cc-summary-chart"><h3 class="cc-summary-chart-title">${title}</h3>${renderV45GroupedChart(rows, first, second, first, second)}<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700">Ver serie completa</summary><div class="max-h-56 overflow-auto"><table class="w-full min-w-[25rem] text-xs"><thead><tr><th class="p-1 text-left">Fecha</th><th class="p-1 text-right">${first}</th><th class="p-1 text-right">${second}</th></tr></thead><tbody>${table}</tbody></table></div></details></div>`;
     };
     return `<div class="mt-4 grid gap-3 lg:grid-cols-2">${panels.map(chart).join("")}</div>`
       + renderV45SeriesComparison(areaData, areaData.series, areaData.series_comparacion, "debe", "Libro Diario · Debe")
@@ -1664,7 +1757,10 @@
       `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="p-2 text-left">${escHtml(row.fecha)}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iva_credito)}</td><td class="p-2 text-right font-semibold tabular-nums">${fmtMoney.format(row.iva_posicion)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_debito)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(row.iibb_credito)}</td></tr>`
     ).join("");
     const fiscalTable = (title, rows) => `<section class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">${escHtml(title)}</h3><table class="w-full min-w-[42rem] text-xs"><thead><tr><th class="p-2 text-left">Mes</th><th class="p-2 text-right">IVA débito</th><th class="p-2 text-right">IVA crédito</th><th class="p-2 text-right">Posición IVA</th><th class="p-2 text-right">IIBB ventas</th><th class="p-2 text-right">IIBB crédito</th></tr></thead><tbody>${rows || '<tr><td class="p-2" colspan="6">Sin movimientos en el período.</td></tr>'}</tbody></table></section>`;
-    return `<section class="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Composición de la posición IVA</h3><p class="mb-2 text-xs text-slate-500">Débito + percepciones de ventas − crédito − percepciones de compras − retenciones</p>${bars}</section>`
+    return `<div class="cc-summary-charts mt-3">
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">IVA débito vs crédito por período</h3>${renderV45GroupedChart(areaData.serie_mensual?.filas, "iva_debito", "iva_credito", "Cargos IVA", "Créditos IVA")}</section>
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">IIBB en ventas vs pagos a cuenta</h3>${renderV45GroupedChart(areaData.serie_mensual?.filas, "iibb_debito", "iibb_credito", "IIBB ventas", "Pagos a cuenta")}</section>
+    </div><details class="mt-2"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Ver composición de la posición IVA</summary><p class="mb-2 text-xs text-slate-500">Débito + percepciones de ventas − crédito − percepciones de compras − retenciones</p>${bars}</details>`
       + fiscalTable("Evolución fiscal mensual · período actual", fiscalRows)
       + fiscalTable(`Evolución fiscal mensual · ${comparisonPeriodLabel(areaData)}`, previousRows)
       + renderV45SeriesComparison(areaData, areaData.serie_mensual, areaData.serie_mensual_comparacion, "iva_debito", "IVA débito mensual")
@@ -1683,16 +1779,6 @@
 
   function renderContableV45Charts(areaData) {
     const rows = (areaData.serie_asientos?.filas || []).slice(-30);
-    const maxValue = Math.max(1, ...rows.flatMap((row) => [Number(row.debe || 0), Number(row.haber || 0)]));
-    const step = rows.length ? 304 / rows.length : 304;
-    const width = Math.max(1, step / 2 - 1);
-    const bars = rows.map((row, index) => {
-      const debit = Math.max(0, Number(row.debe || 0)) / maxValue * 83;
-      const credit = Math.max(0, Number(row.haber || 0)) / maxValue * 83;
-      const x = 8 + index * step;
-      return `<rect x="${x.toFixed(1)}" y="${(96 - debit).toFixed(1)}" width="${width.toFixed(1)}" height="${debit.toFixed(1)}" fill="#7c3aed" />
-        <rect x="${(x + width).toFixed(1)}" y="${(96 - credit).toFixed(1)}" width="${width.toFixed(1)}" height="${credit.toFixed(1)}" fill="#14b8a6" />`;
-    }).join("");
     const tableRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="px-2 py-1.5 text-left">${escHtml(row.fecha)}</th><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.debe)}</td><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.haber)}</td></tr>`).join("");
     const k = areaData.kpis || {};
     const tax = [
@@ -1704,9 +1790,9 @@
     const taxMax = Math.max(1, ...tax.map(([, key]) => Number(k[key] || 0)));
     const taxRows = tax.map(([label, key]) => `<div class="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800"><p class="text-[11px]">${label}</p><div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-amber-500" style="width:${Math.max(0, Number(k[key] || 0)) / taxMax * 100}%"></div></div><p class="mt-1 text-right text-xs font-semibold tabular-nums">${k[key] == null ? "N/D" : fmtMoney.format(k[key])}</p></div>`).join("");
     return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
-      <div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Libro Diario · Debe y Haber</h3><svg viewBox="0 0 320 102" role="img" aria-label="Debe y Haber por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg><p class="text-[11px] text-slate-500">● Violeta: Debe · ● Turquesa: Haber</p>
+      <div class="cc-summary-chart"><h3 class="cc-summary-chart-title">Libro Diario · Debe y Haber</h3>${renderV45GroupedChart(rows, "debe", "haber", "Debe", "Haber")}
         <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Debe</th><th class="px-2 py-2 text-right">Haber</th></tr></thead><tbody>${tableRows}</tbody></table></div></details>
-      </div><div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Situación fiscal · alcance general</h3>${taxRows}</div>
+      </div><div class="cc-summary-chart"><h3 class="cc-summary-chart-title">Impuestos · a pagar vs a favor</h3>${renderV45GroupedChart([{ estado: "A pagar", importe: k.impuestos_pagar || 0 }, { estado: "A favor", importe: k.impuestos_favor || 0 }], "importe", null, "Importe", "")}<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver situación fiscal</summary>${taxRows}</details></div>
     </div><p class="mt-2 text-[11px] text-slate-500">Impuestos, períodos y ejercicios son generales para la empresa.</p>`
       + renderV45SeriesComparison(areaData, areaData.serie_asientos, areaData.serie_asientos_comparacion, "debe", "Libro Diario · Debe")
       + renderV45ComparisonTable(areaData, [
@@ -1720,16 +1806,6 @@
 
   function renderFinancieroV45Charts(areaData) {
     const rows = (areaData.serie_flujo?.filas || []).slice(-30);
-    const maxFlow = Math.max(1, ...rows.flatMap((row) => [Number(row.cobranzas || 0), Number(row.pagos || 0)]));
-    const step = rows.length ? 304 / rows.length : 304;
-    const width = Math.max(1, step / 2 - 1);
-    const bars = rows.map((row, index) => {
-      const collected = Math.max(0, Number(row.cobranzas || 0)) / maxFlow * 83;
-      const paid = Math.max(0, Number(row.pagos || 0)) / maxFlow * 83;
-      const x = 8 + index * step;
-      return `<rect x="${x.toFixed(1)}" y="${(96 - collected).toFixed(1)}" width="${width.toFixed(1)}" height="${collected.toFixed(1)}" fill="#0d9488" />
-        <rect x="${(x + width).toFixed(1)}" y="${(96 - paid).toFixed(1)}" width="${width.toFixed(1)}" height="${paid.toFixed(1)}" fill="#f97316" />`;
-    }).join("");
     const buckets = [
       ["Por vencer", "por_vencer"], ["0–7 días", "d0_7"],
       ["8–30 días", "d8_30"], ["31–60 días", "d31_60"],
@@ -1748,39 +1824,30 @@
     const comparisonRows = [["Cobranzas", "cobranzas"], ["Pagos", "pagos"], ["Flujo neto", "flujo_neto"]]
       .map(([label, key]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="p-2 text-left">${label}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(areaData.kpis?.[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(compared[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(areaData.comparacion?.diferencias?.[key] || 0)}</td></tr>`).join("");
     return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
-      <div class="rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Flujo del período</h3><svg viewBox="0 0 320 102" role="img" aria-label="Cobranzas y pagos por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg><p class="text-[11px] text-slate-500">● Turquesa: cobranzas · ● Naranja: pagos</p>
+      <div class="cc-summary-chart"><h3 class="cc-summary-chart-title">Cobranzas vs Pagos</h3>${renderV45GroupedChart(rows, "cobranzas", "pagos", "Cobranzas", "Pagos")}
         <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead><tbody>${seriesRows}</tbody></table></div></details>
       </div>
-      <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Antigüedad de saldos</h3><p class="text-[11px] text-slate-500">● Turquesa: cobrar · ● Naranja: pagar</p>${agingRows}</div>
+      <div class="cc-summary-chart"><h3 class="cc-summary-chart-title">Antigüedad de saldos</h3>${renderV45GroupedChart(buckets.map(([name, key]) => ({ estado: name, cobrar: receivable[key] || 0, pagar: payable[key] || 0 })), "cobrar", "pagar", "A cobrar", "A pagar")}<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver importes por tramo</summary>${agingRows}</details></div>
     </div><div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Flujo comparado con ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="p-2 text-left">Indicador</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th><th class="p-2 text-right">Variación</th></tr></thead><tbody>${comparisonRows}</tbody></table></div>`;
   }
 
   function renderComprasV45Charts(areaData) {
     const rows = (areaData.serie_evolucion?.filas || []).slice(-30);
-    const maxValue = Math.max(1, ...rows.flatMap((row) => [Number(row.compras || 0), Number(row.ordenes || 0)]));
-    const step = rows.length ? 304 / rows.length : 304;
-    const width = Math.max(1, step / 2 - 1);
-    const bars = rows.map((row, index) => {
-      const buy = Math.max(0, Number(row.compras || 0)) / maxValue * 83;
-      const order = Math.max(0, Number(row.ordenes || 0)) / maxValue * 83;
-      const x = 8 + index * step;
-      return `<rect x="${x.toFixed(1)}" y="${(96 - buy).toFixed(1)}" width="${width.toFixed(1)}" height="${buy.toFixed(1)}" fill="#d97706" />
-        <rect x="${(x + width).toFixed(1)}" y="${(96 - order).toFixed(1)}" width="${width.toFixed(1)}" height="${order.toFixed(1)}" fill="#0284c7" />`;
-    }).join("");
     const tableRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800">
       <th scope="row" class="px-2 py-1.5 text-left font-medium">${escHtml(row.fecha)}</th>
       <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.compras)}</td>
       <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.ordenes)}</td>
     </tr>`).join("");
     const previous = areaData.comparacion?.kpis?.compras_netas;
-    return `<div class="mt-4 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+    const statusRows = [["OC pendientes", "oc_pendientes"], ["OC parciales", "oc_parciales"], ["Remitos recibidos", "remitos_recibidos"], ["OC vencidas", "oc_vencidas"]]
+      .map(([estado, key]) => ({ estado, cantidad: areaData.kpis?.[key] || 0 }));
+    return `<div class="cc-summary-charts mt-3"><section class="cc-summary-chart">
       <p class="text-xs font-semibold">Evolución de compras y OC · ${areaData.serie_evolucion?.agrupacion || "período"}</p>
-      <svg viewBox="0 0 320 102" role="img" aria-label="Compras y órdenes de compra por período" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg>
-      <p class="text-[11px] text-slate-500">🟠 Compras · 🔵 Órdenes de compra</p>
+      ${renderV45GroupedChart(rows, "compras", "ordenes", "Compras netas", "Órdenes de compra")}
       <p class="mt-2 text-xs">Compras del ${escHtml(comparisonPeriodLabel(areaData))}: <strong class="tabular-nums">${previous == null ? "No disponible" : fmtMoney.format(previous)}</strong></p>
       <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary>
         <div class="mt-2 max-h-72 overflow-auto"><table class="w-full min-w-[30rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Compras</th><th class="px-2 py-2 text-right">OC</th></tr></thead><tbody>${tableRows}</tbody></table></div>
-      </details></div>`;
+      </details></section><section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Situación actual de órdenes de compra</h3>${renderV45GroupedChart(statusRows, "cantidad", null, "Órdenes", "", "count")}</section></div>`;
   }
 
   function renderPreparacionV45Charts(areaData) {
@@ -1798,32 +1865,141 @@
       <div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded bg-emerald-600" style="width:${Math.max(0, Number(row.importe || 0)) / maxAmount * 100}%"></div></div>
       <p class="mt-1 text-right text-xs font-semibold tabular-nums">${row.importe == null ? "No disponible" : fmtMoney.format(row.importe)}</p>
     </div>`).join("");
-    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
-      <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Estados · <span class="text-sky-600">actual</span> / <span class="text-orange-500">${escHtml(comparisonPeriodLabel(areaData))}</span></h3>${stateRows}</section>
-      <section class="rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-xs font-semibold">Importes por estado</h3>${amountRows}</section>
-    </div>`;
+    return `<div class="cc-summary-charts mt-3">
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Estados · actual vs ${escHtml(comparisonPeriodLabel(areaData))}</h3>${renderV45GroupedChart(states, "actual", "anterior", "Actual", "Anterior", "count")}</section>
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Importe de pedidos por estado</h3>${renderV45GroupedChart(amounts, "importe", null, "Importe", "")}</section>
+    </div><details class="mt-2"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Ver importes y estados</summary><div class="grid gap-3 lg:grid-cols-2"><section>${stateRows}</section><section>${amountRows}</section></div></details>`;
+  }
+
+  const RESUMEN_KPIS = [
+    ["Ventas netas", "ventas", "money", "#1d4ed8", "Ventas netas del período"],
+    ["Compras netas", "compras_netas", "money", "#1d4ed8", "Compras netas del período"],
+    ["Cobranzas", "cobranzas", "money", "#0f766e", "Cobranzas registradas en el período"],
+    ["Pagos", "pagos", "money", "#0f766e", "Pagos registrados en el período"],
+    ["Presupuestos", "presupuestos", "count", "#6d28d9", "Presupuestos emitidos en el período"],
+    ["Pedidos", "pedidos", "count", "#6d28d9", "Pedidos registrados en el período"],
+    ["Facturas", "facturas", "count", "#6d28d9", "Comprobantes de venta emitidos"],
+    ["Remitos", "remitos", "count", "#6d28d9", "Entregas de mercadería registradas"],
+    ["Vencimiento a cobrar", "vencimiento_cobrar", "money", "#c2410c", "Vencimientos dentro del intervalo"],
+    ["Vencimiento a pagar", "vencimiento_pagar", "money", "#c2410c", "Vencimientos dentro del intervalo"],
+    ["Efectivo actual", "efectivo_actual", "money", "#475569", "Cajas finales de efectivo"],
+    ["Tarjetas actual", "tarjetas_actual", "money", "#475569", "Saldos actuales de tarjetas en pesos"],
+    ["Cheques actual", "cheques_actual", "money", "#475569", "Saldos actuales de cheques en pesos"],
+    ["Bancos actual", "bancos_actual", "money", "#475569", "Saldo neto de cuentas bancarias en pesos"],
+    ["Venta cuenta corriente", "venta_cuenta_corriente", "money", "#475569", "Venta financiada en el período"],
+    ["Compra cuenta corriente", "compra_cuenta_corriente", "money", "#475569", "Compra neta financiada en el período"],
+  ];
+
+  function resumenTrend(key, current, previous) {
+    if (current == null) return null;
+    if (["efectivo_actual", "bancos_actual"].includes(key)) {
+      return Number(current) < -0.0001
+        ? { direction: "down", label: "Controlar", note: "Controlar saldo negativo" }
+        : null;
+    }
+    if (!["ventas", "compras_netas", "cobranzas", "pagos"].includes(key)) return null;
+    if (previous == null || Math.abs(Number(previous)) < 0.0001) {
+      return { direction: "none", label: "", note: "Sin base en período anterior" };
+    }
+    const pct = (Number(current) / Number(previous) - 1) * 100;
+    if (!Number.isFinite(pct)) return null;
+    if (Math.abs(pct) < 0.05) {
+      return { direction: "flat", label: "Sin cambio", note: "0,0 % vs período anterior" };
+    }
+    const magnitude = Math.abs(pct);
+    const strength = magnitude < 10 ? "mínima" : magnitude < 25 ? "leve"
+      : magnitude < 50 ? "media" : magnitude < 100 ? "fuerte" : "extrema";
+    const direction = pct > 0 ? "up" : "down";
+    const percent = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(pct);
+    return {
+      direction,
+      label: `${pct > 0 ? "Suba" : "Baja"} ${strength}`,
+      note: `${pct > 0 ? "+" : ""}${percent} % vs período anterior`,
+    };
+  }
+
+  function trendForV45(areaKey, index, data) {
+    const arrows = {
+      preparacion_pedidos: { 1: "monto_pedidos" },
+      compras: { 0: "compras_netas" },
+      financiero: { 0: "cobranzas", 1: "pagos" },
+      gastos: { 9: "total_gastos" },
+    };
+    const key = arrows[areaKey]?.[index];
+    if (!key) return null;
+    return resumenTrend("ventas", data.kpis?.[key], data.comparacion?.kpis?.[key]);
+  }
+
+  function renderResumenV45Kpis(areaData) {
+    const current = areaData.kpis || {};
+    const previous = areaData.comparacion?.kpis || {};
+    const trendIcon = { up: "arrow_upward", down: "arrow_downward", flat: "remove" };
+    return `<div class="cc-summary-kpis" aria-label="Indicadores del Resumen gerencial">${RESUMEN_KPIS.map(([label, key, kind, accent, description]) => {
+      const value = current[key];
+      const trend = resumenTrend(key, value, previous[key]);
+      const quantityKey = `${key}_cantidad`;
+      const note = trend?.note || (current[quantityKey] != null
+        ? `${fmtNum.format(current[quantityKey])} vencimientos dentro del intervalo` : description);
+      const trendHtml = trend && trend.direction !== "none"
+        ? `<span class="cc-trend cc-trend-${trend.direction}" aria-label="${escHtml(trend.label)}"><span class="cc-trend-icon"><span class="material-icons" aria-hidden="true">${trendIcon[trend.direction]}</span></span><span>${escHtml(trend.label)}</span></span>`
+        : "";
+      const detail = value == null ? "" : `<button type="button" class="cc-v45-kpi-detail text-xs font-semibold text-blue-700 underline dark:text-blue-300" data-area="resumen_general" data-kpi="${key}" data-title="${escHtml(label)}">Ver detalle ›</button>`;
+      return `<article class="cc-summary-kpi" style="--cc-kpi-accent:${accent}">
+        <div class="cc-summary-kpi-head"><h3 class="cc-summary-kpi-title">${escHtml(label)}</h3>${detail}</div>
+        <div class="cc-summary-kpi-middle"><strong class="cc-summary-kpi-value">${value == null ? "N/D" : kind === "count" ? fmtNum.format(value) : fmtMoney.format(value)}</strong>${trendHtml}</div>
+        <p class="cc-summary-kpi-note ${trend?.direction === "down" ? "cc-trend-down" : trend?.direction === "up" ? "cc-trend-up" : ""}">${escHtml(value == null ? "Información no disponible para este alcance" : note)}</p>
+      </article>`;
+    }).join("")}</div>`;
   }
 
   function renderResumenV45Charts(areaData) {
     const series = (areaData.series?.filas || []).slice(-30);
+    const chartDate = (date) => {
+      const day = String(date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (day) return `${day[3]}/${day[2]}`;
+      const month = String(date || "").match(/^(\d{4})-(\d{2})$/);
+      return month ? `${month[2]}/${month[1]}` : String(date || "");
+    };
     const chart = (title, left, right, leftLabel, rightLabel) => {
-      const maxValue = Math.max(1, ...series.flatMap((row) => [
-        Number(row[left] || 0), Number(row[right] || 0),
-      ]));
-      const step = series.length ? 304 / series.length : 304;
-      const width = Math.max(1, step / 2 - 1);
-      const bars = series.map((row, index) => {
-        const leftHeight = Math.max(0, Number(row[left] || 0)) / maxValue * 83;
-        const rightHeight = Math.max(0, Number(row[right] || 0)) / maxValue * 83;
-        const x = 8 + index * step;
-        return `<rect x="${x.toFixed(1)}" y="${(96 - leftHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${leftHeight.toFixed(1)}" fill="#0284c7" />
-          <rect x="${(x + width).toFixed(1)}" y="${(96 - rightHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${rightHeight.toFixed(1)}" fill="#f97316" />`;
+      if (!series.length) return `<section class="cc-summary-chart"><h3 class="cc-summary-chart-title">${escHtml(title)}</h3><p class="p-6 text-center text-sm text-slate-500 dark:text-slate-300">Sin movimientos en el período.</p></section>`;
+      const values = series.flatMap((row) => [Number(row[left] || 0) / 1000000, Number(row[right] || 0) / 1000000]);
+      const low = Math.min(0, ...values);
+      const high = Math.max(1, ...values);
+      const range = high - low;
+      const plot = { x: 50, y: 10, width: 422, height: 174 };
+      const yFor = (value) => plot.y + (high - value) / range * plot.height;
+      const zeroY = yFor(0);
+      const millions = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 });
+      const grid = Array.from({ length: 5 }, (_, index) => {
+        const value = high - index * range / 4;
+        const y = plot.y + index * plot.height / 4;
+        return `<line x1="${plot.x}" y1="${y}" x2="${plot.x + plot.width}" y2="${y}" class="cc-chart-grid" />
+          <text x="${plot.x - 7}" y="${y + 3}" text-anchor="end" class="cc-chart-axis">${millions.format(value)}</text>`;
       }).join("");
-      return `<div class="min-w-0 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
-        <p class="text-xs font-semibold">${title}</p>
-        <svg viewBox="0 0 320 102" role="img" aria-label="${title}" class="mt-2 h-28 w-full"><line x1="8" y1="96" x2="312" y2="96" stroke="#94a3b8" />${bars}</svg>
-        <p class="text-[11px] text-slate-500">🔵 ${leftLabel} · 🟠 ${rightLabel}</p>
-      </div>`;
+      const step = series.length ? plot.width / series.length : plot.width;
+      const barWidth = Math.max(1, Math.min(15, step * .36));
+      const labelEvery = Math.max(1, Math.ceil(series.length / 10));
+      const bars = series.map((row, index) => {
+        const x = plot.x + index * step + (step - 2 * barWidth) / 2;
+        const rectangles = [[left, "#ef1717", 0], [right, "#16d61c", barWidth]].map(([key, color, offset]) => {
+          const amount = Number(row[key] || 0) / 1000000;
+          const y = Math.min(yFor(amount), zeroY);
+          const height = Math.max(0, Math.abs(yFor(amount) - zeroY));
+          return `<rect x="${(x + offset).toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${height.toFixed(1)}" fill="${color}"><title>${escHtml(row.fecha)} · ${escHtml(key === left ? leftLabel : rightLabel)}: ${fmtMoney.format(row[key] || 0)}</title></rect>`;
+        }).join("");
+        const label = index % labelEvery === 0 || index === series.length - 1
+          ? `<text x="${(plot.x + (index + .5) * step).toFixed(1)}" y="202" text-anchor="middle" class="cc-chart-axis">${escHtml(chartDate(row.fecha))}</text>` : "";
+        return rectangles + label;
+      }).join("");
+      return `<section class="cc-summary-chart" aria-label="${escHtml(title)}">
+        <h3 class="cc-summary-chart-title">${escHtml(title)}</h3>
+        <svg viewBox="0 0 600 217" role="img" aria-label="${escHtml(title)}: importes en millones">
+          ${grid}<line x1="${plot.x}" y1="${zeroY.toFixed(1)}" x2="${plot.x + plot.width}" y2="${zeroY.toFixed(1)}" class="cc-chart-zero" />${bars}
+          <text x="12" y="108" transform="rotate(-90 12 108)" text-anchor="middle" class="cc-chart-axis">Importe (millones)</text>
+          <rect x="485" y="74" width="10" height="10" fill="#ef1717" /><text x="499" y="83" class="cc-chart-axis">${escHtml(leftLabel)}</text>
+          <rect x="485" y="94" width="10" height="10" fill="#16d61c" /><text x="499" y="103" class="cc-chart-axis">${escHtml(rightLabel)}</text>
+        </svg>
+      </section>`;
     };
     const prior = areaData.comparacion?.kpis || {};
     const current = areaData.kpis || {};
@@ -1844,10 +2020,15 @@
       <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.cobranzas)}</td>
       <td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.pagos)}</td>
     </tr>`).join("");
-    return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
-      ${chart("Gestión comercial", "ventas", "compras", "Ventas", "Compras")}
-      ${chart("Tesorería", "cobranzas", "pagos", "Cobranzas", "Pagos")}
-    </div><details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Ver serie completa (${areaData.series?.agrupacion || "período"})</summary>
+    const readout = (label, value) => `<span>${escHtml(label)}: <strong>${value == null ? "N/D" : fmtMoney.format(value)}</strong></span>`;
+    const flow = current.cobranzas == null || current.pagos == null ? null : current.cobranzas - current.pagos;
+    const margin = current.ventas == null || current.compras_netas == null ? null : current.ventas - current.compras_netas;
+    const ordersBudget = current.pedidos == null || current.presupuestos == null || !Number(current.presupuestos)
+      ? "N/D" : `${new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(current.pedidos / current.presupuestos * 100)} %`;
+    return `<div class="cc-summary-charts">
+      ${chart("Gestión comercial · Ventas vs Compras", "ventas", "compras", "Venta neta", "Compras netas")}
+      ${chart("Tesorería · Cobranzas vs Pagos", "cobranzas", "pagos", "Cobranzas", "Pagos")}
+    </div><div class="cc-summary-readout">${readout("Flujo del período", flow)}<span aria-hidden="true">|</span>${readout("Ventas - Compras", margin)}<span aria-hidden="true">|</span><span>Pedidos / Presupuestos: <strong>${ordersBudget}</strong></span></div><details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Ver serie completa (${areaData.series?.agrupacion || "período"})</summary>
       <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[38rem] text-xs text-slate-700 dark:text-slate-200">
         <thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Ventas</th><th class="px-2 py-2 text-right">Compras</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead>
         <tbody>${seriesRows}</tbody></table></div></details>
@@ -1897,24 +2078,16 @@
     }).join("");
     const currentSeries = areaData.series?.ventas_actual || [];
     const previousSeries = areaData.series?.ventas_anterior || [];
-    const pointCount = Math.max(currentSeries.length, previousSeries.length, 2);
-    const allValues = [...currentSeries, ...previousSeries].map((item) => Number(item.valor || 0));
-    const minValue = Math.min(0, ...allValues);
-    const maxValue = Math.max(1, ...allValues);
-    const range = Math.max(1, maxValue - minValue);
-    const points = (series) => series.map((item, index) => {
-      const x = 8 + (index / (pointCount - 1)) * 304;
-      const y = 103 - ((Number(item.valor || 0) - minValue) / range) * 88;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-    const graph = `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
-      <p class="mb-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Evolución de ventas por ${areaData.series?.agrupacion === "mes" ? "mes" : "día"}</p>
-      <svg viewBox="0 0 320 112" role="img" aria-label="Ventas diarias: período actual azul y comparación naranja" class="h-28 w-full">
-        <line x1="8" y1="103" x2="312" y2="103" stroke="#94a3b8" />
-        <polyline points="${points(previousSeries)}" fill="none" stroke="#f97316" stroke-width="2.5" />
-        <polyline points="${points(currentSeries)}" fill="none" stroke="#0284c7" stroke-width="2.5" />
-      </svg>
-      <div class="flex flex-wrap gap-4 text-[10px] text-slate-500"><span>● Azul: actual</span><span>● Naranja: ${escHtml(comparisonPeriodLabel(areaData))}</span></div>
+    const salesSeries = Array.from({ length: Math.max(currentSeries.length, previousSeries.length) }, (_, index) => ({
+      fecha: currentSeries[index]?.fecha || previousSeries[index]?.fecha || String(index + 1),
+      actual: currentSeries[index]?.valor || 0,
+      anterior: previousSeries[index]?.valor || 0,
+    }));
+    const documents = [["Presupuestos", "presupuestos"], ["Pedidos", "pedidos"], ["Remitos", "remitos"], ["Facturas", "facturas"]]
+      .map(([estado, key]) => ({ estado, actual: actual[key] || 0, anterior: previous[key] || 0 }));
+    const graph = `<div class="cc-summary-charts mt-3">
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Ventas netas · actual vs anterior</h3>${renderV45GroupedChart(salesSeries, "actual", "anterior", "Actual", "Anterior")}</section>
+      <section class="cc-summary-chart"><h3 class="cc-summary-chart-title">Documentos · actual vs período anterior</h3>${renderV45GroupedChart(documents, "actual", "anterior", "Actual", "Anterior", "count")}</section>
     </div>`;
     return `${graph}<details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-sky-700 dark:text-sky-300">Comparar los 16 indicadores</summary>
       <div class="mt-2 max-h-80 overflow-auto"><table class="w-full min-w-[34rem] text-xs text-slate-700 dark:text-slate-200">
@@ -1926,27 +2099,8 @@
   function renderStockV45Charts(areaData) {
     const movement = areaData?.serie_movimientos || {};
     const rows = Array.isArray(movement.filas) ? movement.filas : [];
-    const lastRows = rows.slice(-30);
     const previousRows = Array.isArray(areaData?.serie_movimientos_anterior?.filas)
       ? areaData.serie_movimientos_anterior.filas : [];
-    const priorLast = previousRows.slice(-30);
-    const plotRows = Math.max(lastRows.length, priorLast.length);
-    const maxValue = Math.max(1, ...[...lastRows, ...priorLast].flatMap((row) => [Number(row.entradas || 0), Number(row.salidas || 0)]));
-    const step = plotRows ? 304 / plotRows : 304;
-    const bars = Array.from({ length: plotRows }, (_, index) => {
-      const row = lastRows[index] || {};
-      const prior = priorLast[index] || {};
-      const inHeight = Math.max(0, Number(row.entradas || 0)) / maxValue * 84;
-      const outHeight = Math.max(0, Number(row.salidas || 0)) / maxValue * 84;
-      const priorInHeight = Math.max(0, Number(prior.entradas || 0)) / maxValue * 84;
-      const priorOutHeight = Math.max(0, Number(prior.salidas || 0)) / maxValue * 84;
-      const x = 8 + index * step;
-      const width = Math.max(1, step / (previousRows.length ? 4 : 2) - 0.5);
-      return `<rect x="${x.toFixed(1)}" y="${(98 - inHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${inHeight.toFixed(1)}" fill="#059669" />
-        <rect x="${(x + width).toFixed(1)}" y="${(98 - outHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${outHeight.toFixed(1)}" fill="#f97316" />
-        ${previousRows.length ? `<rect x="${(x + width * 2).toFixed(1)}" y="${(98 - priorInHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${priorInHeight.toFixed(1)}" fill="#86efac" />
-        <rect x="${(x + width * 3).toFixed(1)}" y="${(98 - priorOutHeight).toFixed(1)}" width="${width.toFixed(1)}" height="${priorOutHeight.toFixed(1)}" fill="#fdba74" />` : ""}`;
-    }).join("");
     const seriesTable = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800">
       <th class="py-1.5 text-left font-normal">${escHtml(row.fecha)}</th>
       <td class="py-1.5 text-right">${fmtNum.format(row.entradas)}</td>
@@ -1954,10 +2108,7 @@
     </tr>`).join("");
     const graph = `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
       <p class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Movimientos por ${movement.agrupacion || "período"} · ${escHtml(areaData.presentacion || "unidad")}</p>
-      <svg viewBox="0 0 320 105" role="img" aria-label="Entradas en verde y salidas en naranja" class="h-28 w-full">
-        <line x1="8" y1="98" x2="312" y2="98" stroke="#94a3b8" />${bars}
-      </svg>
-      <div class="flex flex-wrap gap-3 text-[10px] text-slate-500"><span>● Verde: entradas</span><span>● Naranja: salidas</span>${previousRows.length ? `<span>● Verde claro / naranja claro: ${escHtml(comparisonPeriodLabel(areaData))}</span>` : ""}</div>
+      ${renderV45GroupedChart(rows, "entradas", "salidas", "Entradas", "Salidas", "count")}
       <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa (${rows.length})</summary>
         <div class="max-h-60 overflow-auto"><table class="w-full text-xs"><thead><tr><th class="text-left">Fecha</th><th class="text-right">Entradas</th><th class="text-right">Salidas</th></tr></thead><tbody>${seriesTable}</tbody></table></div>
       </details>
@@ -1967,10 +2118,11 @@
     </div>`;
     const deposits = Array.isArray(areaData?.series_depositos) ? areaData.series_depositos : [];
     const maxDeposit = Math.max(1, ...deposits.map((dep) => Number(dep.valor || 0)));
-    const depositChart = deposits.length ? `<div class="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
-      <p class="mb-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Valorización por depósito</p>
-      ${deposits.map((dep) => `<div class="mb-2 text-xs"><div class="flex justify-between gap-2"><span class="truncate">${escHtml(dep.nombre)}</span><strong class="tabular-nums">${fmtMoney.format(dep.valor)}</strong></div><div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-700"><div class="h-2 rounded bg-emerald-600" style="width:${(Math.max(0, Number(dep.valor || 0)) / maxDeposit * 100).toFixed(1)}%"></div></div></div>`).join("")}
-    </div>` : "";
+    const depositChart = `<div class="cc-summary-chart mt-3">
+      <h3 class="cc-summary-chart-title">Valorización por depósito</h3>
+      ${renderV45GroupedChart(deposits, "valor", null, "Stock valorizado", "")}
+      ${deposits.length ? `<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver depósitos</summary>${deposits.map((dep) => `<div class="mb-2 text-xs"><div class="flex justify-between gap-2"><span class="truncate">${escHtml(dep.nombre)}</span><strong class="tabular-nums">${fmtMoney.format(dep.valor)}</strong></div><div class="mt-1 h-2 rounded bg-slate-100 dark:bg-slate-700"><div class="h-2 rounded bg-emerald-600" style="width:${(Math.max(0, Number(dep.valor || 0)) / maxDeposit * 100).toFixed(1)}%"></div></div></div>`).join("")}</details>` : ""}
+    </div>`;
     const compare = areaData?.comparacion;
     const flowFields = [
       ["Entradas", "entradas_periodo", "qty"], ["Salidas", "salidas_periodo", "qty"],
@@ -1985,7 +2137,7 @@
       }).join("")}
       </tbody></table></div><p class="mt-2 text-[11px] text-slate-500">Las existencias son una foto actual y no se comparan como período.</p>
     </div>` : "";
-    return graph + depositChart + comparison;
+    return `<div class="cc-summary-charts">${depositChart}${graph}</div>${comparison}`;
   }
 
   function renderInventarioDepositosBlock(areaData) {
@@ -2053,24 +2205,41 @@
       cyan: "border-cyan-200 dark:border-cyan-800",
     }[def.color] || "border-slate-200";
 
+    if (def.key === "resumen_general" && !unavailable) {
+      const data = areaData || {};
+      return `<article data-area-key="${def.key}" class="cc-card-animate min-w-0 rounded-xl border ${borderColor} bg-white p-2 shadow-sm dark:bg-slate-900" style="animation-delay:${delayIdx * 0.06}s">
+        <h2 class="sr-only">${def.title}</h2>
+        ${renderResumenV45Kpis(data)}
+        <p class="cc-summary-legend">Lectura: Suba/Baja = dirección | Fuerza: Mínima &lt;10 % | Leve 10-24,9 % | Media 25-49,9 % | Fuerte 50-99,9 % | Extrema ≥100 % | Verde = suba | Rojo = baja | Caja/Banco negativo: Controlar</p>
+        ${renderResumenV45Charts(data)}
+      </article>`;
+    }
+
     let body = "";
     if (unavailable) {
       body = `<p class="text-sm text-amber-700 dark:text-amber-300">${areaData.error?.mensaje || "Datos no disponibles"}</p>`;
     } else {
       const a = areaData || {};
-      const rows = def.metrics(a)
+      const metrics = def.metrics(a);
+      const useV45Layout = CUSTOM_COMPARE_AREAS.has(def.key);
+      const rows = metrics
         .map(
-          ([k, val, kpi]) => `
+          ([k, val, kpi], index) => useV45Layout ? `<article class="cc-summary-kpi" style="--cc-kpi-accent:${["#1d4ed8", "#1d4ed8", "#0f766e", "#0f766e", "#6d28d9", "#6d28d9", "#6d28d9", "#6d28d9", "#c2410c", "#c2410c", "#475569", "#475569", "#475569", "#475569", "#475569", "#475569"][index] || "#475569"}">
+            <div class="cc-summary-kpi-head"><h3 class="cc-summary-kpi-title">${escHtml(k)}</h3>
+              ${metricDetailButton(def, index, k, val, kpi)}
+            </div><div class="cc-summary-kpi-middle"><strong class="cc-summary-kpi-value">${val}</strong>${(() => { const trend = trendForV45(def.key, index, a); return trend && trend.direction !== "none" ? `<span class="cc-trend cc-trend-${trend.direction}"><span class="cc-trend-icon"><span class="material-icons" aria-hidden="true">${trend.direction === "up" ? "arrow_upward" : trend.direction === "down" ? "arrow_downward" : "remove"}</span></span>${escHtml(trend.label)}</span>` : ""; })()}</div>
+            ${(() => { const trend = trendForV45(def.key, index, a); return trend ? `<p class="cc-summary-kpi-note cc-trend-${trend.direction}">${escHtml(trend.note)}</p>` : ""; })()}
+          </article>` : `
         <div class="flex items-start justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0 dark:border-slate-800">
           <span class="min-w-0 shrink text-sm text-slate-500 dark:text-slate-400">${k}
-            ${kpi && !["Sin permiso de costos", "No disponible", "N/D"].includes(val) ? `<button type="button" class="cc-v45-kpi-detail ml-1 align-middle text-sky-600 dark:text-sky-300" data-area="${def.key}" data-kpi="${kpi}" data-title="${escHtml(k)}" aria-label="Ver detalle de ${escHtml(k)}"><span class="material-icons text-sm" aria-hidden="true">open_in_new</span></button>` : ""}
+            ${metricDetailButton(def, index, k, val, kpi, true)}
           </span>
           <span class="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-white">${val}</span>
         </div>`
         )
         .join("");
       const extra = typeof def.afterMetrics === "function" ? def.afterMetrics(a) : "";
-      body = `<div class="space-y-0">${rows}</div>${extra || ""}`;
+      body = `<div class="${useV45Layout ? "cc-summary-kpis" : "space-y-0"}">${rows}</div>${extra || ""}`;
     }
 
     const detailBtns = (def.details || [])
@@ -2161,7 +2330,10 @@
     });
     scope?.querySelectorAll(".cc-v45-kpi-detail").forEach((btn) => {
       btn.addEventListener("click", () => {
-        if (btn.dataset.area === "resumen_general") openDetail("resumen_v45", btn.dataset.title, btn.dataset.kpi);
+        if (btn.dataset.urlKey) openDetail(btn.dataset.urlKey, btn.dataset.title, btn.dataset.vista);
+        else if (btn.dataset.area === "resumen_general" || (btn.dataset.area === "ventas" && btn.dataset.kpi === "ventas_netas")) {
+          openDetail("resumen_v45", btn.dataset.title, "ventas_netas" === btn.dataset.kpi ? "ventas" : btn.dataset.kpi);
+        }
         else if (btn.dataset.area === "inventario") openStockDetail(btn.dataset.kpi, btn.dataset.title);
         else openComercialDetail(btn.dataset.kpi, btn.dataset.title);
       });
@@ -2648,6 +2820,71 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function renderResumenRanking(data, state) {
+    const visual = el("cc-v45-visual");
+    if (!visual) return;
+    const rows = data.filas || [];
+    const compare = state.mode === "comparacion";
+    const count = RESUMEN_COUNT_KPIS.has(state.vista);
+    const format = (value) => count ? fmtNum.format(Number(value || 0)) : fmtMoney.format(Number(value || 0));
+    const total = Number(data.total_importe || 0);
+    const previous = Number(data.total_anterior || 0);
+    const pct = (value) => total ? `${fmtNum.format(Number(value || 0) / total * 100)} %` : "—";
+    const mode = el("cc-v45-chart-mode")?.value || "auto";
+    const chartMode = compare ? "barras" : mode === "auto"
+      ? (rows.filter((row) => Number(row.importe) > 0).length <= 7 ? "torta" : "barras") : mode;
+    const top = rows.filter((row) => Number(row.importe) > 0).slice(0, 7);
+    const chartCandidates = compare ? rows.filter((row) => Number(row.importe) !== 0 || Number(row.anterior) !== 0) : top;
+    const colors = ["#2563eb", "#14b8a6", "#f97316", "#8b5cf6", "#eab308", "#ec4899", "#0ea5e9", "#64748b"];
+    let chart = '<p class="text-sm text-slate-500 dark:text-slate-300">Sin valores positivos para graficar.</p>';
+    if (top.length && chartMode === "torta") {
+      const chartTotal = rows.reduce((sum, row) => sum + Math.max(0, Number(row.importe || 0)), 0);
+      const slices = top.map((row) => Number(row.importe || 0));
+      const others = Math.max(0, chartTotal - slices.reduce((sum, value) => sum + value, 0));
+      if (others) slices.push(others);
+      let position = 0;
+      const stops = slices.map((value, index) => {
+        const start = position;
+        position += value / chartTotal * 100;
+        return `${colors[index]} ${start.toFixed(2)}% ${position.toFixed(2)}%`;
+      });
+      chart = `<div class="flex flex-col items-center gap-5 sm:flex-row">
+        <div class="aspect-square w-48 shrink-0 rounded-full shadow-inner sm:w-60" role="img" aria-label="Participación de los importes positivos" style="background:conic-gradient(${stops.join(",")})"></div>
+        <ul class="min-w-0 space-y-1 text-xs">${top.map((row, index) => `<li class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded-sm" style="background:${colors[index]}"></span><span class="truncate">${escHtml(row.etiqueta)}</span><strong class="tabular-nums">${fmtNum.format(Number(row.importe) / chartTotal * 100)} %</strong></li>`).join("")}${others ? `<li class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded-sm" style="background:${colors[7]}"></span>Otros</li>` : ""}</ul>
+      </div>`;
+    } else if (chartCandidates.length) {
+      const chartRows = chartCandidates.slice(0, compare ? 12 : 7);
+      const max = Math.max(1, ...chartRows.flatMap((row) => [Math.abs(Number(row.importe || 0)), compare ? Math.abs(Number(row.anterior || 0)) : 0]));
+      chart = `<div class="space-y-3">${chartRows.map((row) => `<div class="grid grid-cols-[minmax(5rem,8rem)_1fr] items-center gap-2 text-xs"><span class="truncate" title="${escHtml(row.etiqueta)}">${escHtml(row.etiqueta)}</span><div class="space-y-1"><div class="h-4 rounded-sm bg-blue-600" style="width:${Math.max(1, Math.abs(Number(row.importe || 0)) / max * 100).toFixed(1)}%" title="Actual: ${escHtml(format(row.importe))}"></div>${compare ? `<div class="h-4 rounded-sm bg-green-500" style="width:${Math.max(1, Math.abs(Number(row.anterior || 0)) / max * 100).toFixed(1)}%" title="Comparación: ${escHtml(format(row.anterior))}"></div>` : ""}</div></div>`).join("")}</div>${compare ? '<p class="mt-3 text-xs text-slate-500"><span class="text-blue-600">■</span> Período 1 &nbsp; <span class="text-green-500">■</span> Período 2</p>' : ""}`;
+    }
+    const period = data.periodo ? `${data.periodo.inicio} a ${data.periodo.fin}` : "";
+    const compPeriod = data.comparacion ? `${data.comparacion.inicio} a ${data.comparacion.fin}` : "";
+    const head = compare
+      ? "<th>Descripción</th><th>Período 1</th><th>Período 2</th><th>Variación</th><th>Variación %</th><th>Indicador</th>"
+      : "<th>Pos.</th><th>Descripción</th><th>Importe</th><th>% part.</th><th>Cantidad</th>";
+    const body = rows.map((row, index) => {
+      const direction = Number(row.variacion || 0) > 0 ? "↑ Sube" : Number(row.variacion || 0) < 0 ? "↓ Baja" : "— Estable";
+      const color = Number(row.variacion || 0) > 0 ? "text-green-700 dark:text-green-400" : Number(row.variacion || 0) < 0 ? "text-red-700 dark:text-red-400" : "text-slate-500";
+      return `<tr class="border-b border-slate-100 dark:border-slate-800">${compare
+        ? `<td>${escHtml(row.etiqueta)}</td><td>${format(row.importe)}</td><td>${format(row.anterior)}</td><td>${format(row.variacion)}</td><td>${row.variacion_pct == null ? "Nuevo" : `${fmtNum.format(row.variacion_pct)} %`}</td><td class="${color}">${direction}</td>`
+        : `<td>${index + 1}</td><td>${escHtml(row.etiqueta)}</td><td>${format(row.importe)}</td><td>${pct(row.importe)}</td><td>${fmtNum.format(Number(row.cantidad || 0))}</td>`}</tr>`;
+    }).join("");
+    const totalRow = compare
+      ? `<td>Total</td><td>${format(total)}</td><td>${format(previous)}</td><td>${format(total - previous)}</td><td>${previous ? `${fmtNum.format((total - previous) / Math.abs(previous) * 100)} %` : "Nuevo"}</td><td></td>`
+      : `<td></td><td>Total general</td><td>${format(total)}</td><td>${total ? "100 %" : "—"}</td><td>${fmtNum.format(Number(data.total_cantidad || 0))}</td>`;
+    visual.innerHTML = `<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+      <section class="min-w-0 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="mb-3 text-sm font-semibold">${compare ? "Análisis por períodos" : "Ranking"}</h3>${chart}</section>
+      <section class="min-w-0 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700"><table class="w-full min-w-[34rem] text-xs [&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2 [&_th]:py-2 [&_th]:text-left"><thead class="bg-slate-100 dark:bg-slate-800"><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="6">Sin datos.</td></tr>'}<tr class="font-bold text-amber-800 dark:text-amber-300">${totalRow}</tr></tbody></table></section>
+    </div><p class="mt-3 text-xs text-slate-500 dark:text-slate-300">${escHtml(data.nota || "")}${data.truncado ? " Se muestran hasta 500 posiciones." : ""} Los importes cero o negativos permanecen en la tabla; el gráfico de torta usa sólo valores positivos.</p>`;
+    visual.classList.remove("hidden");
+    el("cc-detail-table-wrap")?.classList.add("hidden");
+    el("cc-detail-cards")?.classList.add("hidden");
+    el("cc-v45-pagination")?.classList.add("hidden");
+    el("cc-detail-summary").textContent = compare
+      ? `Período 1: ${period} · Período 2: ${compPeriod} · Total: ${format(total)}`
+      : `${rows.length} posición(es) · Total: ${format(total)}`;
+  }
+
   async function loadGenericV45Detail() {
     const state = genericV45Detail;
     if (!state) return;
@@ -2657,20 +2894,35 @@
       return;
     }
     const extra = { vista: state.vista, limit: "100", offset: String(state.offset) };
+    if (state.resumen) {
+      extra.modo = state.mode;
+      if (state.mode !== "documentos") extra.agrupar_por = el("cc-v45-group")?.value || "entidad";
+    }
     if (term.length >= 2) extra.busqueda = term;
+    const requestId = (state.requestId || 0) + 1;
+    state.requestId = requestId;
     el("cc-detail-summary").textContent = "Cargando detalle…";
     el("cc-detail-error")?.classList.add("hidden");
     try {
       const data = await fetchJson(`${state.base}?${buildQuery(extra)}`);
-      if (genericV45Detail !== state || state.offset !== Number(extra.offset)) return;
+      if (genericV45Detail !== state || state.offset !== Number(extra.offset) || state.requestId !== requestId) return;
       if (data.disponible === false) {
+        el("cc-v45-visual")?.classList.add("hidden");
+        el("cc-detail-table-wrap")?.classList.remove("hidden");
         renderGenericDetailTable({ filas: [], total_registros: 0 });
         el("cc-detail-summary").textContent = data.motivo === "sin_alcance_territorial"
           ? "Este origen fiscal no tiene sucursal ni punto de venta. Quitá el filtro para consultar sus documentos generales."
+          : data.motivo === "saldo_sin_periodo" ? "Este saldo es una foto actual y no tiene comparación entre períodos."
           : "Detalle no disponible para esta empresa.";
         return;
       }
       genericV45DetailData = data;
+      if (state.resumen && state.mode !== "documentos") {
+        renderResumenRanking(data, state);
+        return;
+      }
+      el("cc-v45-visual")?.classList.add("hidden");
+      el("cc-detail-table-wrap")?.classList.remove("hidden");
       renderGenericDetailTable(data);
       const pagination = el("cc-v45-pagination");
       pagination?.classList.remove("hidden");
@@ -2721,12 +2973,25 @@
     el("cc-detail-error")?.classList.add("hidden");
     clearDetailContent();
     if (["resumen_v45", "libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45", "compras_v45", "preparacion_v45", "financiero_v45"].includes(urlKey) && vista) {
-      genericV45Detail = { base, vista, offset: 0 };
+      const resumen = urlKey === "resumen_v45";
+      genericV45Detail = { base, vista, offset: 0, resumen, mode: resumen ? "ranking" : "documentos" };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");
       controls?.classList.add("flex");
       if (el("cc-v45-search")) el("cc-v45-search").value = "";
       el("cc-v45-order")?.classList.add("hidden");
+      for (const id of ["cc-v45-view", "cc-v45-group", "cc-v45-chart-mode"]) {
+        el(id)?.classList.toggle("hidden", !resumen);
+      }
+      if (resumen) {
+        el("cc-v45-view").value = "ranking";
+        el("cc-v45-group").value = vista === "ventas" ? "vendedor" : "entidad";
+        el("cc-v45-chart-mode").value = "auto";
+        for (const option of el("cc-v45-group").options) {
+          if (["vendedor", "marca"].includes(option.value)) option.hidden = vista !== "ventas";
+        }
+        el("cc-v45-view").querySelector('option[value="comparacion"]').hidden = RESUMEN_GLOBAL_KPIS.has(vista);
+      }
       void loadGenericV45Detail();
       return;
     }
@@ -2958,6 +3223,23 @@
       if (stockDetail) stockDetail.offset = 0;
       if (genericV45Detail) genericV45Detail.offset = 0;
       comercialSearchTimer = setTimeout(() => void (genericV45Detail ? loadGenericV45Detail() : stockDetail ? loadStockDetail() : loadComercialDetail()), 300);
+    });
+    el("cc-v45-view")?.addEventListener("change", () => {
+      if (!genericV45Detail?.resumen) return;
+      genericV45Detail.mode = el("cc-v45-view").value;
+      genericV45Detail.offset = 0;
+      const ranking = genericV45Detail.mode !== "documentos";
+      el("cc-v45-group")?.classList.toggle("hidden", !ranking);
+      el("cc-v45-chart-mode")?.classList.toggle("hidden", !ranking);
+      void loadGenericV45Detail();
+    });
+    el("cc-v45-group")?.addEventListener("change", () => {
+      if (genericV45Detail?.resumen && genericV45Detail.mode !== "documentos") void loadGenericV45Detail();
+    });
+    el("cc-v45-chart-mode")?.addEventListener("change", () => {
+      if (genericV45Detail?.resumen && genericV45Detail.mode !== "documentos" && genericV45DetailData) {
+        renderResumenRanking(genericV45DetailData, genericV45Detail);
+      }
     });
     el("cc-v45-order")?.addEventListener("change", () => {
       if (!comercialDetail && !stockDetail) return;

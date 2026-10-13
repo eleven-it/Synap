@@ -17,6 +17,7 @@
   .cc-shell { overflow-x: clip; }
   .cc-hero {
     position: relative;
+    overflow: visible !important;
     background: linear-gradient(135deg, #fff 0%, #f8fafc 65%, #eef2ff 100%);
     border-color: #cbd5e1;
     color: #0f172a;
@@ -28,6 +29,7 @@
     inset: 0;
     background: radial-gradient(ellipse 80% 60% at 100% 0%, rgba(56, 189, 248, 0.09), transparent 55%);
     pointer-events: none;
+    border-radius: inherit;
   }
   .cc-hero-toolbar {
     background: rgba(255, 255, 255, 0.85);
@@ -44,14 +46,20 @@
     color: #0f172a;
   }
   .cc-hero-toolbar .tags-input { background: transparent !important; color: #0f172a !important; }
+  .cc-hero-toolbar .tags-filter-container { min-width: 0; padding-block: .45rem; }
+  .cc-hero-toolbar .tags-chips { flex: 0 1 auto; }
+  .cc-hero-toolbar .tags-chips:empty { display: none; }
+  .cc-filter-field .tags-input { width: auto; min-width: 4rem; text-align: left; }
+  .cc-filter-search-icon { flex: none; font-size: 1.05rem; color: #64748b; }
   .cc-hero-toolbar .tags-input::placeholder { color: #64748b; opacity: 1; }
   .cc-hero-toolbar .tags-dropdown { background: #fff; border-color: #cbd5e1; }
   .cc-hero #cc-btn-areas-config { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
   .cc-hero .cc-report-link { background: #f8fafc; color: #1e40af; border-color: #cbd5e1; }
   .cc-hero #cc-link-mpr-tablero { color: #6d28d9; }
   .cc-hero #cc-areas-config-panel { background: #fff; border-color: #fcd34d; color: #0f172a; }
-  .cc-filter-layout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; align-items: start; }
-  .cc-period-fieldset, .cc-filter-scope, .cc-comparison { grid-column: span 2; }
+  .cc-filter-layout { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .75rem; align-items: start; }
+  .cc-period-fieldset, .cc-filter-scope, .cc-comparison { grid-column: span 4; }
+  .cc-comparison { margin-top: 1.2rem; min-height: 2.5rem; }
   .cc-filter-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; max-width: none; }
   .cc-filter-scope .cc-filter-actions { grid-column: 1 / -1; }
   .cc-filter-scope .cc-filter-field p { display: none; }
@@ -69,6 +77,7 @@
     background: rgba(2, 6, 23, .55); border-color: #475569; color: #fff;
   }
   .dark .cc-hero-toolbar .tags-input { color: #fff !important; }
+  .dark .cc-filter-search-icon { color: #94a3b8; }
   .dark .cc-hero-toolbar .tags-input::placeholder { color: #94a3b8; }
   .dark .cc-hero-toolbar .tags-dropdown { background: #0f172a; border-color: #475569; }
   .dark .cc-hero #cc-btn-areas-config { background: rgba(120, 53, 15, .4); color: #fef3c7; border-color: rgba(245, 158, 11, .5); }
@@ -78,6 +87,7 @@
   @media (max-width: 900px) {
     .cc-filter-layout { grid-template-columns: 1fr; }
     .cc-period-fieldset, .cc-filter-scope, .cc-comparison { grid-column: 1; }
+    .cc-comparison { margin-top: 0; }
   }
   @media (max-width: 520px) {
     .cc-filter-scope { grid-template-columns: 1fr; }
@@ -92,6 +102,42 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
   }
+  .cc-summary-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .45rem; }
+  .cc-summary-kpi { min-width: 0; min-height: 5.1rem; padding: .4rem .55rem; border: 1px solid var(--cc-kpi-accent); border-radius: .45rem; background: #fff; }
+  .cc-summary-kpi-head { display: flex; align-items: baseline; justify-content: space-between; gap: .25rem; }
+  .cc-summary-kpi-title { color: var(--cc-kpi-accent); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .025em; line-height: 1.15; }
+  .cc-summary-kpi-value { font-size: clamp(1rem, 1.5vw, 1.32rem); line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .cc-summary-kpi-middle { display: flex; align-items: center; justify-content: space-between; gap: .25rem; }
+  .cc-summary-kpi-note { font-size: .67rem; line-height: 1.2; color: #64748b; }
+  .cc-trend { display: inline-flex; align-items: center; gap: .25rem; flex: none; font-size: .68rem; font-weight: 600; }
+  .cc-trend-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border-radius: 999px; color: #fff; }
+  .cc-trend-icon .material-icons { font-size: .98rem; }
+  .cc-trend-up { color: #15803d; }
+  .cc-trend-up .cc-trend-icon { background: #16a34a; }
+  .cc-trend-down { color: #b91c1c; }
+  .cc-trend-down .cc-trend-icon { background: #dc2626; }
+  .cc-trend-flat { color: #64748b; }
+  .cc-trend-flat .cc-trend-icon { background: #64748b; }
+  .cc-summary-kpi-note.cc-trend-up, .dark .cc-summary-kpi-note.cc-trend-up { color: #15803d; }
+  .cc-summary-kpi-note.cc-trend-down, .dark .cc-summary-kpi-note.cc-trend-down { color: #b91c1c; }
+  .cc-summary-legend { margin: .4rem .15rem .55rem; color: #475569; font-size: .65rem; text-align: center; }
+  .cc-summary-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+  .cc-summary-chart { min-width: 0; border: 1px solid #cbd5e1; border-radius: .5rem; background: #fff; padding: .6rem; }
+  .cc-summary-chart svg { width: 100%; height: auto; min-height: 11rem; }
+  .cc-summary-chart-title { margin-bottom: .2rem; color: #334155; font-size: .7rem; font-weight: 700; text-transform: uppercase; }
+  .cc-chart-grid { stroke: #64748b; stroke-width: .75; }
+  .cc-chart-zero { stroke: #334155; stroke-width: 1.1; }
+  .cc-chart-axis { fill: #334155; font-size: 9px; }
+  .cc-summary-readout { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem 1rem; padding: .8rem .3rem; font-size: .83rem; font-weight: 600; }
+  .dark .cc-summary-kpi, .dark .cc-summary-chart { background: #0f172a; }
+  .dark .cc-summary-kpi-note { color: #cbd5e1; }
+  .dark .cc-summary-legend, .dark .cc-summary-chart-title { color: #cbd5e1; }
+  .dark .cc-chart-grid { stroke: #64748b; }
+  .dark .cc-chart-zero { stroke: #cbd5e1; }
+  .dark .cc-chart-axis { fill: #cbd5e1; }
+  @media (max-width: 1100px) { .cc-summary-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 700px) { .cc-summary-charts { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) { .cc-summary-kpis { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
@@ -216,7 +262,8 @@
                 </select>
                 <div id="sucursales_tags_container"
                      class="tags-filter-container relative flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 shadow-inner transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35">
-                  <div class="tags-chips flex min-w-0 flex-1 flex-wrap gap-1.5"></div>
+                  <span class="material-icons cc-filter-search-icon" aria-hidden="true">search</span>
+                  <div class="tags-chips flex min-w-0 flex-wrap gap-1.5"></div>
                   <input type="text" id="sucursales_search"
                          class="tags-input min-w-[8rem] flex-1 border-none bg-transparent py-0 text-sm text-white outline-none placeholder:text-slate-500"
                          placeholder="Todas · buscar sucursal…" autocomplete="off" />
@@ -232,7 +279,8 @@
                 </select>
                 <div id="punto_venta_tags_container"
                      class="tags-filter-container relative flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 shadow-inner transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35">
-                  <div class="tags-chips flex min-w-0 flex-1 flex-wrap gap-1.5"></div>
+                  <span class="material-icons cc-filter-search-icon" aria-hidden="true">search</span>
+                  <div class="tags-chips flex min-w-0 flex-wrap gap-1.5"></div>
                   <input type="text" id="punto_venta_search"
                          class="tags-input min-w-[8rem] flex-1 border-none bg-transparent py-0 text-sm text-white outline-none placeholder:text-slate-500"
                          placeholder="Todos · buscar punto de venta…" autocomplete="off" />
@@ -246,7 +294,8 @@
                 <select name="depositos" id="depositos" multiple class="hidden" data-tags-field="depositos"></select>
                 <div id="depositos_tags_container"
                      class="tags-filter-container relative flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 shadow-inner transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/35">
-                  <div class="tags-chips flex min-w-0 flex-1 flex-wrap gap-1.5"></div>
+                  <span class="material-icons cc-filter-search-icon" aria-hidden="true">search</span>
+                  <div class="tags-chips flex min-w-0 flex-wrap gap-1.5"></div>
                   <input type="text" id="depositos_search"
                          class="tags-input min-w-[8rem] flex-1 border-none bg-transparent py-0 text-sm text-white outline-none placeholder:text-slate-500"
                          placeholder="Buscar depósito…" autocomplete="off" />
@@ -337,7 +386,7 @@
      role="dialog"
      aria-modal="true"
      aria-labelledby="cc-detail-title">
-  <div class="flex h-[100dvh] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden border-0 bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[min(90vh,100dvh)] sm:max-w-5xl sm:rounded-2xl sm:border sm:border-slate-200 dark:sm:border-slate-700">
+  <div class="flex h-[100dvh] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden border-0 bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[min(94vh,100dvh)] sm:max-w-[96vw] sm:rounded-2xl sm:border sm:border-slate-200 dark:sm:border-slate-700">
     <div class="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900 sm:px-4">
       <h2 id="cc-detail-title" class="min-w-0 flex-1 truncate text-base font-bold text-slate-900 dark:text-white">Detalle</h2>
       <button type="button" id="cc-detail-close" class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Cerrar">
@@ -371,7 +420,19 @@
     </div>
     <div id="cc-v45-detail-controls" class="hidden shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 sm:px-4">
       <label class="sr-only" for="cc-v45-search">Buscar comprobante, cliente o artículo</label>
-      <input id="cc-v45-search" type="search" maxlength="120" placeholder="Buscar comprobante o cliente…" class="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+      <input id="cc-v45-search" type="search" maxlength="120" placeholder="Buscar en el detalle…" class="min-h-10 min-w-[12rem] flex-1 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+      <label class="sr-only" for="cc-v45-view">Vista del indicador</label>
+      <select id="cc-v45-view" class="hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+        <option value="ranking">Resumen y gráfico</option><option value="documentos">Documentos</option><option value="comparacion">Análisis por períodos</option>
+      </select>
+      <label class="sr-only" for="cc-v45-group">Ranking por</label>
+      <select id="cc-v45-group" class="hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+        <option value="entidad">Cliente / entidad</option><option value="vendedor">Vendedor</option><option value="marca">Marca</option>
+      </select>
+      <label class="sr-only" for="cc-v45-chart-mode">Tipo de gráfico</label>
+      <select id="cc-v45-chart-mode" class="hidden min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+        <option value="auto">Gráfico automático</option><option value="barras">Barras</option><option value="torta">Torta</option>
+      </select>
       <label class="sr-only" for="cc-v45-order">Orden</label>
       <select id="cc-v45-order" class="min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
         <option value="fecha_desc">Fecha ↓</option><option value="fecha_asc">Fecha ↑</option>
@@ -381,6 +442,7 @@
     </div>
     <div class="cc-detail-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-4">
       <div id="cc-detail-summary" class="mb-3 break-words text-sm text-slate-600 dark:text-slate-300"></div>
+      <div id="cc-v45-visual" class="hidden"></div>
       <div id="cc-detail-cards" class="hidden space-y-2" role="list"></div>
       <div id="cc-detail-table-wrap" class="cc-detail-scroll -mx-3 overflow-x-auto px-3 sm:-mx-4 sm:px-4">
         <table class="w-full min-w-0 table-auto text-left text-xs text-slate-700 dark:text-slate-200 lg:min-w-full">
@@ -425,5 +487,5 @@
   import { initializeTagsFilter } from "{% static 'reports/js/tags_filter.mjs' %}?v=20260901b";
   window.initializeTagsFilter = initializeTagsFilter;
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20261013a" defer></script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20261013b" defer></script>
 {% endblock %}

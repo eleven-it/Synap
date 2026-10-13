@@ -1,5 +1,6 @@
 """Límites de acceso del Resumen gerencial V45."""
 from datetime import date
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
@@ -9,10 +10,73 @@ from reports.services.executive_dashboard.resumen_v45 import (
     _sales_account_source,
     _snapshots,
 )
-from reports.services.executive_dashboard.resumen_v45_detail import list_resumen_v45_detail
+from reports.services.executive_dashboard.resumen_v45_detail import (
+    _ranking_source, _source, list_resumen_v45_detail, list_resumen_v45_ranking,
+)
 
 
 class ResumenV45ScopeTests(SimpleTestCase):
+    def test_ranking_ventas_respeta_filtros_y_fuentes(self):
+        filters = DashboardFilters(
+            "best_sox", date(2026, 10, 13),
+            date(2026, 10, 1), date(2026, 10, 13),
+            sucursales_filtro=(2,), puntos_venta=(8,),
+        )
+        with patch("reports.services.executive_dashboard.resumen_v45_detail._table_exists", return_value=False):
+            seller, params, tables, _ = _ranking_source(None, filters, "ventas", False, "vendedor")
+            self.assertIn("cc.CodViajante", seller)
+            self.assertIn("cc.CodSucursal IN (%s)", seller)
+            self.assertIn("cc.id_pv IN (%s)", seller)
+            self.assertEqual(params[-2:], [8, 2])
+            self.assertIn("viajantes", tables)
+            brand, _, tables, note = _ranking_source(None, filters, "ventas", False, "marca")
+            self.assertIn("st.PrecioNetoxR", brand)
+            self.assertIn("st.Anulado='No'", brand)
+            self.assertIn("ajustes de cabecera", note)
+            self.assertIn("marca", tables)
+            documents, _, required = _source(filters, "ventas", False)
+            self.assertIn("c.CUIT", documents)
+            self.assertIn("cc.CondVenta", documents)
+            self.assertIn("importe_final", documents)
+            self.assertIn("cc.id_pv punto_venta", documents)
+            self.assertIn("viajantes", required)
+
+    def test_ranking_comparacion_usa_periodo_anterior_y_conserva_negativos(self):
+        filters = DashboardFilters(
+            "best_sox", date(2026, 10, 13),
+            date(2026, 10, 1), date(2026, 10, 13),
+        )
+
+        class Cursor:
+            description = [("etiqueta",), ("importe",), ("cantidad",)]
+            def __init__(self):
+                self.periods = []
+                self.aggregate = False
+            def execute(self, query, params):
+                if "FROM information_schema" in query:
+                    self.aggregate = None
+                elif "SELECT COALESCE(SUM(r.importe)" in query:
+                    self.aggregate = True
+                    self.periods.append(params[0])
+                else:
+                    self.aggregate = False
+            def fetchone(self):
+                if self.aggregate is None:
+                    return (1,)
+                if self.aggregate:
+                    return (80, 2) if self.periods[-1] == "2026-10-01" else (120, 3)
+                return None
+            def fetchall(self):
+                return [("Cliente A", 100, 1), ("Devolución", -20, 1)] if self.periods[-1] == "2026-10-01" else [("Cliente A", 120, 3)]
+
+        cursor = Cursor()
+        data = list_resumen_v45_ranking(cursor, filters, key="ventas", compare=True)
+        self.assertEqual(cursor.periods, ["2026-10-01", "2026-09-18"])
+        self.assertEqual(data["total_importe"], 80)
+        self.assertEqual(data["total_anterior"], 120)
+        self.assertEqual(data["filas"][1]["importe"], -20)
+        self.assertEqual(data["filas"][1]["variacion"], -20)
+
     def test_consultas_de_cuenta_corriente_aceptan_parametros_mysql(self):
         filters = DashboardFilters(
             "best_sox", date(2026, 10, 12),
@@ -55,3 +119,6 @@ class ResumenV45ScopeTests(SimpleTestCase):
             result = list_resumen_v45_detail(NoGlobalCursor(), filters, key=key)
             self.assertFalse(result["disponible"])
             self.assertEqual(result["motivo"], "sin_alcance_territorial")
+            ranking = list_resumen_v45_ranking(NoGlobalCursor(), filters, key=key)
+            self.assertFalse(ranking["disponible"])
+            self.assertEqual(ranking["motivo"], "sin_alcance_territorial")
