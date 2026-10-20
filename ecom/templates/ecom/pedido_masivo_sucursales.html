@@ -607,6 +607,7 @@
                                x-model="qArt"
                                :disabled="!matrizEditable"
                                @focus="abrirPanelArt(); scrollBuscadorIntoView()"
+                               @input="invalidarBusquedaArticulos()"
                                @input.debounce.250ms="buscarArticulos()"
                                @keydown.arrow-down.prevent="onArrowDownArt()"
                                @keydown.arrow-up.prevent="moverSelArt(-1)"
@@ -869,6 +870,7 @@
                      :aria-expanded="panelArt"
                      :disabled="!matrizEditable"
                      @focus="abrirPanelArt(); prepararBusquedaMovil($event)"
+                     @input="invalidarBusquedaArticulos()"
                      @input.debounce.250ms="buscarArticulos()"
                      @keydown.arrow-down.prevent="onArrowDownArt()"
                      @keydown.arrow-up.prevent="moverSelArt(-1)"
@@ -1512,5 +1514,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple50"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple51"></script>
 {% endblock %}

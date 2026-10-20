@@ -2375,6 +2375,14 @@ function pedidoMasivoCore() {
       clearTimeout(this._chipTimer);
       this._chipTimer = setTimeout(() => { this.guardadoChip = ''; }, 1500);
     },
+    invalidarBusquedaArticulos() {
+      ++this._artBusquedaSeq;
+      this._articulosBusquedaAbort?.abort();
+      this._articulosBusquedaAbort = null;
+      this.articulosBusqueda = [];
+      this.artBusquedaHecha = false;
+      this.cargandoArt = false;
+    },
     async buscarArticulos() {
       if (!this.idCliente || !this.urls.articulos) return;
       const q = (this.qArt || '').trim();
@@ -2403,6 +2411,7 @@ function pedidoMasivoCore() {
      */
     async listarTodosArticulos() {
       if (!this.idCliente || !this.urls.articulos) return;
+      this.qArt = '';
       this.paginaGaleriaSimple = 1;
       await this._fetchArticulos({ q: '', todos: true,
         tam: this.modoSimple && this.vistaCatalogoSimple === 'galeria' ? 24 : 5000 });
@@ -2424,11 +2433,8 @@ function pedidoMasivoCore() {
         + '&pagina=' + encodeURIComponent(String(pagina))
         + this.parametroDomicilioCatalogo();
       if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') u += '&fotos=1';
-      if (todos) {
-        u += '&todos=1';
-      } else {
-        u += '&q=' + encodeURIComponent(q || '');
-      }
+      if (todos) u += '&todos=1';
+      if (q) u += '&q=' + encodeURIComponent(q);
       const filtros = this.parametrosFiltrosCatalogo();
       if (filtros) u += `&${filtros}`;
       try {

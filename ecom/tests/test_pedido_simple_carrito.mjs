@@ -132,6 +132,39 @@ test('la galería pagina fotos sin perder la selección múltiple', async () => 
   assert.ok(urls[1].includes('pagina=2'));
 });
 
+test('la búsqueda conserva el código al filtrar o paginar, y Ver todos limpia el campo', async () => {
+  const app = appEditable(true);
+  app.idCliente = 3;
+  app.urls = { articulos: '/articulos' };
+  app.qArt = '947563-03';
+  const urls = [];
+  app.getJson = async (url) => {
+    urls.push(new URL(url, 'https://synap.local'));
+    return { ok: true, items: [] };
+  };
+
+  await app.aplicarFiltrosCatalogo();
+  assert.equal(urls[0].searchParams.get('todos'), '1');
+  assert.equal(urls[0].searchParams.get('q'), '947563-03');
+
+  await app.listarTodosArticulos();
+  assert.equal(app.qArt, '');
+  assert.equal(urls[1].searchParams.get('q'), null);
+});
+
+test('al escribir se ocultan inmediatamente los resultados de la búsqueda anterior', () => {
+  const app = appEditable(true);
+  app.articulosBusqueda = [{ id_articulo: 9, nombre: 'Resultado anterior' }];
+  app.artBusquedaHecha = true;
+  const secuencia = app._artBusquedaSeq;
+
+  app.invalidarBusquedaArticulos();
+
+  assert.deepEqual(app.articulosBusqueda, []);
+  assert.equal(app.artBusquedaHecha, false);
+  assert.equal(app._artBusquedaSeq, secuencia + 1);
+});
+
 test('el teclado compacto reemplaza la cantidad inicial y conserva la multiselección', () => {
   const app = appEditable(true);
   const art = { id_articulo: 10, nombre: 'A' };
