@@ -56,6 +56,15 @@ def _cantidad_export(fila: Dict[str, Any], clave: str, modo: str) -> Any:
     return fila.get(clave)
 
 
+def _detalle_movimiento_export(mov: Dict[str, Any]) -> str:
+    """Texto de «Qué pasó» que ve el usuario, incluido el aviso si el conteo no cierra."""
+    texto = str(mov.get("detalle_ui") or mov.get("detalle") or "").strip()
+    aviso = str(mov.get("aviso_conteo") or "").strip()
+    if aviso and aviso not in texto:
+        return f"{texto} {aviso}".strip() if texto else aviso
+    return texto
+
+
 def analisis_trazabilidad_a_csv(
     analisis: Dict[str, Any],
     *,
@@ -147,7 +156,8 @@ def analisis_trazabilidad_a_csv(
             "fecha_display": mov.get("fecha_display") or "-",
             "tipo_mov": mov.get("tipo_mov") or mov.get("clase_ui") or "-",
             "nro_comprobante": mov.get("nro_comprobante") or "-",
-            "detalle": mov.get("detalle") or "",
+            "detalle": _detalle_movimiento_export(mov),
+            "contado": "" if mov.get("conteo") is None else mov.get("conteo"),
             "entrada": _cantidad_export(mov, "entrada", modo),
             "salida": _cantidad_export(mov, "salida", modo),
             "saldo_corrido": mov.get("saldo_corrido", ""),
@@ -170,6 +180,7 @@ def analisis_trazabilidad_a_csv(
         ("tipo_mov", "Tipo"),
         ("nro_comprobante", "Comprobante"),
         ("detalle", "Detalle"),
+        ("contado", "Contado"),
         ("entrada", "Entrada"),
         ("salida", "Salida"),
         ("saldo_corrido", "Saldo corrido"),
