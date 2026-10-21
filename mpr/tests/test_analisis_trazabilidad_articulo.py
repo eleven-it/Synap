@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -821,7 +822,7 @@ class TestSaldoCorridoAnalisis(SimpleTestCase):
         self.assertEqual(out[0]["saldo_corrido"], 150)
         self.assertEqual(out[1]["saldo_corrido"], 120)
 
-    def test_inventario_expone_conteo_igual_saldo_corrido(self):
+    def test_inventario_no_copia_saldo_en_contado(self):
         movs = [
             {
                 "entrada": 0,
@@ -838,8 +839,97 @@ class TestSaldoCorridoAnalisis(SimpleTestCase):
         ]
         out = _calcular_saldo_corrido_analisis(movs, saldo_inicial=167)
         self.assertIsNone(out[0]["conteo"])
-        self.assertEqual(out[1]["conteo"], 167)
+        self.assertIsNone(out[1]["conteo"])
         self.assertEqual(out[1]["saldo_corrido"], 167)
+
+
+class TestContadoFisicoKardex(SimpleTestCase):
+    """Contado es la cantidad de la campaña, no el saldo posterior al ajuste."""
+
+    def test_campana_10_muestra_367_y_avisa_si_el_saldo_no_cierra(self):
+        from mpr.services_kardex_articulo import _enriquecer_contado_fisico
+
+        movs = [
+            {
+                "clase_ui": "opa",
+                "entrada": 62,
+                "salida": 0,
+                "afecta_deposito": True,
+                "saldo_corrido": 80,
+                "detalle": "Armado 1ra MPR",
+                "conteo": None,
+            },
+            {
+                "clase_ui": "inventario",
+                "codigo_movimiento": 17710,
+                "motivo_movimiento": "Faltante",
+                "cod_deposito": 6,
+                "entrada": 0,
+                "salida": 584,
+                "afecta_deposito": True,
+                "saldo_corrido": -504,
+                "detalle": "Inventario físico campaña #10 (diff en conteo, faltante)",
+                "conteo": None,
+            },
+        ]
+
+        with patch(
+            "mpr.services_kardex_articulo._fetch_contados_por_campana",
+            return_value={(10, 6): {"id_linea": 8954, "cantidad_contada": Decimal("367")}},
+        ):
+            out = _enriquecer_contado_fisico("administranet", 1757, movs, id_deposito_eje=6)
+
+        self.assertIsNone(out[0]["conteo"])
+        self.assertEqual(out[1]["conteo"], 367)
+        self.assertEqual(out[1]["id_campana"], 10)
+        self.assertEqual(out[1]["detalle_ui"], "Campaña 10 · faltante · contaron 367")
+        self.assertTrue(out[1]["conteo_no_cierra"])
+        self.assertIn("pasó de 80 a -504", out[1]["aviso_conteo"])
+        self.assertNotEqual(out[1]["conteo"], out[1]["saldo_corrido"])
+
+    def test_sin_linea_de_campana_contado_queda_vacio(self):
+        from mpr.services_kardex_articulo import _enriquecer_contado_fisico
+
+        movs = [
+            {
+                "clase_ui": "inventario",
+                "cod_deposito": 6,
+                "entrada": 0,
+                "salida": 10,
+                "saldo_corrido": -10,
+                "detalle": "Inventario físico campaña #10 (diff en conteo, faltante)",
+            }
+        ]
+        with patch(
+            "mpr.services_kardex_articulo._fetch_contados_por_campana",
+            return_value={},
+        ):
+            out = _enriquecer_contado_fisico("administranet", 1, movs, id_deposito_eje=6)
+        self.assertIsNone(out[0]["conteo"])
+        self.assertEqual(out[0]["detalle_ui"], "Campaña 10 · faltante")
+        self.assertFalse(out[0]["conteo_no_cierra"])
+
+    def test_contado_cero_no_se_confunde_con_vacio(self):
+        from mpr.services_kardex_articulo import _enriquecer_contado_fisico
+
+        movs = [
+            {
+                "clase_ui": "inventario",
+                "cod_deposito": 6,
+                "entrada": 5,
+                "salida": 0,
+                "saldo_corrido": 5,
+                "detalle": "Inventario físico campaña #4",
+            }
+        ]
+        with patch(
+            "mpr.services_kardex_articulo._fetch_contados_por_campana",
+            return_value={(4, 6): {"id_linea": 1, "cantidad_contada": Decimal("0")}},
+        ):
+            out = _enriquecer_contado_fisico("administranet", 1, movs, id_deposito_eje=6)
+        self.assertEqual(out[0]["conteo"], 0)
+        self.assertEqual(out[0]["detalle_ui"], "Campaña 4 · sobrante · contaron 0")
+        self.assertTrue(out[0]["conteo_no_cierra"])
 
 
 class TestCalcularSaldoInicialTerminado(SimpleTestCase):
@@ -1464,6 +1554,10 @@ class TestGoldenSampleKardex610Blanco(SimpleTestCase):
 class TestArticulo340StockInicialRemSobrante(SimpleTestCase):
     """Regresión artículo 340: Stock Inicial +167, REM −167, Sobrante +167 → cierre 167."""
 
+    @patch(
+        "mpr.services_kardex_articulo._enriquecer_contado_fisico",
+        side_effect=lambda base, id_art, movimientos, **kwargs: movimientos,
+    )
     @patch("mpr.services_kardex_articulo._fetch_nombre_deposito", return_value="Terminado")
     @patch("mpr.services.get_deposito_terminado_mpr", return_value=6)
     @patch("mpr.services_kardex_articulo._consultar_eventos_mpr_articulo", return_value=[])
@@ -1531,7 +1625,7 @@ class TestArticulo340StockInicialRemSobrante(SimpleTestCase):
         movs = payload["movimientos"]
         self.assertEqual([m["clase_ui"] for m in movs], ["stock_inicial", "rem", "inventario"])
         self.assertEqual([m["saldo_corrido"] for m in movs], [167, 0, 167])
-        self.assertEqual(movs[-1]["conteo"], 167)
+        self.assertIsNone(movs[-1]["conteo"])
         self.assertEqual(payload["kpis"]["saldo_final"], 167)
         self.assertFalse(
             any("no coincide" in a.lower() for a in payload.get("advertencias", []))

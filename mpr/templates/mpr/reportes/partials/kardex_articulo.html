@@ -266,7 +266,7 @@
                     {% endif %}
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Comprobante</th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Qué pasó</th>
-                    <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Conteo</th>
+                    <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Contado</th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Entrada</th>
                     <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Salida</th>
                     {% if meta.deposito.tipo_eje == "pipeline_fabricados" %}
@@ -353,7 +353,7 @@
                                 aria-haspopup="dialog"
                                 data-fecha="{{ r.fecha_display|default:'-' }}"
                                 data-comprobante="{{ r.nro_comprobante|default:'-' }}"
-                                data-ruta="{{ r.detalle|default:'-' }}"
+                                data-ruta="{% if r.detalle_ui %}{{ r.detalle_ui }}{% else %}{{ r.detalle|default:'-' }}{% endif %}"
                                 data-cantidad="{% if r.entrada %}Entrada: {{ r.entrada }}{% elif r.salida %}Salida: {{ r.salida }}{% else %}-{% endif %}"
                                 data-codigo-movimiento="{{ r.codigo_movimiento }}"
                                 data-pdf-url="{% url 'stock:movimiento_pdf' r.codigo_movimiento %}">
@@ -362,9 +362,19 @@
                         {% else %}
                         {{ r.nro_comprobante|default:"-" }}
                         {% endif %}
+                        {% if r.clase_ui == "inventario" and r.codigo_movimiento %}
+                        <span class="mt-0.5 block text-[11px] font-normal text-slate-500 dark:text-slate-400">{{ r.motivo_movimiento|default:"Inventario" }} · {{ r.codigo_movimiento }}</span>
+                        {% endif %}
                     </td>
-                    <td class="max-w-[18rem] px-3 py-2.5 text-sm text-slate-600 dark:text-slate-400" title="{{ r.detalle|default:'' }}">
-                        <span class="line-clamp-2">{{ r.detalle|default:"-" }}</span>
+                    <td class="max-w-[22rem] px-3 py-2.5 text-sm text-slate-600 dark:text-slate-400" title="{{ r.detalle|default:'' }}">
+                        <span class="{% if not r.conteo_no_cierra %}line-clamp-2{% endif %}">{% if r.detalle_ui %}{{ r.detalle_ui }}{% else %}{{ r.detalle|default:"-" }}{% endif %}</span>
+                        {% if r.aviso_conteo %}
+                        <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">{{ r.aviso_conteo }}</p>
+                        {% endif %}
+                        {% if r.id_campana %}
+                        <a href="{% url 'stock:inventario_fisico_analizador' r.id_campana %}"
+                           class="mt-1 block text-xs font-medium text-purple-700 hover:underline dark:text-purple-300">Ver campaña {{ r.id_campana }}</a>
+                        {% endif %}
                     </td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-amber-800 dark:text-amber-300">{% if r.conteo is not None %}{{ r.conteo }}{% else %}—{% endif %}</td>
                     <td class="px-3 py-2.5 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">{% if r.entrada %}{{ r.entrada }}{% else %}—{% endif %}</td>
