@@ -7,9 +7,12 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from core.mysql_pool import mysql_cursor
+from decimal import Decimal
+
 from core.utils.administranet_types import (
     str_or_default,
     to_date_or_none,
+    to_decimal_or_none,
     to_int_or_none,
 )
 
@@ -26,6 +29,7 @@ _RE_DETALLE_OPP_PARTE_UUID = re.compile(
     r"OPP-parte\s+(" + _RE_UUID.pattern + r")\s+desde\s+MPR",
     re.IGNORECASE,
 )
+_RE_ID_CAMPANA_DETALLE = re.compile(r"campa[nñ]a\s*#\s*(\d+)", re.IGNORECASE)
 
 # Keywords LIKE sobre movimiento_stock.motivo_movimiento (LOWER … LIKE %kw%).
 MOTIVOS_MSTOCK_MOTIVO_LIKE_KEYWORDS = (
@@ -797,6 +801,7 @@ def _normalizar_fila_analisis_stock(
         "codigo_movimiento": to_int_or_none(row.get("codigo_movimiento")),
         "nro_comprobante": str_or_default(row.get("nro_comprobante"), "-"),
         "detalle": detalle,
+        "motivo_movimiento": str_or_default(row.get("motivo_movimiento"), ""),
         "operario": "-",
         "clase_ui": clase_ui,
         "afecta_deposito": afecta,
@@ -825,6 +830,7 @@ def _normalizar_fila_analisis_mstock(row: Dict[str, Any]) -> Optional[Dict[str, 
     mov = {
         **fila_k,
         "fecha_sort": row.get("fecha"),
+        "motivo_movimiento": str_or_default(row.get("motivo_movimiento"), ""),
         "clase_ui": clase_ui,
         "afecta_deposito": afecta,
         "fuente": str_or_default(row.get("fuente"), "mstock"),
@@ -1012,12 +1018,8 @@ def _calcular_saldo_corrido_por_etapa(
             for t in tipos_etapa
         ]
         fila["saldo_corrido"] = sum(snapshot.values())
-        if fila.get("clase_ui") == "inventario" and tipo in snapshot:
-            fila["conteo"] = snapshot[tipo]
-        elif fila.get("clase_ui") == "inventario":
-            fila["conteo"] = fila["saldo_corrido"]
-        else:
-            fila["conteo"] = mov.get("conteo")
+        # Contado es la cantidad física de la campaña. No se copia el saldo de etapa.
+        fila["conteo"] = mov.get("conteo")
         resultado.append(fila)
     return resultado
 
@@ -1191,10 +1193,8 @@ def _calcular_saldo_corrido_analisis(
             saldo += entrada - salida
         fila = dict(mov)
         fila["saldo_corrido"] = saldo
-        if mov.get("clase_ui") == "inventario":
-            fila["conteo"] = saldo
-        else:
-            fila["conteo"] = None
+        # Contado es la cantidad física de la campaña. No se copia el saldo corrido.
+        fila["conteo"] = mov.get("conteo")
         resultado.append(fila)
     return resultado
 
@@ -1441,6 +1441,169 @@ def _conteo_partes_mismo_turno(
         if n_db > out[clave]:
             out[clave] = n_db
     return out
+
+
+def _id_campana_desde_detalle(detalle: Optional[str]) -> Optional[int]:
+    """Id de campaña en textos como «Inventario físico campaña #10»."""
+    match = _RE_ID_CAMPANA_DETALLE.search(detalle or "")
+    if not match:
+        return None
+    return to_int_or_none(match.group(1))
+
+
+def _contado_visible(value: Any) -> Any:
+    """Cantidad contada para la grilla: entero si no tiene decimales; None si no hay conteo."""
+    cantidad = to_decimal_or_none(value)
+    if cantidad is None:
+        return None
+    if cantidad == cantidad.to_integral_value():
+        return int(cantidad)
+    return format(cantidad.normalize(), "f")
+
+
+def _sentido_ajuste_inventario(entrada: int, salida: int, detalle: str) -> str:
+    texto = (detalle or "").lower()
+    if "faltante" in texto or salida > entrada:
+        return "faltante"
+    if "sobrante" in texto or entrada > salida:
+        return "sobrante"
+    return "ajuste"
+
+
+def _saldo_referencia_conteo(mov: Dict[str, Any]) -> int:
+    """Saldo contra el que se compara lo contado: la etapa del impacto, o el corrido."""
+    tipo = (mov.get("etapa") or {}).get("tipo_mpr")
+    saldos = mov.get("saldos_por_etapa") or {}
+    if tipo and tipo in saldos:
+        return int(saldos.get(tipo) or 0)
+    return int(to_int_or_none(mov.get("saldo_corrido")) or 0)
+
+
+def _texto_que_paso_inventario(
+    *,
+    id_campana: Optional[int],
+    contado: Any,
+    sentido: str,
+) -> str:
+    campana = f"Campaña {id_campana}" if id_campana is not None else "Inventario físico"
+    if contado is None:
+        return f"{campana} · {sentido}"
+    return f"{campana} · {sentido} · contaron {contado}"
+
+
+def _aviso_conteo_no_cierra(mov: Dict[str, Any], saldo_antes: int, saldo_despues: int) -> str:
+    etiqueta = "El stock"
+    etapa = str_or_default(mov.get("etapa_label"), "")
+    if etapa:
+        etiqueta = f"El stock de {etapa}"
+    return f"{etiqueta} no quedó en lo contado: pasó de {saldo_antes} a {saldo_despues}."
+
+
+def _fetch_contados_por_campana(
+    base_empresa: str,
+    id_articulo: int,
+    ids_campana: List[int],
+) -> Dict[Tuple[int, int], Dict[str, Any]]:
+    """(id_campana, id_deposito) → cantidad contada e id de línea. Vacío si no hay tabla."""
+    from mpr.services import _nombre_tabla
+
+    campanas = [c for c in {to_int_or_none(x) for x in ids_campana} if c is not None]
+    id_art = to_int_or_none(id_articulo)
+    if not (base_empresa or "").strip() or id_art is None or not campanas:
+        return {}
+    placeholders = ",".join(["%s"] * len(campanas))
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tabla = _nombre_tabla(cursor, "inv_fisico_linea")
+            if not tabla:
+                return {}
+            tabla_sql = str(tabla).replace("`", "``")
+            cursor.execute(
+                f"""
+                SELECT id_linea, id_campana, id_deposito, cantidad_contada
+                FROM `{tabla_sql}`
+                WHERE id_articulo = %s AND id_campana IN ({placeholders})
+                """,
+                [id_art, *campanas],
+            )
+            rows = list(cursor.fetchall() or [])
+    except Exception as exc:
+        logger.warning(
+            "_fetch_contados_por_campana base=%s art=%s: %s",
+            base_empresa,
+            id_articulo,
+            exc,
+        )
+        return {}
+
+    out: Dict[Tuple[int, int], Dict[str, Any]] = {}
+    for row in rows:
+        camp = to_int_or_none(row.get("id_campana"))
+        dep = to_int_or_none(row.get("id_deposito"))
+        if camp is None or dep is None:
+            continue
+        out[(camp, dep)] = {
+            "id_linea": to_int_or_none(row.get("id_linea")),
+            "cantidad_contada": row.get("cantidad_contada"),
+        }
+    return out
+
+
+def _enriquecer_contado_fisico(
+    base_empresa: str,
+    id_articulo: int,
+    movimientos: List[Dict[str, Any]],
+    *,
+    id_deposito_eje: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Completa Contado con la cantidad física de la campaña.
+
+    Si la línea no se puede resolver, Contado queda vacío. No se usa el saldo
+    ni la entrada/salida como sustituto.
+    """
+    filas = [dict(m) for m in (movimientos or [])]
+    inventarios = [f for f in filas if f.get("clase_ui") == "inventario"]
+    if not inventarios:
+        return filas
+
+    ids_campana: List[int] = []
+    for fila in inventarios:
+        camp = _id_campana_desde_detalle(fila.get("detalle"))
+        if camp is not None:
+            ids_campana.append(camp)
+    contados = _fetch_contados_por_campana(base_empresa, id_articulo, ids_campana)
+    dep_eje = to_int_or_none(id_deposito_eje)
+
+    for fila in filas:
+        if fila.get("clase_ui") != "inventario":
+            continue
+        entrada = int(to_int_or_none(fila.get("entrada")) or 0)
+        salida = int(to_int_or_none(fila.get("salida")) or 0)
+        detalle = str_or_default(fila.get("detalle"), "")
+        id_campana = _id_campana_desde_detalle(detalle)
+        sentido = _sentido_ajuste_inventario(entrada, salida, detalle)
+        dep = to_int_or_none(fila.get("cod_deposito"))
+        if dep is None:
+            dep = dep_eje
+        linea = contados.get((id_campana, dep)) if id_campana is not None and dep is not None else None
+        contado = _contado_visible(linea.get("cantidad_contada")) if linea else None
+        saldo_despues = _saldo_referencia_conteo(fila)
+        saldo_antes = saldo_despues - (entrada - salida)
+        fila["id_campana"] = id_campana
+        fila["id_linea_conteo"] = linea.get("id_linea") if linea else None
+        fila["conteo"] = contado
+        fila["detalle_ui"] = _texto_que_paso_inventario(
+            id_campana=id_campana,
+            contado=contado,
+            sentido=sentido,
+        )
+        if contado is not None and Decimal(str(contado)) != Decimal(saldo_despues):
+            fila["conteo_no_cierra"] = True
+            fila["aviso_conteo"] = _aviso_conteo_no_cierra(fila, saldo_antes, saldo_despues)
+        else:
+            fila["conteo_no_cierra"] = False
+            fila["aviso_conteo"] = ""
+    return filas
 
 
 def _enriquecer_detalles_opp_parte(
@@ -1864,6 +2027,13 @@ def construir_analisis_trazabilidad_articulo(
         # No se ancla al inventario: un desvío se informa, no se esconde.
         origen_saldo_inicial = "historico_pre_periodo"
         movimientos = _unificar_y_saldo_corrido(movimientos, saldo_inicial=saldo_inicial)
+
+    movimientos = _enriquecer_contado_fisico(
+        base_empresa,
+        id_art,
+        movimientos,
+        id_deposito_eje=None if es_pipeline_fabricados else dep_id,
+    )
 
     eventos_mpr = _consultar_eventos_mpr_articulo(
         base_empresa,
