@@ -27,6 +27,12 @@ docker compose --env-file .env -f compose.local.yml ps
 docker inspect Synap_app --format '{{.State.Health.Status}}'
 ```
 
+Para entrar al contenedor de la aplicación:
+
+```powershell
+docker exec -it Synap_app bash
+```
+
 Abrir <http://127.0.0.1:18080/>. `.env` se crea localmente, contiene
 credenciales aleatorias y nunca se commitea. Para detener el entorno:
 
