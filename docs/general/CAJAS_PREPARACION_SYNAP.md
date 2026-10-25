@@ -42,7 +42,8 @@ proveedor `stock_prep_cajas_synap` de la herramienta global de migración MySQL.
 - El código `333` contiene ID de artículo y cantidad; display y bulto se
   convierten con `articulo_prov`. Los artículos con lote o serie solo se leen
   por unidad. Los códigos `334` de caja de stock no forman parte de este paso.
-- El operador elige modo **Unidad** o **Display** antes de escanear. En Unidad,
+- La pantalla inicia en modo **Display**; el operador puede cambiar a **Unidad**
+  antes de escanear. En Unidad,
   el código unitario suma 1; en Display suma `cantidad_unidad_display` de
   `articulo_prov` (por ejemplo, 6 unidades en Best Sox). Los códigos propios
   de display/bulto conservan su factor y el `333` conserva su cantidad. Cada

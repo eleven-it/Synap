@@ -241,6 +241,7 @@
     } catch (error) { aviso(error.message, true); }
     finally { input.disabled = false; input.focus(); }
   });
+  el('prep-modo-lectura').value = 'display';
   actualizarModo();
   cargarPreparaciones();
 })();
