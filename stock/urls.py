@@ -14,6 +14,7 @@ urlpatterns = [
     path("api/preparacion-cajas/<int:codigo_prep>/abrir/", prep_cajas_views.abrir, name="prep_cajas_abrir"),
     path("api/preparacion-cajas/<int:codigo_prep>/lectura/", prep_cajas_views.lectura, name="prep_cajas_lectura"),
     path("api/preparacion-cajas/<int:codigo_prep>/accion/", prep_cajas_views.accion, name="prep_cajas_accion"),
+    path("api/preparacion-cajas/<int:codigo_prep>/reserva/", prep_cajas_views.reserva, name="prep_cajas_reserva"),
     path("manual/", views.manual_usuario_view, name="manual_usuario"),
     path("ingreso-movimiento/", views.alta_movimiento_view, name="alta_movimiento"),
     path("movimientos/", views.visualiza_movimientos_view, name="visualiza_movimientos"),

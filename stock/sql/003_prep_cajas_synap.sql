@@ -5,6 +5,16 @@ CREATE TABLE IF NOT EXISTS synap_prep_caja_secuencia (
     proximo_numero INT NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS synap_prep_caja_reserva (
+    codigo_movimiento_prep BIGINT NOT NULL PRIMARY KEY,
+    id_usuario BIGINT NOT NULL,
+    sesion_hash CHAR(64) NOT NULL,
+    fecha_inicio DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ultimo_contacto DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_synap_prep_reserva_secuencia FOREIGN KEY (codigo_movimiento_prep)
+      REFERENCES synap_prep_caja_secuencia (codigo_movimiento_prep)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS synap_prep_caja (
     id_caja BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     codigo_movimiento_prep BIGINT NOT NULL,

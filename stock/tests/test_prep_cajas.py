@@ -99,6 +99,7 @@ class CajasPreparacionRegistroTests(SimpleTestCase):
     def _registrar(self, consumido=None, lineas=None, modo="unidad"):
         with patch("stock.services.prep_cajas._tx", self._fake_tx), \
              patch("stock.services.prep_cajas._bloquear_preparacion", return_value=1), \
+             patch("stock.services.prep_cajas._asegurar_reserva"), \
              patch("stock.services.prep_cajas._lineas", return_value=lineas or [self.linea]), \
              patch("stock.services.prep_cajas._consumos", return_value=consumido or {}):
             return registrar_lectura("prueba", 44, 1, "7790012345678", self.KEY, 7, modo)

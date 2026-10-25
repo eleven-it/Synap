@@ -15,6 +15,9 @@ class PreparacionError(ValueError):
     """Dato o transición inválida que puede mostrarse al operador."""
 
 
+RESERVA_SEGUNDOS = 300
+
+
 PENDIENTE = """(CASE
     WHEN IFNULL(sp.cantidad_pendiente,0) > 0 THEN sp.cantidad_pendiente
     WHEN UCASE(TRIM(IFNULL(sp.remitido_facturado,''))) <> 'SI' THEN IFNULL(sp.Cantidad,0)
@@ -131,6 +134,7 @@ def _cajas(cursor, codigo_prep):
             (SELECT COUNT(*) FROM synap_prep_caja_lectura l
             WHERE l.id_caja=c.id_caja) AS lecturas_totales
            FROM synap_prep_caja c WHERE c.codigo_movimiento_prep=%s
+             AND c.estado<>'Anulada'
            ORDER BY c.numero_caja""",
         [codigo_prep],
     )
@@ -149,7 +153,7 @@ def _contenido_cajas(cursor, codigo_prep):
            JOIN synap_prep_caja c ON c.id_caja=l.id_caja
            LEFT JOIN articulo a ON a.IDArt=l.id_articulo
            LEFT JOIN comp_ped cp ON cp.CodigoMovimiento=l.codigo_movimiento_ped
-           WHERE c.codigo_movimiento_prep=%s AND l.anulada=0
+           WHERE c.codigo_movimiento_prep=%s AND c.estado<>'Anulada' AND l.anulada=0
            GROUP BY l.id_caja,l.id_articulo,l.codigo_movimiento_ped,
                     l.codigo_leido,l.tipo_lectura
            ORDER BY l.id_caja,articulo,l.codigo_leido""",
@@ -162,7 +166,7 @@ def _lecturas(cursor, codigo_prep):
     cursor.execute(
         """SELECT l.*, c.numero_caja FROM synap_prep_caja_lectura l
         JOIN synap_prep_caja c ON c.id_caja=l.id_caja
-        WHERE c.codigo_movimiento_prep=%s AND l.anulada=0
+        WHERE c.codigo_movimiento_prep=%s AND c.estado<>'Anulada' AND l.anulada=0
         ORDER BY l.id_lectura DESC LIMIT 30""",
         [codigo_prep],
     )
@@ -241,9 +245,88 @@ def _bloquear_preparacion(cursor, codigo_prep):
     return cursor.fetchone()["proximo_numero"]
 
 
-def abrir_caja(base_empresa, codigo_prep, pedido, id_usuario):
+def _reserva_actual(cursor, codigo_prep):
+    cursor.execute(
+        """SELECT id_usuario,sesion_hash,
+                  TIMESTAMPDIFF(SECOND,ultimo_contacto,NOW()) AS inactivo
+           FROM synap_prep_caja_reserva WHERE codigo_movimiento_prep=%s FOR UPDATE""",
+        [codigo_prep],
+    )
+    return cursor.fetchone()
+
+
+def reservar_preparacion(base_empresa, codigo_prep, id_usuario, sesion_hash):
+    if not sesion_hash:
+        raise PreparacionError("Iniciá sesión nuevamente para preparar pedidos.")
+    with _tx(base_empresa) as cursor:
+        _bloquear_preparacion(cursor, codigo_prep)
+        cursor.execute(
+            "SELECT 1 AS existe FROM ped_prep WHERE CodigoMovimiento_prep=%s "
+            "AND IFNULL(Anulado,'No')='No' LIMIT 1", [codigo_prep],
+        )
+        if not cursor.fetchone():
+            raise PreparacionError("La preparación no está disponible.")
+        reserva = _reserva_actual(cursor, codigo_prep)
+        propia = reserva and _num(reserva["id_usuario"]) == id_usuario \
+            and reserva["sesion_hash"] == sesion_hash
+        if reserva and not propia and _num(reserva["inactivo"]) < RESERVA_SEGUNDOS:
+            raise PreparacionError(
+                f"La preparación está en uso por el usuario {reserva['id_usuario']} "
+                "en otra sesión. Esperá a que la libere o a que venza la reserva."
+            )
+        if propia:
+            cursor.execute(
+                "UPDATE synap_prep_caja_reserva SET ultimo_contacto=NOW() "
+                "WHERE codigo_movimiento_prep=%s", [codigo_prep],
+            )
+        elif reserva:
+            cursor.execute(
+                """UPDATE synap_prep_caja_reserva SET id_usuario=%s,sesion_hash=%s,
+                          ultimo_contacto=NOW(),fecha_inicio=NOW()
+                   WHERE codigo_movimiento_prep=%s""",
+                [id_usuario, sesion_hash, codigo_prep],
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO synap_prep_caja_reserva
+                   (codigo_movimiento_prep,id_usuario,sesion_hash) VALUES (%s,%s,%s)""",
+                [codigo_prep, id_usuario, sesion_hash],
+            )
+    return {"ok": True}
+
+
+def _asegurar_reserva(cursor, codigo_prep, id_usuario, sesion_hash):
+    reserva = _reserva_actual(cursor, codigo_prep)
+    if not reserva or _num(reserva["id_usuario"]) != id_usuario \
+            or reserva["sesion_hash"] != sesion_hash:
+        raise PreparacionError(
+            "Esta preparación no está reservada para tu sesión. "
+            "Volvé a seleccionarla antes de continuar."
+        )
+    cursor.execute(
+        "UPDATE synap_prep_caja_reserva SET ultimo_contacto=NOW() "
+        "WHERE codigo_movimiento_prep=%s", [codigo_prep],
+    )
+
+
+def liberar_preparacion(base_empresa, codigo_prep, id_usuario, sesion_hash):
+    with _tx(base_empresa) as cursor:
+        _bloquear_preparacion(cursor, codigo_prep)
+        reserva = _reserva_actual(cursor, codigo_prep)
+        if reserva:
+            if _num(reserva["id_usuario"]) != id_usuario or reserva["sesion_hash"] != sesion_hash:
+                raise PreparacionError("La preparación está reservada por otra sesión.")
+            cursor.execute(
+                "DELETE FROM synap_prep_caja_reserva WHERE codigo_movimiento_prep=%s",
+                [codigo_prep],
+            )
+    return {"ok": True}
+
+
+def abrir_caja(base_empresa, codigo_prep, pedido, id_usuario, sesion_hash):
     with _tx(base_empresa) as cursor:
         numero = _bloquear_preparacion(cursor, codigo_prep)
+        _asegurar_reserva(cursor, codigo_prep, id_usuario, sesion_hash)
         lineas = _lineas(cursor, codigo_prep)
         origen = next((r for r in lineas if _num(r["pedido"]) == pedido), None)
         if origen is None:
@@ -333,7 +416,7 @@ def _motivo_codigo_sin_pendiente(cursor, codigo_prep, codigo):
 
 
 def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuario,
-                     modo_lectura="unidad"):
+                     modo_lectura="unidad", sesion_hash=None):
     codigo = str(codigo or "").strip()
     modo_lectura = str(modo_lectura or "").strip().lower()
     if modo_lectura not in ("unidad", "display"):
@@ -348,6 +431,7 @@ def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuari
         raise PreparacionError("Identificador de lectura inválido.") from None
     with _tx(base_empresa) as cursor:
         _bloquear_preparacion(cursor, codigo_prep)
+        _asegurar_reserva(cursor, codigo_prep, id_usuario, sesion_hash)
         cursor.execute(
             "SELECT * FROM synap_prep_caja_lectura WHERE idempotency_key=%s", [key]
         )
@@ -404,9 +488,10 @@ def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuari
 
 
 def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario,
-                id_lectura=None, id_articulo=None):
+                id_lectura=None, id_articulo=None, sesion_hash=None):
     with _tx(base_empresa) as cursor:
         _bloquear_preparacion(cursor, codigo_prep)
+        _asegurar_reserva(cursor, codigo_prep, id_usuario, sesion_hash)
         cursor.execute(
             "SELECT * FROM synap_prep_caja WHERE id_caja=%s "
             "AND codigo_movimiento_prep=%s FOR UPDATE", [id_caja, codigo_prep]
@@ -433,15 +518,16 @@ def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario,
             if caja["estado"] not in ("Abierta", "Cerrada") or caja["fecha_importacion"]:
                 raise PreparacionError("La caja importada no puede eliminarse.")
             cursor.execute(
-                "SELECT COUNT(*) AS n FROM synap_prep_caja_lectura WHERE id_caja=%s",
+                "SELECT COUNT(*) AS n FROM synap_prep_caja_lectura "
+                "WHERE id_caja=%s AND anulada=0",
                 [id_caja],
             )
             if cursor.fetchone()["n"]:
-                raise PreparacionError(
-                    "La caja tiene lecturas en su historial, incluso si fueron anuladas. "
-                    "Conservala para mantener la trazabilidad."
-                )
-            cursor.execute("DELETE FROM synap_prep_caja WHERE id_caja=%s", [id_caja])
+                raise PreparacionError("Quitá los artículos de la caja antes de eliminarla.")
+            cursor.execute(
+                "UPDATE synap_prep_caja SET estado='Anulada' WHERE id_caja=%s",
+                [id_caja],
+            )
         elif accion in ("anular_lectura", "anular_articulo"):
             if caja["estado"] != "Abierta" or caja["fecha_importacion"]:
                 raise PreparacionError("Reabrí la caja antes de corregir lecturas.")

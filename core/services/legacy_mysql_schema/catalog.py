@@ -2710,7 +2710,7 @@ def run_stock_prep_cajas_mysql(conn) -> Dict[str, Any]:
                 if statement:
                     cursor.execute(statement)
         conn.commit()
-        applied.append("Tablas synap_prep_caja_secuencia, synap_prep_caja y synap_prep_caja_lectura")
+        applied.append("Tablas de secuencia, reserva de operador, cajas y lecturas de preparación")
     except Exception as exc:
         conn.rollback()
         logger.exception("run_stock_prep_cajas_mysql: %s", exc)
@@ -3099,7 +3099,7 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         "id": "stock_prep_cajas_synap",
         "title": "Stock — cajas por preparación de pedidos",
         "description": (
-            "Crea las tablas de armado previo de cajas, lecturas y numeración por "
+            "Crea las tablas de armado previo de cajas, reserva de operador, lecturas y numeración por "
             "preparación. No modifica el control de salida VB6. "
             "Fuente: stock/sql/003_prep_cajas_synap.sql."
         ),

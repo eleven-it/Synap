@@ -8,7 +8,8 @@
   let estado = null;
   let buscando = null;
   let lecturaPendiente = null;
-  const url = (tipo) => root.dataset[tipo].replace('__CODIGO__', String(prep));
+  const urlPara = (tipo, codigo) => root.dataset[tipo].replace('__CODIGO__', String(codigo));
+  const url = (tipo) => urlPara(tipo, prep);
   const numero = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 4 }).format(Number(n || 0));
 
   function actualizarModo() {
@@ -60,9 +61,26 @@
     } catch (error) { aviso(error.message, true); }
   }
   async function seleccionar(codigo) {
-    prep = codigo;
+    const anterior = prep;
+    try {
+      await pedir(urlPara('reserva', codigo), { accion: 'tomar' });
+      prep = codigo;
+      cajaActiva = null;
+      await refrescar();
+      if (anterior && anterior !== codigo) {
+        try { await pedir(urlPara('reserva', anterior), { accion: 'liberar' }); }
+        catch (error) { aviso(`No se pudo liberar la preparación anterior: ${error.message}`, true); }
+      }
+    } catch (error) { aviso(error.message, true); }
+  }
+
+  function quitarPreparacionDePantalla() {
+    prep = null;
     cajaActiva = null;
-    await refrescar();
+    estado = null;
+    lecturaPendiente = null;
+    el('prep-contenido').classList.add('hidden');
+    el('prep-sin-seleccion').classList.remove('hidden');
   }
   async function refrescar() {
     if (!prep) return;
@@ -134,11 +152,11 @@
         controls.append(b);
       }
       if ((caja.estado === 'Abierta' || caja.estado === 'Cerrada')
-          && !caja.fecha_importacion && Number(caja.lecturas_totales) === 0) {
+          && !caja.fecha_importacion && Number(caja.lecturas_activas) === 0) {
         const eliminar = nodo('button', 'rounded border border-red-500 px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300', 'Eliminar caja');
         eliminar.type = 'button';
         eliminar.addEventListener('click', async () => {
-          if (!window.confirm(`¿Eliminar la caja ${caja.numero_caja}? El número no se reutilizará.`)) return;
+          if (!window.confirm(`¿Eliminar la caja ${caja.numero_caja}? Se conservará el historial de lecturas anuladas y el número no se reutilizará.`)) return;
           try {
             await pedir(url('accion'), { id_caja: caja.id_caja, accion: 'eliminar' });
             if (cajaActiva === Number(caja.id_caja)) cajaActiva = null;
@@ -231,6 +249,22 @@
   el('prep-buscar').addEventListener('input', () => {
     clearTimeout(buscando); buscando = setTimeout(cargarPreparaciones, 250);
   });
+  el('prep-liberar').addEventListener('click', async () => {
+    if (!prep) return;
+    try {
+      await pedir(url('reserva'), { accion: 'liberar' });
+      quitarPreparacionDePantalla();
+      aviso('Preparación liberada. Otro usuario ya puede trabajarla.');
+    } catch (error) { aviso(error.message, true); }
+  });
+  setInterval(async () => {
+    if (!prep) return;
+    try { await pedir(url('reserva'), { accion: 'renovar' }); }
+    catch (error) {
+      quitarPreparacionDePantalla();
+      aviso(`Se perdió la reserva de la preparación: ${error.message}`, true);
+    }
+  }, 60000);
   el('prep-abrir').addEventListener('click', async () => {
     try {
       const data = await pedir(url('abrir'), { pedido: Number(el('prep-pedido').value) });

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from hashlib import sha256
 
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -16,8 +17,10 @@ from stock.services.prep_cajas import (
     abrir_caja,
     cambiar_caja,
     estado_preparacion,
+    liberar_preparacion,
     listar_preparaciones,
     registrar_lectura,
+    reservar_preparacion,
 )
 
 
@@ -42,6 +45,12 @@ def _entero(value, nombre):
     if number <= 0:
         raise PreparacionError(f"{nombre} inválido.")
     return number
+
+
+def _sesion_hash(request):
+    if not request.session.session_key:
+        request.session.save()
+    return sha256(request.session.session_key.encode("utf-8")).hexdigest()
 
 
 def _json(request):
@@ -73,6 +82,7 @@ def pagina(request):
         "url_abrir": reverse("stock:prep_cajas_abrir", args=[1]).replace("/1/", "/__CODIGO__/"),
         "url_lectura": reverse("stock:prep_cajas_lectura", args=[1]).replace("/1/", "/__CODIGO__/"),
         "url_accion": reverse("stock:prep_cajas_accion", args=[1]).replace("/1/", "/__CODIGO__/"),
+        "url_reserva": reverse("stock:prep_cajas_reserva", args=[1]).replace("/1/", "/__CODIGO__/"),
     })
 
 
@@ -96,12 +106,27 @@ def estado(request, codigo_prep):
 
 @tiene_permiso(PERMISO)
 @require_POST
+def reserva(request, codigo_prep):
+    def ejecutar():
+        base, usuario = _contexto(request)
+        accion = _json(request).get("accion")
+        sesion = _sesion_hash(request)
+        if accion == "liberar":
+            return liberar_preparacion(base, codigo_prep, usuario, sesion)
+        if accion in ("tomar", "renovar"):
+            return reservar_preparacion(base, codigo_prep, usuario, sesion)
+        raise PreparacionError("Acción de reserva desconocida.")
+    return _responder(ejecutar)
+
+
+@tiene_permiso(PERMISO)
+@require_POST
 def abrir(request, codigo_prep):
     def ejecutar():
         base, usuario = _contexto(request)
         data = _json(request)
         pedido = _entero(data.get("pedido"), "Pedido")
-        return abrir_caja(base, codigo_prep, pedido, usuario)
+        return abrir_caja(base, codigo_prep, pedido, usuario, _sesion_hash(request))
     return _responder(ejecutar)
 
 
@@ -115,6 +140,7 @@ def lectura(request, codigo_prep):
         return registrar_lectura(
             base, codigo_prep, caja, data.get("codigo"),
             data.get("idempotency_key"), usuario, data.get("modo_lectura", "unidad"),
+            _sesion_hash(request),
         )
     return _responder(ejecutar)
 
@@ -133,6 +159,7 @@ def accion(request, codigo_prep):
         if id_articulo is not None:
             id_articulo = _entero(id_articulo, "Artículo")
         return cambiar_caja(
-            base, codigo_prep, caja, data.get("accion"), usuario, id_lectura, id_articulo
+            base, codigo_prep, caja, data.get("accion"), usuario, id_lectura,
+            id_articulo, _sesion_hash(request),
         )
     return _responder(ejecutar)
