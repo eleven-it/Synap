@@ -129,7 +129,10 @@ def accion(request, codigo_prep):
         id_lectura = data.get("id_lectura")
         if id_lectura is not None:
             id_lectura = _entero(id_lectura, "Lectura")
+        id_articulo = data.get("id_articulo")
+        if id_articulo is not None:
+            id_articulo = _entero(id_articulo, "Artículo")
         return cambiar_caja(
-            base, codigo_prep, caja, data.get("accion"), usuario, id_lectura
+            base, codigo_prep, caja, data.get("accion"), usuario, id_lectura, id_articulo
         )
     return _responder(ejecutar)

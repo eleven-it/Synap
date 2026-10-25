@@ -150,20 +150,52 @@
       }
       card.append(controls);
       const contenido = caja.contenido || [];
-      const unidades = contenido.reduce((total, item) => total + Number(item.cantidad_unidades || 0), 0);
-      const articulos = new Set(contenido.map((item) => Number(item.id_articulo)));
+      const articulos = new Map();
+      for (const item of contenido) {
+        const id = Number(item.id_articulo);
+        if (!articulos.has(id)) articulos.set(id, {
+          id, nombre: item.articulo || `Artículo ${id}`, unidades: 0,
+          codigos: new Set(), tipos: new Set(), pedidos: new Set(),
+        });
+        const grupo = articulos.get(id);
+        grupo.unidades += Number(item.cantidad_unidades || 0);
+        grupo.codigos.add(item.codigo_leido);
+        grupo.tipos.add(item.tipo_lectura);
+        grupo.pedidos.add(item.nro_pedido || item.codigo_movimiento_ped);
+      }
+      const unidades = [...articulos.values()].reduce((total, item) => total + item.unidades, 0);
       card.append(nodo('p', 'mt-3 border-t border-slate-300 pt-2 text-sm font-semibold dark:border-slate-600',
-        contenido.length ? `Contenido: ${numero(unidades)} unidad(es) · ${articulos.size} artículo(s)` : 'Sin artículos en esta caja'));
-      if (contenido.length) {
+        articulos.size ? `Contenido: ${numero(unidades)} unidad(es) · ${articulos.size} artículo(s)` : 'Sin artículos en esta caja'));
+      if (articulos.size) {
         const lista = nodo('ul', 'mt-2 max-h-48 space-y-2 overflow-y-auto text-sm');
-        for (const item of contenido) {
+        for (const item of articulos.values()) {
           const fila = nodo('li', 'rounded bg-white p-2 dark:bg-slate-800');
-          fila.append(nodo('p', 'font-semibold', `${numero(item.cantidad_unidades)} u. · ${item.articulo || `Artículo ${item.id_articulo}`}`));
+          fila.append(nodo('p', 'font-semibold', `${numero(item.unidades)} u. · ${item.nombre}`));
           fila.append(nodo('p', 'break-all text-slate-600 dark:text-slate-300',
-            `Código leído: ${item.codigo_leido} · ${item.tipo_lectura} · Pedido ${item.nro_pedido || item.codigo_movimiento_ped}`));
+            `Código(s): ${[...item.codigos].join(', ')} · ${[...item.tipos].join(', ')} · Pedido(s): ${[...item.pedidos].join(', ')}`));
+          if (caja.estado === 'Abierta') {
+            const quitar = nodo('button', 'mt-2 rounded border border-red-500 px-2 py-1 font-semibold text-red-700 dark:text-red-300', 'Eliminar artículo');
+            quitar.type = 'button';
+            quitar.setAttribute('aria-label', `Eliminar ${item.nombre} de la caja ${caja.numero_caja}`);
+            quitar.addEventListener('click', async () => {
+              if (!window.confirm(`¿Eliminar ${numero(item.unidades)} unidad(es) de ${item.nombre} de la caja ${caja.numero_caja}? Las lecturas quedarán anuladas.`)) return;
+              try {
+                await pedir(url('accion'), { id_caja: caja.id_caja, accion: 'anular_articulo', id_articulo: item.id });
+                lecturaPendiente = null;
+                el('prep-ultimo').textContent = '';
+                await refrescar();
+                aviso(`Artículo quitado de la caja ${caja.numero_caja}. Las unidades volvieron al pendiente.`);
+              } catch (error) { aviso(error.message, true); }
+            });
+            fila.append(quitar);
+          }
           lista.append(fila);
         }
         card.append(lista);
+        if (caja.estado === 'Cerrada' && !caja.fecha_importacion) {
+          card.append(nodo('p', 'mt-2 text-xs text-slate-600 dark:text-slate-300',
+            'Reabrí la caja para eliminar un artículo.'));
+        }
       }
       boxList.append(card);
     }

@@ -18,6 +18,9 @@ remitos.
    son del mismo cliente y sucursal/domicilio.
 5. Puede deshacer lecturas, cerrar incluso una caja vacía abierta por error y
    reabrir cajas mientras no hayan sido importadas en el control de salida.
+   En una caja abierta, **Eliminar artículo** anula todas sus lecturas activas
+   en esa caja y devuelve las unidades al pendiente; las lecturas anuladas
+   permanecen en el historial.
    El número de una caja vacía cerrada queda reservado y la pantalla la señala
    como vacía. También puede eliminar una caja abierta o cerrada si nunca tuvo
    lecturas, incluso anuladas. El número eliminado tampoco se reutiliza. Una

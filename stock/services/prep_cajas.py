@@ -403,7 +403,8 @@ def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuari
         raise PreparacionError("La lectura supera la cantidad pendiente del pedido.")
 
 
-def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario, id_lectura=None):
+def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario,
+                id_lectura=None, id_articulo=None):
     with _tx(base_empresa) as cursor:
         _bloquear_preparacion(cursor, codigo_prep)
         cursor.execute(
@@ -441,17 +442,29 @@ def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario, id_lect
                     "Conservala para mantener la trazabilidad."
                 )
             cursor.execute("DELETE FROM synap_prep_caja WHERE id_caja=%s", [id_caja])
-        elif accion == "anular_lectura":
-            if caja["estado"] != "Abierta":
+        elif accion in ("anular_lectura", "anular_articulo"):
+            if caja["estado"] != "Abierta" or caja["fecha_importacion"]:
                 raise PreparacionError("Reabrí la caja antes de corregir lecturas.")
-            cursor.execute(
-                """UPDATE synap_prep_caja_lectura SET anulada=1,
-                   id_usuario_anulacion=%s,fecha_anulacion=NOW()
-                   WHERE id_lectura=%s AND id_caja=%s AND anulada=0""",
-                [id_usuario, id_lectura, id_caja],
-            )
-            if cursor.rowcount != 1:
-                raise PreparacionError("La lectura ya no está disponible.")
+            if accion == "anular_lectura":
+                cursor.execute(
+                    """UPDATE synap_prep_caja_lectura SET anulada=1,
+                       id_usuario_anulacion=%s,fecha_anulacion=NOW()
+                       WHERE id_lectura=%s AND id_caja=%s AND anulada=0""",
+                    [id_usuario, id_lectura, id_caja],
+                )
+                if cursor.rowcount != 1:
+                    raise PreparacionError("La lectura ya no está disponible.")
+            else:
+                if _num(id_articulo) <= 0:
+                    raise PreparacionError("Artículo inválido.")
+                cursor.execute(
+                    """UPDATE synap_prep_caja_lectura SET anulada=1,
+                       id_usuario_anulacion=%s,fecha_anulacion=NOW()
+                       WHERE id_caja=%s AND id_articulo=%s AND anulada=0""",
+                    [id_usuario, id_caja, id_articulo],
+                )
+                if cursor.rowcount == 0:
+                    raise PreparacionError("El artículo ya no está en esta caja.")
         else:
             raise PreparacionError("Acción desconocida.")
         return {"ok": True}
