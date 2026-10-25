@@ -91,7 +91,8 @@
     boxList.replaceChildren();
     for (const caja of cajas) {
       const card = nodo('div', 'rounded-lg border border-slate-300 p-3 dark:border-slate-600');
-      card.append(nodo('p', 'text-xl font-bold', `Caja ${caja.numero_caja} · ${caja.estado}`));
+      const vacia = caja.estado === 'Cerrada' && Number(caja.lecturas_activas) === 0;
+      card.append(nodo('p', 'text-xl font-bold', `Caja ${caja.numero_caja} · ${caja.estado}${vacia ? ' · Vacía' : ''}`));
       card.append(nodo('p', 'text-sm', caja.destino_entrega));
       const controls = nodo('div', 'mt-2 flex flex-wrap gap-2');
       const accion = caja.estado === 'Abierta' ? 'cerrar' : 'reabrir';

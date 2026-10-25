@@ -60,6 +60,26 @@ WHERE p.CodigoMovimiento_prep = %s
 ORDER BY c.nombre_cliente, destino, cp.NroComprobante, a.NombreArticulo, sp.id_stock
 """
 
+CODIGOS_DE_LA_PREPARACION_SQL = f"""
+SELECT sp.IDArt AS id_articulo, IFNULL(a.id_manual,'') AS codigo_manual,
+       IFNULL(a.NroCodBarra,'') AS barra_interna,
+       IFNULL(a.NroCodBarraF,'') AS barra_fabrica,
+       IFNULL(a.nro_cod_barra_display,'') AS barra_display,
+       IFNULL(a.nro_cod_barra_bulto,'') AS barra_bulto,
+       {PENDIENTE} AS pendiente,
+       UCASE(TRIM(IFNULL(sp.remitido_facturado,''))) AS remitido_facturado
+FROM ped_prep p
+JOIN comp_ped cp ON cp.CodigoMovimiento = p.ped_numeracion
+JOIN stockp sp ON sp.CodigoMovimiento = cp.CodigoMovimiento
+JOIN articulo a ON a.IDArt = sp.IDArt
+WHERE p.CodigoMovimiento_prep = %s
+  AND IFNULL(p.Anulado,'No') = 'No'
+  AND IFNULL(cp.Anulado,'No') = 'No'
+  AND IFNULL(sp.Anulado,'No') = 'No'
+  AND cp.Estado IN ('Pendiente','En preparacion','En preparación',
+                    'Preparado','Parcial','Facturado')
+"""
+
 
 def _num(value) -> int:
     return int(Decimal(str(value or 0)))
@@ -106,7 +126,10 @@ def _lineas(cursor, codigo_prep):
 
 def _cajas(cursor, codigo_prep):
     cursor.execute(
-        "SELECT * FROM synap_prep_caja WHERE codigo_movimiento_prep=%s ORDER BY numero_caja",
+        """SELECT c.*, (SELECT COUNT(*) FROM synap_prep_caja_lectura l
+            WHERE l.id_caja=c.id_caja AND l.anulada=0) AS lecturas_activas
+           FROM synap_prep_caja c WHERE c.codigo_movimiento_prep=%s
+           ORDER BY c.numero_caja""",
         [codigo_prep],
     )
     return cursor.fetchall()
@@ -262,6 +285,20 @@ def _coincide_codigo(codigo, articulo):
     )
 
 
+def _motivo_codigo_sin_pendiente(cursor, codigo_prep, codigo):
+    """Distingue una línea ya remitida de un código ajeno a la preparación."""
+    cursor.execute(CODIGOS_DE_LA_PREPARACION_SQL, [codigo_prep])
+    lineas = [r for r in cursor.fetchall() if _coincide_codigo(codigo, r)]
+    if not lineas:
+        return None
+    if all(_dec(r["pendiente"]) <= 0 for r in lineas):
+        if all(r["remitido_facturado"] == "SI" for r in lineas):
+            return ("El artículo pertenece a esta preparación, pero ya figura "
+                    "remitido/facturado y no tiene unidades pendientes.")
+        return "El artículo pertenece a esta preparación, pero no tiene unidades pendientes."
+    return "El artículo pertenece a esta preparación, pero no está disponible para controlar."
+
+
 def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuario):
     codigo = str(codigo or "").strip()
     if not codigo or len(codigo) > 128:
@@ -300,7 +337,8 @@ def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuari
         compatibles = [(clave, filas) for clave, filas in coincidencias
                        if _compatible(caja, filas[0])]
         if not coincidencias:
-            raise PreparacionError("El producto no pertenece a la preparación.")
+            motivo = _motivo_codigo_sin_pendiente(cursor, codigo_prep, codigo)
+            raise PreparacionError(motivo or "El producto no pertenece a la preparación.")
         if not compatibles:
             raise PreparacionError("El producto corresponde a otra sucursal o cliente.")
         if len({clave[1] for clave, _ in compatibles}) > 1:
@@ -341,12 +379,6 @@ def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario, id_lect
         if accion == "cerrar":
             if caja["estado"] != "Abierta":
                 raise PreparacionError("La caja no está abierta.")
-            cursor.execute(
-                "SELECT COUNT(*) AS n FROM synap_prep_caja_lectura WHERE id_caja=%s AND anulada=0",
-                [id_caja],
-            )
-            if not cursor.fetchone()["n"]:
-                raise PreparacionError("La caja está vacía.")
             cursor.execute(
                 "UPDATE synap_prep_caja SET estado='Cerrada', "
                 "id_usuario_cierre=%s, fecha_cierre=NOW() WHERE id_caja=%s",

@@ -16,8 +16,10 @@ remitos.
    mismo destino que tenga cantidad pendiente suficiente. Se muestran los
    faltantes en tiempo real. Una caja puede contener varios pedidos solo si
    son del mismo cliente y sucursal/domicilio.
-5. Puede deshacer lecturas, cerrar y reabrir cajas mientras no hayan sido
-   importadas en el control de salida.
+5. Puede deshacer lecturas, cerrar incluso una caja vacía abierta por error y
+   reabrir cajas mientras no hayan sido importadas en el control de salida.
+   El número de una caja vacía cerrada queda reservado y la pantalla la señala
+   como vacía.
 6. El operario escribe el número grande `1`, `2`, etc. en cada caja física.
 
 La pantalla está en **Stock → Cajas de preparación**. Requiere el permiso
@@ -47,8 +49,8 @@ pedido, línea `stockp`, usuario y fecha. `idempotency_key` impide duplicar un
 escaneo reenviado por la red. Deshacer marca la lectura anulada: no la borra.
 
 La futura opción **Control en el lugar** de VB6 recibirá
-`CodigoMovimiento_prep` y `numero_caja`, leerá solamente cajas `Cerrada` y
-lecturas no anuladas, y revalidará pedido, destino y pendiente antes de
+`CodigoMovimiento_prep` y `numero_caja`, leerá solamente cajas `Cerrada` con
+al menos una lectura no anulada, y revalidará pedido, destino y pendiente antes de
 registrarlas en `stock_control_caja` y `stock_control_caja_detalle`. En la
 misma transacción vinculará `id_stock_control` y `fecha_importacion` y pasará
 la caja a `Importada`; un segundo intento no volverá a registrar lecturas.
