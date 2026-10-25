@@ -135,6 +135,27 @@ def _cajas(cursor, codigo_prep):
     return cursor.fetchall()
 
 
+def _contenido_cajas(cursor, codigo_prep):
+    cursor.execute(
+        """SELECT l.id_caja, l.id_articulo, l.codigo_movimiento_ped,
+                  l.codigo_leido, l.tipo_lectura,
+                  MAX(IFNULL(a.NombreArticulo,'')) AS articulo,
+                  MAX(IFNULL(cp.NroComprobante,'')) AS nro_pedido,
+                  SUM(l.cantidad_unidades) AS cantidad_unidades,
+                  COUNT(*) AS lecturas
+           FROM synap_prep_caja_lectura l
+           JOIN synap_prep_caja c ON c.id_caja=l.id_caja
+           LEFT JOIN articulo a ON a.IDArt=l.id_articulo
+           LEFT JOIN comp_ped cp ON cp.CodigoMovimiento=l.codigo_movimiento_ped
+           WHERE c.codigo_movimiento_prep=%s AND l.anulada=0
+           GROUP BY l.id_caja,l.id_articulo,l.codigo_movimiento_ped,
+                    l.codigo_leido,l.tipo_lectura
+           ORDER BY l.id_caja,articulo,l.codigo_leido""",
+        [codigo_prep],
+    )
+    return cursor.fetchall()
+
+
 def _lecturas(cursor, codigo_prep):
     cursor.execute(
         """SELECT l.*, c.numero_caja FROM synap_prep_caja_lectura l
@@ -182,8 +203,14 @@ def estado_preparacion(base_empresa, codigo_prep):
     with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
         lineas = _lineas(cursor, codigo_prep)
         cajas = _cajas(cursor, codigo_prep)
+        contenido = _contenido_cajas(cursor, codigo_prep)
         lecturas = _lecturas(cursor, codigo_prep)
         consumido = _consumos(cursor, codigo_prep)
+    por_caja = {}
+    for item in contenido:
+        por_caja.setdefault(_num(item["id_caja"]), []).append(item)
+    for caja in cajas:
+        caja["contenido"] = por_caja.get(_num(caja["id_caja"]), [])
     agrupadas = {}
     for linea in lineas:
         clave = (_num(linea["pedido"]), _num(linea["id_articulo"]))

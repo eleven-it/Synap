@@ -90,15 +90,21 @@
     const boxList = el('prep-cajas-lista');
     boxList.replaceChildren();
     for (const caja of cajas) {
-      const card = nodo('div', 'rounded-lg border border-slate-300 p-3 dark:border-slate-600');
+      const seleccionada = Number(caja.id_caja) === cajaActiva;
+      const card = nodo('div', `rounded-lg border p-3 ${seleccionada
+        ? 'border-blue-600 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/40'
+        : 'border-slate-300 dark:border-slate-600'}`);
       const vacia = caja.estado === 'Cerrada' && Number(caja.lecturas_activas) === 0;
       card.append(nodo('p', 'text-xl font-bold', `Caja ${caja.numero_caja} · ${caja.estado}${vacia ? ' · Vacía' : ''}`));
       card.append(nodo('p', 'text-sm', caja.destino_entrega));
+      if (seleccionada) card.append(nodo('p', 'mt-1 text-sm font-bold text-blue-800 dark:text-blue-200', 'Caja de lectura activa'));
       const controls = nodo('div', 'mt-2 flex flex-wrap gap-2');
       const accion = caja.estado === 'Abierta' ? 'cerrar' : 'reabrir';
       if (caja.estado === 'Abierta') {
-        const elegir = nodo('button', 'rounded bg-blue-700 px-3 py-2 text-sm font-semibold text-white', 'Usar caja');
+        const elegir = nodo('button', 'rounded bg-blue-700 px-3 py-2 text-sm font-semibold text-white',
+          seleccionada ? 'Usando esta caja' : 'Usar caja');
         elegir.type = 'button';
+        elegir.disabled = seleccionada;
         elegir.addEventListener('click', () => { cajaActiva = Number(caja.id_caja); render(); el('prep-codigo').focus(); });
         controls.append(elegir);
       }
@@ -106,12 +112,36 @@
         const b = nodo('button', 'rounded border border-slate-400 px-3 py-2 text-sm font-semibold', accion === 'cerrar' ? 'Cerrar caja' : 'Reabrir');
         b.type = 'button';
         b.addEventListener('click', async () => {
-          try { await pedir(url('accion'), { id_caja: caja.id_caja, accion }); await refrescar(); aviso(`Caja ${caja.numero_caja}: ${accion === 'cerrar' ? 'cerrada' : 'reabierta'}.`); }
+          try {
+            await pedir(url('accion'), { id_caja: caja.id_caja, accion });
+            if (accion === 'reabrir') cajaActiva = Number(caja.id_caja);
+            await refrescar();
+            aviso(accion === 'cerrar' ? `Caja ${caja.numero_caja} cerrada.`
+              : `Caja ${caja.numero_caja} reabierta y seleccionada para escanear.`);
+            if (accion === 'reabrir') el('prep-codigo').focus();
+          }
           catch (error) { aviso(error.message, true); }
         });
         controls.append(b);
       }
-      card.append(controls); boxList.append(card);
+      card.append(controls);
+      const contenido = caja.contenido || [];
+      const unidades = contenido.reduce((total, item) => total + Number(item.cantidad_unidades || 0), 0);
+      const articulos = new Set(contenido.map((item) => Number(item.id_articulo)));
+      card.append(nodo('p', 'mt-3 border-t border-slate-300 pt-2 text-sm font-semibold dark:border-slate-600',
+        contenido.length ? `Contenido: ${numero(unidades)} unidad(es) · ${articulos.size} artículo(s)` : 'Sin artículos en esta caja'));
+      if (contenido.length) {
+        const lista = nodo('ul', 'mt-2 max-h-48 space-y-2 overflow-y-auto text-sm');
+        for (const item of contenido) {
+          const fila = nodo('li', 'rounded bg-white p-2 dark:bg-slate-800');
+          fila.append(nodo('p', 'font-semibold', `${numero(item.cantidad_unidades)} u. · ${item.articulo || `Artículo ${item.id_articulo}`}`));
+          fila.append(nodo('p', 'break-all text-slate-600 dark:text-slate-300',
+            `Código leído: ${item.codigo_leido} · Pedido ${item.nro_pedido || item.codigo_movimiento_ped}`));
+          lista.append(fila);
+        }
+        card.append(lista);
+      }
+      boxList.append(card);
     }
     if (!cajas.length) boxList.append(nodo('p', 'text-sm text-slate-500', 'Todavía no hay cajas.'));
     const articulos = el('prep-articulos');
