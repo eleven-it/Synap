@@ -11,6 +11,15 @@
   const url = (tipo) => root.dataset[tipo].replace('__CODIGO__', String(prep));
   const numero = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 4 }).format(Number(n || 0));
 
+  function actualizarModo() {
+    const display = el('prep-modo-lectura').value === 'display';
+    const ayuda = el('prep-modo-ayuda');
+    ayuda.textContent = display
+      ? 'Modo Display: el código de unidad suma el pack indicado en cada artículo. La etiqueta 333 conserva su cantidad.'
+      : 'Modo Unidad: el código de unidad suma 1. Los códigos propios de display o bulto mantienen su factor.';
+    ayuda.className = display ? 'mt-1 text-sm font-bold text-amber-800 dark:text-amber-200' : 'mt-1 text-sm';
+  }
+
   function nodo(tag, clase, contenido) {
     const n = document.createElement(tag);
     if (clase) n.className = clase;
@@ -151,7 +160,7 @@
           const fila = nodo('li', 'rounded bg-white p-2 dark:bg-slate-800');
           fila.append(nodo('p', 'font-semibold', `${numero(item.cantidad_unidades)} u. · ${item.articulo || `Artículo ${item.id_articulo}`}`));
           fila.append(nodo('p', 'break-all text-slate-600 dark:text-slate-300',
-            `Código leído: ${item.codigo_leido} · Pedido ${item.nro_pedido || item.codigo_movimiento_ped}`));
+            `Código leído: ${item.codigo_leido} · ${item.tipo_lectura} · Pedido ${item.nro_pedido || item.codigo_movimiento_ped}`));
           lista.append(fila);
         }
         card.append(lista);
@@ -166,6 +175,7 @@
       row.append(nodo('p', 'font-semibold', articulo.articulo));
       row.append(nodo('p', 'text-slate-500 dark:text-slate-300', `${articulo.nro_pedido} · ${articulo.cliente} · ${articulo.destino}`));
       row.append(nodo('p', 'font-bold', `Pendiente ${numero(articulo.faltante)} / ${numero(articulo.pendiente)}`));
+      row.append(nodo('p', 'text-slate-600 dark:text-slate-300', `Unidades por display: ${numero(articulo.unidades_display)}`));
       articulos.append(row);
     }
     if (!estado.articulos.length) articulos.append(nodo('p', 'text-sm text-slate-500', 'No hay artículos pendientes en administraNET.'));
@@ -200,14 +210,21 @@
     el('prep-codigo').setAttribute('inputmode', event.target.checked ? 'text' : 'none');
     el('prep-codigo').focus();
   });
+  el('prep-modo-lectura').addEventListener('change', () => {
+    lecturaPendiente = null;
+    actualizarModo();
+    el('prep-codigo').focus();
+  });
   el('prep-scan-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = el('prep-codigo');
     const codigo = input.value.trim();
+    const modo_lectura = el('prep-modo-lectura').value;
     if (!cajaActiva || !codigo) return;
     input.disabled = true;
-    if (!lecturaPendiente || lecturaPendiente.codigo !== codigo || lecturaPendiente.id_caja !== cajaActiva) {
-      lecturaPendiente = { codigo, id_caja: cajaActiva, idempotency_key: crypto.randomUUID() };
+    if (!lecturaPendiente || lecturaPendiente.codigo !== codigo || lecturaPendiente.id_caja !== cajaActiva
+        || lecturaPendiente.modo_lectura !== modo_lectura) {
+      lecturaPendiente = { codigo, id_caja: cajaActiva, modo_lectura, idempotency_key: crypto.randomUUID() };
     }
     try {
       const result = await pedir(url('lectura'), {
@@ -224,5 +241,6 @@
     } catch (error) { aviso(error.message, true); }
     finally { input.disabled = false; input.focus(); }
   });
+  actualizarModo();
   cargarPreparaciones();
 })();

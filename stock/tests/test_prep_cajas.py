@@ -44,12 +44,16 @@ class CajasPreparacionReglasTests(SimpleTestCase):
 
     def test_barras_unidad_display_y_bulto(self):
         self.assertEqual(_cantidad_codigo("7790012345678", self.linea), (Decimal(1), "Unidad"))
+        self.assertEqual(_cantidad_codigo("7790012345678", self.linea, "display"),
+                         (Decimal(6), "Display por modo"))
         self.assertEqual(_cantidad_codigo("D42", self.linea), (Decimal(6), "Display"))
         self.assertEqual(_cantidad_codigo("B42", self.linea), (Decimal(24), "Bulto"))
         self.assertIsNone(_cantidad_codigo("NOEXISTE", self.linea))
 
     def test_etiqueta_333_conserva_su_cantidad(self):
         self.assertEqual(_cantidad_codigo("333000420007", self.linea), (Decimal(7), "Etiqueta 333"))
+        self.assertEqual(_cantidad_codigo("333000420007", self.linea, "display"),
+                         (Decimal(7), "Etiqueta 333"))
         self.assertTrue(_coincide_codigo("333000420007", self.linea))
         self.assertFalse(_coincide_codigo("333000430007", self.linea))
         with self.assertRaises(PreparacionError):
@@ -58,6 +62,8 @@ class CajasPreparacionReglasTests(SimpleTestCase):
     def test_lote_impide_conversion_a_display(self):
         with self.assertRaises(PreparacionError):
             _cantidad_codigo("D42", {**self.linea, "lote": "Si"})
+        self.assertEqual(_cantidad_codigo("7790012345678", {**self.linea, "lote": "Si"}, "display"),
+                         (Decimal(1), "Unidad"))
 
     def test_pantalla_y_api_disponibles_en_movil(self):
         self.assertTrue(mobile_path_allowed_for_level_a("/stock/preparacion-cajas/"))
@@ -90,12 +96,12 @@ class CajasPreparacionRegistroTests(SimpleTestCase):
     def _fake_tx(self, _base):
         yield self.cursor
 
-    def _registrar(self, consumido=None, lineas=None):
+    def _registrar(self, consumido=None, lineas=None, modo="unidad"):
         with patch("stock.services.prep_cajas._tx", self._fake_tx), \
              patch("stock.services.prep_cajas._bloquear_preparacion", return_value=1), \
              patch("stock.services.prep_cajas._lineas", return_value=lineas or [self.linea]), \
              patch("stock.services.prep_cajas._consumos", return_value=consumido or {}):
-            return registrar_lectura("prueba", 44, 1, "7790012345678", self.KEY, 7)
+            return registrar_lectura("prueba", 44, 1, "7790012345678", self.KEY, 7, modo)
 
     def test_lectura_registra_pedido_y_linea_exactos(self):
         resultado = self._registrar()
@@ -108,6 +114,21 @@ class CajasPreparacionRegistroTests(SimpleTestCase):
             self._registrar(consumido={(100, 42): Decimal(3)})
         self.assertFalse(any("INSERT INTO synap_prep_caja_lectura" in c.args[0]
                              for c in self.cursor.execute.call_args_list))
+
+    def test_modo_display_registra_pack_y_respeta_faltante(self):
+        resultado = self._registrar(lineas=[{**self.linea, "pendiente": Decimal(12)}], modo="display")
+        self.assertEqual(resultado["cantidad"], Decimal(6))
+        self.assertTrue(any("INSERT INTO synap_prep_caja_lectura" in c.args[0]
+                            and "Display por modo" in c.args[1] and Decimal(6) in c.args[1]
+                            for c in self.cursor.execute.call_args_list))
+        self.cursor.reset_mock()
+        self.cursor.fetchone.side_effect = [None, {
+            "id_caja": 1, "estado": "Abierta", "id_cliente": 12,
+            "id_cliente_domicilio": 201, "destino_entrega": "Casa Matriz",
+            "codigo_movimiento_ped_origen": 100,
+        }]
+        with self.assertRaisesMessage(PreparacionError, "supera la cantidad"):
+            self._registrar(lineas=[{**self.linea, "pendiente": Decimal(5)}], modo="display")
 
     def test_rechaza_otro_domicilio(self):
         with self.assertRaisesMessage(PreparacionError, "otra sucursal"):

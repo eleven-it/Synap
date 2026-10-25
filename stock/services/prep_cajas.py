@@ -265,7 +265,7 @@ def abrir_caja(base_empresa, codigo_prep, pedido, id_usuario):
         return {"id_caja": id_caja, "numero_caja": numero}
 
 
-def _cantidad_codigo(codigo, articulo):
+def _cantidad_codigo(codigo, articulo, modo_lectura="unidad"):
     codigo = str(codigo).strip()
     if codigo.startswith("333"):
         if len(codigo) < 12 or not codigo[3:12].isdigit():
@@ -295,6 +295,10 @@ def _cantidad_codigo(codigo, articulo):
             cantidad = (_dec(articulo["unidades_display"]) or Decimal(1)) * (
                 _dec(articulo["displays_bulto"]) or Decimal(1))
             tipo = "Bulto"
+        elif modo_lectura == "display" and str(articulo["lote"]).upper() != "SI" \
+                and str(articulo["serie"]).upper() != "SI":
+            cantidad = _dec(articulo["unidades_display"]) or Decimal(1)
+            tipo = "Display por modo"
     if cantidad <= 0:
         raise PreparacionError("La cantidad leída debe ser mayor que cero.")
     if str(articulo["lote"]).upper() == "SI" or str(articulo["serie"]).upper() == "SI":
@@ -328,8 +332,12 @@ def _motivo_codigo_sin_pendiente(cursor, codigo_prep, codigo):
     return "El artículo pertenece a esta preparación, pero no está disponible para controlar."
 
 
-def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuario):
+def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuario,
+                     modo_lectura="unidad"):
     codigo = str(codigo or "").strip()
+    modo_lectura = str(modo_lectura or "").strip().lower()
+    if modo_lectura not in ("unidad", "display"):
+        raise PreparacionError("Elegí un modo de lectura válido: Unidad o Display.")
     if not codigo or len(codigo) > 128:
         raise PreparacionError("Escaneá un código de artículo válido.")
     if codigo.startswith("333") and (len(codigo) < 12 or not codigo[3:12].isdigit()):
@@ -374,7 +382,7 @@ def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuari
             raise PreparacionError("El código identifica varios artículos. Corregí el código de barras.")
         for pedido_articulo, filas in compatibles:
             referencia = filas[0]
-            lectura = _cantidad_codigo(codigo, referencia)
+            lectura = _cantidad_codigo(codigo, referencia, modo_lectura)
             if lectura is None:
                 continue
             cantidad, tipo = lectura

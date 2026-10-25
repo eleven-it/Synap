@@ -114,7 +114,7 @@ def lectura(request, codigo_prep):
         caja = _entero(data.get("id_caja"), "Caja")
         return registrar_lectura(
             base, codigo_prep, caja, data.get("codigo"),
-            data.get("idempotency_key"), usuario,
+            data.get("idempotency_key"), usuario, data.get("modo_lectura", "unidad"),
         )
     return _responder(ejecutar)
 
