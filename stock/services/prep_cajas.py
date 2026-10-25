@@ -127,7 +127,9 @@ def _lineas(cursor, codigo_prep):
 def _cajas(cursor, codigo_prep):
     cursor.execute(
         """SELECT c.*, (SELECT COUNT(*) FROM synap_prep_caja_lectura l
-            WHERE l.id_caja=c.id_caja AND l.anulada=0) AS lecturas_activas
+            WHERE l.id_caja=c.id_caja AND l.anulada=0) AS lecturas_activas,
+            (SELECT COUNT(*) FROM synap_prep_caja_lectura l
+            WHERE l.id_caja=c.id_caja) AS lecturas_totales
            FROM synap_prep_caja c WHERE c.codigo_movimiento_prep=%s
            ORDER BY c.numero_caja""",
         [codigo_prep],
@@ -418,6 +420,19 @@ def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario, id_lect
                 "UPDATE synap_prep_caja SET estado='Abierta', "
                 "id_usuario_cierre=NULL, fecha_cierre=NULL WHERE id_caja=%s", [id_caja]
             )
+        elif accion == "eliminar":
+            if caja["estado"] not in ("Abierta", "Cerrada") or caja["fecha_importacion"]:
+                raise PreparacionError("La caja importada no puede eliminarse.")
+            cursor.execute(
+                "SELECT COUNT(*) AS n FROM synap_prep_caja_lectura WHERE id_caja=%s",
+                [id_caja],
+            )
+            if cursor.fetchone()["n"]:
+                raise PreparacionError(
+                    "La caja tiene lecturas en su historial, incluso si fueron anuladas. "
+                    "Conservala para mantener la trazabilidad."
+                )
+            cursor.execute("DELETE FROM synap_prep_caja WHERE id_caja=%s", [id_caja])
         elif accion == "anular_lectura":
             if caja["estado"] != "Abierta":
                 raise PreparacionError("Reabrí la caja antes de corregir lecturas.")

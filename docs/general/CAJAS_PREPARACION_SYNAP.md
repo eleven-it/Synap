@@ -19,7 +19,9 @@ remitos.
 5. Puede deshacer lecturas, cerrar incluso una caja vacía abierta por error y
    reabrir cajas mientras no hayan sido importadas en el control de salida.
    El número de una caja vacía cerrada queda reservado y la pantalla la señala
-   como vacía.
+   como vacía. También puede eliminar una caja abierta o cerrada si nunca tuvo
+   lecturas, incluso anuladas. El número eliminado tampoco se reutiliza. Una
+   caja con historial de lecturas se conserva para mantener la trazabilidad.
 6. El operario escribe el número grande `1`, `2`, etc. en cada caja física.
 
 La pantalla está en **Stock → Cajas de preparación**. Requiere el permiso

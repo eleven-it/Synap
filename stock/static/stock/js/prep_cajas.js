@@ -124,6 +124,21 @@
         });
         controls.append(b);
       }
+      if ((caja.estado === 'Abierta' || caja.estado === 'Cerrada')
+          && !caja.fecha_importacion && Number(caja.lecturas_totales) === 0) {
+        const eliminar = nodo('button', 'rounded border border-red-500 px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300', 'Eliminar caja');
+        eliminar.type = 'button';
+        eliminar.addEventListener('click', async () => {
+          if (!window.confirm(`¿Eliminar la caja ${caja.numero_caja}? El número no se reutilizará.`)) return;
+          try {
+            await pedir(url('accion'), { id_caja: caja.id_caja, accion: 'eliminar' });
+            if (cajaActiva === Number(caja.id_caja)) cajaActiva = null;
+            await refrescar();
+            aviso(`Caja ${caja.numero_caja} eliminada. Su número no se reutilizará.`);
+          } catch (error) { aviso(error.message, true); }
+        });
+        controls.append(eliminar);
+      }
       card.append(controls);
       const contenido = caja.contenido || [];
       const unidades = contenido.reduce((total, item) => total + Number(item.cantidad_unidades || 0), 0);
