@@ -156,7 +156,7 @@
         const eliminar = nodo('button', 'rounded border border-red-500 px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300', 'Eliminar caja');
         eliminar.type = 'button';
         eliminar.addEventListener('click', async () => {
-          if (!window.confirm(`¿Eliminar la caja ${caja.numero_caja}? Se conservará el historial de lecturas anuladas y el número no se reutilizará.`)) return;
+          if (!window.confirm(`¿Eliminar la caja ${caja.numero_caja}? Se conservará el historial de lecturas anuladas. Si no quedan cajas, la próxima empezará nuevamente en 1.`)) return;
           try {
             await pedir(url('accion'), { id_caja: caja.id_caja, accion: 'eliminar' });
             if (cajaActiva === Number(caja.id_caja)) cajaActiva = null;

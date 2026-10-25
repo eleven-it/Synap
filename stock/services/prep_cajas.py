@@ -325,12 +325,19 @@ def liberar_preparacion(base_empresa, codigo_prep, id_usuario, sesion_hash):
 
 def abrir_caja(base_empresa, codigo_prep, pedido, id_usuario, sesion_hash):
     with _tx(base_empresa) as cursor:
-        numero = _bloquear_preparacion(cursor, codigo_prep)
+        siguiente = _bloquear_preparacion(cursor, codigo_prep)
         _asegurar_reserva(cursor, codigo_prep, id_usuario, sesion_hash)
         lineas = _lineas(cursor, codigo_prep)
         origen = next((r for r in lineas if _num(r["pedido"]) == pedido), None)
         if origen is None:
             raise PreparacionError("El pedido no tiene artículos pendientes en esta preparación.")
+        cursor.execute(
+            "SELECT MAX(numero_caja) AS ultimo FROM synap_prep_caja "
+            "WHERE codigo_movimiento_prep=%s AND estado<>'Anulada'",
+            [codigo_prep],
+        )
+        ultimo = cursor.fetchone()["ultimo"]
+        numero = max(_num(siguiente), _num(ultimo) + 1) if ultimo is not None else 1
         cursor.execute(
             """INSERT INTO synap_prep_caja
                (codigo_movimiento_prep,numero_caja,codigo_movimiento_ped_origen,
@@ -528,6 +535,15 @@ def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario,
                 "UPDATE synap_prep_caja SET estado='Anulada' WHERE id_caja=%s",
                 [id_caja],
             )
+            cursor.execute(
+                "SELECT 1 FROM synap_prep_caja WHERE codigo_movimiento_prep=%s "
+                "AND estado<>'Anulada' LIMIT 1", [codigo_prep],
+            )
+            if not cursor.fetchone():
+                cursor.execute(
+                    "UPDATE synap_prep_caja_secuencia SET proximo_numero=1 "
+                    "WHERE codigo_movimiento_prep=%s", [codigo_prep],
+                )
         elif accion in ("anular_lectura", "anular_articulo"):
             if caja["estado"] != "Abierta" or caja["fecha_importacion"]:
                 raise PreparacionError("Reabrí la caja antes de corregir lecturas.")

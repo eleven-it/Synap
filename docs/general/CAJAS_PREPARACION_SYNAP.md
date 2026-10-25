@@ -14,8 +14,9 @@ remitos.
    la reserva mientras permanece abierta. **Terminar y liberar** la entrega a
    otro operario; si la sesión desaparece, la reserva vence a los 5 minutos.
 2. Ve los artículos pendientes de cada pedido y sucursal.
-3. Abre una caja; el número comienza en 1 y nunca se reutiliza dentro de la
-   misma preparación. La caja toma el cliente y domicilio del pedido origen.
+3. Abre una caja; el número comienza en 1. Mientras haya cajas vigentes, la
+   numeración sigue creciendo. Si se eliminan todas, la próxima vuelve a ser
+   la caja 1. La caja toma el cliente y domicilio del pedido origen.
 4. Cada lectura de código asigna el artículo al primer pedido compatible del
    mismo destino que tenga cantidad pendiente suficiente. Se muestran los
    faltantes en tiempo real. Una caja puede contener varios pedidos solo si
@@ -25,10 +26,11 @@ remitos.
    En una caja abierta, **Eliminar artículo** anula todas sus lecturas activas
    en esa caja y devuelve las unidades al pendiente; las lecturas anuladas
    permanecen en el historial.
-   El número de una caja vacía cerrada queda reservado y la pantalla la señala
-   como vacía. También puede eliminar una caja abierta o cerrada sin lecturas
-   activas. La caja queda anulada y desaparece de la vista, pero se conservan
-   su número y el historial de lecturas anuladas para trazabilidad.
+   La pantalla señala una caja vacía cerrada como vacía. También puede eliminar
+   una caja abierta o cerrada sin lecturas activas. La caja queda anulada y
+   desaparece de la vista, pero se conservan su número histórico, ID interno y
+   lecturas anuladas para trazabilidad. Ese número puede volver a utilizarse
+   cuando no queda ninguna caja vigente de la preparación.
 6. El operario escribe el número grande `1`, `2`, etc. en cada caja física.
 
 La pantalla está en **Stock → Cajas de preparación**. Requiere el permiso
@@ -64,6 +66,9 @@ pedido, línea `stockp`, usuario y fecha. `idempotency_key` impide duplicar un
 escaneo reenviado por la red. Deshacer marca la lectura anulada: no la borra.
 La reserva del operador vive en `synap_prep_caja_reserva`; cada operación de
 escritura valida la sesión bajo el mismo bloqueo transaccional de numeración.
+`numero_caja_vigente` impone unicidad solo para cajas no anuladas. El ID interno
+`id_caja` distingue una caja histórica anulada de una nueva que reutiliza su
+número visible después de comenzar de cero.
 
 La futura opción **Control en el lugar** de VB6 recibirá
 `CodigoMovimiento_prep` y `numero_caja`, leerá solamente cajas `Cerrada` con

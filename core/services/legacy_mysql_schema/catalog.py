@@ -2709,8 +2709,18 @@ def run_stock_prep_cajas_mysql(conn) -> Dict[str, Any]:
                 statement = _sc_sql_strip_leading_comments(statement)
                 if statement:
                     cursor.execute(statement)
+            cursor.execute("SHOW COLUMNS FROM synap_prep_caja LIKE 'numero_caja_vigente'")
+            if not cursor.fetchone():
+                cursor.execute(
+                    """ALTER TABLE synap_prep_caja
+                       ADD COLUMN numero_caja_vigente INT GENERATED ALWAYS AS
+                         (CASE WHEN estado='Anulada' THEN NULL ELSE numero_caja END) VIRTUAL,
+                       DROP INDEX uq_synap_prep_numero,
+                       ADD UNIQUE KEY uq_synap_prep_numero_vigente
+                         (codigo_movimiento_prep,numero_caja_vigente)"""
+                )
         conn.commit()
-        applied.append("Tablas de secuencia, reserva de operador, cajas y lecturas de preparación")
+        applied.append("Tablas de cajas y numeración reiniciable por preparación")
     except Exception as exc:
         conn.rollback()
         logger.exception("run_stock_prep_cajas_mysql: %s", exc)
@@ -3099,7 +3109,7 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         "id": "stock_prep_cajas_synap",
         "title": "Stock — cajas por preparación de pedidos",
         "description": (
-            "Crea las tablas de armado previo de cajas, reserva de operador, lecturas y numeración por "
+            "Crea las tablas de armado previo de cajas, reserva de operador, lecturas y numeración reiniciable por "
             "preparación. No modifica el control de salida VB6. "
             "Fuente: stock/sql/003_prep_cajas_synap.sql."
         ),

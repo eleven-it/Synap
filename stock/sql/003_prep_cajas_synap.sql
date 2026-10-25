@@ -24,13 +24,15 @@ CREATE TABLE IF NOT EXISTS synap_prep_caja (
     id_cliente_domicilio BIGINT NULL,
     destino_entrega VARCHAR(255) NOT NULL DEFAULT '',
     estado VARCHAR(12) NOT NULL DEFAULT 'Abierta',
+    numero_caja_vigente INT GENERATED ALWAYS AS
+      (CASE WHEN estado='Anulada' THEN NULL ELSE numero_caja END) VIRTUAL,
     id_usuario_apertura BIGINT NOT NULL,
     fecha_apertura DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     id_usuario_cierre BIGINT NULL,
     fecha_cierre DATETIME NULL,
     id_stock_control BIGINT NULL,
     fecha_importacion DATETIME NULL,
-    UNIQUE KEY uq_synap_prep_numero (codigo_movimiento_prep, numero_caja),
+    UNIQUE KEY uq_synap_prep_numero_vigente (codigo_movimiento_prep, numero_caja_vigente),
     KEY idx_synap_prep_caja_estado (codigo_movimiento_prep, estado),
     CONSTRAINT fk_synap_prep_caja_secuencia FOREIGN KEY (codigo_movimiento_prep)
       REFERENCES synap_prep_caja_secuencia (codigo_movimiento_prep)
