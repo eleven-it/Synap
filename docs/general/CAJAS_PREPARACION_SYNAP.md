@@ -48,6 +48,15 @@ cerradas. Synap no modifica `stockp` ni el pendiente del pedido en este paso.
 La pantalla está en **Stock → Cajas de preparación**. Requiere el permiso
 `stock.preparacion_cajas`. La base de datos de cada empresa debe recibir el
 proveedor `stock_prep_cajas_synap` de la herramienta global de migración MySQL.
+También se puede aplicar por empresa desde el contenedor de Synap:
+
+```bash
+docker exec Synap_app python manage.py apply_stock_prep_cajas administranet1
+```
+
+El comando usa el mismo proveedor que la pantalla y falla con código distinto
+de cero si MySQL rechaza el cambio. Ejecutarlo primero sobre la base de prueba;
+la empresa productiva se actualiza después de validar el circuito.
 
 ## Fuente VB6 y reglas de paridad
 
