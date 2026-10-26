@@ -188,6 +188,37 @@ def _consumos(cursor, codigo_prep):
             _dec(r["cantidad"]) for r in cursor.fetchall()}
 
 
+def _consumos_otras_preparaciones(cursor, codigo_prep):
+    """Lecturas aún no importadas de otros armados del mismo pedido."""
+    cursor.execute(
+        """SELECT l.codigo_movimiento_ped, l.id_articulo,
+                  SUM(l.cantidad_unidades) AS cantidad
+           FROM synap_prep_caja_lectura l
+           JOIN synap_prep_caja c ON c.id_caja=l.id_caja
+           WHERE c.codigo_movimiento_prep<>%s
+             AND c.estado IN ('Abierta','Cerrada') AND l.anulada=0
+           GROUP BY l.codigo_movimiento_ped,l.id_articulo""",
+        [codigo_prep],
+    )
+    return {(_num(r["codigo_movimiento_ped"]), _num(r["id_articulo"])):
+            _dec(r["cantidad"]) for r in cursor.fetchall()}
+
+
+def _consumo_otros_bloqueado(cursor, codigo_prep, pedido_articulo):
+    """Bloquea el rango de lecturas del pedido/artículo antes de insertar."""
+    cursor.execute(
+        """SELECT l.cantidad_unidades, c.codigo_movimiento_prep, c.estado
+           FROM synap_prep_caja_lectura l
+           JOIN synap_prep_caja c ON c.id_caja=l.id_caja
+           WHERE l.codigo_movimiento_ped=%s AND l.id_articulo=%s AND l.anulada=0
+           FOR UPDATE""",
+        list(pedido_articulo),
+    )
+    return sum((_dec(r["cantidad_unidades"]) for r in cursor.fetchall()
+                if _num(r["codigo_movimiento_prep"]) != _num(codigo_prep)
+                and r["estado"] in ("Abierta", "Cerrada")), Decimal(0))
+
+
 def listar_preparaciones(base_empresa, termino=""):
     termino = str(termino or "").strip()[:60]
     with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
@@ -205,13 +236,32 @@ def listar_preparaciones(base_empresa, termino=""):
         return cursor.fetchall()
 
 
+def _cajas_listas(cajas):
+    return bool(cajas) and all(
+        c["estado"] == "Cerrada" and _num(c["lecturas_activas"]) > 0 for c in cajas
+    )
+
+
+def _estado_finalizacion(articulos, cajas):
+    sin_faltantes = bool(articulos) and all(_dec(a["faltante"]) == 0 for a in articulos)
+    completa = sin_faltantes and _cajas_listas(cajas)
+    return sin_faltantes, completa
+
+
 def estado_preparacion(base_empresa, codigo_prep):
     with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+        cursor.execute(
+            "SELECT MAX(NroComprobante) AS numero FROM ped_prep "
+            "WHERE CodigoMovimiento_prep=%s AND IFNULL(Anulado,'No')='No'",
+            [codigo_prep],
+        )
+        numero_preparacion = (cursor.fetchone() or {}).get("numero") or ""
         lineas = _lineas(cursor, codigo_prep)
         cajas = _cajas(cursor, codigo_prep)
         contenido = _contenido_cajas(cursor, codigo_prep)
         lecturas = _lecturas(cursor, codigo_prep)
         consumido = _consumos(cursor, codigo_prep)
+        consumido_otros = _consumos_otras_preparaciones(cursor, codigo_prep)
     por_caja = {}
     for item in contenido:
         por_caja.setdefault(_num(item["id_caja"]), []).append(item)
@@ -225,11 +275,27 @@ def estado_preparacion(base_empresa, codigo_prep):
             agrupadas[clave]["pendiente"] = Decimal(0)
         agrupadas[clave]["pendiente"] += _dec(linea["pendiente"])
     articulos = []
+    articulos_en_otra_preparacion = 0
     for clave, linea in agrupadas.items():
+        linea["pendiente"] = max(Decimal(0), linea["pendiente"] - consumido_otros.get(clave, Decimal(0)))
         linea["en_cajas"] = consumido.get(clave, Decimal(0))
         linea["faltante"] = max(Decimal(0), linea["pendiente"] - linea["en_cajas"])
-        articulos.append(linea)
-    return {"codigo": codigo_prep, "articulos": articulos, "cajas": cajas, "lecturas": lecturas}
+        if linea["pendiente"] > 0 or linea["en_cajas"] > 0:
+            articulos.append(linea)
+        elif consumido_otros.get(clave, Decimal(0)) > 0:
+            articulos_en_otra_preparacion += 1
+    sin_faltantes, completa = _estado_finalizacion(articulos, cajas)
+    return {
+        "codigo": codigo_prep,
+        "numero_preparacion": numero_preparacion,
+        "sin_faltantes": sin_faltantes,
+        "completa": completa,
+        "cajas_listas": _cajas_listas(cajas),
+        "articulos_en_otra_preparacion": articulos_en_otra_preparacion,
+        "articulos": articulos,
+        "cajas": cajas,
+        "lecturas": lecturas,
+    }
 
 
 def _bloquear_preparacion(cursor, codigo_prep):
@@ -328,8 +394,15 @@ def abrir_caja(base_empresa, codigo_prep, pedido, id_usuario, sesion_hash):
         siguiente = _bloquear_preparacion(cursor, codigo_prep)
         _asegurar_reserva(cursor, codigo_prep, id_usuario, sesion_hash)
         lineas = _lineas(cursor, codigo_prep)
+        otros = _consumos_otras_preparaciones(cursor, codigo_prep)
         origen = next((r for r in lineas if _num(r["pedido"]) == pedido), None)
-        if origen is None:
+        por_articulo = {}
+        for linea in lineas:
+            if _num(linea["pedido"]) == pedido:
+                clave = (pedido, _num(linea["id_articulo"]))
+                por_articulo[clave] = por_articulo.get(clave, Decimal(0)) + _dec(linea["pendiente"])
+        if origen is None or not any(total > otros.get(clave, Decimal(0))
+                                    for clave, total in por_articulo.items()):
             raise PreparacionError("El pedido no tiene artículos pendientes en esta preparación.")
         cursor.execute(
             "SELECT MAX(numero_caja) AS ultimo FROM synap_prep_caja "
@@ -471,14 +544,19 @@ def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuari
             raise PreparacionError("El producto corresponde a otra sucursal o cliente.")
         if len({clave[1] for clave, _ in compatibles}) > 1:
             raise PreparacionError("El código identifica varios artículos. Corregí el código de barras.")
+        exceso = None
         for pedido_articulo, filas in compatibles:
             referencia = filas[0]
             lectura = _cantidad_codigo(codigo, referencia, modo_lectura)
             if lectura is None:
                 continue
             cantidad, tipo = lectura
+            consumido_otros = _consumo_otros_bloqueado(cursor, codigo_prep, pedido_articulo)
             pendiente = sum((_dec(r["pendiente"]) for r in filas), Decimal(0))
-            if cantidad > pendiente - consumido.get(pedido_articulo, Decimal(0)):
+            disponible = max(Decimal(0), pendiente - consumido.get(pedido_articulo, Decimal(0))
+                             - consumido_otros)
+            if cantidad > disponible:
+                exceso = (referencia, cantidad, disponible)
                 continue
             cursor.execute(
                 """INSERT INTO synap_prep_caja_lectura
@@ -490,8 +568,14 @@ def registrar_lectura(base_empresa, codigo_prep, id_caja, codigo, key, id_usuari
             )
             return {"id_lectura": cursor.lastrowid, "repetida": False,
                     "articulo": referencia["articulo"], "pedido": referencia["nro_pedido"],
-                    "cantidad": cantidad}
-        raise PreparacionError("La lectura supera la cantidad pendiente del pedido.")
+                    "cantidad": cantidad, "id_articulo": pedido_articulo[1],
+                    "codigo_movimiento_ped": pedido_articulo[0]}
+        if exceso:
+            referencia, cantidad, disponible = exceso
+            raise PreparacionError(
+                f"La lectura supera la cantidad pendiente del pedido: {referencia['articulo']}. "
+                f"Quedan {disponible:g} unidades; esta lectura suma {cantidad:g}.")
+        raise PreparacionError("No se pudo registrar el código en esta caja.")
 
 
 def cambiar_caja(base_empresa, codigo_prep, id_caja, accion, id_usuario,

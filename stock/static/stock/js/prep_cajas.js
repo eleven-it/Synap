@@ -8,17 +8,36 @@
   let estado = null;
   let buscando = null;
   let lecturaPendiente = null;
+  let seleccionVersion = 0;
+  let seleccionSolicitada = null;
+  let seleccionando = false;
   const urlPara = (tipo, codigo) => root.dataset[tipo].replace('__CODIGO__', String(codigo));
   const url = (tipo) => urlPara(tipo, prep);
   const numero = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 4 }).format(Number(n || 0));
+  function factorDisplay(idArticulo, pedido) {
+    const articulo = (estado?.articulos || []).find((item) =>
+      Number(item.id_articulo) === Number(idArticulo) &&
+      (pedido == null || Number(item.pedido) === Number(pedido)));
+    const factor = Number(articulo?.unidades_display || 0);
+    return factor > 1 ? factor : 0;
+  }
+  function unidadesYDisplays(unidades, factor) {
+    const cantidad = Number(unidades || 0);
+    const textoUnidades = `${numero(cantidad)} ${cantidad === 1 ? 'unidad' : 'unidades'}`;
+    if (!(factor > 1)) return textoUnidades;
+    const displays = Math.floor((cantidad + 0.000001) / factor);
+    const resto = Math.max(0, cantidad - displays * factor);
+    const textoDisplays = `${numero(displays)} ${displays === 1 ? 'display' : 'displays'}`;
+    return `${textoUnidades} · ${textoDisplays}${resto > 0.000001 ? ` + ${numero(resto)} ${resto === 1 ? 'unidad' : 'unidades'}` : ''} (${numero(factor)} unidades/display)`;
+  }
 
   function actualizarModo() {
     const display = el('prep-modo-lectura').value === 'display';
     const ayuda = el('prep-modo-ayuda');
     ayuda.textContent = display
-      ? 'Modo Display: el código de unidad suma el pack indicado en cada artículo. La etiqueta 333 conserva su cantidad.'
+      ? 'Modo Display: el código de unidad suma las unidades de un display indicadas en cada artículo. La etiqueta 333 conserva su cantidad.'
       : 'Modo Unidad: el código de unidad suma 1. Los códigos propios de display o bulto mantienen su factor.';
-    ayuda.className = display ? 'mt-1 text-sm font-bold text-amber-800 dark:text-amber-200' : 'mt-1 text-sm';
+    ayuda.className = display ? 'mt-1 break-words text-sm font-bold text-amber-800 dark:text-amber-200' : 'mt-1 break-words text-sm';
   }
 
   function nodo(tag, clase, contenido) {
@@ -51,27 +70,61 @@
       const lista = el('prep-lista');
       lista.replaceChildren();
       for (const item of data.preparaciones) {
-        const b = nodo('button', 'block w-full rounded-lg border border-slate-200 p-3 text-left text-sm hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-slate-700',
+        const b = nodo('button', 'block w-full rounded-lg border border-slate-200 bg-white p-3 text-left text-sm text-slate-900 hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-700',
           `${item.numero || `Prep. ${item.codigo}`} · ${item.pedidos} pedido(s)`);
         b.type = 'button';
         b.addEventListener('click', () => seleccionar(Number(item.codigo)));
         lista.append(b);
       }
-      if (!data.preparaciones.length) lista.append(nodo('p', 'p-3 text-sm text-slate-500', 'Sin preparaciones encontradas.'));
+      if (!data.preparaciones.length) lista.append(nodo('p', 'p-3 text-sm text-slate-500 dark:text-slate-300', 'Sin preparaciones encontradas.'));
     } catch (error) { aviso(error.message, true); }
   }
   async function seleccionar(codigo) {
+    if (codigo === prep && !seleccionando) return;
+    const version = ++seleccionVersion;
+    seleccionSolicitada = codigo;
     const anterior = prep;
+    const estadoAnterior = estado;
+    const cajaAnterior = cajaActiva;
+    let reservaTomada = false;
+    seleccionando = true;
+    el('prep-aviso').classList.add('hidden');
+    el('prep-contenido').classList.add('hidden');
+    el('prep-sin-seleccion').textContent = `Cargando preparación ${codigo}...`;
+    el('prep-sin-seleccion').classList.remove('hidden');
     try {
       await pedir(urlPara('reserva', codigo), { accion: 'tomar' });
+      reservaTomada = true;
+      if (version !== seleccionVersion) return;
+      const nuevoEstado = await pedir(urlPara('estado', codigo));
+      if (version !== seleccionVersion) return;
       prep = codigo;
       cajaActiva = null;
-      await refrescar();
+      lecturaPendiente = null;
+      el('prep-ultimo').textContent = '';
+      estado = nuevoEstado;
+      seleccionando = false;
+      render();
       if (anterior && anterior !== codigo) {
         try { await pedir(urlPara('reserva', anterior), { accion: 'liberar' }); }
         catch (error) { aviso(`No se pudo liberar la preparación anterior: ${error.message}`, true); }
       }
-    } catch (error) { aviso(error.message, true); }
+    } catch (error) {
+      if (version !== seleccionVersion) return;
+      prep = anterior;
+      estado = estadoAnterior;
+      cajaActiva = cajaAnterior;
+      seleccionando = false;
+      seleccionSolicitada = anterior;
+      if (estadoAnterior) render();
+      else quitarPreparacionDePantalla();
+      aviso(error.message, true);
+    } finally {
+      if (reservaTomada && codigo !== prep && codigo !== seleccionSolicitada) {
+        try { await pedir(urlPara('reserva', codigo), { accion: 'liberar' }); }
+        catch (error) { /* La reserva transitoria vence sola si otro usuario la tomó. */ }
+      }
+    }
   }
 
   function quitarPreparacionDePantalla() {
@@ -83,22 +136,125 @@
     el('prep-sin-seleccion').classList.remove('hidden');
   }
   async function refrescar() {
-    if (!prep) return;
+    if (!prep || seleccionando) return false;
+    const codigo = prep;
+    const version = seleccionVersion;
     try {
-      estado = await pedir(url('estado'));
+      const estabanListas = Boolean(estado?.cajas_listas);
+      const nuevoEstado = await pedir(urlPara('estado', codigo));
+      if (prep !== codigo || version !== seleccionVersion || seleccionando) return false;
+      estado = nuevoEstado;
       render();
-    } catch (error) { aviso(error.message, true); }
+      if (estado.cajas_listas && !estabanListas) {
+        el('prep-finalizacion').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return true;
+    } catch (error) {
+      if (prep === codigo && version === seleccionVersion && !seleccionando) aviso(error.message, true);
+      return false;
+    }
+  }
+  function renderFinalizacion(cajas) {
+    const sinFaltantes = Boolean(estado.sin_faltantes);
+    const cajasListas = Boolean(estado.cajas_listas);
+    const panel = el('prep-finalizacion');
+    panel.className = `rounded-xl border p-4 ${sinFaltantes || cajasListas ? '' : 'hidden '}${cajasListas && sinFaltantes
+      ? 'border-emerald-400 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/50 dark:text-emerald-100'
+      : 'border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/50 dark:text-amber-100'}`;
+    el('prep-resumen-datos').classList.toggle('hidden', !cajasListas);
+    el('prep-resumen-faltantes').classList.toggle('hidden', !cajasListas || sinFaltantes);
+    if (!sinFaltantes && !cajasListas) return;
+    const numeroPrep = estado.numero_preparacion || String(prep);
+    el('prep-finalizacion-titulo').textContent = cajasListas
+      ? `Armado de cajas ${numeroPrep} ${sinFaltantes ? 'completo' : 'parcial'}: listo para control de salida`
+      : `Preparación ${numeroPrep}: todas las unidades previstas fueron leídas`;
+    if (!cajasListas) {
+      const abiertas = cajas.filter((c) => c.estado === 'Abierta').map((c) => c.numero_caja);
+      const vacias = cajas.filter((c) => Number(c.lecturas_activas) === 0).map((c) => c.numero_caja);
+      el('prep-finalizacion-ayuda').textContent = abiertas.length
+        ? `No quedan artículos por leer. Cerrá ${abiertas.map((n) => `Caja ${n}`).join(', ')} para llevarla a control de salida.`
+        : vacias.length
+          ? `No quedan artículos por leer. Eliminá ${vacias.map((n) => `Caja ${n}`).join(', ')} porque está vacía.`
+          : 'No quedan artículos por leer. Revisá el estado de las cajas.';
+      return;
+    }
+    const articulos = estado.articulos || [];
+    const total = articulos.reduce((suma, item) => suma + Number(item.pendiente || 0), 0);
+    const leido = articulos.reduce((suma, item) => suma + Number(item.en_cajas || 0), 0);
+    const faltante = articulos.reduce((suma, item) => suma + Number(item.faltante || 0), 0);
+    el('prep-finalizacion-ayuda').textContent = sinFaltantes
+      ? `${numero(leido)} de ${numero(total)} unidades en cajas cerradas. Usá el código de movimiento en el control de salida de administraNET.`
+      : `${numero(leido)} de ${numero(total)} unidades en cajas cerradas; faltan ${numero(faltante)}. Controlá estas cajas en administraNET y dejá pendiente lo que no se pudo preparar.`;
+    const pendientes = el('prep-resumen-faltantes-lista');
+    pendientes.replaceChildren();
+    if (!sinFaltantes) {
+      for (const articulo of articulos.filter((item) => Number(item.faltante) > 0)) {
+        pendientes.append(nodo('li', 'rounded border border-amber-400 px-2 py-1 dark:border-amber-700',
+          `Faltan ${unidadesYDisplays(articulo.faltante, Number(articulo.unidades_display))} · ${articulo.articulo} · Pedido ${articulo.nro_pedido}`));
+      }
+    }
+    el('prep-resumen-movimiento').textContent = String(prep);
+    el('prep-resumen-numero').textContent = numeroPrep;
+    const lista = el('prep-resumen-cajas');
+    lista.replaceChildren();
+    for (const caja of cajas) {
+      const contenido = caja.contenido || [];
+      const unidades = contenido.reduce((total, item) => total + Number(item.cantidad_unidades || 0), 0);
+      const card = nodo('div', 'rounded-lg border border-emerald-300 bg-white p-3 text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-white');
+      card.append(nodo('p', 'text-xl font-bold', `Caja ${caja.numero_caja} · ${numero(unidades)} unidades`));
+      card.append(nodo('p', 'mt-1 text-sm text-slate-600 dark:text-slate-300', caja.destino_entrega));
+      const detalle = nodo('ul', 'mt-2 space-y-1 border-t border-slate-200 pt-2 text-sm dark:border-slate-700');
+      for (const item of contenido) {
+        detalle.append(nodo('li', '', `${unidadesYDisplays(item.cantidad_unidades, factorDisplay(item.id_articulo, item.codigo_movimiento_ped))} · ${item.articulo} · Código ${item.codigo_leido} · Pedido ${item.nro_pedido}`));
+      }
+      card.append(detalle);
+      lista.append(card);
+    }
+  }
+  function renderProgreso() {
+    const articulos = estado.articulos || [];
+    const total = articulos.reduce((suma, item) => suma + Number(item.pendiente || 0), 0);
+    const faltante = articulos.reduce((suma, item) => suma + Number(item.faltante || 0), 0);
+    const leido = articulos.reduce((suma, item) => suma + Number(item.en_cajas || 0), 0);
+    const completos = articulos.filter((item) => Number(item.faltante) <= 0).length;
+    const pendientes = articulos.filter((item) => Number(item.faltante) > 0);
+    const porcentaje = total > 0 ? Math.min(100, Math.max(0, Math.round(100 * leido / total))) : 0;
+    el('prep-progreso-titulo').textContent = `Avance de preparación ${estado.numero_preparacion || prep}`;
+    el('prep-progreso-faltante').textContent = `${numero(faltante)} de ${numero(total)} unidades`;
+    el('prep-progreso-leido').textContent = `${numero(leido)} unidades`;
+    el('prep-progreso-articulos').textContent = `${completos} de ${articulos.length}`;
+    el('prep-progreso-barra').setAttribute('aria-valuenow', String(porcentaje));
+    el('prep-progreso-relleno').style.width = `${porcentaje}%`;
+    const proximos = el('prep-proximos');
+    proximos.replaceChildren();
+    for (const item of pendientes.slice(0, 3)) {
+      proximos.append(nodo('p', 'rounded bg-amber-50 px-2 py-1 font-medium text-amber-950 dark:bg-amber-950/40 dark:text-amber-100',
+        `Faltan ${unidadesYDisplays(item.faltante, Number(item.unidades_display))} · ${item.articulo}`));
+    }
+    if (pendientes.length > 3) proximos.append(nodo('p', 'text-slate-600 dark:text-slate-300',
+      `Y ${pendientes.length - 3} artículo(s) más. Ver lista completa abajo.`));
+    if (!pendientes.length && articulos.length) proximos.append(nodo('p', 'font-bold text-emerald-800 dark:text-emerald-200',
+      'Lectura completa: no quedan artículos pendientes.'));
+    if (!articulos.length && Number(estado.articulos_en_otra_preparacion) > 0) {
+      proximos.append(nodo('p', 'font-bold text-amber-900 dark:text-amber-200',
+        'Las unidades pendientes ya están en cajas de otra preparación del mismo pedido.'));
+    }
+
   }
   function render() {
     el('prep-sin-seleccion').classList.add('hidden');
     el('prep-contenido').classList.remove('hidden');
-    el('prep-titulo').textContent = `Preparación ${prep}`;
+    el('prep-titulo').textContent = `Preparación ${estado.numero_preparacion || prep}`;
     const cajas = estado.cajas || [];
+    renderFinalizacion(cajas);
+    renderProgreso();
+    el('prep-lectura-panel').classList.toggle('hidden', Boolean(estado.cajas_listas));
+    if (estado.cajas_listas || estado.sin_faltantes) el('prep-aviso').classList.add('hidden');
     if (!cajas.some((c) => Number(c.id_caja) === cajaActiva && c.estado === 'Abierta')) cajaActiva = null;
     const activa = cajas.find((c) => Number(c.id_caja) === cajaActiva);
     el('prep-caja-activa').textContent = activa ? `Caja ${activa.numero_caja}` : 'Ninguna';
     el('prep-caja-destino').textContent = activa ? activa.destino_entrega : 'Abrí o seleccioná una caja para escanear.';
-    el('prep-codigo').disabled = !activa;
+    el('prep-codigo').disabled = !activa || Boolean(estado.sin_faltantes);
     const selector = el('prep-pedido');
     const elegido = selector.value;
     selector.replaceChildren();
@@ -114,11 +270,12 @@
     }
     if (pedidos.has(elegido)) selector.value = elegido;
     el('prep-abrir').disabled = !pedidos.size;
+    el('prep-abrir-fila').classList.toggle('hidden', !pedidos.size);
     const boxList = el('prep-cajas-lista');
     boxList.replaceChildren();
     for (const caja of cajas) {
       const seleccionada = Number(caja.id_caja) === cajaActiva;
-      const card = nodo('div', `rounded-lg border p-3 ${seleccionada
+      const card = nodo('div', `rounded-lg border p-3 text-slate-900 dark:text-slate-100 ${seleccionada
         ? 'border-blue-600 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/40'
         : 'border-slate-300 dark:border-slate-600'}`);
       const vacia = caja.estado === 'Cerrada' && Number(caja.lecturas_activas) === 0;
@@ -136,14 +293,14 @@
         controls.append(elegir);
       }
       if (caja.estado === 'Abierta' || (caja.estado === 'Cerrada' && !caja.fecha_importacion)) {
-        const b = nodo('button', 'rounded border border-slate-400 px-3 py-2 text-sm font-semibold', accion === 'cerrar' ? 'Cerrar caja' : 'Reabrir');
+        const b = nodo('button', 'rounded border border-slate-400 bg-white px-3 py-2 text-sm font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100', accion === 'cerrar' ? 'Cerrar caja' : 'Reabrir');
         b.type = 'button';
         b.addEventListener('click', async () => {
           try {
             await pedir(url('accion'), { id_caja: caja.id_caja, accion });
             if (accion === 'reabrir') cajaActiva = Number(caja.id_caja);
             await refrescar();
-            aviso(accion === 'cerrar' ? `Caja ${caja.numero_caja} cerrada.`
+            if (!estado.cajas_listas) aviso(accion === 'cerrar' ? `Caja ${caja.numero_caja} cerrada.`
               : `Caja ${caja.numero_caja} reabierta y seleccionada para escanear.`);
             if (accion === 'reabrir') el('prep-codigo').focus();
           }
@@ -187,8 +344,8 @@
       if (articulos.size) {
         const lista = nodo('ul', 'mt-2 max-h-48 space-y-2 overflow-y-auto text-sm');
         for (const item of articulos.values()) {
-          const fila = nodo('li', 'rounded bg-white p-2 dark:bg-slate-800');
-          fila.append(nodo('p', 'font-semibold', `${numero(item.unidades)} u. · ${item.nombre}`));
+          const fila = nodo('li', 'rounded bg-white p-2 text-slate-900 dark:bg-slate-800 dark:text-slate-100');
+          fila.append(nodo('p', 'font-semibold', `${unidadesYDisplays(item.unidades, factorDisplay(item.id))} · ${item.nombre}`));
           fila.append(nodo('p', 'break-all text-slate-600 dark:text-slate-300',
             `Código(s): ${[...item.codigos].join(', ')} · ${[...item.tipos].join(', ')} · Pedido(s): ${[...item.pedidos].join(', ')}`));
           if (caja.estado === 'Abierta') {
@@ -217,23 +374,49 @@
       }
       boxList.append(card);
     }
-    if (!cajas.length) boxList.append(nodo('p', 'text-sm text-slate-500', 'Todavía no hay cajas.'));
+    if (!cajas.length) boxList.append(nodo('p', 'text-sm text-slate-500 dark:text-slate-300', 'Todavía no hay cajas.'));
     const articulos = el('prep-articulos');
     articulos.replaceChildren();
-    for (const articulo of estado.articulos) {
-      const row = nodo('div', 'rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-700');
+    el('prep-articulos-titulo').textContent = `${estado.sin_faltantes ? 'Artículos preparados' : 'Artículos pendientes'} · Preparación ${estado.numero_preparacion || prep}`;
+    el('prep-articulos-ayuda').textContent = estado.sin_faltantes
+      ? 'Todos los artículos de esta preparación fueron leídos.'
+      : 'El faltante se reduce con cada lectura. Si no hay stock, cerrá las cajas para continuar con un armado parcial; lo no preparado queda pendiente para el control de salida.';
+    const ordenados = [...estado.articulos].sort((a, b) => Number(b.faltante > 0) - Number(a.faltante > 0));
+    for (const articulo of ordenados) {
+      const completo = Number(articulo.faltante) <= 0;
+      const total = Number(articulo.pendiente || 0);
+      const leido = Number(articulo.en_cajas || 0);
+      const porcentaje = total > 0 ? Math.min(100, Math.max(0, Math.round(100 * leido / total))) : 0;
+      const row = nodo('div', `rounded-lg border p-3 text-sm ${completo
+        ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30'
+        : 'border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20'}`);
       row.append(nodo('p', 'font-semibold', articulo.articulo));
       row.append(nodo('p', 'text-slate-500 dark:text-slate-300', `${articulo.nro_pedido} · ${articulo.cliente} · ${articulo.destino}`));
-      row.append(nodo('p', 'font-bold', `Pendiente ${numero(articulo.faltante)} / ${numero(articulo.pendiente)}`));
+      row.append(nodo('p', `font-bold ${completo ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-900 dark:text-amber-200'}`,
+        completo ? 'Completo · Faltan 0 unidades'
+          : `Faltan ${unidadesYDisplays(articulo.faltante, Number(articulo.unidades_display))}`));
+      row.append(nodo('p', 'font-medium', `En cajas ${numero(leido)} de ${numero(total)} unidades`));
+      const barra = nodo('div', 'mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700');
+      const relleno = nodo('div', 'h-full rounded-full bg-emerald-600');
+      relleno.style.width = `${porcentaje}%`;
+      barra.append(relleno);
+      row.append(barra);
+      if (articulo.barra_interna) {
+        row.append(nodo('p', 'break-all font-medium text-slate-700 dark:text-slate-200',
+          `Código de barra interno: ${articulo.barra_interna}`));
+      }
       row.append(nodo('p', 'text-slate-600 dark:text-slate-300', `Unidades por display: ${numero(articulo.unidades_display)}`));
       articulos.append(row);
     }
-    if (!estado.articulos.length) articulos.append(nodo('p', 'text-sm text-slate-500', 'No hay artículos pendientes en administraNET.'));
+    if (!estado.articulos.length) articulos.append(nodo('p', 'text-sm text-slate-600 dark:text-slate-300',
+      Number(estado.articulos_en_otra_preparacion) > 0
+        ? 'Los artículos pendientes ya se registraron en cajas de otra preparación del mismo pedido. No vuelvas a leerlos aquí.'
+        : 'No hay artículos pendientes en administraNET.'));
     const lecturas = el('prep-lecturas');
     lecturas.replaceChildren();
     for (const lectura of estado.lecturas.slice(0, 30)) {
       const row = nodo('div', 'flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2 text-sm dark:border-slate-700');
-      row.append(nodo('span', 'min-w-0 flex-1', `Caja ${lectura.numero_caja} · ${lectura.codigo_leido} · ${numero(lectura.cantidad_unidades)} u.`));
+      row.append(nodo('span', 'min-w-0 flex-1', `Caja ${lectura.numero_caja} · ${lectura.codigo_leido} · ${unidadesYDisplays(lectura.cantidad_unidades, factorDisplay(lectura.id_articulo, lectura.codigo_movimiento_ped))}`));
       if (Number(lectura.id_caja) === cajaActiva) {
         const deshacer = nodo('button', 'rounded border border-red-400 px-2 py-1 text-red-700 dark:text-red-300', 'Deshacer');
         deshacer.type = 'button';
@@ -249,14 +432,21 @@
   el('prep-buscar').addEventListener('input', () => {
     clearTimeout(buscando); buscando = setTimeout(cargarPreparaciones, 250);
   });
-  el('prep-liberar').addEventListener('click', async () => {
+  async function liberarPreparacion(elegirOtra = false) {
     if (!prep) return;
     try {
       await pedir(url('reserva'), { accion: 'liberar' });
       quitarPreparacionDePantalla();
       aviso('Preparación liberada. Otro usuario ya puede trabajarla.');
+      if (elegirOtra) {
+        el('prep-buscar').value = '';
+        await cargarPreparaciones();
+        el('prep-buscar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     } catch (error) { aviso(error.message, true); }
-  });
+  }
+  el('prep-liberar').addEventListener('click', () => liberarPreparacion());
+  el('prep-otra').addEventListener('click', () => liberarPreparacion(true));
   setInterval(async () => {
     if (!prep) return;
     try { await pedir(url('reserva'), { accion: 'renovar' }); }
@@ -298,14 +488,30 @@
       });
       lecturaPendiente = null;
       input.value = '';
-      el('prep-ultimo').textContent = result.repetida
+      const actualizado = await refrescar();
+      const articulo = actualizado && (estado.articulos || []).find((item) =>
+        Number(item.id_articulo) === Number(result.id_articulo)
+        && Number(item.pedido) === Number(result.codigo_movimiento_ped));
+      const ultimo = el('prep-ultimo');
+      ultimo.className = 'mt-2 text-sm font-bold text-emerald-900 dark:text-emerald-200';
+      ultimo.textContent = result.repetida
         ? `${codigo} · lectura ya registrada; no se duplicó.`
-        : `${result.articulo || codigo} · ${numero(result.cantidad)} unidad(es) · Pedido ${result.pedido || ''}`;
-      await refrescar();
-      aviso(result.repetida ? 'Lectura recuperada sin duplicar.' : 'Artículo registrado en la caja.');
+        : `${result.articulo || codigo} · leídas ${unidadesYDisplays(result.cantidad, factorDisplay(result.id_articulo, result.codigo_movimiento_ped))}. ${articulo
+          ? `Quedan ${unidadesYDisplays(articulo.faltante, Number(articulo.unidades_display))} de ${unidadesYDisplays(articulo.pendiente, Number(articulo.unidades_display))} para este artículo.`
+          : `Pedido ${result.pedido || ''}.`}`;
+      if (!estado.sin_faltantes) aviso(result.repetida
+        ? 'Lectura recuperada sin duplicar.' : 'Artículo registrado en la caja.');
       if (navigator.vibrate) navigator.vibrate(45);
-    } catch (error) { aviso(error.message, true); }
-    finally { input.disabled = false; input.focus(); }
+    } catch (error) {
+      aviso(error.message, true);
+      const ultimo = el('prep-ultimo');
+      ultimo.className = 'mt-2 text-sm font-bold text-red-800 dark:text-red-300';
+      ultimo.textContent = `Lectura rechazada: ${error.message}`;
+    }
+    finally {
+      input.disabled = !cajaActiva || Boolean(estado?.sin_faltantes);
+      if (!input.disabled) input.focus();
+    }
   });
   el('prep-modo-lectura').value = 'display';
   actualizarModo();

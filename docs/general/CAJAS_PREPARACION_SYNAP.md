@@ -19,7 +19,10 @@ remitos.
    la caja 1. La caja toma el cliente y domicilio del pedido origen.
 4. Cada lectura de código asigna el artículo al primer pedido compatible del
    mismo destino que tenga cantidad pendiente suficiente. Se muestran los
-   faltantes en tiempo real. Una caja puede contener varios pedidos solo si
+   faltantes en tiempo real, junto al escáner y por artículo. Las lecturas
+   activas de otras preparaciones del mismo pedido también descuentan el
+   disponible, para no volver a preparar un parcial ya puesto en cajas.
+   Una caja puede contener varios pedidos solo si
    son del mismo cliente y sucursal/domicilio.
 5. Puede deshacer lecturas, cerrar incluso una caja vacía abierta por error y
    reabrir cajas mientras no hayan sido importadas en el control de salida.
@@ -32,6 +35,15 @@ remitos.
    lecturas anuladas para trazabilidad. Ese número puede volver a utilizarse
    cuando no queda ninguna caja vigente de la preparación.
 6. El operario escribe el número grande `1`, `2`, etc. en cada caja física.
+
+Si faltan artículos por falta de stock, el operario puede cerrar las cajas con
+contenido igualmente. El resumen indica **armado parcial**, las unidades
+guardadas y el saldo no preparado por artículo. Ese saldo se debe conservar
+pendiente en el control de salida de administraNET. Si todas las unidades se
+leyeron pero hay cajas abiertas, la pantalla pide cerrarlas; muestra un solo
+aviso de estado arriba. El resumen queda listo para usar con el código de
+movimiento y números de caja cuando todas las cajas con contenido están
+cerradas. Synap no modifica `stockp` ni el pendiente del pedido en este paso.
 
 La pantalla está en **Stock → Cajas de preparación**. Requiere el permiso
 `stock.preparacion_cajas`. La base de datos de cada empresa debe recibir el

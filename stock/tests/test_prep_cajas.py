@@ -9,6 +9,7 @@ from django.test import SimpleTestCase
 from core.middleware.mobile_level_a_middleware import mobile_path_allowed_for_level_a
 from stock.services.prep_cajas import (
     PreparacionError, _cantidad_codigo, _coincide_codigo, _compatible,
+    _cajas_listas, _estado_finalizacion, abrir_caja,
     registrar_lectura,
 )
 
@@ -69,6 +70,23 @@ class CajasPreparacionReglasTests(SimpleTestCase):
         self.assertTrue(mobile_path_allowed_for_level_a("/stock/preparacion-cajas/"))
         self.assertTrue(mobile_path_allowed_for_level_a("/stock/api/preparacion-cajas/42/lectura/"))
 
+    def test_finalizacion_exige_todos_los_articulos_y_cajas_cerradas_con_contenido(self):
+        articulos = [{"faltante": Decimal(0)}, {"faltante": Decimal(0)}]
+        caja = {"estado": "Cerrada", "lecturas_activas": 2}
+        self.assertEqual(_estado_finalizacion(articulos, [caja]), (True, True))
+        self.assertEqual(_estado_finalizacion([{**articulos[0], "faltante": Decimal(1)}], [caja]), (False, False))
+        self.assertEqual(_estado_finalizacion(articulos, [{**caja, "estado": "Abierta"}]), (True, False))
+        self.assertEqual(_estado_finalizacion(articulos, [caja, {**caja, "lecturas_activas": 0}]), (True, False))
+        self.assertEqual(_estado_finalizacion([], [caja]), (False, False))
+
+    def test_cajas_cerradas_con_faltantes_quedan_listas_para_control_parcial(self):
+        caja = {"estado": "Cerrada", "lecturas_activas": 1}
+        self.assertTrue(_cajas_listas([caja]))
+        self.assertEqual(_estado_finalizacion([{"faltante": Decimal(6)}], [caja]),
+                         (False, False))
+        self.assertFalse(_cajas_listas([{**caja, "estado": "Abierta"}]))
+        self.assertFalse(_cajas_listas([{**caja, "lecturas_activas": 0}]))
+
 
 class CajasPreparacionRegistroTests(SimpleTestCase):
     KEY = "e89687fa-005e-4012-a774-47c0615d0ad3"
@@ -96,12 +114,14 @@ class CajasPreparacionRegistroTests(SimpleTestCase):
     def _fake_tx(self, _base):
         yield self.cursor
 
-    def _registrar(self, consumido=None, lineas=None, modo="unidad"):
+    def _registrar(self, consumido=None, lineas=None, modo="unidad", otros=None):
         with patch("stock.services.prep_cajas._tx", self._fake_tx), \
              patch("stock.services.prep_cajas._bloquear_preparacion", return_value=1), \
              patch("stock.services.prep_cajas._asegurar_reserva"), \
              patch("stock.services.prep_cajas._lineas", return_value=lineas or [self.linea]), \
-             patch("stock.services.prep_cajas._consumos", return_value=consumido or {}):
+             patch("stock.services.prep_cajas._consumos", return_value=consumido or {}), \
+             patch("stock.services.prep_cajas._consumo_otros_bloqueado",
+                   return_value=(otros or {}).get((100, 42), Decimal(0))):
             return registrar_lectura("prueba", 44, 1, "7790012345678", self.KEY, 7, modo)
 
     def test_lectura_registra_pedido_y_linea_exactos(self):
@@ -114,6 +134,31 @@ class CajasPreparacionRegistroTests(SimpleTestCase):
         with self.assertRaisesMessage(PreparacionError, "supera la cantidad"):
             self._registrar(consumido={(100, 42): Decimal(3)})
         self.assertFalse(any("INSERT INTO synap_prep_caja_lectura" in c.args[0]
+                             for c in self.cursor.execute.call_args_list))
+
+    def test_parcial_rechaza_unidades_armadas_en_otra_preparacion(self):
+        with self.assertRaisesMessage(PreparacionError, "Quedan 0 unidades"):
+            self._registrar(otros={(100, 42): Decimal(3)})
+        self.assertFalse(any("INSERT INTO synap_prep_caja_lectura" in c.args[0]
+                             for c in self.cursor.execute.call_args_list))
+
+    def test_parcial_rechaza_display_que_supera_saldo_entre_preparaciones(self):
+        with self.assertRaisesMessage(PreparacionError, "Quedan 4 unidades"):
+            self._registrar(lineas=[{**self.linea, "pendiente": Decimal(8)}],
+                            otros={(100, 42): Decimal(4)}, modo="display")
+        self.assertFalse(any("INSERT INTO synap_prep_caja_lectura" in c.args[0]
+                             for c in self.cursor.execute.call_args_list))
+
+    def test_no_abre_caja_para_pedido_ya_armado_en_otra_preparacion(self):
+        with patch("stock.services.prep_cajas._tx", self._fake_tx), \
+             patch("stock.services.prep_cajas._bloquear_preparacion", return_value=1), \
+             patch("stock.services.prep_cajas._asegurar_reserva"), \
+             patch("stock.services.prep_cajas._lineas", return_value=[self.linea]), \
+             patch("stock.services.prep_cajas._consumos_otras_preparaciones",
+                   return_value={(100, 42): Decimal(3)}):
+            with self.assertRaisesMessage(PreparacionError, "no tiene artículos pendientes"):
+                abrir_caja("prueba", 44, 100, 7, "sesion")
+        self.assertFalse(any("INSERT INTO synap_prep_caja" in c.args[0]
                              for c in self.cursor.execute.call_args_list))
 
     def test_modo_display_registra_pack_y_respeta_faltante(self):
