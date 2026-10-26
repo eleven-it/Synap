@@ -278,6 +278,14 @@ APPS_MENU = [
                 "seccion": _("Reportes"),
                 "items": [
                     {"label": _("Reportes MPR"), "url": "mpr:reportes", "icon": "assessment", "permission": ["mpr.ver", "mpr.reportes"], "menu_item_id": "mpr_rep_reportes"},
+                    {
+                        "label": _("Pedidos pendientes (Producción)"),
+                        "url": "reports:dashboard_detail",
+                        "url_kwargs": {"slug": "pedidos-pendientes-produccion"},
+                        "icon": "pending_actions",
+                        "permission": ["reports.view_operational", "mpr.reportes", "mpr.ver"],
+                        "menu_item_id": "mpr_rep_pedidos_pendientes_produccion",
+                    },
                 ]
             },
             {
