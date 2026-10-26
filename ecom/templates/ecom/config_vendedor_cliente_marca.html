@@ -38,14 +38,19 @@
           <input id="vcm-vend" type="text" autocomplete="off" role="combobox"
                  :aria-expanded="panel==='vend'"
                  x-model="qVend"
-                 @focus="abrirPanel('vend'); buscarVendedores()"
+                 @focus="onFocusVend()"
                  @input.debounce.280ms="onInput('vend')"
                  @keydown.arrow-down.prevent="flechaAbajo('vend')"
                  @keydown.arrow-up.prevent="moverSel('vend', -1)"
                  @keydown.enter.prevent="elegirResaltado('vend')"
                  @keydown.escape="cerrarPanel('vend')"
                  placeholder="Buscar vendedor…"
-                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"/>
+          <p x-show="selVend" x-cloak class="mt-1.5 text-xs font-medium text-slate-700 dark:text-slate-200">
+            <span class="text-slate-500 dark:text-slate-400">Seleccionado:</span>
+            <span x-text="selVend.nombre"></span>
+            <button type="button" @click="quitarVend()" class="ml-1 text-purple-700 underline hover:text-purple-900 dark:text-purple-300">Quitar</button>
+          </p>
           <ul x-show="panel==='vend' && vendedores.length" x-cloak
               class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
               role="listbox">
@@ -69,14 +74,19 @@
           <input id="vcm-cli" type="text" autocomplete="off" role="combobox"
                  :aria-expanded="panel==='cli'"
                  x-model="qCli"
-                 @focus="abrirPanel('cli'); buscarClientes()"
+                 @focus="onFocusCli()"
                  @input.debounce.280ms="onInput('cli')"
                  @keydown.arrow-down.prevent="flechaAbajo('cli')"
                  @keydown.arrow-up.prevent="moverSel('cli', -1)"
                  @keydown.enter.prevent="elegirResaltado('cli')"
                  @keydown.escape="cerrarPanel('cli')"
                  placeholder="Buscar cliente…"
-                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"/>
+          <p x-show="selCli" x-cloak class="mt-1.5 text-xs font-medium text-slate-700 dark:text-slate-200">
+            <span class="text-slate-500 dark:text-slate-400">Seleccionado:</span>
+            <span x-text="selCli.nombre"></span>
+            <button type="button" @click="quitarCli()" class="ml-1 text-purple-700 underline hover:text-purple-900 dark:text-purple-300">Quitar</button>
+          </p>
           <ul x-show="panel==='cli' && clientes.length" x-cloak
               class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
               role="listbox">
@@ -108,7 +118,7 @@
                  @keydown.enter.prevent="elegirResaltado('suc')"
                  @keydown.escape="cerrarPanel('suc')"
                  :placeholder="selCli ? 'Marcá una o más sucursales…' : 'Elegí cliente primero…'"
-                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"/>
           <div x-show="selSucs.length" x-cloak class="mt-1.5 flex flex-wrap gap-1.5">
             <template x-for="s in selSucs" :key="'chip-'+s.id_cliente_domicilio">
               <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-950/50 dark:text-purple-200">
@@ -164,7 +174,7 @@
                  @keydown.enter.prevent="elegirResaltado('mar')"
                  @keydown.escape="cerrarPanel('mar')"
                  placeholder="Marcá una o más marcas…"
-                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"/>
           <div x-show="selMars.length" x-cloak class="mt-1.5 flex flex-wrap gap-1.5">
             <template x-for="m in selMars" :key="'chip-m-'+m.CodMarca">
               <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-950/50 dark:text-purple-200">
@@ -224,7 +234,7 @@
                @keydown.arrow-down.prevent="flechaAbajo('filtro')"
                @keydown.escape="cerrarPanel('filtro')"
                placeholder="Todos (o buscar…)"
-               class="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+               class="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"/>
         <ul x-show="panel==='filtro'" x-cloak
             class="absolute z-30 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800">
           <li @mousedown.prevent="filtroViajante=''; qFiltro=''; cerrarPanel('filtro'); cargar()"
@@ -493,6 +503,7 @@
 <style>[x-cloak]{display:none!important}</style>
 
 {{ urls_api|json_script:"vcm-urls" }}
+<script src="{% static 'ecom/js/vcm_form.js' %}"></script>
 <script>
 window.vcmApp = function vcmApp() {
   return {
@@ -541,8 +552,20 @@ window.vcmApp = function vcmApp() {
         window.alert(texto || '');
       }
     },
+    _formUtils() {
+      return window.vcmFormUtils || {};
+    },
+    formularioListo() {
+      const u = this._formUtils();
+      if (typeof u.vcmFormularioListo === 'function') {
+        return u.vcmFormularioListo(this.selVend, this.selCli, this.selSucs, this.selMars);
+      }
+      return !!(this.selVend && this.selCli && this.selSucs.length && this.selMars.length);
+    },
     pedirAsignar() {
-      if (!this.selVend || !this.selCli || !this.selSucs.length || !this.selMars.length) {
+      this.actualizarResumenVend();
+      this.actualizarResumenCli();
+      if (!this.formularioListo()) {
         this.mostrarAviso('Completá vendedor, cliente, al menos una sucursal y al menos una marca.', 'error');
         return;
       }
@@ -581,10 +604,44 @@ window.vcmApp = function vcmApp() {
     abrirPanel(p) { this.panel = p; },
     cerrarPanel(p) {
       if (this.panel === p) {
+        if (p === 'vend') this.actualizarResumenVend();
+        if (p === 'cli') this.actualizarResumenCli();
         if (p === 'suc') this.actualizarResumenSuc();
         if (p === 'mar') this.actualizarResumenMar();
         this.panel = null;
       }
+    },
+    actualizarResumenVend() {
+      this.qVend = this.selVend ? (this.selVend.nombre || '') : '';
+    },
+    actualizarResumenCli() {
+      this.qCli = this.selCli ? (this.selCli.nombre || '') : '';
+    },
+    onFocusVend() {
+      if (this.selVend && !String(this.qVend || '').trim()) {
+        this.actualizarResumenVend();
+      }
+      this.abrirPanel('vend');
+      this.buscarVendedores();
+    },
+    onFocusCli() {
+      if (this.selCli && !String(this.qCli || '').trim()) {
+        this.actualizarResumenCli();
+      }
+      this.abrirPanel('cli');
+      this.buscarClientes();
+    },
+    quitarVend() {
+      this.selVend = null;
+      this.qVend = '';
+      this.vendedores = [];
+    },
+    quitarCli() {
+      this.selCli = null;
+      this.qCli = '';
+      this.selSucs = [];
+      this.qSuc = '';
+      this.sucursales = [];
     },
     actualizarResumenSuc() {
       const n = this.selSucs.length;
@@ -925,10 +982,14 @@ window.vcmApp = function vcmApp() {
     onInput(tipo) {
       this.abrirPanel(tipo);
       if (tipo === 'vend') {
-        if (this.selVend && this.qVend !== (this.selVend.nombre || '')) this.selVend = null;
+        const nom = (this.selVend && this.selVend.nombre) || '';
+        const q = String(this.qVend || '').trim();
+        if (this.selVend && q && q !== String(nom).trim()) this.selVend = null;
         this.buscarVendedores();
       } else if (tipo === 'cli') {
-        if (this.selCli && this.qCli !== (this.selCli.nombre || '')) {
+        const nom = (this.selCli && this.selCli.nombre) || '';
+        const q = String(this.qCli || '').trim();
+        if (this.selCli && q && q !== String(nom).trim()) {
           this.selCli = null; this.selSucs = []; this.qSuc = ''; this.sucursales = [];
         }
         this.buscarClientes();
@@ -1105,12 +1166,12 @@ window.vcmApp = function vcmApp() {
     },
     elegirVend(v) {
       this.selVend = v;
-      this.qVend = v.nombre || '';
+      this.actualizarResumenVend();
       this.cerrarPanel('vend');
     },
     elegirCli(c) {
       this.selCli = c;
-      this.qCli = c.nombre || '';
+      this.actualizarResumenCli();
       this.selSucs = [];
       this.qSuc = '';
       this.sucursales = [];
@@ -1134,18 +1195,18 @@ window.vcmApp = function vcmApp() {
       else if (tipo === 'mar' && this.marcas[this.idxMar]) this.toggleMar(this.marcas[this.idxMar]);
     },
     async crear() {
-      if (!this.selVend || !this.selCli || !this.selSucs.length || !this.selMars.length) {
+      this.actualizarResumenVend();
+      this.actualizarResumenCli();
+      const u = this._formUtils();
+      const body = typeof u.vcmBuildCrearPayload === 'function'
+        ? u.vcmBuildCrearPayload(this.selVend, this.selCli, this.selSucs, this.selMars)
+        : null;
+      if (!body) {
         this.cerrarConfirm();
         this.mostrarAviso('Completá vendedor, cliente, al menos una sucursal y al menos una marca.', 'error');
         return;
       }
       this.guardando = true;
-      const body = {
-        CodViajante: Number(this.selVend.CodViajante),
-        id_cliente: Number(this.selCli.id_cliente),
-        CodMarcas: this.selMars.map((m) => Number(m.CodMarca)),
-        ids_cliente_domicilio: this.selSucs.map((s) => Number(s.id_cliente_domicilio)),
-      };
       const { status, data } = await this.postJson(this.urls.crear, body);
       this.guardando = false;
       this.confirmOpen = false;
