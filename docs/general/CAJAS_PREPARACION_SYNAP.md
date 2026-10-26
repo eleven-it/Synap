@@ -57,6 +57,13 @@ docker exec Synap_app python manage.py apply_stock_prep_cajas administranet1
 El comando usa el mismo proveedor que la pantalla y falla con código distinto
 de cero si MySQL rechaza el cambio. Ejecutarlo primero sobre la base de prueba;
 la empresa productiva se actualiza después de validar el circuito.
+La cuenta MySQL usada por `Synap_app` necesita permisos `CREATE` y, si ya
+existían cajas con el esquema anterior, `ALTER`. Si la cuenta de aplicación
+solo tiene permisos de operación, un DBA debe ejecutar el proveedor con una
+cuenta DDL o aplicar `stock/sql/003_prep_cajas_synap.sql` y comprobar la
+columna generada `numero_caja_vigente` en `synap_prep_caja`. Para una tabla
+preexistente sin esa columna también hace falta el `ALTER` que figura en
+`run_stock_prep_cajas_mysql`.
 
 ## Fuente VB6 y reglas de paridad
 
