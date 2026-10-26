@@ -1,0 +1,203 @@
+{% extends "base_app.html" %}
+{% block title %}Nuevo pedido interno | Synap{% endblock %}
+{% block content %}
+{% csrf_token %}
+<main class="mx-auto max-w-5xl px-4 py-6 text-slate-900 dark:text-slate-100">
+  <div class="mb-5"><a href="{% url 'stock:pedido_interno_lista' %}" class="text-sm text-blue-700 underline dark:text-blue-300">← Pedidos internos</a><h1 class="mt-2 text-2xl font-bold">Nuevo pedido interno</h1></div>
+  <form id="pedido-form" class="space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800" novalidate>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm font-semibold">Tipo
+        <select id="pedido-tipo" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"><option value="A deposito">A depósito</option><option value="A compras">A compras</option></select>
+      </label>
+      <label class="block text-sm font-semibold">Fecha
+        <input id="pedido-fecha" type="date" value="{% now 'Y-m-d' %}" required class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+      </label>
+      <label class="block text-sm font-semibold">Depósito que solicita
+        <select id="pedido-origen" required class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"><option value="">Elegir depósito</option>{% for deposito in depositos %}<option value="{{ deposito.CodDeposito }}">{{ deposito.NombreDeposito }}</option>{% endfor %}</select>
+      </label>
+      <label id="pedido-destino-wrap" class="block text-sm font-semibold">Depósito al que se solicita
+        <select id="pedido-destino" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"><option value="">Elegir depósito</option>{% for deposito in depositos %}<option value="{{ deposito.CodDeposito }}">{{ deposito.NombreDeposito }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <label class="block text-sm font-semibold">Detalle
+      <textarea id="pedido-detalle" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white" placeholder="Observaciones"></textarea>
+    </label>
+    <section aria-labelledby="articulos-titulo" class="border-t border-slate-200 pt-4 dark:border-slate-700">
+      <h2 id="articulos-titulo" class="mb-2 text-lg font-bold">Artículos solicitados</h2>
+      <div class="relative"><label for="articulo-busqueda" class="text-sm">Buscar por código, nombre o código de barras</label><input id="articulo-busqueda" autocomplete="off" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Escaneá el código con Enter para agregarlo. Cada lectura suma la cantidad y presentación indicadas.</p><div id="articulo-resultados" class="absolute z-20 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-lg border border-slate-300 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-900"></div></div>
+      <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_130px_160px_auto] sm:items-end"><div id="articulo-elegido" class="min-h-10 rounded-lg bg-slate-100 p-2 text-sm dark:bg-slate-900">Ningún artículo elegido</div><label class="text-sm">Cantidad<input id="articulo-cantidad" type="number" min="0.000001" step="any" value="1" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"></label><label class="text-sm">Presentación<select id="articulo-unidad" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"><option>Unidad</option><option>Display</option><option>Bulto</option></select></label><button id="articulo-agregar" type="button" class="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white">Agregar</button></div>
+      <p id="articulo-equivalencia" class="mt-2 text-sm text-slate-600 dark:text-slate-300" aria-live="polite"></p>
+      <div id="pedido-renglones" class="mt-4 space-y-2" aria-live="polite"></div>
+    </section>
+    <div id="pedido-error" role="alert" class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200"></div>
+    <div class="flex flex-wrap gap-2"><button id="pedido-guardar" type="submit" class="rounded-lg bg-green-700 px-5 py-2 font-semibold text-white disabled:opacity-50">Generar PEDI</button><a href="{% url 'stock:pedido_interno_lista' %}" class="rounded-lg border border-slate-300 px-4 py-2 dark:border-slate-600">Cancelar</a></div>
+  </form>
+  <div id="pedido-exito" role="status" class="mt-5 hidden rounded-xl border border-green-600 bg-green-50 p-4 dark:bg-green-950"></div>
+</main>
+<script>
+(() => {
+  const byId = id => document.getElementById(id);
+  const filas = [];
+  let elegido = null;
+  let consulta = 0;
+  let busquedaTimer = null;
+  let lecturasPendientes = Promise.resolve();
+  const numero = valor => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(valor);
+  const nombrePresentacion = (unidad, cantidad) => unidad === 'Display'
+    ? (cantidad === 1 ? 'display' : 'displays')
+    : unidad === 'Bulto' ? (cantidad === 1 ? 'bulto' : 'bultos')
+    : (cantidad === 1 ? 'unidad' : 'unidades');
+  const factor = (articulo, unidad) => unidad === 'Unidad' ? 1 : Number(
+    articulo.presentacion?.[unidad === 'Display' ? 'unidades_display' : 'unidades_bulto'] || 0);
+  const detallePack = articulo => {
+    const partes = [];
+    const display = Number(articulo.presentacion?.unidades_display || 0);
+    const bulto = Number(articulo.presentacion?.unidades_bulto || 0);
+    if (display > 1) partes.push(`1 display = ${numero(display)} unidades`);
+    if (bulto > 1) partes.push(`1 bulto = ${numero(bulto)} unidades`);
+    return partes.join(' · ');
+  };
+  const actualizarEquivalencia = () => {
+    const salida = byId('articulo-equivalencia');
+    if (!elegido) { salida.textContent = ''; return; }
+    const unidad = byId('articulo-unidad').value;
+    const cantidad = Number(byId('articulo-cantidad').value);
+    const unidadesPorPack = factor(elegido, unidad);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      salida.textContent = 'Ingresá una cantidad mayor a cero.';
+      return;
+    }
+    if (unidad !== 'Unidad' && !unidadesPorPack) {
+      salida.textContent = `Este artículo no admite ${unidad.toLowerCase()}. ${detallePack(elegido)}`;
+      return;
+    }
+    salida.textContent = `${numero(cantidad)} ${nombrePresentacion(unidad, cantidad)} = ${numero(cantidad * unidadesPorPack)} unidades` +
+      (detallePack(elegido) ? ` · ${detallePack(elegido)}` : '');
+  };
+  byId('articulo-cantidad').addEventListener('input', actualizarEquivalencia);
+  byId('articulo-unidad').addEventListener('change', actualizarEquivalencia);
+  const error = mensaje => { const el = byId('pedido-error'); el.textContent = mensaje; el.classList.remove('hidden'); };
+  byId('pedido-tipo').addEventListener('change', () => {
+    byId('pedido-destino-wrap').classList.toggle('hidden', byId('pedido-tipo').value === 'A compras');
+  });
+  byId('articulo-busqueda').addEventListener('input', event => {
+    const texto = event.target.value.trim();
+    const contenedor = byId('articulo-resultados');
+    const pedido = ++consulta;
+    clearTimeout(busquedaTimer);
+    contenedor.replaceChildren(); contenedor.classList.add('hidden'); elegido = null;
+    byId('articulo-elegido').textContent = 'Ningún artículo elegido';
+    if (texto.length < 2) return;
+    busquedaTimer = setTimeout(async () => {
+      try {
+        const resp = await fetch('{% url "stock:api_ingreso_articulos" %}?detalle=1&q=' + encodeURIComponent(texto));
+        const datos = await resp.json();
+        if (pedido !== consulta || !resp.ok) return;
+        for (const articulo of datos.articulos || []) {
+          const boton = document.createElement('button'); boton.type = 'button';
+          boton.className = 'block w-full border-b border-slate-200 p-2 text-left text-sm hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-slate-800';
+          boton.textContent = (articulo.id_manual || articulo.CodigoArticulo || articulo.IDArt) + ' · ' + articulo.Descripcion;
+          boton.addEventListener('click', async () => {
+            const seleccion = ++consulta;
+            byId('articulo-busqueda').value = ''; contenedor.classList.add('hidden');
+            byId('articulo-elegido').textContent = 'Consultando presentación...';
+            try {
+              const respuesta = await fetch('{% url "stock:api_pedido_interno_presentacion" %}?id_articulo=' + encodeURIComponent(articulo.IDArt));
+              if (!respuesta.ok) throw new Error();
+              const detalle = await respuesta.json();
+              if (seleccion !== consulta) return;
+              articulo.presentacion = detalle.presentacion;
+              elegido = articulo; byId('articulo-elegido').textContent = boton.textContent;
+              actualizarEquivalencia();
+            } catch (_) { if (seleccion === consulta) error('No se pudo consultar la presentación del artículo.'); }
+          });
+          contenedor.appendChild(boton);
+        }
+        contenedor.classList.toggle('hidden', !contenedor.childElementCount);
+      } catch (_) { if (pedido === consulta) error('No se pudo buscar artículos.'); }
+    }, 180);
+  });
+  const dibujar = () => {
+    const contenedor = byId('pedido-renglones'); contenedor.replaceChildren();
+    filas.forEach((fila, indice) => {
+      const card = document.createElement('div'); card.className = 'flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-700';
+      const descripcion = document.createElement('span');
+      descripcion.textContent = `${fila.descripcion} · ${numero(fila.cantidad)} ${nombrePresentacion(fila.tipo_unidad, fila.cantidad)} · ${numero(fila.cantidad * fila.factor)} unidades` +
+        (fila.detalle_pack ? ` · ${fila.detalle_pack}` : '');
+      const quitar = document.createElement('button'); quitar.type = 'button'; quitar.className = 'text-red-700 underline dark:text-red-300'; quitar.textContent = 'Quitar';
+      quitar.addEventListener('click', () => { filas.splice(indice, 1); dibujar(); });
+      card.append(descripcion, quitar); contenedor.appendChild(card);
+    });
+  };
+  const agregarArticulo = (articulo, conservarLectura = false, cantidadLectura = null, unidadLectura = null) => {
+    const cantidad = Number(cantidadLectura === null ? byId('articulo-cantidad').value : cantidadLectura);
+    if (!articulo || !Number.isFinite(cantidad) || cantidad <= 0) { error('Elegí un artículo y una cantidad mayor a cero.'); return false; }
+    const unidad = unidadLectura || byId('articulo-unidad').value;
+    const unidadesPorPack = factor(articulo, unidad);
+    if (!unidadesPorPack) { error(`Este artículo no admite ${unidad.toLowerCase()}.`); return false; }
+    const existente = filas.find(fila => fila.id_articulo === articulo.IDArt && fila.tipo_unidad === unidad);
+    if (existente) existente.cantidad += cantidad;
+    else {
+      if (filas.length >= 200) { error('El pedido admite hasta 200 renglones.'); return false; }
+      filas.push({ id_articulo: articulo.IDArt, descripcion: articulo.Descripcion, cantidad, tipo_unidad: unidad,
+        factor: unidadesPorPack, detalle_pack: detallePack(articulo) });
+    }
+    elegido = null; byId('articulo-elegido').textContent = 'Ningún artículo elegido';
+    if (!conservarLectura) { byId('articulo-cantidad').value = 1; byId('articulo-unidad').value = 'Unidad'; }
+    actualizarEquivalencia(); dibujar();
+    byId('pedido-error').classList.add('hidden'); byId('articulo-busqueda').focus();
+    return true;
+  };
+  byId('articulo-agregar').addEventListener('click', () => agregarArticulo(elegido));
+  byId('articulo-busqueda').addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const codigo = event.currentTarget.value.trim();
+    if (!codigo) return;
+    const cantidadLectura = byId('articulo-cantidad').value;
+    const unidadLectura = byId('articulo-unidad').value;
+    clearTimeout(busquedaTimer); ++consulta;
+    byId('articulo-resultados').replaceChildren(); byId('articulo-resultados').classList.add('hidden');
+    event.currentTarget.value = '';
+    lecturasPendientes = lecturasPendientes.then(async () => {
+      const resp = await fetch('{% url "stock:api_ingreso_articulos_por_codigo" %}?presentacion=1&codigo=' + encodeURIComponent(codigo));
+      if (!resp.ok) throw new Error('No se pudo consultar el código.');
+      const datos = await resp.json();
+      const articulo = (datos.articulos || [])[0];
+      if (!articulo) { error('Código ' + codigo + ' no encontrado.'); return; }
+      agregarArticulo(articulo, true, cantidadLectura, unidadLectura);
+    }).catch(() => error('No se pudo consultar el código ' + codigo + '.'));
+  });
+  byId('pedido-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    byId('pedido-error').classList.add('hidden');
+    if (!filas.length) { error('Agregá al menos un artículo.'); return; }
+    const tipo = byId('pedido-tipo').value;
+    if (!byId('pedido-fecha').value || !byId('pedido-origen').value ||
+        (tipo === 'A deposito' && !byId('pedido-destino').value)) {
+      error('Completá fecha y depósitos antes de generar el pedido.'); return;
+    }
+    if (tipo === 'A deposito' && byId('pedido-origen').value === byId('pedido-destino').value) {
+      error('Los depósitos deben ser diferentes.'); return;
+    }
+    const datos = { tipo, fecha: byId('pedido-fecha').value, deposito_origen: byId('pedido-origen').value,
+      deposito_destino: tipo === 'A deposito' ? byId('pedido-destino').value : byId('pedido-origen').value,
+      detalle: byId('pedido-detalle').value, renglones: filas.map(({id_articulo,cantidad,tipo_unidad}) => ({id_articulo,cantidad,tipo_unidad})) };
+    const guardar = byId('pedido-guardar'); guardar.disabled = true;
+    try {
+      const respuesta = await fetch('{% url "stock:api_pedido_interno_crear" %}', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value }, body: JSON.stringify(datos) });
+      const resultado = await respuesta.json();
+      if (!respuesta.ok) { error(resultado.error || 'No se pudo generar el pedido.'); return; }
+      byId('pedido-form').classList.add('hidden');
+      const exito = byId('pedido-exito'); exito.classList.remove('hidden');
+      const titulo = document.createElement('h2'); titulo.className = 'text-lg font-bold'; titulo.textContent = `PEDI ${resultado.nro_comprobante} generado`;
+      const detalle = document.createElement('p'); detalle.textContent = `Código de movimiento: ${resultado.codigo_movimiento}.`;
+      const volver = document.createElement('a'); volver.href = '{% url "stock:pedido_interno_lista" %}'; volver.className = 'mt-3 inline-block text-blue-700 underline dark:text-blue-300'; volver.textContent = 'Ver pedidos internos';
+      exito.append(titulo, detalle, volver);
+    } catch (_) { error('No se pudo comunicar con el servidor.'); }
+    finally { guardar.disabled = false; }
+  });
+})();
+</script>
+{% endblock %}

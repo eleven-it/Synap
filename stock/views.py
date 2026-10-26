@@ -44,6 +44,33 @@ def alta_movimiento_view(request):
     return render(request, "stock/alta_movimiento.html", context)
 
 
+@tiene_permiso("stock.crear_movimiento")
+def pedido_interno_lista_view(request):
+    """Consulta de pedidos internos, con formulario individual separado."""
+    from core.services.pedido_interno_stock import listar_pedidos_internos
+    base = (request.session.get("user") or {}).get("base_empresa")
+    if not base:
+        return redirect("core:dashboard")
+    try:
+        pedidos = listar_pedidos_internos(base)
+    except Exception:
+        pedidos = []
+        messages.error(request, "No se pudo consultar los pedidos internos.")
+    return render(request, "stock/pedido_interno_lista.html", {"pedidos": pedidos})
+
+
+@tiene_permiso("stock.crear_movimiento")
+def pedido_interno_nuevo_view(request):
+    from core.services.administranet_stock import get_depositos
+    user = request.session.get("user") or {}
+    base = user.get("base_empresa")
+    if not base:
+        return redirect("core:dashboard")
+    return render(request, "stock/pedido_interno_nuevo.html", {
+        "depositos": get_depositos(base, user.get("id_puesto")),
+    })
+
+
 @tiene_permiso("stock.consultas")
 def visualiza_movimientos_view(request):
     """Listado de movimientos de stock (Visualiza_CargaMovStock) con filtros."""
@@ -308,6 +335,7 @@ def movimiento_pdf_view(request, codigo_movimiento):
 
         buf = io.BytesIO()
         p = canvas.Canvas(buf, pagesize=landscape(A4))
+        pagina = 1
         # En horizontal la altura de la hoja es 210 mm
         y_content = draw_report_header(
             p, empresa, "Comprobante de Movimiento de Stock", 210 * mm
@@ -355,9 +383,28 @@ def movimiento_pdf_view(request, codigo_movimiento):
         y_content -= fila_altura
 
         p.setFont("Helvetica", 10)
-        for r in renglones[:30]:
+        for r in renglones:
+            if y_content < 27 * mm:
+                p.line(margin, y_content + fila_altura, x_fin_tabla, y_content + fila_altura)
+                draw_report_footer(p, pagina_actual=pagina)
+                p.showPage()
+                pagina += 1
+                y_content = draw_report_header(
+                    p, empresa, "Comprobante de Movimiento de Stock (continuación)", 210 * mm
+                )
+                p.setFont("Helvetica", 9)
+                p.drawString(margin, y_content, f"Nro: {mov.get('nro_comprobante') or '-'}")
+                y_content -= 9 * mm
+                p.setFont("Helvetica-Bold", 9)
+                p.drawString(margin + 2 * mm, y_content, "Artículo / Descripción")
+                p.drawString(margin + col_articulo + 2 * mm, y_content, "Entrada")
+                p.drawString(margin + col_articulo + col_entrada + 2 * mm, y_content, "Salida")
+                p.drawString(margin + col_articulo + col_entrada + col_salida + 2 * mm, y_content, "Saldo")
+                y_content -= 5 * mm
+                p.line(margin, y_content, x_fin_tabla, y_content)
+                p.setFont("Helvetica", 9)
             p.line(margin, y_content + fila_altura, x_fin_tabla, y_content + fila_altura)
-            art_desc = f"{r.get('CodigoArticulo') or ''} {str(r.get('Descripcion') or '')[:70]}".strip()
+            art_desc = f"{r.get('CodigoArticulo') or ''} {str(r.get('Descripcion') or '')[:55]} [{r.get('nombre_deposito') or '-'}]".strip()
             if len(art_desc) > 73:
                 art_desc = art_desc[:70] + "..."
             p.drawString(margin + 2 * mm, y_content + (fila_altura - 3.5 * mm), art_desc)
@@ -376,12 +423,12 @@ def movimiento_pdf_view(request, codigo_movimiento):
         # Línea inferior de la tabla
         p.line(margin, y_content, x_fin_tabla, y_content)
 
-        if len(renglones) > 30:
-            y_content -= 4 * mm
+        if any(r.get("nro_pedi") for r in renglones) and y_content > 27 * mm:
+            y_content -= 6 * mm
             p.setFont("Helvetica", 9)
-            p.drawString(margin, y_content, f"... y {len(renglones) - 30} renglones más.")
+            p.drawString(margin, y_content, "Pedido interno: " + str(next(r["nro_pedi"] for r in renglones if r.get("nro_pedi"))))
 
-        draw_report_footer(p)
+        draw_report_footer(p, pagina_actual=pagina)
         p.showPage()
         p.save()
         buf.seek(0)
