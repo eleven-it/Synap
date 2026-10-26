@@ -213,6 +213,7 @@ class QueryRunnerService:
             'uninvoiced_remitos',
             'pedidos-pendientes',
             'bo-stock-facturacion',
+            'pedidos-pendientes-produccion',
             'ventas-objetivos-vs-bo',
             'ventas-por-vendedor',
             'ventas-por-articulo',
@@ -330,6 +331,10 @@ class QueryRunnerService:
             result = self._run_total_consolidado_operativo(report, payload)
         elif report.slug == "bo-stock-facturacion":
             result = self._run_backorder_vs_stock_vs_facturacion(report, payload)
+        elif report.slug == "pedidos-pendientes-produccion":
+            from .pedidos_pendientes_produccion_runner import run_pedidos_pendientes_produccion
+
+            result = run_pedidos_pendientes_produccion(report, payload, self.user)
         elif report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
             from .ventas_objetivos_bo_runner import run_ventas_objetivos_vs_bo
 

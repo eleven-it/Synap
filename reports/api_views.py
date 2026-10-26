@@ -16,7 +16,9 @@ from .permissions import (
     BuilderReportsPermission,
     InventarioDepositoCatalogPermission,
     INVENTARIO_DEPOSITO_SLUG,
+    PEDIDOS_PENDIENTES_PRODUCCION_SLUG,
     user_can_access_inventario_deposito,
+    user_can_access_pedidos_pendientes_produccion,
 )
 from .services.semantic_service import SemanticService
 
@@ -99,6 +101,12 @@ class ReportQueryAPIView(APIView):
             if not user_can_access_inventario_deposito(request.user):
                 return Response(
                     {"detail": "Inventario por depósito no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.slug == PEDIDOS_PENDIENTES_PRODUCCION_SLUG:
+            if not user_can_access_pedidos_pendientes_produccion(request.user):
+                return Response(
+                    {"detail": "Pedidos pendientes producción no permitido."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif report.is_operational() and not OperationalReportsPermission().has_permission(request, self):
@@ -431,6 +439,12 @@ class ReportExportAPIView(APIView):
             if not user_can_access_inventario_deposito(request.user):
                 return Response(
                     {"detail": "Inventario por depósito no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.slug == PEDIDOS_PENDIENTES_PRODUCCION_SLUG:
+            if not user_can_access_pedidos_pendientes_produccion(request.user):
+                return Response(
+                    {"detail": "Pedidos pendientes producción no permitido."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif report.is_operational() and not OperationalReportsPermission().has_permission(request, self):

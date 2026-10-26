@@ -518,6 +518,11 @@ class ExportService:
         if report.slug == "bo-stock-facturacion":
             self._generate_excel_bo(file_path, report, query_result, payload)
             return
+        if report.slug == "pedidos-pendientes-produccion":
+            self._generate_excel_pedidos_pendientes_produccion(
+                file_path, report, query_result, payload
+            )
+            return
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
@@ -1707,6 +1712,85 @@ class ExportService:
 
         wb.save(file_path)
         logger.info("Excel documento presupuesto ventas generado: %s", file_path)
+
+    def _generate_excel_pedidos_pendientes_produccion(
+        self, file_path: Path, report: ReportDefinition, query_result, payload: Dict
+    ):
+        """Excel tabla única: pendiente, stock por depósito y columnas MPR."""
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+
+        extra = (query_result.meta or {}).get("extra") or {}
+        columnas = extra.get("columnas_stock") or {}
+        otros = columnas.get("otros") or []
+        articulos = query_result.data or []
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Pedidos pendientes"[:31]
+
+        headers = [
+            "Código",
+            "Artículo",
+            "Marca",
+            "Categoría",
+            "Cant. pendiente",
+            "Stock terminado",
+            "Stock producción",
+        ]
+        for col in otros:
+            headers.append(col.get("nombre") or col.get("key"))
+        headers.extend(
+            [
+                "Stock total",
+                "MPR demanda pedido",
+                "MPR stock terminado",
+                "MPR reserva",
+                "MPR a fabricar",
+                "Brecha vs pendiente",
+            ]
+        )
+
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        for col_idx, title in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_idx, value=title)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+
+        for row_idx, art in enumerate(articulos, 2):
+            row_vals = [
+                art.get("codigo"),
+                art.get("articulo"),
+                art.get("marca"),
+                art.get("categoria"),
+                art.get("pendiente_qty"),
+                art.get("stock_terminado"),
+                art.get("stock_produccion"),
+            ]
+            for col in otros:
+                row_vals.append(art.get(col.get("key")))
+            row_vals.extend(
+                [
+                    art.get("stock_total"),
+                    art.get("mpr_demanda_pedido"),
+                    art.get("mpr_stock_terminado"),
+                    art.get("mpr_stock_reserva"),
+                    art.get("mpr_cantidad_a_fabricar"),
+                    art.get("mpr_brecha_vs_pendiente"),
+                ]
+            )
+            for col_idx, val in enumerate(row_vals, 1):
+                ws.cell(row=row_idx, column=col_idx, value=val)
+
+        for col_num in range(1, len(headers) + 1):
+            col_letter = get_column_letter(col_num)
+            ws.column_dimensions[col_letter].width = min(18, max(10, len(headers[col_num - 1]) + 2))
+
+        wb.save(file_path)
+        logger.info("Excel pedidos-pendientes-produccion: %s", file_path)
 
     def get_file_response(self, export_result: ExportResult) -> HttpResponse:
         """
