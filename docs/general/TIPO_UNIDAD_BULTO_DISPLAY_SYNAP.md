@@ -1,17 +1,22 @@
 # Tipo unidad / Bulto / Display en Ingreso Mov. Stock (Synap)
 
-**Objetivo:** Permitir elegir por renglón la unidad de medida (Unidad, Display, Bulto) cuando la empresa usa bulto cerrado o display, alineado con CargaMovStock VB6.
+**Objetivo:** Permitir elegir por renglón la presentación (Unidad, Display, Bulto) en cualquier motivo de movimiento de stock.
 
 ## Configuración (tabla `configuracion`)
 
-- **utiliza_bulto_cerrado:** `'Si'` / `'No'`. Si es `'Si'`, se ofrece la opción "Bulto" en el select de embalaje.
-- **utiliza_display:** `'Si'` / `'No'`. Si es `'Si'`, se ofrece la opción "Display" en el select de embalaje.
+- **utiliza_bulto_cerrado** y **utiliza_display:** se reciben para compatibilidad con otros circuitos; no restringen las opciones del movimiento de stock.
 - **tipo_unidad_defecto:** (opcional) Valor por defecto al agregar renglón: `'Unidad'`, `'Display'` o `'Bulto'`. Si la columna no existe en la base, el backend devuelve `'Unidad'`.
 
 ## Visibilidad en la UI
 
-- La columna **Embalaje** (y el select en la fila de búsqueda) solo se muestran cuando **mostrarEmbalaje** es verdadero: `utiliza_bulto_cerrado === 'Si'` **o** `utiliza_display === 'Si'`.
-- Opciones del select: siempre "Unidad"; "Display" solo si `utiliza_display === 'Si'`; "Bulto" solo si `utiliza_bulto_cerrado === 'Si'`.
+- La columna **Presentación** y el selector en la fila de búsqueda se muestran al elegir cualquier motivo.
+- El selector ofrece Unidad, Display y Bulto. Los artículos con lote o serie usan únicamente Unidad.
+
+## Convención de interfaz para nuevos circuitos
+
+- Presentación, embalaje y modo de lectura usan un `<select>` nativo, con etiqueta asociada y ancho completo en móvil. Así Android ofrece su selector habitual.
+- Mantener borde gris, fondo blanco, esquinas redondeadas y variante oscura como en Pedido interno. La apariencia no debe cambiar el significado ni los valores de cada opción.
+- Armado de cajas conserva Display y Unidad; Pedido interno e Ingreso Mov. Stock ofrecen también Bulto cuando corresponde al circuito.
 
 ## Flujo
 
@@ -24,6 +29,8 @@
 
 - **Servicio:** `core.services.administranet_stock.get_config_unidad_bulto_display(base_empresa)` devuelve el dict con las tres claves; si `tipo_unidad_defecto` no existe en la tabla, se devuelve `'Unidad'`.
 - **Alta/actualización de renglón:** ya se persiste `tipo_unidad` en `cuerpostock_mstock` y se devuelve en `listar_renglones_temporales`.
+- **Confirmación:** `factor_presentacion` verifica que el artículo tenga la equivalencia elegida y guarda stock en unidades base. El motivo no restringe Display ni Bulto.
+- **Ajuste por saldo deseado:** convierte la diferencia de unidades a presentaciones completas; si no es divisible, se debe elegir Unidad.
 
 ## Referencia
 

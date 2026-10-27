@@ -6,9 +6,13 @@ Sin modelos Django; usa core.mysql_pool y base_empresa de sesión.
 import logging
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
+from MySQLdb.cursors import DictCursor
 
 from core.mysql_pool import get_mysql_pool, mysql_cursor
 from core.services.administranet_permisos_sistema import AdministraNETPermisosSistemaService
+from core.services.stock_presentaciones import (
+    PresentacionInvalida, datos_presentacion_articulo, factor_presentacion,
+)
 from core.utils.administranet_types import str_or_default, to_date_or_none, to_decimal_or_none, to_int_or_none
 
 logger = logging.getLogger(__name__)
@@ -459,8 +463,20 @@ def listar_pedidos_pendientes(
                     WHERE cp.Anulado = 'No'
                       AND cp.TipoComprobante IN ('PEDI')
                       AND COALESCE(cp.tipo_pedido_interno, '') = 'A deposito'
-                      AND cp.Estado = 'Pendiente'
                       AND ms.deposito_origen = %s
+                      AND EXISTS (
+                        SELECT 1 FROM stockp sp
+                        WHERE sp.CodigoMovimiento = cp.CodigoMovimiento
+                          AND UPPER(COALESCE(sp.Anulado, 'No')) <> 'SI'
+                          AND (COALESCE(sp.cantidad_pendiente, 0) > 0 OR
+                            (COALESCE(sp.cantidad_pendiente, 0) = 0
+                             AND COALESCE(sp.cantidad_entregada, 0) = 0
+                             AND NOT EXISTS (
+                               SELECT 1 FROM movstock_pedi mp
+                               WHERE mp.codmov_pedi = cp.CodigoMovimiento
+                                 AND UPPER(COALESCE(mp.anulado, 'No')) <> 'SI'
+                             )))
+                      )
                     ORDER BY cp.CodigoMovimiento DESC
                     LIMIT 200
                     """,
@@ -493,6 +509,163 @@ def listar_pedidos_pendientes(
             logger.warning("Error listar PED pendientes (OPT/OPP) en %s: %s", base_empresa, e)
             return []
     return []
+
+
+def importar_pedi_temporal(base_empresa: str, id_usuario: int, codigo_pedi: int,
+                          deposito_origen: int, deposito_destino: int,
+                          id_puesto: Optional[int] = None) -> Optional[str]:
+    """Carga el pendiente real de un PEDI en la lista temporal de transferencia."""
+    if not codigo_pedi or not deposito_origen or not deposito_destino or deposito_origen == deposito_destino:
+        return "Seleccione el pedido y dos depósitos diferentes."
+    permitidos = {int(dep["CodDeposito"]) for dep in get_depositos(base_empresa, id_puesto)}
+    if deposito_origen not in permitidos or deposito_destino not in permitidos:
+        return "No tiene acceso a uno de los depósitos de la transferencia."
+    pool = get_mysql_pool()
+    try:
+        with pool.get_connection(base_empresa) as conn:
+            conn.autocommit(False)
+            cursor = conn.cursor(DictCursor)
+            try:
+                cursor.execute(
+                    """SELECT cp.CodigoMovimiento, cp.NroComprobante,
+                              ms.deposito_origen AS destino_pedi,
+                              ms.deposito_destino AS origen_pedi
+                       FROM comp_ped cp JOIN movimiento_stock ms
+                         ON ms.codigo_movimiento=cp.CodigoMovimiento
+                        AND ms.tipo_comprobante='PEDI'
+                       WHERE cp.CodigoMovimiento=%s AND cp.TipoComprobante='PEDI'
+                         AND cp.tipo_pedido_interno='A deposito'
+                         AND UPPER(COALESCE(cp.Anulado,'No'))<>'SI'
+                       FOR UPDATE""", [codigo_pedi])
+                pedido = cursor.fetchone()
+                if not pedido or int(pedido["destino_pedi"] or 0) != deposito_destino or int(pedido["origen_pedi"] or 0) != deposito_origen:
+                    conn.rollback()
+                    return "Los depósitos de la transferencia no coinciden con los del PEDI."
+                cursor.execute(
+                    """SELECT COUNT(*) AS total FROM cuerpostock_mstock
+                       WHERE CodUsuario=%s AND COALESCE(visualiza,'No')='No'
+                         AND COALESCE(CodigoMovimiento,1)=1""", [id_usuario])
+                if cursor.fetchone()["total"]:
+                    conn.rollback()
+                    return "Quite los renglones actuales antes de importar un PEDI."
+                cursor.execute(
+                    """SELECT EXISTS(SELECT 1 FROM movstock_pedi
+                           WHERE codmov_pedi=%s AND UPPER(COALESCE(anulado,'No'))<>'SI') AS usado""",
+                    [codigo_pedi])
+                usado = bool(cursor.fetchone()["usado"])
+                cursor.execute(
+                    """SELECT sp.id_stock, sp.IDArt, sp.CodigoArticulo, sp.Descripcion,
+                              sp.id_manual, sp.Cantidad, sp.cantidad_pendiente,
+                              sp.cantidad_entregada
+                       FROM stockp sp WHERE sp.CodigoMovimiento=%s
+                         AND UPPER(COALESCE(sp.Anulado,'No'))<>'SI'
+                       ORDER BY sp.Orden, sp.id_stock FOR UPDATE""", [codigo_pedi])
+                items = cursor.fetchall()
+                insertados = 0
+                for item in items:
+                    cantidad = Decimal(str(item["cantidad_pendiente"] or 0))
+                    if not usado and cantidad == 0 and Decimal(str(item["cantidad_entregada"] or 0)) == 0:
+                        cantidad = Decimal(str(item["Cantidad"] or 0))
+                    if cantidad <= 0:
+                        continue
+                    cursor.execute(
+                        """INSERT INTO cuerpostock_mstock
+                           (CodUsuario,visualiza,CodigoMovimiento,IDArt,CodigoArticulo,
+                            Descripcion,Cantidad,entrada,salida,ES,CodDeposito,
+                            cod_deposito_destino,id_manual,nro_pedi,codmov_nro_pedi,
+                            id_stock,tipo_unidad)
+                           VALUES (%s,'No',1,%s,%s,%s,%s,0,%s,'S',%s,%s,%s,%s,%s,%s,'Unidad')""",
+                        [id_usuario, item["IDArt"], item["CodigoArticulo"],
+                         item["Descripcion"], cantidad, cantidad, deposito_origen,
+                         deposito_destino, item["id_manual"], pedido["NroComprobante"],
+                         codigo_pedi, item["id_stock"]])
+                    insertados += 1
+                if not insertados:
+                    conn.rollback()
+                    return "El pedido interno ya no tiene unidades pendientes."
+                conn.commit()
+                return None
+            except Exception:
+                conn.rollback()
+                raise
+    except Exception as exc:
+        logger.exception("Error al importar PEDI %s", codigo_pedi)
+        return str(exc)
+
+
+def _aplicar_entregas_pedi(cursor: Any, codigo_mov: int, cabecera: Dict[str, Any],
+                           renglones: List[Dict[str, Any]], deposito_origen: int,
+                           deposito_destino: int) -> Optional[str]:
+    """Descuenta pendientes y vincula el MSTOCK al PEDI en la misma transacción."""
+    codigo_pedi = to_int_or_none(cabecera.get("nro_pedi"))
+    vinculados = [r for r in renglones if to_int_or_none(r.get("codmov_nro_pedi"))]
+    if not codigo_pedi:
+        return "El pedido interno no está seleccionado." if vinculados else None
+    if len(vinculados) != len(renglones):
+        return "Todos los renglones de esta transferencia deben pertenecer al PEDI seleccionado."
+    cursor.execute(
+        """SELECT cp.NroComprobante, ms.deposito_origen, ms.deposito_destino
+           FROM comp_ped cp JOIN movimiento_stock ms
+             ON ms.codigo_movimiento=cp.CodigoMovimiento AND ms.tipo_comprobante='PEDI'
+           WHERE cp.CodigoMovimiento=%s AND cp.TipoComprobante='PEDI'
+             AND cp.tipo_pedido_interno='A deposito'
+             AND UPPER(COALESCE(cp.Anulado,'No'))<>'SI' FOR UPDATE""", [codigo_pedi])
+    pedido = cursor.fetchone()
+    if not pedido or int(pedido[1] or 0) != deposito_destino or int(pedido[2] or 0) != deposito_origen:
+        return "Los depósitos de la transferencia no coinciden con los del PEDI."
+    cursor.execute(
+        """SELECT EXISTS(SELECT 1 FROM movstock_pedi
+           WHERE codmov_pedi=%s AND UPPER(COALESCE(anulado,'No'))<>'SI')""",
+        [codigo_pedi])
+    usado = bool(cursor.fetchone()[0])
+    if not usado:
+        cursor.execute(
+            """UPDATE stockp SET cantidad_pendiente=COALESCE(Cantidad,0),
+                      cantidad_entregada=0
+               WHERE CodigoMovimiento=%s AND UPPER(COALESCE(Anulado,'No'))<>'SI'
+                 AND COALESCE(cantidad_pendiente,0)=0
+                 AND COALESCE(cantidad_entregada,0)=0""", [codigo_pedi])
+    cantidades: Dict[int, Decimal] = {}
+    articulos: Dict[int, int] = {}
+    for reng in renglones:
+        if to_int_or_none(reng.get("codmov_nro_pedi")) != codigo_pedi:
+            return "Hay renglones vinculados a otro pedido interno."
+        id_stockp = to_int_or_none(reng.get("id_stock"))
+        id_art = to_int_or_none(reng.get("IDArt"))
+        if not id_stockp or not id_art:
+            return "Un renglón del PEDI perdió su referencia original. Recargue el pedido."
+        cantidades[id_stockp] = cantidades.get(id_stockp, Decimal(0)) + reng["_cantidad_unidades"]
+        if id_stockp in articulos and articulos[id_stockp] != id_art:
+            return "Un renglón del PEDI tiene un artículo diferente al original."
+        articulos[id_stockp] = id_art
+    for id_stockp, cantidad in cantidades.items():
+        cursor.execute(
+            """UPDATE stockp SET
+                 cantidad_entregada=LEAST(COALESCE(Cantidad,0),COALESCE(cantidad_entregada,0)+%s),
+                 cantidad_pendiente=COALESCE(cantidad_pendiente,0)-%s
+               WHERE id_stock=%s AND CodigoMovimiento=%s AND IDArt=%s
+                 AND UPPER(COALESCE(Anulado,'No'))<>'SI'
+                 AND COALESCE(cantidad_pendiente,0)>=%s""",
+            [cantidad, cantidad, id_stockp, codigo_pedi, articulos[id_stockp], cantidad])
+        if cursor.rowcount != 1:
+            return f"El pendiente del renglón {id_stockp} cambió. Recargue el PEDI."
+    cursor.execute(
+        """SELECT COUNT(*) FROM stockp WHERE CodigoMovimiento=%s
+             AND UPPER(COALESCE(Anulado,'No'))<>'SI'
+             AND COALESCE(cantidad_pendiente,0)>0""", [codigo_pedi])
+    estado = "Pendiente" if cursor.fetchone()[0] else "Completo"
+    cursor.execute(
+        """UPDATE comp_ped SET Estado=%s WHERE CodigoMovimiento=%s
+             AND TipoComprobante='PEDI' AND UPPER(COALESCE(Anulado,'No'))<>'SI'""",
+        [estado, codigo_pedi])
+    cursor.execute(
+        """UPDATE movimiento_stock SET Estado=%s WHERE codigo_movimiento=%s
+             AND tipo_comprobante='PEDI' AND UPPER(COALESCE(anulado,'No'))<>'SI'""",
+        [estado, codigo_pedi])
+    cursor.execute(
+        "INSERT INTO movstock_pedi (codmov_movstock,codmov_pedi,anulado) VALUES (%s,%s,'No')",
+        [codigo_mov, codigo_pedi])
+    return None
 
 
 def listar_proyectos(base_empresa: str) -> List[Dict[str, Any]]:
@@ -1201,8 +1374,7 @@ def buscar_articulos_para_movimiento(
             art_cols = {r["Field"] for r in cursor.fetchall()}
 
             opt_cols = []
-            for col in ("cantidad_uni", "unidad_art_peso", "lote_articulo",
-                        "serie_articulo", "marca", "multiplicador_vta"):
+            for col in ("cantidad_uni", "unidad_art_peso", "marca", "multiplicador_vta"):
                 if col in art_cols:
                     opt_cols.append(f"a.{col}")
                 else:
@@ -1217,7 +1389,8 @@ def buscar_articulos_para_movimiento(
                        a.id_manual, a.PrecioCosto, a.Precio1V, a.PNOficial,
                        COALESCE(iva.Alicuota, a.Alicuota, 0) AS Alicuota,
                        a.Moneda,
-                       {opt_select}
+                       {opt_select}, a.lote AS lote_articulo,
+                       a.serie AS serie_articulo
                 FROM articulo a
                 LEFT JOIN iva ON iva.id = a.Alicuota
                 WHERE (a.NombreArticulo LIKE %s OR a.CodigoArticuloT LIKE %s
@@ -1391,7 +1564,7 @@ def listar_renglones_temporales(
                 """
                 SELECT c.Orden, c.IDArt, c.CodigoArticulo, c.Descripcion, c.Cantidad, c.entrada, c.salida, c.ES,
                        c.CodDeposito, c.cod_deposito_destino, c.id_lote, c.cod_lote, c.vto_lote,
-                       c.id_manual, c.nro_pedi, c.codmov_nro_pedi,
+                       c.id_manual, c.nro_pedi, c.codmov_nro_pedi, c.id_stock,
                        c.marca, c.multiplicador_vta, c.cantidad_uni,
                        COALESCE(NULLIF(TRIM(c.tipo_unidad), ''), 'Unidad') AS tipo_unidad,
                        c.unidad_art_peso,
@@ -1521,8 +1694,11 @@ def agregar_serie_salida_temp(
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(
-                "SELECT nro_serie, vto_serie, desc_serie FROM serie_entrada WHERE id_serie_entrada = %s",
-                [id_serie_entrada],
+                """SELECT nro_serie, vto_serie, desc_serie FROM serie_entrada
+                   WHERE id_serie_entrada=%s AND id_articulo=%s AND id_deposito=%s
+                     AND COALESCE(disponible,'Si')='Si'
+                     AND UPPER(COALESCE(anulado,'No'))<>'SI'""",
+                [id_serie_entrada, id_articulo, id_deposito],
             )
             row = cursor.fetchone()
             if not row:
@@ -1840,11 +2016,19 @@ def _validar_series_renglones(
     cursor: Any,
     id_usuario: int,
     renglones: List[Dict[str, Any]],
+    deposito_origen: Optional[int],
 ) -> Optional[str]:
     """
     Valida que cada renglón con artículo seriado tenga cantidad de series en temp igual a Cantidad.
     Devuelve mensaje de error o None.
     """
+    cursor.execute(
+        """SELECT id_serie_entrada FROM serie_salida_temp
+           WHERE id_usuario=%s AND COALESCE(visualiza,'No')='No'
+             AND tipo_comprobante='Mstock'
+           GROUP BY id_serie_entrada HAVING COUNT(*)>1 LIMIT 1""", [id_usuario])
+    if cursor.fetchone():
+        return "Una misma serie fue seleccionada más de una vez."
     for idx, reng in enumerate(renglones):
         if (str(reng.get("serie_articulo") or "").strip()) != "Si":
             continue
@@ -1856,7 +2040,7 @@ def _validar_series_renglones(
         except (TypeError, ValueError):
             return f"Renglón {idx + 1}: datos de serie inválidos."
         if orden is None or id_art is None:
-            continue
+            return f"Renglón {idx + 1}: falta identificar la serie del renglón."
         cant = Decimal(str(reng.get("Cantidad") or 0))
         es_entrada = (str(reng.get("ES") or "E").strip().upper()) == "E"
         if es_entrada:
@@ -1870,16 +2054,32 @@ def _validar_series_renglones(
             )
         else:
             cursor.execute(
-                """
-                SELECT COUNT(*) FROM serie_salida_temp
-                WHERE id_usuario = %s AND COALESCE(tipo_comprobante, '') = 'Mstock'
-                  AND orden = %s AND id_articulo = %s
-                """,
+                """SELECT COUNT(*) FROM serie_salida_temp
+                   WHERE id_usuario=%s AND tipo_comprobante='Mstock'
+                     AND COALESCE(visualiza,'No')='No'
+                     AND orden=%s AND id_articulo=%s""",
                 [id_usuario, orden, id_art],
             )
-        row = cursor.fetchone()
-        count_series = int(row[0] or 0) if row else 0
-        if count_series != int(cant):
+            total_seleccionado = int(cursor.fetchone()[0] or 0)
+            cursor.execute(
+                """SELECT se.id_serie_entrada FROM serie_salida_temp st
+                   JOIN serie_entrada se ON se.id_serie_entrada=st.id_serie_entrada
+                   WHERE st.id_usuario=%s AND st.tipo_comprobante='Mstock'
+                     AND COALESCE(st.visualiza,'No')='No'
+                     AND st.orden=%s AND st.id_articulo=%s
+                     AND se.id_articulo=%s AND se.id_deposito=%s
+                     AND COALESCE(se.disponible,'Si')='Si'
+                     AND UPPER(COALESCE(se.anulado,'No'))<>'SI' FOR UPDATE""",
+                [id_usuario, orden, id_art, id_art, deposito_origen],
+            )
+        if es_entrada:
+            row = cursor.fetchone()
+            count_series = int(row[0] or 0) if row else 0
+        else:
+            count_series = len(cursor.fetchall())
+            if count_series != total_seleccionado:
+                return f"Renglón {idx + 1}: hay series que no están disponibles en el depósito origen."
+        if cant != cant.to_integral_value() or count_series != int(cant):
             return (
                 f"Renglón {idx + 1} (artículo seriado): "
                 f"debe haber {int(cant)} número(s) de serie, hay {count_series}."
@@ -1895,6 +2095,7 @@ def _guardar_series_movimiento(
     fecha: str,
     es_entrada: bool,
     deposito_origen: Any,
+    deposito_destino: Any = None,
 ) -> Optional[str]:
     """
     Copia series desde temp a serie_entrada/serie_movimiento (paridad VB6 GuardarSerie).
@@ -1931,11 +2132,13 @@ def _guardar_series_movimiento(
                 (anulado, codigo_mov_mstock, desc_serie, fecha, id_articulo, nro_serie, tipo_comprobante, vto_serie, id_serie_entrada, tipo_comp_desc, comprobante, modificado, id_stock, id_deposito, nro_comprobante)
                 SELECT 'No', %s, st.desc_serie, %s, st.id_articulo, st.nro_serie, st.tipo_comprobante, st.vto_serie, st.id_serie_entrada, 'MSTOCK Salida', 'MSTOCK', 'No', s.id_stock, %s, %s
                 FROM serie_salida_temp st
-                INNER JOIN stock s ON s.codigoMovimiento = %s AND s.IDArt = st.id_articulo AND COALESCE(s.anulado, 'No') = 'No' AND s.Salida > 0 AND s.Orden = st.orden
+                INNER JOIN stock s ON s.codigoMovimiento = %s AND s.IDArt = st.id_articulo AND COALESCE(s.anulado, 'No') = 'No' AND s.Salida > 0 AND s.Orden = st.orden * %s - %s
                 WHERE COALESCE(st.visualiza, 'No') = 'No' AND st.id_usuario = %s AND COALESCE(st.tipo_comprobante, '') = 'Mstock'
                 ORDER BY st.id_serie_salida_temp
                 """,
-                [codigo_mov, fecha, deposito_origen, nro_comprobante, codigo_mov, id_usuario],
+                [codigo_mov, fecha, deposito_origen, nro_comprobante, codigo_mov,
+                 2 if deposito_destino is not None else 1,
+                 1 if deposito_destino is not None else 0, id_usuario],
             )
             cursor.execute(
                 """
@@ -1946,6 +2149,42 @@ def _guardar_series_movimiento(
                 """,
                 [id_usuario],
             )
+            if deposito_destino is not None:
+                # Una transferencia registra salida y entrada, y deja una nueva
+                # serie disponible únicamente en el depósito de destino (VB6).
+                cursor.execute(
+                    """INSERT INTO serie_movimiento
+                       (anulado,codigo_mov_mstock,desc_serie,fecha,id_articulo,
+                        nro_serie,tipo_comprobante,vto_serie,id_serie_entrada,
+                        tipo_comp_desc,comprobante,modificado,id_stock,id_deposito,
+                        nro_comprobante)
+                       SELECT 'No',%s,st.desc_serie,%s,st.id_articulo,
+                              st.nro_serie,st.tipo_comprobante,st.vto_serie,
+                              st.id_serie_entrada,'MSTOCK Entrada','MSTOCK','No',
+                              s.id_stock,%s,%s
+                       FROM serie_salida_temp st
+                       JOIN stock s ON s.CodigoMovimiento=%s
+                         AND s.IDArt=st.id_articulo AND s.Entrada>0
+                         AND s.Orden=st.orden*2
+                       WHERE st.visualiza='No' AND st.id_usuario=%s
+                         AND st.tipo_comprobante='Mstock'""",
+                    [codigo_mov, fecha, deposito_destino, nro_comprobante,
+                     codigo_mov, id_usuario],
+                )
+                cursor.execute(
+                    """INSERT INTO serie_entrada
+                       (anulado,codigo_mov_entrada,desc_serie,disponible,fecha,
+                        id_articulo,nro_serie,tipo_comprobante,vto_serie,id_deposito,
+                        id_serie_salida)
+                       SELECT 'No',%s,se.desc_serie,'Si',%s,se.id_articulo,
+                              se.nro_serie,se.tipo_comprobante,se.vto_serie,%s,
+                              se.id_serie_entrada
+                       FROM serie_salida_temp st
+                       JOIN serie_entrada se ON se.id_serie_entrada=st.id_serie_entrada
+                       WHERE st.visualiza='No' AND st.id_usuario=%s
+                         AND st.tipo_comprobante='Mstock'""",
+                    [codigo_mov, fecha, deposito_destino, id_usuario],
+                )
         return None
     except Exception as e:
         logger.exception("Error en GuardarSerie")
@@ -2145,12 +2384,6 @@ def alta_movimiento(
                 # Formato como AdministraNET: PV de 4 dígitos + guión + Nro de 8 dígitos (ej. 0001-00000288)
                 nro_comprobante = f"{id_pv:04d}-{nro_nuevo:08d}"
 
-                # Validar series: artículos seriados deben tener cantidad de series = Cantidad
-                err_series = _validar_series_renglones(cursor, id_usuario, renglones)
-                if err_series:
-                    conn.rollback()
-                    return False, None, None, err_series, None
-
                 # Con IDArt conocido, stock siempre conserva código/descripción del maestro.
                 _enriquecer_renglones_desde_articulo(cursor, renglones)
 
@@ -2163,6 +2396,45 @@ def alta_movimiento(
                 deposito_destino = to_int_or_none(cabecera.get("deposito_destino")) if motivo_num == 6 else deposito_origen
                 if deposito_destino is None:
                     deposito_destino = deposito_origen
+                if motivo_num == 6 and (not deposito_origen or not deposito_destino or deposito_origen == deposito_destino):
+                    conn.rollback()
+                    return False, None, None, "La transferencia requiere depósitos de origen y destino diferentes.", None
+
+                for idx, reng in enumerate(renglones):
+                    id_art = to_int_or_none(reng.get("IDArt"))
+                    if not id_art:
+                        conn.rollback()
+                        return False, None, None, f"Renglón {idx + 1}: artículo inválido.", None
+                    try:
+                        presentacion = datos_presentacion_articulo(cursor, id_art)
+                        tipo = str(reng.get("tipo_unidad") or "Unidad").strip().title()
+                        factor = factor_presentacion(
+                            tipo, presentacion["unidades_display"],
+                            presentacion["multiplicador_comp"],
+                            presentacion["displays_bulto"],
+                            usa_lote=presentacion["lote"], usa_serie=presentacion["serie"],
+                        )
+                        cantidad_presentacion = Decimal(str(reng.get("Cantidad") or 0))
+                        if not cantidad_presentacion.is_finite() or cantidad_presentacion <= 0:
+                            raise PresentacionInvalida("La cantidad debe ser mayor a cero.")
+                        if presentacion["serie"] and cantidad_presentacion != cantidad_presentacion.to_integral_value():
+                            raise PresentacionInvalida("La cantidad de un artículo con serie debe ser entera.")
+                        if presentacion["lote"] and str(reng.get("ES") or "E").upper() == "S" and not to_int_or_none(reng.get("id_lote")):
+                            raise PresentacionInvalida("Debe elegir un lote del depósito de origen.")
+                        reng["_cantidad_unidades"] = cantidad_presentacion * factor
+                        reng["_factor_presentacion"] = factor
+                        reng["_presentacion"] = presentacion
+                        reng["_tipo_unidad"] = tipo
+                        reng["serie_articulo"] = "Si" if presentacion["serie"] else "No"
+                    except (PresentacionInvalida, ArithmeticError, ValueError) as exc:
+                        conn.rollback()
+                        return False, None, None, f"Renglón {idx + 1}: {exc}", None
+
+                # Valida el número real de series, tomando serie del maestro y no del cliente.
+                err_series = _validar_series_renglones(cursor, id_usuario, renglones, deposito_origen)
+                if err_series:
+                    conn.rollback()
+                    return False, None, None, err_series, None
                 fecha_mov = to_date_or_none(cabecera.get("fecha"))
                 if not fecha_mov:
                     from datetime import date
@@ -2273,7 +2545,15 @@ def alta_movimiento(
                     alicuota: Optional[Decimal],
                     cod_sucursal: int,
                     cod_laboratorio: int,
-                ) -> None:
+                    tipo_unidad: str,
+                    cantidad_unidad_display: Decimal,
+                    factor_presentacion_renglon: Decimal,
+                    id_lote: Optional[int],
+                    id_stockp: Optional[int],
+                    codigo_pedi: Optional[int],
+                    nro_pedi: Optional[str],
+                    es_serie: bool,
+                ) -> int:
                     """Inserta stock con los campos completos y conserva compatibilidad legacy."""
                     precio_costo_r = precio_costo_u * cantidad
                     params_completos = [
@@ -2317,15 +2597,36 @@ def alta_movimiento(
                                 nro_comprobante, cod_viajante,
                             ],
                         )
+                    id_stock_insertado = cursor.lastrowid
+                    cursor.execute(
+                        """UPDATE stock SET tipo_unidad=%s, cantidad_unidad_display=%s,
+                                  cantidad_dividir=%s, id_lote=%s, id_stockp=%s,
+                                  codmov_nro_pedi=%s, nro_pedi=%s, serie=%s
+                           WHERE id_stock=%s""",
+                        [tipo_unidad, cantidad_unidad_display or 1,
+                         factor_presentacion_renglon, id_lote, id_stockp,
+                         codigo_pedi, nro_pedi, "Si" if es_serie else "No",
+                         id_stock_insertado],
+                    )
+                    return id_stock_insertado
 
                 # (4) Por cada renglón: INSERT stock y actualizar stock_deposito (transfer = dos filas por renglón)
                 for idx, reng in enumerate(renglones):
                     id_art = to_int_or_none(reng.get("IDArt"))
-                    cantidad = to_decimal_or_none(reng.get("Cantidad"), "0.000001") or Decimal(0)
-                    entrada = to_decimal_or_none(reng.get("entrada"), "0.000001") or Decimal(0)
-                    salida = to_decimal_or_none(reng.get("salida"), "0.000001") or Decimal(0)
+                    cantidad = reng["_cantidad_unidades"]
                     cod_dep = to_int_or_none(reng.get("CodDeposito")) or deposito_origen
                     es = (str(reng.get("ES") or "E")).strip().upper()
+                    if es not in ("E", "S") or (motivo_num == 6 and es != "S"):
+                        conn.rollback()
+                        return False, None, None, f"Renglón {idx + 1}: tipo de movimiento inválido.", None
+                    entrada = cantidad if es == "E" else Decimal(0)
+                    salida = cantidad if es == "S" else Decimal(0)
+                    orden_temporal = to_int_or_none(reng.get("Orden")) or idx + 1
+                    presentacion = reng["_presentacion"]
+                    id_lote_stock = to_int_or_none(reng.get("id_lote"))
+                    id_stockp = to_int_or_none(reng.get("id_stock")) if motivo_num == 6 else None
+                    codigo_pedi = to_int_or_none(reng.get("codmov_nro_pedi")) if motivo_num == 6 else None
+                    nro_pedi = str(reng.get("nro_pedi")) if codigo_pedi else None
                     codigo_art = str_or_default(reng.get("CodigoArticulo"), "")
                     descripcion_art = str_or_default(reng.get("Descripcion"), "")
                     precio_costo_u = to_decimal_or_none(reng.get("PrecioCostoxU"), "0.000001")
@@ -2382,18 +2683,28 @@ def alta_movimiento(
                         _insertar_stock(
                             id_art=id_art, codigo_art=codigo_art, descripcion_art=descripcion_art,
                             entrada=Decimal(0), salida=cantidad_transfer, saldo=saldo_origen_despues,
-                            cod_deposito=deposito_origen, orden=idx * 2 + 1, cod_viajante=cod_viajante,
+                            cod_deposito=deposito_origen, orden=orden_temporal * 2 - 1, cod_viajante=cod_viajante,
                             cantidad=cantidad_transfer, precio_costo_u=precio_costo_u, id_manual=id_manual,
                             tipo_iva=tipo_iva, alicuota=alicuota, cod_sucursal=cod_sucursal,
                             cod_laboratorio=cod_laboratorio,
+                            tipo_unidad=reng["_tipo_unidad"],
+                            cantidad_unidad_display=Decimal(str(presentacion["unidades_display"] or 1)),
+                            factor_presentacion_renglon=reng["_factor_presentacion"],
+                            id_lote=id_lote_stock, id_stockp=id_stockp,
+                            codigo_pedi=codigo_pedi, nro_pedi=nro_pedi,
+                            es_serie=presentacion["serie"],
                         )
                         _actualizar_stock_deposito(cursor, id_art, deposito_origen, -cantidad_transfer)
                         # Lote salida en origen
                         id_lote_reng = to_int_or_none(reng.get("id_lote"))
                         if id_lote_reng:
                             cursor.execute(
-                                "SELECT id_lote_stock, stock_lote FROM lote_stock WHERE id_lote = %s AND id_deposito = %s FOR UPDATE",
-                                [id_lote_reng, deposito_origen],
+                                """SELECT ls.id_lote_stock, ls.stock_lote FROM lote_stock ls
+                                   JOIN lote l ON l.id_lote=ls.id_lote
+                                   WHERE ls.id_lote=%s AND ls.id_deposito=%s
+                                     AND l.id_articulo=%s AND COALESCE(l.anulado,'No')='No'
+                                   FOR UPDATE""",
+                                [id_lote_reng, deposito_origen, id_art],
                             )
                             ls_row = cursor.fetchone()
                             if not ls_row:
@@ -2417,10 +2728,16 @@ def alta_movimiento(
                         _insertar_stock(
                             id_art=id_art, codigo_art=codigo_art, descripcion_art=descripcion_art,
                             entrada=cantidad_transfer, salida=Decimal(0), saldo=saldo_destino_despues,
-                            cod_deposito=deposito_destino, orden=idx * 2 + 2, cod_viajante=cod_viajante,
+                            cod_deposito=deposito_destino, orden=orden_temporal * 2, cod_viajante=cod_viajante,
                             cantidad=cantidad_transfer, precio_costo_u=precio_costo_u, id_manual=id_manual,
                             tipo_iva=tipo_iva, alicuota=alicuota, cod_sucursal=cod_sucursal,
                             cod_laboratorio=cod_laboratorio,
+                            tipo_unidad=reng["_tipo_unidad"],
+                            cantidad_unidad_display=Decimal(str(presentacion["unidades_display"] or 1)),
+                            factor_presentacion_renglon=reng["_factor_presentacion"],
+                            id_lote=id_lote_stock, id_stockp=id_stockp,
+                            codigo_pedi=codigo_pedi, nro_pedi=nro_pedi,
+                            es_serie=presentacion["serie"],
                         )
                         _actualizar_stock_deposito(cursor, id_art, deposito_destino, cantidad_transfer)
                         # Lote entrada en destino (opcional: crear/actualizar si viene cod_lote o id_lote)
@@ -2429,7 +2746,7 @@ def alta_movimiento(
                         vto_lote_reng = reng.get("vto_lote")
                         if id_lote_reng or cod_lote_reng:
                             if id_lote_reng:
-                                cursor.execute("SELECT id_lote FROM lote WHERE id_lote = %s FOR UPDATE", [id_lote_reng])
+                                cursor.execute("SELECT id_lote FROM lote WHERE id_lote=%s AND id_articulo=%s AND COALESCE(anulado,'No')='No' FOR UPDATE", [id_lote_reng, id_art])
                                 lote_row = cursor.fetchone()
                             else:
                                 lote_row = None
@@ -2500,13 +2817,19 @@ def alta_movimiento(
                     saldo_despues = saldo_actual + (entrada - salida)
 
                     cantidad_stock = cantidad or (entrada if entrada > 0 else salida)
-                    _insertar_stock(
+                    id_stock_nuevo = _insertar_stock(
                         id_art=id_art, codigo_art=codigo_art, descripcion_art=descripcion_art,
                         entrada=entrada, salida=salida, saldo=saldo_despues, cod_deposito=cod_dep,
                         orden=idx + 1, cod_viajante=cod_viajante, cantidad=cantidad_stock,
                         precio_costo_u=precio_costo_u, id_manual=id_manual, tipo_iva=tipo_iva,
                         alicuota=alicuota, cod_sucursal=cod_sucursal,
                         cod_laboratorio=cod_laboratorio,
+                        tipo_unidad=reng["_tipo_unidad"],
+                        cantidad_unidad_display=Decimal(str(presentacion["unidades_display"] or 1)),
+                        factor_presentacion_renglon=reng["_factor_presentacion"],
+                        id_lote=id_lote_stock, id_stockp=None,
+                        codigo_pedi=None, nro_pedi=None,
+                        es_serie=presentacion["serie"],
                     )
                     _actualizar_stock_deposito(cursor, id_art, cod_dep, entrada - salida)
 
@@ -2515,8 +2838,12 @@ def alta_movimiento(
                     vto_lote_reng = reng.get("vto_lote")
                     if es == "S" and id_lote_reng:
                         cursor.execute(
-                            "SELECT id_lote_stock, stock_lote FROM lote_stock WHERE id_lote = %s AND id_deposito = %s FOR UPDATE",
-                            [id_lote_reng, cod_dep],
+                            """SELECT ls.id_lote_stock, ls.stock_lote FROM lote_stock ls
+                               JOIN lote l ON l.id_lote=ls.id_lote
+                               WHERE ls.id_lote=%s AND ls.id_deposito=%s
+                                 AND l.id_articulo=%s AND COALESCE(l.anulado,'No')='No'
+                               FOR UPDATE""",
+                            [id_lote_reng, cod_dep, id_art],
                         )
                         ls_row = cursor.fetchone()
                         if not ls_row:
@@ -2534,7 +2861,7 @@ def alta_movimiento(
                         )
                     elif es == "E" and (id_lote_reng or cod_lote_reng):
                         if id_lote_reng:
-                            cursor.execute("SELECT id_lote FROM lote WHERE id_lote = %s FOR UPDATE", [id_lote_reng])
+                            cursor.execute("SELECT id_lote FROM lote WHERE id_lote=%s AND id_articulo=%s AND COALESCE(anulado,'No')='No' FOR UPDATE", [id_lote_reng, id_art])
                             lote_row = cursor.fetchone()
                         else:
                             lote_row = None
@@ -2577,26 +2904,19 @@ def alta_movimiento(
                                 "INSERT INTO lote_stock (id_lote, id_deposito, stock_lote) VALUES (%s, %s, %s)",
                                 [id_lote_nuevo, cod_dep, entrada],
                             )
+                            cursor.execute("UPDATE stock SET id_lote=%s WHERE id_stock=%s", [id_lote_nuevo, id_stock_nuevo])
                         elif id_lote_reng:
                             conn.rollback()
                             return False, None, None, f"Renglón {idx + 1}: lote no encontrado.", None
 
-                # (4a) movstock_pedi: una fila por renglón que tenga pedido (codmov_nro_pedi), paridad VB6
-                codigo_mov_int = to_int_or_none(codigo_mov) or int(codigo_mov)
-                for reng in renglones:
-                    codmov_pedi = to_int_or_none(reng.get("codmov_nro_pedi"))
-                    if codmov_pedi is None and reng.get("nro_pedi") is not None:
-                        nro = str(reng.get("nro_pedi")).strip()
-                        if nro and nro.replace(".", "").replace("-", "").isdigit():
-                            codmov_pedi = to_int_or_none(float(nro))
-                    if codmov_pedi is not None:
-                        cursor.execute(
-                            """
-                            INSERT INTO movstock_pedi (codmov_movstock, codmov_pedi, anulado)
-                            VALUES (%s, %s, 'No')
-                            """,
-                            [codigo_mov_int, codmov_pedi],
-                        )
+                # El pendiente del PEDI se consume con bloqueo y una sola relación.
+                if motivo_num == 6:
+                    error_pedi = _aplicar_entregas_pedi(
+                        cursor, int(codigo_mov), cabecera, renglones,
+                        deposito_origen, deposito_destino)
+                    if error_pedi:
+                        conn.rollback()
+                        return False, None, None, error_pedi, None
 
                 # (4b) Guardar series (temp → serie_entrada / serie_movimiento) si hay artículos seriados
                 hay_seriados = any(
@@ -2612,6 +2932,7 @@ def alta_movimiento(
                         fecha_mov,
                         es_entrada,
                         deposito_origen,
+                        deposito_destino if motivo_num == 6 else None,
                     )
                     if err_guardar:
                         conn.rollback()
@@ -2663,6 +2984,7 @@ def listar_movimientos(
                 FROM movimiento_stock m
                 LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
                 WHERE COALESCE(m.anulado, 'No') = 'No'
+                  AND UPPER(COALESCE(m.tipo_comprobante, '')) = 'MSTOCK'
             """
             params = []
             if fecha_desde:
@@ -2695,7 +3017,9 @@ def obtener_movimiento(base_empresa: str, codigo_movimiento: int) -> Optional[Di
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(
-                "SELECT * FROM movimiento_stock WHERE codigo_movimiento = %s",
+                """SELECT * FROM movimiento_stock
+                   WHERE codigo_movimiento = %s
+                     AND UPPER(COALESCE(tipo_comprobante, '')) = 'MSTOCK'""",
                 [codigo_movimiento],
             )
             row = cursor.fetchone()
@@ -2710,7 +3034,10 @@ def obtener_renglones_movimiento(base_empresa: str, codigo_movimiento: int) -> L
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(
-                "SELECT IDArt, CodigoArticulo, Descripcion, Entrada, Salida, COALESCE(saldo, 0) AS saldo, CodDeposito FROM stock WHERE CodigoMovimiento = %s ORDER BY Orden",
+                """SELECT IDArt, CodigoArticulo, Descripcion, Entrada, Salida,
+                          COALESCE(saldo, 0) AS saldo, CodDeposito, nro_pedi,
+                          tipo_unidad, cantidad_dividir, id_lote, serie
+                   FROM stock WHERE CodigoMovimiento = %s ORDER BY Orden""",
                 [codigo_movimiento],
             )
             rows = cursor.fetchall()

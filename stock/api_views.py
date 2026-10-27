@@ -155,7 +155,38 @@ def api_ingreso_articulos_por_codigo(request):
     )
     if not item:
         return JsonResponse({"articulos": []})
+    if request.GET.get("presentacion") == "1":
+        from core.services.pedido_interno_stock import obtener_presentaciones_pedido_interno
+        try:
+            item["presentacion"] = obtener_presentaciones_pedido_interno(
+                ctx["base_empresa"], int(item["IDArt"]),
+            )
+        except Exception:
+            logger.exception("No se pudo consultar la presentación del artículo %s", item["IDArt"])
+            return JsonResponse({"error": "No se pudo consultar la presentación del artículo."}, status=503)
     return JsonResponse({"articulos": [item]})
+
+
+@tiene_permiso("stock.crear_movimiento")
+@require_http_methods(["GET"])
+def api_pedido_interno_presentacion(request):
+    """Factores de Display y Bulto para mostrar unidades antes de crear el PEDI."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        id_articulo = int(request.GET.get("id_articulo", ""))
+        if id_articulo <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Artículo inválido."}, status=400)
+    from core.services.pedido_interno_stock import obtener_presentaciones_pedido_interno
+    try:
+        presentacion = obtener_presentaciones_pedido_interno(ctx["base_empresa"], id_articulo)
+    except Exception:
+        logger.exception("No se pudo consultar la presentación del artículo %s", id_articulo)
+        return JsonResponse({"error": "No se pudo consultar la presentación del artículo."}, status=503)
+    return JsonResponse({"presentacion": presentacion})
 
 
 @tiene_permiso("stock.crear_movimiento")
@@ -416,6 +447,45 @@ def api_ingreso_pedidos_pendientes(request):
                 row[k] = v
         out.append(row)
     return JsonResponse({"pedidos": out})
+
+
+@tiene_permiso("stock.crear_movimiento")
+@require_http_methods(["POST"])
+def api_ingreso_importar_pedi(request):
+    """Importa al temporal las unidades pendientes de un PEDI de depósito."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        data = json.loads(request.body) if request.body else {}
+        codigo = int(data.get("codigo_pedi"))
+        origen = int(data.get("deposito_origen"))
+        destino = int(data.get("deposito_destino"))
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return JsonResponse({"error": "Pedido o depósitos inválidos."}, status=400)
+    error = svc.importar_pedi_temporal(ctx["base_empresa"], ctx["id_usuario"],
+                                       codigo, origen, destino, ctx["id_puesto"])
+    if error:
+        return JsonResponse({"error": error}, status=400)
+    return JsonResponse({"ok": True, "renglones": svc.listar_renglones_temporales(
+        ctx["base_empresa"], ctx["id_usuario"])})
+
+
+@tiene_permiso("stock.crear_movimiento")
+@require_http_methods(["POST"])
+def api_pedido_interno_crear(request):
+    from core.services.pedido_interno_stock import crear_pedido_interno
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido."}, status=400)
+    ok, resultado = crear_pedido_interno(
+        ctx["base_empresa"], ctx["id_usuario"], ctx["id_puesto"],
+        ctx["id_punto_venta"] or 1, data)
+    return JsonResponse({"ok": ok, **resultado}, status=200 if ok else 400)
 
 
 @tiene_permiso("stock.crear_movimiento")

@@ -102,7 +102,7 @@
           <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{{ m.nombre_usuario|default:m.id_usuario|default:"—" }}</td>
           <td class="px-4 py-3 whitespace-nowrap text-right text-sm">
             <a href="{% url 'stock:detalle_movimiento' codigo_movimiento=m.codigo_movimiento %}" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium mr-3">Ver detalle</a>
-            <a href="{% url 'stock:movimiento_pdf' codigo_movimiento=m.codigo_movimiento %}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium">PDF</a>
+            <a href="{% url 'stock:movimiento_pdf' codigo_movimiento=m.codigo_movimiento %}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium">Reimprimir PDF</a>
           </td>
         </tr>
         {% endfor %}
