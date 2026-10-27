@@ -23,8 +23,9 @@
   });
 
   const FOOTER_NOTA =
-    "Stock actual global: depósitos activos con Suma stock=Si. Disponible = max(0, terminado − pendiente). " +
-    "Backorder = pendiente sin cobertura de terminado. Producción se muestra aparte. " +
+    "Stock terminado: depósitos Terminado/Consignación (suma_stock=Si). " +
+    "Stock producción: unidades armables según semi de componentes Fabricado (receta); no suma al disponible. " +
+    "Disponible = max(0, terminado − pendiente). Backorder = pendiente sin cobertura de terminado. " +
     "Importe neto sin IVA ni descuento de cabecera.";
 
   const COLUMNS = [
@@ -35,7 +36,15 @@
     { key: "unidad_base", label: "Unidad base", align: "left", sortable: true, type: "text" },
     { key: "pendiente_qty", label: "Pedido pendiente", align: "right", sortable: true, type: "unit" },
     { key: "stock_terminado", label: "Stock terminado", align: "right", sortable: true, type: "unit" },
-    { key: "stock_produccion", label: "Stock producción", align: "right", sortable: true, type: "unit" },
+    {
+      key: "stock_produccion",
+      label: "Stock producción",
+      title:
+        "Cantidad armable: mínimo según saldo en Semi elaborado de componentes Fabricado de la receta (solo informativo).",
+      align: "right",
+      sortable: true,
+      type: "unit",
+    },
     { key: "disponible", label: "Disponible", align: "right", sortable: true, type: "unit" },
     { key: "backorder", label: "Backorder", align: "right", sortable: true, type: "unit", cellClass: "ppp-backorder" },
     { key: "importe_pendiente", label: "Importe pendiente", align: "right", sortable: true, type: "money" },
@@ -189,10 +198,13 @@
     let head = "<tr>";
     COLUMNS.forEach(function (col) {
       const arrow = sortKey === col.key ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+      const titleAttr = col.title ? ' title="' + escHtml(col.title) + '"' : "";
       head +=
         '<th class="ppp-sort-th whitespace-nowrap px-3 py-2 cursor-pointer select-none ' +
         (col.align === "right" ? "text-right" : "text-left") +
-        '" data-sort-key="' +
+        '"' +
+        titleAttr +
+        ' data-sort-key="' +
         escHtml(col.key) +
         '">' +
         escHtml(col.label) +
