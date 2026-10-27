@@ -1716,7 +1716,7 @@ class ExportService:
     def _generate_excel_pedidos_pendientes_produccion(
         self, file_path: Path, report: ReportDefinition, query_result, payload: Dict
     ):
-        """Excel: mismas columnas que pantalla + MPR reserva; totales sin Brecha."""
+        """Excel: mismas columnas que pantalla (reserva objetivo/disponible/reposición)."""
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment
         from openpyxl.utils import get_column_letter
@@ -1745,11 +1745,12 @@ class ExportService:
             "Backorder",
             "Importe pendiente",
             "MPR demanda",
-            "MPR reserva",
+            "Reserva objetivo",
+            "Reserva disponible",
+            "Reposición reserva",
             "MPR a fabricar",
-            "Brecha",
         ]
-        unit_cols = {6, 7, 8, 9, 10, 12, 13, 14, 15}
+        unit_cols = {6, 7, 8, 9, 10, 12, 13, 14, 15, 16}
         money_cols = {11}
 
         header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
@@ -1774,9 +1775,10 @@ class ExportService:
                 art.get("backorder"),
                 art.get("importe_pendiente"),
                 art.get("mpr_demanda_pedido"),
-                art.get("mpr_stock_reserva"),
+                art.get("reserva_objetivo"),
+                art.get("reserva_disponible"),
+                art.get("reposicion_reserva"),
                 art.get("mpr_cantidad_a_fabricar"),
-                art.get("mpr_brecha_vs_pendiente"),
             ]
 
         def apply_number_formats(row_idx: int, bold: bool = False):
@@ -1811,9 +1813,10 @@ class ExportService:
                 totals.get("total_backorder"),
                 totals.get("total_importe_pendiente"),
                 totals.get("total_mpr_demanda_pedido"),
-                None,
+                totals.get("total_reserva_objetivo"),
+                totals.get("total_reserva_disponible"),
+                totals.get("total_reposicion_reserva"),
                 totals.get("total_mpr_cantidad_a_fabricar"),
-                None,
             ]
             for col_idx, val in enumerate(tot_vals, 1):
                 ws.cell(row=r, column=col_idx, value=val)
