@@ -6,10 +6,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 def compute_disponible_backorder(pendiente_qty: float, stock_terminado: float) -> Tuple[float, float]:
-    """Disponible = stock terminado − pendiente; backorder = max(pendiente − terminado, 0)."""
+    """Disponible = max(0, terminado − pendiente); backorder = max(pendiente − terminado, 0)."""
     pend = float(pendiente_qty or 0)
     term = float(stock_terminado or 0)
-    disponible = round(term - pend, 4)
+    disponible = round(max(0.0, term - pend), 4)
     backorder = round(max(pend - term, 0.0), 4)
     return disponible, backorder
 
