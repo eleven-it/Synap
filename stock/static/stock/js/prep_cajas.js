@@ -11,6 +11,7 @@
   let seleccionVersion = 0;
   let seleccionSolicitada = null;
   let seleccionando = false;
+  let accionCajaEnCurso = false;
   const urlPara = (tipo, codigo) => root.dataset[tipo].replace('__CODIGO__', String(codigo));
   const url = (tipo) => urlPara(tipo, prep);
   const numero = (n) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 4 }).format(Number(n || 0));
@@ -18,9 +19,13 @@
     const articulo = (estado?.articulos || []).find((item) =>
       Number(item.id_articulo) === Number(idArticulo) &&
       (pedido == null || Number(item.pedido) === Number(pedido)));
-    const factor = Number(articulo?.unidades_display || 0);
+    const contenido = articulo ? null : (estado?.cajas || []).flatMap((caja) => caja.contenido || []).find((item) =>
+      Number(item.id_articulo) === Number(idArticulo) &&
+      (pedido == null || Number(item.codigo_movimiento_ped) === Number(pedido)));
+    const factor = Number(articulo?.unidades_display || contenido?.unidades_display || 0);
     return factor > 1 ? factor : 0;
   }
+  const modoDisplay = () => el('prep-modo-lectura').value === 'display';
   function unidadesYDisplays(unidades, factor) {
     const cantidad = Number(unidades || 0);
     const textoUnidades = `${numero(cantidad)} ${cantidad === 1 ? 'unidad' : 'unidades'}`;
@@ -28,7 +33,37 @@
     const displays = Math.floor((cantidad + 0.000001) / factor);
     const resto = Math.max(0, cantidad - displays * factor);
     const textoDisplays = `${numero(displays)} ${displays === 1 ? 'display' : 'displays'}`;
-    return `${textoUnidades} · ${textoDisplays}${resto > 0.000001 ? ` + ${numero(resto)} ${resto === 1 ? 'unidad' : 'unidades'}` : ''} (${numero(factor)} unidades/display)`;
+    const presentacion = `${textoDisplays}${resto > 0.000001 ? ` + ${numero(resto)} ${resto === 1 ? 'unidad' : 'unidades'}` : ''}`;
+    return modoDisplay()
+      ? `${presentacion} · ${textoUnidades} (${numero(factor)} unidades/display)`
+      : `${textoUnidades} · ${presentacion} (${numero(factor)} unidades/display)`;
+  }
+  function resumenCantidades(items, cantidad, factor) {
+    const resumen = { unidades: 0, displays: 0, sueltas: 0, tieneDisplay: false };
+    for (const item of items) {
+      const unidades = Number(cantidad(item) || 0);
+      const porDisplay = Number(factor(item) || 0);
+      resumen.unidades += unidades;
+      if (porDisplay > 1) {
+        resumen.tieneDisplay = true;
+        const displays = Math.floor((unidades + 0.000001) / porDisplay);
+        resumen.displays += displays;
+        resumen.sueltas += Math.max(0, unidades - displays * porDisplay);
+      } else {
+        resumen.sueltas += unidades;
+      }
+    }
+    return resumen;
+  }
+  function cantidadPrincipal(resumen) {
+    if (!modoDisplay() || !resumen.tieneDisplay) return `${numero(resumen.unidades)} unidades`;
+    const displays = `${numero(resumen.displays)} ${resumen.displays === 1 ? 'display' : 'displays'}`;
+    return resumen.sueltas > 0.000001
+      ? `${displays} + ${numero(resumen.sueltas)} unidades`
+      : displays;
+  }
+  function equivalenciaUnidades(resumen) {
+    return modoDisplay() && resumen.tieneDisplay ? `${numero(resumen.unidades)} unidades` : '';
   }
 
   function actualizarModo() {
@@ -218,12 +253,17 @@
     const total = articulos.reduce((suma, item) => suma + Number(item.pendiente || 0), 0);
     const faltante = articulos.reduce((suma, item) => suma + Number(item.faltante || 0), 0);
     const leido = articulos.reduce((suma, item) => suma + Number(item.en_cajas || 0), 0);
+    const porLeer = resumenCantidades(articulos, (item) => item.faltante, (item) => item.unidades_display);
+    const enCajas = resumenCantidades(articulos, (item) => item.en_cajas, (item) => item.unidades_display);
     const completos = articulos.filter((item) => Number(item.faltante) <= 0).length;
     const pendientes = articulos.filter((item) => Number(item.faltante) > 0);
     const porcentaje = total > 0 ? Math.min(100, Math.max(0, Math.round(100 * leido / total))) : 0;
     el('prep-progreso-titulo').textContent = `Avance de preparación ${estado.numero_preparacion || prep}`;
-    el('prep-progreso-faltante').textContent = `${numero(faltante)} de ${numero(total)} unidades`;
-    el('prep-progreso-leido').textContent = `${numero(leido)} unidades`;
+    el('prep-progreso-faltante').textContent = cantidadPrincipal(porLeer);
+    el('prep-progreso-faltante-unidades').textContent = modoDisplay() && porLeer.tieneDisplay
+      ? `${equivalenciaUnidades(porLeer)} de ${numero(total)} previstas` : `de ${numero(total)} previstas`;
+    el('prep-progreso-leido').textContent = cantidadPrincipal(enCajas);
+    el('prep-progreso-leido-unidades').textContent = equivalenciaUnidades(enCajas);
     el('prep-progreso-articulos').textContent = `${completos} de ${articulos.length}`;
     el('prep-progreso-barra').setAttribute('aria-valuenow', String(porcentaje));
     el('prep-progreso-relleno').style.width = `${porcentaje}%`;
@@ -243,6 +283,23 @@
     }
 
   }
+  async function cambiarEstadoCaja(caja, accion) {
+    if (accionCajaEnCurso) return;
+    accionCajaEnCurso = true;
+    el('prep-cerrar-activa').disabled = true;
+    try {
+      await pedir(url('accion'), { id_caja: caja.id_caja, accion });
+      if (accion === 'reabrir') cajaActiva = Number(caja.id_caja);
+      await refrescar();
+      if (!estado.cajas_listas) aviso(accion === 'cerrar' ? `Caja ${caja.numero_caja} cerrada.`
+        : `Caja ${caja.numero_caja} reabierta y seleccionada para escanear.`);
+      if (accion === 'reabrir') el('prep-codigo').focus();
+    } catch (error) { aviso(error.message, true); }
+    finally {
+      accionCajaEnCurso = false;
+      el('prep-cerrar-activa').disabled = false;
+    }
+  }
   function render() {
     el('prep-sin-seleccion').classList.add('hidden');
     el('prep-contenido').classList.remove('hidden');
@@ -257,6 +314,21 @@
     const activa = cajas.find((c) => Number(c.id_caja) === cajaActiva);
     el('prep-caja-activa').textContent = activa ? `Caja ${activa.numero_caja}` : 'Ninguna';
     el('prep-caja-destino').textContent = activa ? activa.destino_entrega : 'Abrí o seleccioná una caja para escanear.';
+    el('prep-cerrar-activa').classList.toggle('hidden', !activa);
+    el('prep-cerrar-activa').setAttribute('aria-label', activa ? `Cerrar caja ${activa.numero_caja}` : 'Cerrar caja');
+    el('prep-cerrar-activa').onclick = activa ? () => cambiarEstadoCaja(activa, 'cerrar') : null;
+    el('prep-caja-resumen').classList.toggle('hidden', !activa);
+    if (activa) {
+      const agrupado = new Map();
+      for (const item of activa.contenido || []) {
+        const clave = `${item.id_articulo}:${item.codigo_movimiento_ped}`;
+        if (!agrupado.has(clave)) agrupado.set(clave, { unidades: 0, factor: factorDisplay(item.id_articulo, item.codigo_movimiento_ped) });
+        agrupado.get(clave).unidades += Number(item.cantidad_unidades || 0);
+      }
+      const contenido = resumenCantidades([...agrupado.values()], (item) => item.unidades, (item) => item.factor);
+      el('prep-caja-cantidad').textContent = cantidadPrincipal(contenido);
+      el('prep-caja-equivalencia').textContent = equivalenciaUnidades(contenido);
+    }
     el('prep-codigo').disabled = !activa || Boolean(estado.sin_faltantes);
     const selector = el('prep-pedido');
     const elegido = selector.value;
@@ -298,17 +370,7 @@
       if (caja.estado === 'Abierta' || (caja.estado === 'Cerrada' && !caja.fecha_importacion)) {
         const b = nodo('button', 'rounded border border-slate-400 bg-white px-3 py-2 text-sm font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100', accion === 'cerrar' ? 'Cerrar caja' : 'Reabrir');
         b.type = 'button';
-        b.addEventListener('click', async () => {
-          try {
-            await pedir(url('accion'), { id_caja: caja.id_caja, accion });
-            if (accion === 'reabrir') cajaActiva = Number(caja.id_caja);
-            await refrescar();
-            if (!estado.cajas_listas) aviso(accion === 'cerrar' ? `Caja ${caja.numero_caja} cerrada.`
-              : `Caja ${caja.numero_caja} reabierta y seleccionada para escanear.`);
-            if (accion === 'reabrir') el('prep-codigo').focus();
-          }
-          catch (error) { aviso(error.message, true); }
-        });
+        b.addEventListener('click', () => cambiarEstadoCaja(caja, accion));
         controls.append(b);
       }
       if ((caja.estado === 'Abierta' || caja.estado === 'Cerrada')
@@ -472,6 +534,7 @@
   el('prep-modo-lectura').addEventListener('change', () => {
     lecturaPendiente = null;
     actualizarModo();
+    if (estado) render();
     el('prep-codigo').focus();
   });
   el('prep-scan-form').addEventListener('submit', async (event) => {
