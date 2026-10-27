@@ -2,7 +2,60 @@
 """Cálculos puros para pedidos-pendientes-produccion (testeables sin MySQL)."""
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+
+def es_tipo_art_fab_fabricado(tipo_art_fab: Any) -> bool:
+    """Paridad con ``mpr.services.TIPO_ART_FAB_FABRICADO`` (case-insensitive)."""
+    from mpr.services import TIPO_ART_FAB_FABRICADO
+
+    return str(tipo_art_fab or "").strip().lower() == TIPO_ART_FAB_FABRICADO.lower()
+
+
+def formula_cantidad_por_unidad_terminado(
+    cantidad_articulo: Any,
+    tipo_unidad: Optional[str] = None,
+    cantidad_unidad_display: Any = None,
+    cantidad_dividir: Any = None,
+) -> float:
+    """
+    Cantidad en unidad base de un componente por unidad de terminado (línea en_abm_formula).
+    """
+    qty = float(cantidad_articulo or 0)
+    if qty <= 0:
+        return 0.0
+    tipo = (tipo_unidad or "Unidad").strip()
+    if not tipo or tipo.upper() == "UNIDAD":
+        return qty
+    try:
+        from core.services.stock_presentaciones import factor_presentacion
+
+        factor = factor_presentacion(
+            tipo,
+            cantidad_unidad_display,
+            cantidad_dividir,
+            cantidad_dividir,
+        )
+        return qty * float(factor)
+    except Exception:
+        return qty
+
+
+def compute_stock_produccion_armable(
+    lineas: Sequence[Tuple[float, float]],
+) -> float:
+    """
+    Mínimo entre componentes de floor(saldo_semi / qty_por_terminado), mínimo 0.
+    Sin líneas válidas → 0.
+    """
+    mejor: Optional[int] = None
+    for saldo_semi, qty_por_unidad in lineas:
+        if qty_por_unidad <= 0:
+            continue
+        packs = int(math.floor(float(saldo_semi or 0) / qty_por_unidad))
+        mejor = packs if mejor is None else min(mejor, packs)
+    return float(max(0, mejor if mejor is not None else 0))
 
 
 def compute_disponible_backorder(pendiente_qty: float, stock_terminado: float) -> Tuple[float, float]:
