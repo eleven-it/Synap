@@ -69,10 +69,11 @@ APPS_MENU = [
                     {"label": _("Ingreso Mov. Stock"), "url": "stock:alta_movimiento", "icon": "add_circle", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_ingreso"},
                     {"label": _("Remito de Compra"), "url": "compras:remito_compra_form", "icon": "receipt", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_remito_compra"},
                     {"label": _("Remito de Venta"), "url": "stock:alta_movimiento", "icon": "receipt_long", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_remito_venta"},
-                    {"label": _("Pedido interno a depósito / compras"), "url": "stock:alta_movimiento", "icon": "swap_horiz", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_pedido_interno"},
+                    {"label": _("Pedido interno a depósito / compras"), "url": "stock:pedido_interno_lista", "icon": "swap_horiz", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_pedido_interno"},
                     {"label": _("Inventario"), "url": "stock:inventario", "icon": "inventory_2", "permission": "stock.consultas", "menu_item_id": "stock_mov_inventario"},
                     {"label": _("Inventario físico (campañas)"), "url": "stock:inventario_fisico_list", "icon": "fact_check", "permission": "stock.inventario_fisico.gestionar", "menu_item_id": "stock_inv_fisico_campanas"},
                     {"label": _("Conteo inventario físico"), "url": "stock:conteo_mis", "icon": "qr_code_scanner", "permission": "stock.inventario_fisico.contar", "menu_item_id": "stock_inv_fisico_conteo"},
+                    {"label": _("Cajas de preparación"), "url": "stock:prep_cajas", "icon": "inventory_2", "permission": "stock.preparacion_cajas", "menu_item_id": "stock_prep_cajas"},
                 ]
             },
             {

@@ -1,0 +1,20 @@
+{% extends "base_app.html" %}
+{% block title %}Pedidos internos | Synap{% endblock %}
+{% block content %}
+<main class="mx-auto max-w-6xl px-4 py-6 text-slate-900 dark:text-slate-100">
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div><p class="text-sm text-slate-500 dark:text-slate-400">Stock</p><h1 class="text-2xl font-bold">Pedidos internos</h1></div>
+    <a href="{% url 'stock:pedido_interno_nuevo' %}" class="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white">Nuevo pedido interno</a>
+  </div>
+  <p class="mb-4 text-sm text-slate-600 dark:text-slate-300">Los pedidos a depósito se pueden cargar después en una transferencia desde Ingreso Mov. Stock.</p>
+  <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <table class="min-w-[960px] w-full text-left text-sm">
+      <thead class="bg-slate-100 dark:bg-slate-900"><tr><th class="p-3">PEDI</th><th class="p-3">Fecha</th><th class="p-3">Tipo</th><th class="p-3">Estado</th><th class="p-3">Unidades</th><th class="p-3">Displays</th><th class="p-3">Bultos</th><th class="p-3">Pendiente (unid.)</th><th class="p-3">Movimiento</th></tr></thead>
+      <tbody>{% for pedido in pedidos %}
+        <tr class="border-t border-slate-200 dark:border-slate-700"><td class="p-3 font-semibold">{{ pedido.NroComprobante }}</td><td class="p-3">{{ pedido.Fecha|date:"d/m/Y" }}</td><td class="p-3">{{ pedido.tipo_pedido_interno }}</td><td class="p-3">{{ pedido.Estado }}</td><td class="p-3">{{ pedido.cantidad|floatformat:2 }}</td><td class="p-3">{{ pedido.displays|floatformat:2 }}</td><td class="p-3">{{ pedido.bultos|floatformat:2 }}</td><td class="p-3">{{ pedido.pendiente|floatformat:2 }}</td><td class="p-3">{{ pedido.CodigoMovimiento }}</td></tr>
+      {% empty %}<tr><td colspan="9" class="p-6 text-center text-slate-500">No hay pedidos internos para mostrar.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  <a href="{% url 'stock:alta_movimiento' %}" class="mt-5 inline-block text-blue-700 underline dark:text-blue-300">Ir a transferencia de stock</a>
+</main>
+{% endblock %}

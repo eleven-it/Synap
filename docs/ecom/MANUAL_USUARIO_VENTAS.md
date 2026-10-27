@@ -127,15 +127,60 @@ No confunda ambos valores: un cliente puede tener cupo en pesos y a la vez estar
 
 **Breadcrumb:** **Ventas / Pedidos / Vendedor · Cliente · Sucursal · Marca**.
 
+Use el botón **Ayuda** en la pantalla para abrir esta sección del manual.
+
 ### Para qué sirve
 
-Definir el **territorio comercial**: qué vendedor atiende a cada cliente, sucursal y marca.
+Definir el **territorio comercial**: qué vendedor atiende a cada **cliente**, en cada **sucursal**, para cada **marca**.
 
-### Pasos básicos
+### Reglas importantes
 
-1. Busque y seleccione vendedor, cliente, una o más sucursales y una o más marcas (mismo patrón de chips/checkboxes).
-2. Cree la relación; el sistema avisa si ya existe otro vendedor para la misma combinación. **PUM, PUS y PUW** se marcan juntas: al elegir una se incluyen las tres.
-3. Para dar de baja: **Anular** en una fila, o tildar varias (también en el encabezado de vendedor/cliente/sucursal) y **Anular seleccionadas**.
+- Por **cliente y sucursal**, cada **marca** solo puede estar asignada a **un vendedor**. Si intentás crear una relación que ya existe con otro vendedor, el sistema te avisa.
+- Las marcas **PUM**, **PUS** y **PUW** van **siempre juntas**: si marcás una de las tres, se incluyen las tres; si quitás una, se quitan las tres.
+
+### Pantalla en dos partes
+
+1. Arriba, la tarjeta **Nueva relación** (vendedor, cliente, sucursales y marcas).
+2. Abajo, el **listado** de relaciones ya cargadas, agrupado por vendedor → cliente → sucursal → marca. Podés expandir o contraer grupos y filtrar por vendedor.
+
+La pantalla se ve bien en **tema claro y oscuro**: los campos de búsqueda de vendedor y cliente muestran el texto con buen contraste.
+
+### Vendedor y cliente (búsqueda con lista)
+
+1. En **Vendedor** o **Cliente**, escribí parte del nombre para filtrar, o hacé clic en el campo para ver sugerencias.
+2. Elegí una fila de la lista (también podés usar las flechas ↑ ↓ y **Enter**).
+3. Debajo del campo aparece **Seleccionado:** con el nombre elegido. Si querés cambiar sin buscar de nuevo, usá **Quitar** y elegí otro.
+4. Si **reescribís** el texto para refinar la búsqueda, la selección **se mantiene** mientras el texto no sea distinto del nombre elegido. Al salir del campo (clic afuera o **Escape**), el cuadro vuelve a mostrar el nombre del seleccionado.
+5. **Sucursal** se habilita recién cuando hay un cliente elegido.
+
+### Sucursales (varias a la vez)
+
+1. Con el cliente elegido, abrí **Sucursal** y marcá una o más filas (casillas). En la lista también tenés **Todas** y **Ninguna**.
+2. Arriba de los chips verás un contador del estilo **3 de 12 sucursales** (cuántas elegiste del total del cliente).
+3. Los atajos **Todas** / **Ninguna** debajo del contador aplican a las sucursales ya elegidas para ese cliente.
+4. Cada sucursal elegida aparece como un **chip** (pastilla) con una ✕ para quitarla. Si hay muchas, se muestran hasta **8** chips y un botón **+N más** para ver el resto; después podés usar **Ver menos** para volver a la vista compacta.
+
+### Marcas (varias a la vez)
+
+1. En **Marca**, buscá y marcá una o más marcas (mismo esquema de casillas que en sucursales, con **Todas** / **Ninguna** en la lista).
+2. Recordá la regla de **PUM / PUS / PUW**: al tildar cualquiera de esas tres, el sistema agrega las tres.
+3. Las marcas elegidas se ven como chips debajo del campo.
+
+### Crear relación(es)
+
+1. Completá vendedor, cliente, al menos una sucursal y al menos una marca. El botón de crear se habilita cuando todo está listo.
+2. Al confirmar, se abre un **cuadro de diálogo** con el título **Asignar relación(es)**:
+   - Arriba queda fijo el encabezado; abajo, fijos **Cancelar** y **Confirmar asignación**.
+   - En el medio, un **resumen en una línea** (vendedor, cliente, cantidad de sucursales × marcas y total de relaciones que se van a crear).
+   - Podés abrir **Ver detalle** para ver la lista completa de sucursales y marcas; si el listado es largo, esa zona hace scroll dentro del cuadro.
+3. Leé el aviso: una marca por cliente y sucursal solo puede pertenecer a un vendedor. Si está todo bien, **Confirmar asignación**.
+
+### Consultar y anular
+
+1. En el listado inferior, expandí vendedor → cliente → sucursal hasta llegar a cada marca.
+2. Para **una** relación: **Anular** en la fila de la marca.
+3. Para **varias**: tildá las filas (o el casillero de un grupo para marcar todo ese vendedor, cliente o sucursal) y elegí **Anular seleccionadas**.
+4. En anulaciones múltiples, el cuadro **Anular relaciones** también tiene encabezado y botones fijos, texto resumen y **Ver detalle** con el listado desplegable. Confirmá solo si estás seguro: las relaciones dejan de estar activas (podés crear otras después).
 
 ---
 
@@ -465,4 +510,4 @@ Los permisos se asignan por **Puesto** en la administración de permisos Synap (
 
 ---
 
-*Manual de usuario – Ventas. Synap. Actualizado 25/07/2026.*
+*Manual de usuario – Ventas. Synap. Actualizado 27/10/2026.*
