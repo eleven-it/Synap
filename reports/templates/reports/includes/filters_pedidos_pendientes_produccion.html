@@ -1,25 +1,9 @@
 {% comment %}
-Filtros informe pedidos-pendientes-produccion: período, criterio, marcas, clientes/depósitos.
+Filtros pedidos-pendientes-produccion (paridad legacy PEDIDOS PENDIENTES VENDEDOR/MARCA).
 {% endcomment %}
 {% include "reports/includes/filters_period.html" %}
-{% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
+{% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" with ocultar_lista_precio=True ocultar_depositos=True %}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 w-full lg:col-span-6 mt-2">
-    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
-        Criterio de pendiente
-        <select name="criterio_pendiente" id="ppp_criterio_pendiente"
-                class="text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2">
-            <option value="backorder" selected>Backorder (PED Pendiente, cantidad pedida)</option>
-            <option value="saldo_comercial">Saldo comercial MPR (cantidad pendiente)</option>
-            <option value="en_preparacion">En preparación / Preparado</option>
-            <option value="saldo_no_entregado">Saldo no entregado (varios estados)</option>
-        </select>
-        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Configurable hasta definición de Lucho.</span>
-    </label>
-    <label class="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 mt-6 md:mt-0">
-        <input type="checkbox" name="solo_terminados" id="ppp_solo_terminados" value="1" checked
-               class="rounded border-slate-300 text-sky-600 focus:ring-sky-400">
-        Solo artículos terminados (tipo_art_fab)
-    </label>
     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0 md:col-span-2">
         Marcas
         <div class="relative">
@@ -32,6 +16,13 @@ Filtros informe pedidos-pendientes-produccion: período, criterio, marcas, clien
                 <div id="marcas_incluidos_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
             </div>
         </div>
-        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Vacío = todas las marcas.</span>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Vacío = todas las marcas (filtro «Vendedor - Marca» del legacy).</span>
+    </label>
+    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0 md:col-span-2">
+        Búsqueda por
+        <input type="search" name="ppp_busqueda" id="ppp_busqueda" autocomplete="off"
+               class="text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100"
+               placeholder="Código, cod. manual, artículo o marca…">
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Equivale al campo libre del informe VB6.</span>
     </label>
 </div>

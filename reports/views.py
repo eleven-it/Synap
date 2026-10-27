@@ -48,6 +48,7 @@ SLUGS_VENTAS_CON_PUNTO_VENTA = frozenset(
         "ventas-marca-superart",
         "ventas-bom-docenas",
         "ventas-marcas-mensual",
+        PEDIDOS_PENDIENTES_PRODUCCION_SLUG,
     }
 )
 

@@ -21,6 +21,7 @@ WHITELIST_VENTAS_PV = frozenset(
         "ventas-marca-superart",
         "ventas-bom-docenas",
         "ventas-marcas-mensual",
+        "pedidos-pendientes-produccion",
     }
 )
 
