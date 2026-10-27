@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from calendar import monthrange
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from core.utils.administranet_types import to_int_or_none
+from core.utils.administranet_types import to_date_or_none, to_int_or_none
 
 from mpr.reportes_transicion_lote_sql import (
     fetch_fabricado_primera_por_articulo_mes,
@@ -39,6 +40,42 @@ _MESES_CORTO = (
 def mes_actual_yyyy_mm(hoy: Optional[date] = None) -> str:
     d = hoy or date.today()
     return f"{d.year:04d}-{d.month:02d}"
+
+
+def _parse_fecha_iso(value: Any) -> Optional[date]:
+    iso = to_date_or_none(value)
+    if not iso:
+        return None
+    try:
+        return datetime.strptime(str(iso)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def primer_dia_mes_calendario(hoy: Optional[date] = None) -> date:
+    d = hoy or date.today()
+    return d.replace(day=1)
+
+
+def ultimo_dia_mes_calendario(hoy: Optional[date] = None) -> date:
+    d = hoy or date.today()
+    return d.replace(day=monthrange(d.year, d.month)[1])
+
+
+def meses_en_rango(desde: date, hasta: date) -> List[str]:
+    """Meses calendario AAAA-MM que intersectan [desde, hasta] (inclusive)."""
+    if desde > hasta:
+        desde, hasta = hasta, desde
+    out: List[str] = []
+    y, m = desde.year, desde.month
+    end_y, end_m = hasta.year, hasta.month
+    while (y, m) <= (end_y, end_m):
+        out.append(f"{y:04d}-{m:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return out
 
 
 def opciones_meses_selector(cantidad: int = 36, hoy: Optional[date] = None) -> List[Dict[str, str]]:
@@ -192,6 +229,14 @@ def parse_filtros_fabricados_superart(
     marcas_getlist: Optional[Sequence[str]] = None,
     hoy: Optional[date] = None,
 ) -> Dict[str, Any]:
+    ref = hoy or date.today()
+    desde_raw = (get_params.get("desde") or get_params.get("fecha_desde") or "").strip()
+    hasta_raw = (get_params.get("hasta") or get_params.get("fecha_hasta") or "").strip()
+    desde_d = _parse_fecha_iso(desde_raw) or primer_dia_mes_calendario(ref)
+    hasta_d = _parse_fecha_iso(hasta_raw) or ref
+    if hasta_d < desde_d:
+        desde_d, hasta_d = hasta_d, desde_d
+
     meses_raw: List[str] = []
     if hasattr(get_params, "getlist"):
         meses_raw = list(get_params.getlist("meses") or [])
@@ -199,9 +244,13 @@ def parse_filtros_fabricados_superart(
         single = (get_params.get("meses") or "").strip()
         if single:
             meses_raw = [p.strip() for p in single.split(",") if p.strip()]
-    meses = normalizar_meses_yyyy_mm(meses_raw)
+    meses_legacy = normalizar_meses_yyyy_mm(meses_raw)
+    if meses_legacy and not desde_raw and not hasta_raw:
+        meses = meses_legacy
+    else:
+        meses = meses_en_rango(desde_d, hasta_d)
     if not meses:
-        meses = [mes_actual_yyyy_mm(hoy)]
+        meses = [mes_actual_yyyy_mm(ref)]
 
     marcas: List[int] = []
     raw_marcas = list(marcas_getlist or [])
@@ -214,10 +263,73 @@ def parse_filtros_fabricados_superart(
 
     busqueda = (get_params.get("q_superart") or get_params.get("q") or "").strip()
     return {
+        "desde_iso": desde_d.isoformat(),
+        "hasta_iso": hasta_d.isoformat(),
         "meses": meses,
         "marcas_incluidos": marcas,
         "busqueda_superart": busqueda,
     }
+
+
+def buscar_marcas_predictivo(
+    base_empresa: str,
+    q: str,
+    *,
+    limit: int = 25,
+) -> List[Dict[str, Any]]:
+    """Sugerencias de marca para autocompletar (value/label)."""
+    from stock.services.inventario_tabla import listar_marcas_catalogo
+
+    texto = (q or "").strip().lower()
+    if not texto or not (base_empresa or "").strip():
+        return []
+    catalogo = listar_marcas_catalogo(base_empresa)
+    out: List[Dict[str, Any]] = []
+    for item in catalogo:
+        label = str(item.get("label") or "")
+        if texto in label.lower():
+            out.append({"value": item.get("value"), "label": label})
+            if len(out) >= max(1, limit):
+                break
+    return out
+
+
+def buscar_superart_predictivo(
+    base_empresa: str,
+    q: str,
+    *,
+    limit: int = 25,
+) -> List[Dict[str, str]]:
+    """Superartículos distintos (id_manual) para autocompletar."""
+    texto = (q or "").strip()
+    if len(texto) < 1 or not (base_empresa or "").strip():
+        return []
+    lim = max(1, min(int(limit or 25), 50))
+    like = f"%{texto}%"
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT TRIM(a.id_manual) AS codigo
+                FROM articulo a
+                WHERE TRIM(COALESCE(a.id_manual, '')) <> ''
+                  AND a.id_manual LIKE %s
+                ORDER BY codigo
+                LIMIT %s
+                """,
+                (like, lim),
+            )
+            rows = cursor.fetchall() or []
+    except Exception as exc:
+        logger.warning("buscar_superart_predictivo %s: %s", base_empresa, exc)
+        return []
+    out: List[Dict[str, str]] = []
+    for row in rows:
+        codigo = str((row.get("codigo") if isinstance(row, dict) else row[0]) or "").strip()
+        if not codigo:
+            continue
+        out.append({"codigo": codigo, "descripcion": codigo})
+    return out
 
 
 def reporte_mpr_fabricados_superart(

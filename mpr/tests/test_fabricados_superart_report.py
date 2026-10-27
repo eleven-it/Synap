@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests reporte fabricados_superart (agrupación y SQL helper)."""
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -134,8 +135,10 @@ class TestParseFiltros(SimpleTestCase):
             def getlist(self, k):
                 return []
 
-        f = parse_filtros_fabricados_superart(Q())
-        self.assertEqual(f["meses"], [mes_actual_yyyy_mm()])
+        f = parse_filtros_fabricados_superart(Q(), hoy=date(2026, 10, 15))
+        self.assertEqual(f["meses"], [mes_actual_yyyy_mm(date(2026, 10, 15))])
+        self.assertEqual(f["desde_iso"], "2026-10-01")
+        self.assertEqual(f["hasta_iso"], "2026-10-15")
 
 
 class TestReporteIntegracion(SimpleTestCase):

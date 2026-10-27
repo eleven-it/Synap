@@ -82,6 +82,14 @@ function mprReportesHub() {
         enviarFiltros() {
             const form = this.$refs.filtrosForm;
             if (!form) return;
+            const reporteInput = form.querySelector('[name="reporte"]');
+            const reporteActual = reporteInput ? reporteInput.value : '';
+            if (reporteActual === 'fabricados_superart') {
+                const params = new URLSearchParams(window.location.search);
+                params.set('presentacion', this.presentacion);
+                window.location.search = '?' + params.toString();
+                return;
+            }
             if (typeof window.mprShowPostLoadingProgress === 'function') {
                 window.mprShowPostLoadingProgress({
                     title: form.getAttribute('data-mpr-loading-title') || 'Reconstruyendo análisis',
