@@ -16,6 +16,7 @@ GRUPOS_REPORTES: Dict[str, Dict[str, Any]] = {
             "operario_mensual": "Por operario (mensual)",
             "operario_maquina": "Por operario y máquina",
             "cadena": "Cadena pipeline",
+            "fabricados_superart": "Fabricados por superartículo",
             "pendiente": "Pendiente componentes",
         },
     },
@@ -63,6 +64,7 @@ PARTIALS: Dict[Tuple[str, str], str] = {
     ("produccion", "operario_mensual"): "mpr/reportes/partials/operario_mensual.html",
     ("produccion", "operario_maquina"): "mpr/reportes/partials/operario_maquina.html",
     ("produccion", "cadena"): "mpr/reportes/partials/cadena_pipeline.html",
+    ("produccion", "fabricados_superart"): "mpr/reportes/partials/fabricados_superart.html",
     ("produccion", "pendiente"): "mpr/reportes/partials/pendiente_componentes.html",
     ("demanda", "brecha_pack"): "mpr/reportes/partials/brecha_pack.html",
     ("demanda", "pedidos_estado"): "mpr/reportes/partials/pedidos_estado.html",
@@ -157,10 +159,16 @@ CSV_COLUMNAS: Dict[Tuple[str, str], List[Tuple[str, str]]] = {
 }
 
 # Reportes que usan fecha_corte propia en lugar del período Desde/Hasta del shell.
-REPORTES_IGNORAN_PERIODO_SHELL = frozenset({("demanda", "inventario_deposito")})
+REPORTES_IGNORAN_PERIODO_SHELL = frozenset({
+    ("demanda", "inventario_deposito"),
+    ("produccion", "fabricados_superart"),
+})
 
 # Reportes con export Excel (?format=xlsx) además de CSV.
-REPORTES_EXPORT_XLSX = frozenset({("demanda", "inventario_deposito")})
+REPORTES_EXPORT_XLSX = frozenset({
+    ("demanda", "inventario_deposito"),
+    ("produccion", "fabricados_superart"),
+})
 
 
 def reporte_soporta_export_xlsx(grupo: str, reporte: str) -> bool:

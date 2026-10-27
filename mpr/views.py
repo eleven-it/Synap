@@ -4440,6 +4440,14 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         modo = context.get("modo_presentacion") or "docenas"
         titulo = context.get("titulo_reporte") or "reporte_mpr"
 
+        if grupo == "produccion" and reporte == "fabricados_superart":
+            from mpr.export import exportar_fabricados_superart_csv
+
+            return exportar_fabricados_superart_csv(
+                context,
+                modo=context.get("modo_presentacion") or "docenas",
+            )
+
         if grupo == "trazabilidad" and reporte == "kardex_articulo":
             analisis = context.get("_analisis_trazabilidad")
             if not analisis:
@@ -4485,6 +4493,14 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         if not reporte_soporta_export_xlsx(grupo, reporte):
             return HttpResponse("Exportación Excel no disponible para este reporte.", status=400)
 
+        if grupo == "produccion" and reporte == "fabricados_superart":
+            from mpr.export import exportar_fabricados_superart_xlsx
+
+            return exportar_fabricados_superart_xlsx(
+                context,
+                titulo=context.get("titulo_reporte") or "Fabricados por superartículo",
+            )
+
         if grupo == "demanda" and reporte == "inventario_deposito":
             fecha_corte = context.get("fecha_corte_iso")
             fecha_obj = None
@@ -4507,6 +4523,7 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         from mpr.reportes_hub import (
             GRUPOS_REPORTES,
             PARTIALS,
+            REPORTES_IGNORAN_PERIODO_SHELL,
             parse_periodo,
             reporte_soporta_export_xlsx,
             resolver_grupo_reporte,
@@ -4533,6 +4550,7 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
             "titulo_reporte": titulo_reporte(grupo, reporte),
             "partial_template": PARTIALS.get((grupo, reporte), ""),
             "soporta_export_xlsx": reporte_soporta_export_xlsx(grupo, reporte),
+            "ignora_periodo_shell": (grupo, reporte) in REPORTES_IGNORAN_PERIODO_SHELL,
             **periodo,
         })
         context["tipo_reporte"] = f"{grupo}_{reporte}"
@@ -4581,6 +4599,50 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
             data = reporte_mpr_cadena_pipeline(base_empresa, fd_iso, fh_iso)
             kpis = data.get("kpis") or {}
             filas = data.get("filas") or []
+        elif grupo == "produccion" and reporte == "fabricados_superart":
+            from django.http import QueryDict
+
+            from mpr.services_fabricados_superart import (
+                opciones_meses_selector,
+                parse_filtros_fabricados_superart,
+                reporte_mpr_fabricados_superart,
+            )
+
+            get_marcas = (
+                self.request.GET.getlist("marcas_incluidos")
+                if hasattr(self.request.GET, "getlist")
+                else []
+            )
+            filtros_fab = parse_filtros_fabricados_superart(
+                self.request.GET,
+                marcas_getlist=get_marcas,
+            )
+            context.update(_context_filtro_marcas(self.request, base_empresa))
+            context["filtros_fabricados_superart"] = filtros_fab
+            context["meses_selector_opciones"] = opciones_meses_selector()
+            export_q = QueryDict(mutable=True)
+            if hasattr(self.request.GET, "lists"):
+                for key in self.request.GET:
+                    for val in self.request.GET.getlist(key):
+                        export_q.appendlist(key, val)
+            elif isinstance(self.request.GET, dict):
+                for key, val in self.request.GET.items():
+                    if isinstance(val, list):
+                        for item in val:
+                            export_q.appendlist(key, item)
+                    else:
+                        export_q[key] = val
+            export_q.pop("format", None)
+            context["fabricados_export_query"] = export_q.urlencode()
+            fab_raw = reporte_mpr_fabricados_superart(
+                base_empresa,
+                meses=filtros_fab["meses"],
+                marcas_incluidos=filtros_fab["marcas_incluidos"] or None,
+                busqueda_superart=filtros_fab["busqueda_superart"],
+            )
+            kpis = fab_raw.get("kpis") or {}
+            filas = fab_raw.get("filas_superart") or []
+            context["_fabricados_superart_raw"] = fab_raw
         elif grupo == "produccion" and reporte == "pendiente":
             data = reporte_mpr_pendiente_componentes(base_empresa)
             kpis = data.get("kpis") or {}
@@ -4842,6 +4904,33 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                 "etiqueta_cantidad_corta": (
                     "doc. · u." if modo_presentacion == "docenas" else "u."
                 ),
+            }
+        elif grupo == "produccion" and reporte == "fabricados_superart":
+            from mpr.reportes_presentacion import preparar_fabricados_superart_presentacion
+
+            fab_raw = context.pop("_fabricados_superart_raw", {})
+            fab_ctx = preparar_fabricados_superart_presentacion(fab_raw, modo_presentacion)
+            reporte_ctx = {
+                "kpis": fab_ctx.get("kpis") or kpis,
+                "filas": fab_ctx.get("filas_superart") or [],
+                "filas_superart": fab_ctx.get("filas_superart") or [],
+                "meses": fab_ctx.get("meses") or [],
+                "mes_labels": fab_ctx.get("mes_labels") or {},
+                "meses_columnas": fab_ctx.get("meses_columnas") or [],
+                "totales_columnas": fab_ctx.get("totales_columnas") or [],
+                "total_general": fab_ctx.get("total_general", 0),
+                "total_general_display": fab_ctx.get("total_general_display"),
+                "filtros_fabricados_superart": context.get("filtros_fabricados_superart"),
+                "meses_selector_opciones": context.get("meses_selector_opciones"),
+                "fabricados_export_query": context.get("fabricados_export_query"),
+                "marcas_catalogo": context.get("marcas_catalogo"),
+                "dias": dias,
+                "eventos": eventos,
+                "totales": totales,
+                "meta": meta,
+                "modo_presentacion": modo_presentacion,
+                "soporta_export_xlsx": context.get("soporta_export_xlsx"),
+                "empty_titulo": "Sin fabricado de 1ra en los meses seleccionados.",
             }
         elif grupo == "demanda" and reporte == "inventario_deposito":
             from mpr.reportes_presentacion import preparar_inventario_deposito_presentacion

@@ -437,3 +437,64 @@ def _fmt_fecha_inventario(value: Any) -> str:
     if isinstance(value, date):
         return value.strftime("%d/%m/%Y")
     return str(value or "")
+
+
+def _aplicar_display_por_mes(
+    por_mes: Dict[str, Any],
+    meses: List[str],
+    modo: str,
+) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for m in meses:
+        out[m] = formatear_cantidad_reporte(por_mes.get(m, 0), modo)
+    return out
+
+
+def _columnas_mes_cantidad(
+    por_mes: Dict[str, Any],
+    meses: List[str],
+    modo: str,
+) -> List[Dict[str, str]]:
+    disp = _aplicar_display_por_mes(por_mes, meses, modo)
+    return [{"ym": m, "display": disp.get(m, "0")} for m in meses]
+
+
+def preparar_fabricados_superart_presentacion(
+    data: Dict[str, Any],
+    modo: str,
+) -> Dict[str, Any]:
+    """Añade *_display por mes y totales para el reporte fabricados_superart."""
+    meses = list(data.get("meses") or [])
+    mes_labels = data.get("mes_labels") or {}
+    meses_columnas = [{"ym": m, "label": mes_labels.get(m, m)} for m in meses]
+    filas = []
+    for sa in data.get("filas_superart") or []:
+        row = dict(sa)
+        row["columnas_mes"] = _columnas_mes_cantidad(sa.get("por_mes") or {}, meses, modo)
+        row["total_display"] = formatear_cantidad_reporte(sa.get("total", 0), modo)
+        arts = []
+        for art in sa.get("articulos") or []:
+            ar = dict(art)
+            ar["columnas_mes"] = _columnas_mes_cantidad(art.get("por_mes") or {}, meses, modo)
+            ar["total_display"] = formatear_cantidad_reporte(art.get("total", 0), modo)
+            arts.append(ar)
+        row["articulos"] = arts
+        filas.append(row)
+    totales_por_mes = data.get("totales_por_mes") or {}
+    totales_columnas = _columnas_mes_cantidad(totales_por_mes, meses, modo)
+    kpis = dict(data.get("kpis") or {})
+    kpis["total_fabricado_primera_display"] = formatear_cantidad_reporte(
+        kpis.get("total_fabricado_primera", 0), modo
+    )
+    kpis["mes_pico_cantidad_display"] = formatear_cantidad_reporte(
+        kpis.get("mes_pico_cantidad", 0), modo
+    )
+    return {
+        **data,
+        "meses_columnas": meses_columnas,
+        "filas_superart": filas,
+        "totales_columnas": totales_columnas,
+        "total_general_display": formatear_cantidad_reporte(data.get("total_general", 0), modo),
+        "kpis": kpis,
+        "modo_presentacion": modo,
+    }
