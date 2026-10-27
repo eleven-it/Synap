@@ -370,6 +370,8 @@ def exportar_fabricados_superart_csv(
     """CSV consolidado por superartículo (mismas columnas que la tabla principal)."""
     meses_columnas = context.get("meses_columnas") or []
     filas = context.get("filas_superart") or []
+    filtros = context.get("filtros_fabricados_superart") or {}
+    superarts_filtro = filtros.get("superarts_incluidos") or []
     columnas: List[Tuple[str, str]] = [
         ("codigo_superart", "Código superartículo"),
         ("descripcion_superart", "Descripción superartículo"),
@@ -380,6 +382,13 @@ def exportar_fabricados_superart_csv(
     columnas.append(("total_display", "Total"))
 
     csv_rows: List[Dict[str, Any]] = []
+    if superarts_filtro:
+        csv_rows.append(
+            {
+                "codigo_superart": "Filtro superartículos",
+                "descripcion_superart": ", ".join(str(s) for s in superarts_filtro),
+            }
+        )
     for sa in filas:
         row = {
             "codigo_superart": sa.get("codigo_superart") or "",
@@ -410,6 +419,8 @@ def exportar_fabricados_superart_xlsx(
     titulo: str = "Fabricados por superartículo",
 ) -> HttpResponse:
     """Excel con hojas Por superartículo y Detalle por artículo."""
+    filtros = context.get("filtros_fabricados_superart") or {}
+    superarts_filtro = filtros.get("superarts_incluidos") or []
     import openpyxl
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
@@ -441,6 +452,10 @@ def exportar_fabricados_superart_xlsx(
     ws1.title = "Por superartículo"
     h1 = ["Código", "Descripción"] + [c.get("label") or c.get("ym") for c in meses_columnas] + ["Total"]
     rows1: List[List[Any]] = []
+    if superarts_filtro:
+        note = ["Filtro superartículos", ", ".join(str(s) for s in superarts_filtro)]
+        note.extend([""] * (len(h1) - 2))
+        rows1.append(note)
     for sa in context.get("filas_superart") or []:
         vals = [
             sa.get("codigo_superart") or "",

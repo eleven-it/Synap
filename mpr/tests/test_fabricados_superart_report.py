@@ -13,6 +13,7 @@ from mpr.services_fabricados_superart import (
     SIN_SUPERART_LABEL,
     agrupar_fabricados_por_superart,
     parse_filtros_fabricados_superart,
+    parse_superarts_incluidos_desde_get,
     reporte_mpr_fabricados_superart,
     superart_desde_id_manual,
 )
@@ -27,17 +28,22 @@ class TestNormalizarMeses(SimpleTestCase):
 
 
 class TestAgrupacionFabricados(SimpleTestCase):
-    def _agrupar(self, filas, meses, busqueda=""):
+    def _agrupar(self, filas, meses, superarts=None, busqueda=""):
         desc = {
             1: ("ART-1", "Artículo uno"),
             2: ("ART-2", "Artículo dos"),
             3: ("ART-3", "Sin manual"),
         }
+        kwargs = {}
+        if superarts is not None:
+            kwargs["superarts_incluidos"] = superarts
+        else:
+            kwargs["busqueda_superart"] = busqueda
         return agrupar_fabricados_por_superart(
             filas,
             meses,
             desc,
-            busqueda_superart=busqueda,
+            **kwargs,
         )
 
     def test_agrupa_por_superart_y_suma_meses(self):
@@ -106,7 +112,7 @@ class TestAgrupacionFabricados(SimpleTestCase):
         r = self._agrupar(filas, ["2026-01"])
         self.assertEqual(len(r["filas_superart"]), 300)
 
-    def test_busqueda_superart(self):
+    def test_busqueda_superart_un_valor_legacy(self):
         filas = [
             {"id_articulo": 1, "id_manual": "ALPHA", "ym": "2026-01", "cantidad": 1},
             {"id_articulo": 2, "id_manual": "BETA", "ym": "2026-01", "cantidad": 1},
@@ -115,6 +121,16 @@ class TestAgrupacionFabricados(SimpleTestCase):
         self.assertEqual(len(r["filas_superart"]), 1)
         self.assertEqual(r["filas_superart"][0]["codigo_superart"], "BETA")
 
+    def test_filtro_varios_superarts_or(self):
+        filas = [
+            {"id_articulo": 1, "id_manual": "ALPHA", "ym": "2026-01", "cantidad": 1},
+            {"id_articulo": 2, "id_manual": "BETA", "ym": "2026-01", "cantidad": 2},
+            {"id_articulo": 3, "id_manual": "GAMMA", "ym": "2026-01", "cantidad": 3},
+        ]
+        r = self._agrupar(filas, ["2026-01"], superarts=["ALPHA", "GAMMA"])
+        codes = {row["codigo_superart"] for row in r["filas_superart"]}
+        self.assertEqual(codes, {"ALPHA", "GAMMA"})
+
     def test_orden_por_total_desc(self):
         filas = [
             {"id_articulo": 1, "id_manual": "LOW", "ym": "2026-01", "cantidad": 1},
@@ -122,6 +138,26 @@ class TestAgrupacionFabricados(SimpleTestCase):
         ]
         r = self._agrupar(filas, ["2026-01"])
         self.assertEqual(r["filas_superart"][0]["codigo_superart"], "HIGH")
+
+
+class TestParseSuperarts(SimpleTestCase):
+    def test_getlist_repetido(self):
+        from django.http import QueryDict
+
+        q = QueryDict("q_superart=SA1&q_superart=SA2")
+        self.assertEqual(parse_superarts_incluidos_desde_get(q), ["SA1", "SA2"])
+
+    def test_coma_y_valor_unico(self):
+        from django.http import QueryDict
+
+        self.assertEqual(
+            parse_superarts_incluidos_desde_get(QueryDict("q_superart=ALPHA,BETA")),
+            ["ALPHA", "BETA"],
+        )
+        self.assertEqual(
+            parse_superarts_incluidos_desde_get(QueryDict("q_superart=BETA")),
+            ["BETA"],
+        )
 
 
 class TestParseFiltros(SimpleTestCase):
@@ -168,6 +204,7 @@ class TestExportExcelDosHojas(SimpleTestCase):
         from mpr.export import exportar_fabricados_superart_xlsx
 
         ctx = {
+            "filtros_fabricados_superart": {"superarts_incluidos": ["SA1", "SA2"]},
             "meses_columnas": [{"ym": "2026-01", "label": "Ene 2026"}],
             "filas_superart": [
                 {
