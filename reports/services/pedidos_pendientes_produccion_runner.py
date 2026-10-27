@@ -34,7 +34,7 @@ IMPORTE_PENDIENTE_NOTA = (
 )
 
 PPP_FOOTER_NOTA = (
-    "Stock actual global: depósitos activos con Suma stock=Si. Disponible = terminado − pendiente. "
+    "Stock actual global: depósitos activos con Suma stock=Si. Disponible = max(0, terminado − pendiente). "
     "Backorder = pendiente sin cobertura de terminado. Producción se muestra aparte. "
     "Importe neto sin IVA ni descuento de cabecera."
 )

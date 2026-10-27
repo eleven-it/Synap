@@ -23,7 +23,7 @@
   });
 
   const FOOTER_NOTA =
-    "Stock actual global: depósitos activos con Suma stock=Si. Disponible = terminado − pendiente. " +
+    "Stock actual global: depósitos activos con Suma stock=Si. Disponible = max(0, terminado − pendiente). " +
     "Backorder = pendiente sin cobertura de terminado. Producción se muestra aparte. " +
     "Importe neto sin IVA ni descuento de cabecera.";
 
@@ -36,7 +36,7 @@
     { key: "pendiente_qty", label: "Pedido pendiente", align: "right", sortable: true, type: "unit" },
     { key: "stock_terminado", label: "Stock terminado", align: "right", sortable: true, type: "unit" },
     { key: "stock_produccion", label: "Stock producción", align: "right", sortable: true, type: "unit" },
-    { key: "disponible", label: "Disponible", align: "right", sortable: true, type: "unit", cellClass: "ppp-disponible" },
+    { key: "disponible", label: "Disponible", align: "right", sortable: true, type: "unit" },
     { key: "backorder", label: "Backorder", align: "right", sortable: true, type: "unit", cellClass: "ppp-backorder" },
     { key: "importe_pendiente", label: "Importe pendiente", align: "right", sortable: true, type: "money" },
     { key: "mpr_demanda_pedido", label: "MPR demanda", align: "right", sortable: true, type: "unit" },
@@ -118,9 +118,6 @@
   }
 
   function cellExtraClass(col, row) {
-    if (col.key === "disponible" && Number(row.disponible) < 0) {
-      return " text-red-600 dark:text-red-400 font-semibold";
-    }
     if (col.key === "backorder" && Number(row.backorder) > 0) {
       return " bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 font-semibold";
     }
