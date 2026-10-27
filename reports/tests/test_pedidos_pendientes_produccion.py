@@ -103,7 +103,11 @@ class TestPermisosYSlug(unittest.TestCase):
         report = ReportDefinition(slug=PEDIDOS_PENDIENTES_PRODUCCION_SLUG, name="T", category="operational")
         user = MagicMock(base_empresa=None)
         svc = QueryRunnerService(user)
-        with patch.object(svc, "_resolve_period_dates", return_value=(None, None)):
+        with patch.object(
+            QueryRunnerService,
+            "_resolve_period_dates",
+            return_value=(None, None),
+        ):
             result = svc.run(report, {"filters": {}})
         self.assertTrue(any("fecha" in n.lower() for n in result.notes))
 
