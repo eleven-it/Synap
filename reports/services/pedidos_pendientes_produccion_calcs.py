@@ -14,26 +14,50 @@ def compute_disponible_backorder(pendiente_qty: float, stock_terminado: float) -
     return disponible, backorder
 
 
+def compute_reserva_reposicion(
+    pendiente_qty: float,
+    stock_terminado: float,
+    stock_reserva: float,
+) -> Tuple[float, float, float]:
+    """
+    Reserva objetivo = stock_reserva del artículo.
+    Reserva disponible = min(objetivo, max(0, terminado − pendiente)).
+    Reposición reserva = max(0, objetivo − disponible).
+    """
+    pend = float(pendiente_qty or 0)
+    term = float(stock_terminado or 0)
+    reserva_objetivo = float(stock_reserva or 0) if stock_reserva is not None else 0.0
+    reserva_disponible = min(reserva_objetivo, max(0.0, term - pend))
+    reposicion_reserva = max(0.0, reserva_objetivo - reserva_disponible)
+    return (
+        round(reserva_objetivo, 4),
+        round(reserva_disponible, 4),
+        round(reposicion_reserva, 4),
+    )
+
+
 def compute_mpr_pack_fields(
     pendiente_qty: float,
     stock_terminado: float,
     stock_reserva: float,
 ) -> Dict[str, float]:
     """
-    Misma fórmula que MPR pack (listar_demanda_pack_desde_pedidos) pero P_ped = pendiente del informe
-    y S = solo stock en depósitos terminado con suma_stock (columna stock_terminado del informe).
+    MPR a fabricar = max(0, pendiente + reserva − stock terminado)
+    = backorder + reposición reserva (invariante del informe).
     """
     p_ped = float(pendiente_qty or 0)
     st = float(stock_terminado or 0)
     reserva = float(stock_reserva or 0) if stock_reserva is not None else 0.0
-    a_fab = max(0.0, p_ped + reserva - st)
-    brecha = round(p_ped - a_fab, 4)
+    _, backorder = compute_disponible_backorder(p_ped, st)
+    res_obj, res_disp, repos = compute_reserva_reposicion(p_ped, st, reserva)
+    a_fab = round(max(0.0, p_ped + reserva - st), 4)
     return {
         "mpr_demanda_pedido": round(p_ped, 4),
-        "mpr_stock_terminado": round(st, 4),
-        "mpr_stock_reserva": round(reserva, 4),
-        "mpr_cantidad_a_fabricar": round(a_fab, 4),
-        "mpr_brecha_vs_pendiente": brecha,
+        "reserva_objetivo": res_obj,
+        "reserva_disponible": res_disp,
+        "reposicion_reserva": repos,
+        "mpr_cantidad_a_fabricar": a_fab,
+        "_backorder_check": backorder,
     }
 
 
@@ -44,6 +68,7 @@ def enrich_articulo_row(row: Dict[str, Any], stock_reserva: float = 0.0) -> None
     row["disponible"] = disp
     row["backorder"] = bo
     mpr = compute_mpr_pack_fields(pend, term, stock_reserva)
+    mpr.pop("_backorder_check", None)
     row.update(mpr)
 
 
@@ -109,7 +134,7 @@ def classify_depositos_stock_columns(
         except (TypeError, ValueError):
             continue
         tipo = _norm_tipo(dep.get("tipo_mpr"))
-        if tipo in ("terminado",):
+        if tipo in ("terminado", "consignacion"):
             terminado.append(cod_int)
         elif tipo in ("produccion", "producción"):
             produccion.append(cod_int)
@@ -133,6 +158,9 @@ def aggregate_totals(articulos: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "total_backorder": _sum("backorder"),
         "total_importe_pendiente": round(_sum("importe_pendiente"), 2),
         "total_mpr_demanda_pedido": _sum("mpr_demanda_pedido"),
+        "total_reserva_objetivo": _sum("reserva_objetivo"),
+        "total_reserva_disponible": _sum("reserva_disponible"),
+        "total_reposicion_reserva": _sum("reposicion_reserva"),
         "total_mpr_cantidad_a_fabricar": _sum("mpr_cantidad_a_fabricar"),
     }
 

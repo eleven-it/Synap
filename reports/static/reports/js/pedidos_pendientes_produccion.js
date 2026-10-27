@@ -40,8 +40,10 @@
     { key: "backorder", label: "Backorder", align: "right", sortable: true, type: "unit", cellClass: "ppp-backorder" },
     { key: "importe_pendiente", label: "Importe pendiente", align: "right", sortable: true, type: "money" },
     { key: "mpr_demanda_pedido", label: "MPR demanda", align: "right", sortable: true, type: "unit" },
+    { key: "reserva_objetivo", label: "Reserva objetivo", align: "right", sortable: true, type: "unit" },
+    { key: "reserva_disponible", label: "Reserva disponible", align: "right", sortable: true, type: "unit" },
+    { key: "reposicion_reserva", label: "Reposición reserva", align: "right", sortable: true, type: "unit" },
     { key: "mpr_cantidad_a_fabricar", label: "MPR a fabricar", align: "right", sortable: true, type: "unit" },
-    { key: "mpr_brecha_vs_pendiente", label: "Brecha", align: "right", sortable: true, type: "unit", cellClass: "ppp-brecha" },
   ];
 
   const TOTAL_KEYS = {
@@ -52,6 +54,9 @@
     backorder: "total_backorder",
     importe_pendiente: "total_importe_pendiente",
     mpr_demanda_pedido: "total_mpr_demanda_pedido",
+    reserva_objetivo: "total_reserva_objetivo",
+    reserva_disponible: "total_reserva_disponible",
+    reposicion_reserva: "total_reposicion_reserva",
     mpr_cantidad_a_fabricar: "total_mpr_cantidad_a_fabricar",
   };
 
@@ -120,11 +125,6 @@
   function cellExtraClass(col, row) {
     if (col.key === "backorder" && Number(row.backorder) > 0) {
       return " bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 font-semibold";
-    }
-    if (col.key === "mpr_brecha_vs_pendiente") {
-      const n = Number(row.mpr_brecha_vs_pendiente);
-      if (n < 0) return " text-red-600 dark:text-red-400";
-      if (n > 0) return " text-emerald-700 dark:text-emerald-400";
     }
     return "";
   }
@@ -222,10 +222,6 @@
           return;
         }
         if (idx < 5) return;
-        if (col.key === "mpr_brecha_vs_pendiente") {
-          body += '<td class="text-right"></td>';
-          return;
-        }
         if (TOTAL_KEYS[col.key]) {
           const tkey = TOTAL_KEYS[col.key];
           const val = totals[tkey];

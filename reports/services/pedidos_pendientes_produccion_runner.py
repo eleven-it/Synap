@@ -34,9 +34,12 @@ IMPORTE_PENDIENTE_NOTA = (
 )
 
 PPP_FOOTER_NOTA = (
-    "Stock actual global: depósitos activos con Suma stock=Si. Disponible = max(0, terminado − pendiente). "
-    "Backorder = pendiente sin cobertura de terminado. Producción se muestra aparte. "
-    "Importe neto sin IVA ni descuento de cabecera."
+    "Stock terminado: depósitos activos con Suma stock=Si y tipo Terminado o Consignación. "
+    "Disponible = max(0, terminado − pendiente). Backorder = pendiente sin cobertura de terminado. "
+    "Reserva objetivo = stock_reserva; reserva disponible = min(R, max(0, terminado − pendiente)); "
+    "reposición reserva = max(0, R − reserva disponible). "
+    "MPR a fabricar = backorder + reposición = max(0, pendiente + reserva − terminado). "
+    "Producción se muestra aparte. Importe neto sin IVA ni descuento de cabecera."
 )
 
 
@@ -289,9 +292,8 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
     notes = [
         f"Período pedidos (sp.Fecha): {svc._format_date(fecha_inicio)} a {svc._format_date(fecha_fin)}",
         "Pendiente: PED en estado Pendiente, cantidad = stockp.Cantidad (backorder).",
-        "Stock terminado/producción: depósitos activos con suma_stock=Si y tipo_mpr Terminado/Producción.",
-        "MPR: P_ped = pendiente del informe; a fabricar = max(0, P_ped + reserva − stock terminado); "
-        "brecha = pendiente − a fabricar (misma base de líneas que el informe).",
+        "Stock terminado: depósitos Terminado y Consignación (suma_stock=Si); producción: tipo Producción.",
+        "MPR: reserva objetivo/disponible/reposición; a fabricar = backorder + reposición = max(0, P+R−terminado).",
         IMPORTE_PENDIENTE_NOTA,
         f"Filas: {totals.get('row_count', 0)}.",
     ]
