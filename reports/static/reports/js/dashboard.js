@@ -77,6 +77,7 @@ function detectReportType() {
     "sales_summary",
     "total-consolidado-operativo",
     "bo-stock-facturacion",
+    "pedidos-pendientes-produccion",
     "ventas-objetivos-vs-bo",
     "ventas-por-vendedor",
     "ventas-por-articulo",
@@ -112,6 +113,10 @@ function isVentasNetasSlug(slug) {
 }
 
 const isInventarioDepositoSlug = (slug) => slug === "inventario-deposito-articulo";
+
+function isPedidosPendientesProduccionSlug(slug) {
+  return slug === "pedidos-pendientes-produccion";
+}
 
 /** Informes con doble período (facturación/remitos + backorder), mismos filtros que BO. */
 function isInformeBoDualPeriodo(slug) {
@@ -6937,7 +6942,12 @@ if (dashboardRoot) {
       }
 
       // Cargar depósitos incluidos (BO, Objetivos vs BO, stock existencias e inventario)
-      if (isInformeBoDualPeriodo(reportSlug) || reportSlug === "stock-existencias" || isInventarioDepositoSlug(reportSlug)) {
+      if (
+        isInformeBoDualPeriodo(reportSlug) ||
+        reportSlug === "stock-existencias" ||
+        isPedidosPendientesProduccionSlug(reportSlug) ||
+        isInventarioDepositoSlug(reportSlug)
+      ) {
         const depositosResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=depositos`, {
           headers: {
             "X-Requested-With": "XMLHttpRequest",
@@ -6965,7 +6975,7 @@ if (dashboardRoot) {
         }
       }
 
-      if (reportSlug === "stock-existencias") {
+      if (reportSlug === "stock-existencias" || isPedidosPendientesProduccionSlug(reportSlug)) {
         const filterBase = `${apiUrl.replace("/query/", "/filters/")}`;
         const headers = { "X-Requested-With": "XMLHttpRequest" };
         const loadTags = async (type, jsonKey, selectId, initLabel) => {
@@ -7000,10 +7010,18 @@ if (dashboardRoot) {
         };
         try {
           await loadTags("marcas", "marcas", "marcas_incluidos", "marcas");
-          await loadTags("rubros", "rubros", "rubros_incluidos", "rubros");
-          await loadTags("subrubros", "subrubros", "subrubros_incluidos", "subrubros");
+          if (reportSlug === "stock-existencias") {
+            await loadTags("rubros", "rubros", "rubros_incluidos", "rubros");
+            await loadTags("subrubros", "subrubros", "subrubros_incluidos", "subrubros");
+          }
         } catch (e) {
           console.error("Error cargando marcas/rubros/subrubros:", e);
+        }
+        if (isPedidosPendientesProduccionSlug(reportSlug)) {
+          const clientesIncluirSelect = document.getElementById("clientes_incluir");
+          if (clientesIncluirSelect) {
+            initializeTagsFilter("clientes_incluir", "clientes", "clientes_excluidos");
+          }
         }
         const gbCtr = document.getElementById("stock_existencias_group_by_tags_container");
         if (gbCtr && !gbCtr.dataset.tagsFilterReady) {
@@ -9119,6 +9137,7 @@ if (dashboardRoot) {
       reportSlug === "sales_summary" ||
       reportSlug === "total-consolidado-operativo" ||
       reportSlug === "stock-existencias" ||
+      isPedidosPendientesProduccionSlug(reportSlug) ||
       isInventarioDepositoSlug(reportSlug) ||
       isInformeBoDualPeriodo(reportSlug);
     if (!allowed) return false;
@@ -10107,6 +10126,28 @@ if (dashboardRoot) {
       }
       const isc = document.getElementById("incluir_stock_cero");
       if (isc) filters.incluir_stock_cero = isc.value;
+    } else if (isPedidosPendientesProduccionSlug(currentReportSlug)) {
+      const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
+      const fechaInicio = document.getElementById("fecha_inicio")?.value;
+      const fechaFin = document.getElementById("fecha_fin")?.value;
+      setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
+      const refreshIntervalSelect = document.getElementById("refresh_interval");
+      if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
+      appendTagMultiFilter("depositos_incluidos", filters, "depositos_incluidos");
+      appendTagMultiFilter("clientes_incluir", filters, "clientes_incluir");
+      appendTagMultiFilter("clientes_excluidos", filters, "clientes_excluidos");
+      appendTagMultiFilter("marcas_incluidos", filters, "marcas_incluidos");
+      const criterioEl = document.getElementById("ppp_criterio_pendiente");
+      if (criterioEl && criterioEl.value) filters.criterio_pendiente = criterioEl.value;
+      const soloTerm = document.getElementById("ppp_solo_terminados");
+      filters.solo_terminados = soloTerm && soloTerm.checked;
+      const sucursalesSelect = document.getElementById("sucursales");
+      if (sucursalesSelect) {
+        const selectedSucursales = Array.from(sucursalesSelect.selectedOptions)
+          .map((opt) => opt.value)
+          .filter((v) => v);
+        if (selectedSucursales.length > 0) filters.sucursales = selectedSucursales;
+      }
     } else if (isInventarioDepositoSlug(currentReportSlug)) {
       const fechaCorte = document.getElementById("fecha_corte")?.value;
       if (fechaCorte) filters.fecha_corte = fechaCorte;
@@ -10678,6 +10719,29 @@ if (dashboardRoot) {
           if (errNoteSe) {
             hasErrorNote = true;
             if (!isAutoRefresh) toast(errNoteSe, "error");
+          }
+        } else if (isPedidosPendientesProduccionSlug(currentReportSlug)) {
+          try {
+            const pppResponse = {
+              data: payload.data || [],
+              totals: payload.totals || {},
+              meta: payload.meta || {},
+              notes: payload.notes || [],
+            };
+            if (window.pedidosPendientesProduccionHandler?.renderTable) {
+              window.pedidosPendientesProduccionHandler.renderTable(pppResponse);
+            }
+            document.dispatchEvent(
+              new CustomEvent("reportDataLoaded", {
+                detail: { slug: "pedidos-pendientes-produccion", response: pppResponse },
+              })
+            );
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
           }
         } else if (isInventarioDepositoSlug(currentReportSlug)) {
           try {
