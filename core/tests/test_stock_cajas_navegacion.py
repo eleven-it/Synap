@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
 
 from core.middleware.mobile_level_a_middleware import mobile_path_allowed_for_level_a
@@ -38,7 +38,8 @@ class StockCajasNavegacionTests(SimpleTestCase):
 
     def _menu(self, request):
         with ExitStack() as stack:
-            stack.enter_context(patch("core.module_manager.ModuleManager.get_active_modules", return_value=[]))
+            mocked_manager = stack.enter_context(patch("core.module_manager.ModuleManager"))
+            mocked_manager.return_value.get_active_modules.return_value = []
             stack.enter_context(patch("core.services.navbar_visibilidad.cargar_estado_granular", return_value=(set(), set())))
             stack.enter_context(patch("core.services.navbar_visibilidad.app_visible_en_navbar_granular", return_value=True))
             stack.enter_context(patch("core.services.navbar_visibilidad.item_visible_en_navbar_granular", return_value=True))
@@ -74,6 +75,7 @@ class StockCajasNavegacionTests(SimpleTestCase):
         with self.assertRaises(PermissionDenied):
             pagina(request)
 
+@override_settings(SYNAP_AUTO_ENSURE_SCHEMA=True)
 class StockCajasCatalogoTests(SimpleTestCase):
     def test_cache_vieja_no_impide_sembrar_el_permiso_nuevo(self):
         with patch("core.services.synap_permisos_seed.cache") as mocked_cache, patch(
