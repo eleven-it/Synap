@@ -21,6 +21,7 @@ from reports.services.pedidos_pendientes_produccion_calcs import (
     build_viajante_sql,
     classify_depositos_stock_columns,
     enrich_articulo_row,
+    sql_entregado_remito_por_pedido_subquery,
     sql_unidad_base_group_by_suffix,
     sql_unidad_base_join,
     sql_unidad_base_select,
@@ -37,14 +38,13 @@ IMPORTE_PENDIENTE_NOTA = (
 )
 
 PPP_FOOTER_NOTA = (
-    "Stock terminado: depósitos activos con Suma stock=Si y tipo Terminado o Consignación. "
-    "Stock producción: cantidad armable según saldo en Semi elaborado de componentes Fabricado "
-    "de la receta (ensamblado=Si); no usa saldo propio del artículo en depósitos de producción. "
-    "Disponible = max(0, terminado − pendiente). Backorder = pendiente sin cobertura de terminado. "
-    "Reserva objetivo = stock_reserva; reserva disponible = min(R, max(0, terminado − pendiente)); "
-    "reposición reserva = max(0, R − reserva disponible). "
-    "MPR a fabricar = backorder + reposición = max(0, pendiente + reserva − terminado). "
-    "Stock producción es solo informativo. Importe neto sin IVA ni descuento de cabecera."
+    "Pedido pendiente: bruto SUM(stockp.Cantidad) en PED estado Pendiente. "
+    "MPR demanda: saldo neto por pedido+artículo (pedido − entregado por remitos vía stock), "
+    "sumado por artículo; backorder, disponible, reserva y a fabricar usan ese saldo. "
+    "Stock terminado: depósitos Terminado/Consignación (suma_stock=Si). "
+    "Stock producción: armable desde Semi (componentes Fabricado); solo informativo. "
+    "MPR a fabricar = backorder + reposición = max(0, demanda + reserva − terminado). "
+    "Importe neto sin IVA ni descuento de cabecera (sobre pedido bruto)."
 )
 
 
@@ -182,9 +182,10 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
     viaj_sql, viaj_params = build_viajante_sql(vendedores_incluir, vendedores_excluidos)
     busq_sql, busq_params = build_busqueda_sql(busqueda)
 
-    importe_expr = (
-        f"SUM({qty_sql} * COALESCE(sp.PrecioNetoxR / NULLIF(ABS(sp.Cantidad), 0), 0))"
+    importe_linea_expr = (
+        f"{qty_sql} * COALESCE(sp.PrecioNetoxR / NULLIF(ABS(sp.Cantidad), 0), 0)"
     )
+    entregado_sub = sql_entregado_remito_por_pedido_subquery()
 
     params_bo: List[Any] = []
     params_bo.extend(suc_params)
@@ -200,34 +201,48 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
 
     sql_pendiente = f"""
         SELECT
-            sp.IDArt AS id_art,
+            ped_mov.id_art,
             COALESCE(a.id_manual, '') AS cod_manual,
             COALESCE(a.NombreArticulo, '') AS articulo,
             COALESCE(m.NombreMarca, '') AS marca,
             {sql_unidad_base_select()},
-            SUM({qty_sql}) AS pendiente_qty,
-            {importe_expr} AS importe_pendiente
-        FROM stockp sp
-        INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
-        LEFT JOIN articulo a ON a.IDArt = sp.IDArt
+            SUM(ped_mov.qty_ped) AS pendiente_qty,
+            SUM(GREATEST(0, ped_mov.qty_ped - ped_mov.qty_ent)) AS mpr_demanda_pedido,
+            ROUND(SUM(ped_mov.importe_linea), 2) AS importe_pendiente
+        FROM (
+            SELECT
+                sp.IDArt AS id_art,
+                sp.CodigoMovimiento,
+                SUM({qty_sql}) AS qty_ped,
+                SUM({importe_linea_expr}) AS importe_linea,
+                MAX(COALESCE(ent.qty_entregada, 0)) AS qty_ent
+            FROM stockp sp
+            INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
+            LEFT JOIN articulo a ON a.IDArt = sp.IDArt
+            LEFT JOIN marca m ON m.CodMarca = a.CodigoMarca
+            LEFT JOIN ({entregado_sub}) ent
+              ON ent.codmov_pedido = sp.CodigoMovimiento AND ent.id_art = sp.IDArt
+            WHERE cp.TipoComprobante = 'PED'
+              AND (sp.Comprobante = 'PED' OR sp.Comprobante IS NULL)
+              AND cp.Anulado = 'No'
+              AND (sp.anulado IS NULL OR sp.anulado = 'No')
+              AND cp.Estado IN {bo_estados_sql}
+              AND sp.CodigoMovimiento IS NOT NULL
+              {suc_sql}
+              {pv_sql}
+              {viaj_sql}
+              AND sp.Fecha >= %s AND sp.Fecha <= %s
+              {cliente_incl_sql}
+              {cliente_excl_sql}
+              {busq_sql}
+              AND {sql_excluir_tipo_art_gasto("a")}
+              {filt_art_sql}
+            GROUP BY sp.IDArt, sp.CodigoMovimiento
+        ) ped_mov
+        LEFT JOIN articulo a ON a.IDArt = ped_mov.id_art
         LEFT JOIN marca m ON m.CodMarca = a.CodigoMarca
         {sql_unidad_base_join()}
-        WHERE cp.TipoComprobante = 'PED'
-          AND (sp.Comprobante = 'PED' OR sp.Comprobante IS NULL)
-          AND cp.Anulado = 'No'
-          AND (sp.anulado IS NULL OR sp.anulado = 'No')
-          AND cp.Estado IN {bo_estados_sql}
-          AND sp.CodigoMovimiento IS NOT NULL
-          {suc_sql}
-          {pv_sql}
-          {viaj_sql}
-          AND sp.Fecha >= %s AND sp.Fecha <= %s
-          {cliente_incl_sql}
-          {cliente_excl_sql}
-          {busq_sql}
-          AND {sql_excluir_tipo_art_gasto("a")}
-          {filt_art_sql}
-        GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, m.NombreMarca{sql_unidad_base_group_by_suffix()}
+        GROUP BY ped_mov.id_art, a.id_manual, a.NombreArticulo, m.NombreMarca{sql_unidad_base_group_by_suffix()}
         HAVING pendiente_qty > 0
         ORDER BY pendiente_qty DESC
     """
@@ -248,7 +263,8 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
                 "marca": row[3] or "",
                 "unidad_base": row[4] or "",
                 "pendiente_qty": float(row[5] or 0),
-                "importe_pendiente": round(float(row[6] or 0), 2),
+                "mpr_demanda_pedido": float(row[6] or 0),
+                "importe_pendiente": round(float(row[7] or 0), 2),
                 "stock_terminado": 0.0,
                 "stock_produccion": 0.0,
             }
@@ -297,10 +313,10 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
 
     notes = [
         f"Período pedidos (sp.Fecha): {svc._format_date(fecha_inicio)} a {svc._format_date(fecha_fin)}",
-        "Pendiente: PED en estado Pendiente, cantidad = stockp.Cantidad (backorder).",
-        "Stock terminado: depósitos Terminado y Consignación (suma_stock=Si). "
-        "Stock producción: armable desde Semi elaborado (componentes Fabricado de la receta).",
-        "MPR: reserva objetivo/disponible/reposición; a fabricar = backorder + reposición = max(0, P+R−terminado).",
+        "Pedido pendiente: bruto stockp.Cantidad (PED Pendiente). "
+        "MPR demanda: saldo neto (pedido − remitos en stock.codmov_pedido/codmov_remito).",
+        "Disponible/backorder/reserva/a fabricar usan MPR demanda (saldo), no el bruto.",
+        "Stock terminado y stock producción (armable semi) como antes.",
         IMPORTE_PENDIENTE_NOTA,
         f"Filas: {totals.get('row_count', 0)}.",
     ]

@@ -23,9 +23,8 @@
   });
 
   const FOOTER_NOTA =
-    "Stock terminado: depósitos Terminado/Consignación (suma_stock=Si). " +
-    "Stock producción: unidades armables según semi de componentes Fabricado (receta); no suma al disponible. " +
-    "Disponible = max(0, terminado − pendiente). Backorder = pendiente sin cobertura de terminado. " +
+    "Pedido pendiente = bruto PED Pendiente. MPR demanda = saldo neto (pedido − remitos); " +
+    "disponible, backorder y a fabricar usan el saldo. Stock producción es solo informativo. " +
     "Importe neto sin IVA ni descuento de cabecera.";
 
   const COLUMNS = [
@@ -48,7 +47,14 @@
     { key: "disponible", label: "Disponible", align: "right", sortable: true, type: "unit" },
     { key: "backorder", label: "Backorder", align: "right", sortable: true, type: "unit", cellClass: "ppp-backorder" },
     { key: "importe_pendiente", label: "Importe pendiente", align: "right", sortable: true, type: "money" },
-    { key: "mpr_demanda_pedido", label: "MPR demanda", align: "right", sortable: true, type: "unit" },
+    {
+      key: "mpr_demanda_pedido",
+      label: "MPR demanda",
+      title: "Saldo pendiente neto: pedido menos cantidades ya remitidas (stock vinculado al PED).",
+      align: "right",
+      sortable: true,
+      type: "unit",
+    },
     { key: "reserva_objetivo", label: "Reserva objetivo", align: "right", sortable: true, type: "unit" },
     { key: "reserva_disponible", label: "Reserva disponible", align: "right", sortable: true, type: "unit" },
     { key: "reposicion_reserva", label: "Reposición reserva", align: "right", sortable: true, type: "unit" },

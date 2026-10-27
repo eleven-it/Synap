@@ -58,6 +58,43 @@ def compute_stock_produccion_armable(
     return float(max(0, mejor if mejor is not None else 0))
 
 
+def saldo_demanda_por_pedido_articulo(pedido_qty: float, entregado_qty: float) -> float:
+    """Saldo MPR por pedido+artículo: max(0, pedido − entregado por remitos)."""
+    ped = float(pedido_qty or 0)
+    ent = float(entregado_qty or 0)
+    return round(max(0.0, ped - ent), 4)
+
+
+def aggregate_mpr_demanda_saldo(
+    lineas_pedido_entregado: Sequence[Tuple[float, float]],
+) -> float:
+    """Suma saldos por renglón lógico (pedido, artículo) ya agrupados."""
+    return round(
+        sum(saldo_demanda_por_pedido_articulo(p, e) for p, e in lineas_pedido_entregado),
+        4,
+    )
+
+
+def sql_entregado_remito_por_pedido_subquery() -> str:
+    """
+    Entregado por (codmov_pedido, IDArt) vía stock.codmov_pedido + stock.codmov_remito → REM.
+    """
+    return """
+        SELECT
+            s.codmov_pedido,
+            s.IDArt AS id_art,
+            SUM(ABS(COALESCE(s.Salida, 0))) AS qty_entregada
+        FROM stock s
+        INNER JOIN comp_ped rem ON rem.CodigoMovimiento = s.codmov_remito
+        WHERE rem.TipoComprobante = 'REM'
+          AND COALESCE(rem.Anulado, 'No') = 'No'
+          AND COALESCE(s.Anulado, 'No') = 'No'
+          AND s.codmov_pedido IS NOT NULL
+          AND s.codmov_pedido <> 0
+        GROUP BY s.codmov_pedido, s.IDArt
+    """
+
+
 def compute_disponible_backorder(pendiente_qty: float, stock_terminado: float) -> Tuple[float, float]:
     """Disponible = max(0, terminado − pendiente); backorder = max(pendiente − terminado, 0)."""
     pend = float(pendiente_qty or 0)
@@ -90,15 +127,16 @@ def compute_reserva_reposicion(
 
 
 def compute_mpr_pack_fields(
-    pendiente_qty: float,
+    demanda_saldo: float,
     stock_terminado: float,
     stock_reserva: float,
 ) -> Dict[str, float]:
     """
-    MPR a fabricar = max(0, pendiente + reserva − stock terminado)
+    demanda_saldo: saldo pendiente neto (pedido − remitos) para columnas MPR.
+    MPR a fabricar = max(0, demanda + reserva − stock terminado)
     = backorder + reposición reserva (invariante del informe).
     """
-    p_ped = float(pendiente_qty or 0)
+    p_ped = float(demanda_saldo or 0)
     st = float(stock_terminado or 0)
     reserva = float(stock_reserva or 0) if stock_reserva is not None else 0.0
     _, backorder = compute_disponible_backorder(p_ped, st)
@@ -115,12 +153,17 @@ def compute_mpr_pack_fields(
 
 
 def enrich_articulo_row(row: Dict[str, Any], stock_reserva: float = 0.0) -> None:
-    pend = float(row.get("pendiente_qty") or 0)
+    pend_bruto = float(row.get("pendiente_qty") or 0)
+    if row.get("mpr_demanda_pedido") is None:
+        demanda = pend_bruto
+    else:
+        demanda = float(row.get("mpr_demanda_pedido") or 0)
+    row["mpr_demanda_pedido"] = round(demanda, 4)
     term = float(row.get("stock_terminado") or 0)
-    disp, bo = compute_disponible_backorder(pend, term)
+    disp, bo = compute_disponible_backorder(demanda, term)
     row["disponible"] = disp
     row["backorder"] = bo
-    mpr = compute_mpr_pack_fields(pend, term, stock_reserva)
+    mpr = compute_mpr_pack_fields(demanda, term, stock_reserva)
     mpr.pop("_backorder_check", None)
     row.update(mpr)
 

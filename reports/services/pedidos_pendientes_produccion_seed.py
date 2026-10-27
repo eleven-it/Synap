@@ -15,8 +15,9 @@ def _report_defaults():
     return {
         "name": "Pedidos pendientes (Producción)",
         "description": (
-            "Demanda pendiente por artículo con stock (terminado/consignación, producción) y columnas MPR "
-            "(reserva objetivo, disponible, reposición, a fabricar). Filtros por marca y cliente."
+            "Pedido pendiente bruto y MPR demanda (saldo neto tras remitos) por artículo, con stock "
+            "terminado/producción y columnas MPR (reserva, disponible, reposición, a fabricar). "
+            "Filtros por marca y cliente."
         ),
         "category": "operational",
         "config": {
@@ -57,9 +58,10 @@ def _report_defaults():
             "seeded_at": now.isoformat(),
             "catalog_legacy_section": "listados",
             "assumptions": [
-                "Default criterio_pendiente=backorder (PED estado Pendiente, SUM cantidad pedida).",
-                "Stock terminado = depósitos tipo Terminado y Consignación (suma_stock=Si); producción aparte.",
-                "MPR: reserva objetivo/disponible/reposición; a fabricar = max(0, P+R−terminado) = backorder + reposición.",
+                "Pedido pendiente = bruto PED Pendiente (SUM stockp.Cantidad).",
+                "MPR demanda = saldo por pedido+artículo (pedido − remitos vía stock.codmov_pedido/remito); MPR derivados usan saldo.",
+                "Stock terminado = depósitos Terminado/Consignación; stock producción = armable semi (informativo).",
+                "A fabricar = max(0, demanda + reserva − terminado) = backorder + reposición reserva.",
                 "Importe neto sin IVA ni descuento de cabecera.",
             ],
         },

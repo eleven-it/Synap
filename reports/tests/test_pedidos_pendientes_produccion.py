@@ -9,6 +9,7 @@ from reports.permissions import (
     user_can_access_pedidos_pendientes_produccion,
 )
 from reports.services.pedidos_pendientes_produccion_calcs import (
+    aggregate_mpr_demanda_saldo,
     aggregate_totals,
     build_viajante_sql,
     classify_depositos_stock_columns,
@@ -19,6 +20,8 @@ from reports.services.pedidos_pendientes_produccion_calcs import (
     enrich_articulo_row,
     es_tipo_art_fab_fabricado,
     formula_cantidad_por_unidad_terminado,
+    saldo_demanda_por_pedido_articulo,
+    sql_entregado_remito_por_pedido_subquery,
     sql_unidad_base_join,
     sql_unidad_base_select,
 )
@@ -97,6 +100,39 @@ class TestFetchStockProduccionArmableBulk(unittest.TestCase):
         out = fetch_stock_produccion_armable_map(cursor, "emp", [1, 2])
         self.assertEqual(out, {1: 0.0, 2: 0.0})
         cursor.execute.assert_not_called()
+
+
+class TestMprDemandaSaldo(unittest.TestCase):
+    def test_parcialmente_entregado(self):
+        self.assertEqual(saldo_demanda_por_pedido_articulo(1000, 400), 600.0)
+        bruto = 1000.0
+        demanda = aggregate_mpr_demanda_saldo([(1000, 400)])
+        self.assertEqual(demanda, 600.0)
+        art = {"pendiente_qty": bruto, "mpr_demanda_pedido": demanda, "stock_terminado": 0}
+        enrich_articulo_row(art, 0)
+        self.assertEqual(art["pendiente_qty"], 1000.0)
+        self.assertEqual(art["mpr_demanda_pedido"], 600.0)
+        self.assertEqual(art["backorder"], 600.0)
+
+    def test_sin_entregas_demanda_igual_bruto(self):
+        self.assertEqual(saldo_demanda_por_pedido_articulo(1500, 0), 1500.0)
+        art = {"pendiente_qty": 1500, "mpr_demanda_pedido": 1500, "stock_terminado": 0}
+        enrich_articulo_row(art)
+        self.assertEqual(art["mpr_demanda_pedido"], 1500.0)
+
+    def test_sobreentrega_piso_cero(self):
+        self.assertEqual(saldo_demanda_por_pedido_articulo(100, 250), 0.0)
+
+    def test_varios_pedidos_mismo_articulo(self):
+        demanda = aggregate_mpr_demanda_saldo([(1000, 400), (500, 100), (200, 500)])
+        self.assertEqual(demanda, 600.0 + 400.0 + 0.0)
+
+    def test_runner_sql_usa_stock_remito_vinculo(self):
+        src = inspect.getsource(ppp_runner_mod)
+        self.assertIn("sql_entregado_remito_por_pedido_subquery", src)
+        self.assertIn("codmov_remito", sql_entregado_remito_por_pedido_subquery())
+        self.assertIn("codmov_pedido", sql_entregado_remito_por_pedido_subquery())
+        self.assertNotIn("cantidad_entregada", src)
 
 
 class TestDisponibleBackorder(unittest.TestCase):
@@ -178,10 +214,15 @@ class TestMprPackFields(unittest.TestCase):
         self.assertEqual(mpr["reposicion_reserva"], 0.0)
 
     def test_enrich_articulo_row(self):
-        art = {"pendiente_qty": 120, "stock_terminado": 0, "stock_produccion": 84}
+        art = {
+            "pendiente_qty": 120,
+            "mpr_demanda_pedido": 80,
+            "stock_terminado": 0,
+            "stock_produccion": 84,
+        }
         enrich_articulo_row(art, 0)
-        self.assertEqual(art["backorder"], 120.0)
-        self.assertEqual(art["mpr_cantidad_a_fabricar"], 120.0)
+        self.assertEqual(art["backorder"], 80.0)
+        self.assertEqual(art["mpr_cantidad_a_fabricar"], 80.0)
         self.assertIn("reserva_objetivo", art)
 
 
