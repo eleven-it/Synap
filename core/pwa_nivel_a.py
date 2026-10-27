@@ -189,7 +189,7 @@ def filtrar_submenus_contabilidad_para_pwa_movil(
 def filtrar_submenus_stock_para_pwa_movil(
     submenus: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Deja solo conteo inventario físico del sidebar stock en móvil."""
+    """Deja conteo y armado de cajas del sidebar Stock en móvil."""
     resultado: List[Dict[str, Any]] = []
     for seccion in submenus or []:
         items = [
@@ -299,6 +299,11 @@ def filtrar_apps_menu_para_pwa_movil(
             app_copy["submenus"] = filtrar_submenus_ecom_para_pwa_movil(app_copy["submenus"])
         if app_id == "stock" and app_copy.get("submenus"):
             app_copy["submenus"] = filtrar_submenus_stock_para_pwa_movil(app_copy["submenus"])
+            # La URL de escritorio lleva a Ingreso Mov. Stock, que Nivel A bloquea.
+            # En PWA la tarjeta Stock debe abrir una pantalla permitida por el puesto.
+            if not app_copy["submenus"]:
+                continue
+            app_copy["url"] = app_copy["submenus"][0]["items"][0]["url"]
         if app_id == "mpr" and app_copy.get("submenus"):
             app_copy["submenus"] = filtrar_submenus_mpr_para_pwa_movil(app_copy["submenus"])
         if app_id == "contabilidad" and app_copy.get("submenus"):
