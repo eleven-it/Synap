@@ -31,6 +31,13 @@ remitos.
    son del mismo cliente y sucursal/domicilio.
 5. Puede deshacer lecturas, cerrar incluso una caja vacía abierta por error y
    reabrir cajas mientras no hayan sido importadas en el control de salida.
+   **Cerrar caja** también aparece junto al número de la caja de lectura activa,
+   para usarlo sin desplazarse hasta el listado de cajas en pedidos largos.
+   Ese panel muestra el contenido acumulado de la caja: en modo Display,
+   primero la cantidad de displays y luego su equivalencia en unidades; en
+   modo Unidad, primero las unidades. El avance de la preparación sigue el
+   mismo orden y conserva las unidades como referencia. Si hay artículos con
+   factores de display distintos, se calcula cada equivalencia por artículo.
    En una caja abierta, **Eliminar artículo** anula todas sus lecturas activas
    en esa caja y devuelve las unidades al pendiente; las lecturas anuladas
    permanecen en el historial.
