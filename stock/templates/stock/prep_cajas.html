@@ -1,0 +1,130 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% block title %}Cajas de preparación · Synap{% endblock %}
+{% block content %}
+<section id="prep-cajas" class="mx-auto max-w-7xl px-3 py-4 pb-24 text-slate-900 dark:text-slate-100 sm:px-6"
+         data-buscar="{{ url_buscar }}" data-estado="{{ url_estado }}"
+         data-abrir="{{ url_abrir }}" data-lectura="{{ url_lectura }}"
+         data-accion="{{ url_accion }}" data-reserva="{{ url_reserva }}">
+  {% csrf_token %}
+  <header class="mb-4 rounded-xl bg-slate-800 p-4 text-white">
+    <p class="text-xs text-slate-300">Stock · Preparación de pedidos</p>
+    <h1 class="text-xl font-bold">Armado de cajas</h1>
+    <p class="text-sm text-slate-200">Escaneá una sola vez mientras retirás los artículos de la góndola.</p>
+  </header>
+
+  <div class="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+    <aside class="rounded-xl border border-slate-200 bg-white p-3 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+      <label for="prep-buscar" class="block text-sm font-semibold">Preparación de pedidos</label>
+      <input id="prep-buscar" type="search" placeholder="Número o código de preparación"
+             class="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+      <div id="prep-lista" class="mt-2 max-h-72 space-y-1 overflow-auto" aria-label="Preparaciones disponibles"></div>
+    </aside>
+
+    <main class="min-w-0 space-y-4">
+      <div id="prep-aviso" role="status" aria-live="polite"
+           class="hidden rounded-xl border p-3 text-sm font-semibold"></div>
+      <div id="prep-sin-seleccion" class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500 dark:border-slate-700 dark:text-slate-300">
+        Elegí una preparación para ver sus pedidos y artículos.
+      </div>
+      <div id="prep-contenido" class="hidden space-y-4">
+        <section id="prep-finalizacion" class="hidden rounded-xl border p-4" aria-live="polite">
+          <h2 id="prep-finalizacion-titulo" class="text-lg font-bold"></h2>
+          <p id="prep-finalizacion-ayuda" class="mt-1 text-sm"></p>
+          <div id="prep-resumen-faltantes" class="mt-3 hidden">
+            <h3 class="font-bold">Unidades sin preparar</h3>
+            <ul id="prep-resumen-faltantes-lista" class="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm"></ul>
+          </div>
+          <div id="prep-resumen-datos" class="hidden">
+            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+              <div class="rounded-lg border border-emerald-300 bg-white p-3 text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-white">
+                <p class="text-xs font-semibold uppercase">Código de movimiento para VB6</p>
+                <p id="prep-resumen-movimiento" class="text-2xl font-black tabular-nums"></p>
+              </div>
+              <div class="rounded-lg border border-emerald-300 bg-white p-3 text-slate-900 dark:border-emerald-700 dark:bg-slate-900 dark:text-white">
+                <p class="text-xs font-semibold uppercase">N.º de preparación</p>
+                <p id="prep-resumen-numero" class="text-xl font-bold tabular-nums"></p>
+              </div>
+            </div>
+            <h3 class="mt-4 font-bold">Cajas para control de salida</h3>
+            <div id="prep-resumen-cajas" class="mt-2 grid gap-2 sm:grid-cols-2"></div>
+            <button id="prep-otra" type="button" class="mt-4 w-full rounded-lg bg-emerald-700 px-4 py-3 font-bold text-white sm:w-auto">
+              Elegir otra preparación
+            </button>
+          </div>
+        </section>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          <h2 id="prep-titulo" class="text-lg font-bold"></h2>
+          <p class="mt-1 text-sm text-slate-700 dark:text-slate-200">
+            Código de movimiento para control de salida:
+            <strong id="prep-codigo-movimiento" class="font-bold tabular-nums"></strong>
+          </p>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-300">Cada caja corresponde a un cliente y una sucursal o domicilio de entrega.</p>
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <span class="font-semibold text-emerald-700 dark:text-emerald-300">Preparación reservada para tu sesión</span>
+            <button id="prep-liberar" type="button" class="rounded border border-slate-400 bg-white px-2 py-1 font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100">Liberar preparación</button>
+          </div>
+          <div id="prep-abrir-fila" class="mt-3 flex flex-wrap gap-2">
+            <select id="prep-pedido" aria-label="Pedido que abre la caja"
+                    class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white p-3 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"></select>
+            <button id="prep-abrir" type="button" class="rounded-lg bg-blue-700 px-4 py-3 font-bold text-white">Abrir caja</button>
+          </div>
+        </div>
+
+        <div id="prep-lectura-panel" class="rounded-xl border-2 border-blue-400 bg-blue-50 p-4 text-slate-900 dark:border-blue-700 dark:bg-blue-950/40 dark:text-slate-100">
+          <p class="text-sm font-semibold uppercase tracking-wide">Caja de lectura</p>
+          <p id="prep-caja-activa" class="mt-1 text-3xl font-black tabular-nums">Ninguna</p>
+          <p id="prep-caja-destino" class="mt-1 text-sm"></p>
+          <label for="prep-modo-lectura" class="mt-3 block text-sm font-semibold">Modo de lectura</label>
+          <select id="prep-modo-lectura"
+                  class="mt-1 block w-full min-w-0 rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white sm:max-w-sm">
+            <option value="display" selected>Display · presentación completa</option>
+            <option value="unidad">Unidad · 1 por lectura</option>
+          </select>
+          <p id="prep-modo-ayuda" class="mt-1 break-words text-sm" aria-live="polite"></p>
+          <div id="prep-progreso" class="mt-4 rounded-lg border border-blue-300 bg-white p-3 dark:border-blue-700 dark:bg-slate-900" aria-live="polite">
+            <p id="prep-progreso-titulo" class="font-bold"></p>
+            <div class="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+              <p>Por leer: <strong id="prep-progreso-faltante" class="block text-lg text-amber-800 dark:text-amber-200"></strong></p>
+              <p>En cajas: <strong id="prep-progreso-leido" class="block text-lg"></strong></p>
+              <p>Artículos completos: <strong id="prep-progreso-articulos" class="block text-lg"></strong></p>
+            </div>
+            <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" role="progressbar"
+                 id="prep-progreso-barra" aria-label="Avance de la preparación" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="prep-progreso-relleno" class="h-full rounded-full bg-emerald-600" style="width: 0%"></div>
+            </div>
+            <div id="prep-proximos" class="mt-3 space-y-1 text-sm"></div>
+          </div>
+          <form id="prep-scan-form" class="mt-4 flex gap-2">
+            <input id="prep-codigo" type="text" inputmode="none" enterkeyhint="done" autocomplete="off"
+                   placeholder="Leé el código de barras" aria-label="Código de barras"
+                   class="min-w-0 flex-1 rounded-lg border-2 border-blue-500 bg-white p-3 text-lg font-semibold text-slate-900 dark:bg-slate-900 dark:text-white">
+            <button type="submit" class="rounded-lg bg-blue-700 px-4 py-3 font-bold text-white">Agregar</button>
+          </form>
+          <label class="mt-2 inline-flex items-center gap-2 text-sm">
+            <input id="prep-teclado" type="checkbox"> Escribir código manualmente
+          </label>
+          <p id="prep-ultimo" class="mt-2 text-sm font-semibold" aria-live="assertive"></p>
+        </div>
+
+        <section class="rounded-xl border border-slate-200 bg-white p-4 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          <h2 id="prep-articulos-titulo" class="font-bold">Artículos pendientes</h2>
+          <p id="prep-articulos-ayuda" class="text-sm text-slate-500 dark:text-slate-300">El faltante se reduce con cada lectura aceptada.</p>
+          <div id="prep-articulos" class="mt-3 space-y-2"></div>
+        </section>
+
+        <section class="rounded-xl border border-slate-200 bg-white p-4 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          <h2 class="font-bold">Cajas de esta preparación</h2>
+          <div id="prep-cajas-lista" class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"></div>
+        </section>
+
+        <section class="rounded-xl border border-slate-200 bg-white p-4 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          <h2 class="font-bold">Últimas lecturas</h2>
+          <div id="prep-lecturas" class="mt-3 space-y-2"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</section>
+<script src="{% static 'stock/js/prep_cajas.js' %}?v=movimiento-prep-1"></script>
+{% endblock %}

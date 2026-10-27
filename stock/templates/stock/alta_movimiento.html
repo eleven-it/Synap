@@ -221,8 +221,8 @@
           <template x-if="cabecera.nro_pedi">
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-xs font-medium text-gray-900 dark:text-white" x-text="pedidoSeleccionadoResumen ? (pedidoSeleccionadoResumen.tipo === 'PEDI' ? 'PEDI #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi) : 'Pedido #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi)) : ('#' + cabecera.nro_pedi)"></span>
-              <button type="button" @click="abrirModalPedidos()" class="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"><span class="material-icons text-sm">edit</span>Cambiar</button>
-              <button type="button" @click="cabecera.nro_pedi = ''; pedidoSeleccionadoResumen = null" class="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-sm">close</span>Quitar</button>
+              <button type="button" @click="abrirModalPedidos()" x-show="parseInt(cabecera.motivo_movimiento, 10) !== 6" class="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"><span class="material-icons text-sm">edit</span>Cambiar</button>
+              <button type="button" @click="cabecera.nro_pedi = ''; pedidoSeleccionadoResumen = null" x-show="parseInt(cabecera.motivo_movimiento, 10) !== 6" class="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-sm">close</span>Quitar</button>
             </div>
           </template>
         </div>
@@ -294,6 +294,18 @@
           </button>
         </div>
         <p x-show="mensajeCodigoInexistente" x-cloak class="text-xs text-red-600 dark:text-red-400">Código inexistente.</p>
+        <div x-show="mostrarEmbalaje" x-cloak class="ims-field-row">
+          <label for="busq-emb-mobile" class="ims-label-inline">Presentación</label>
+          <select id="busq-emb-mobile" x-model="filaBusqueda.tipo_unidad"
+            :disabled="filaBusqueda.articuloSeleccionado && (filaBusqueda.articuloSeleccionado.lote_articulo === 'Si' || filaBusqueda.articuloSeleccionado.serie_articulo === 'Si')"
+            class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <template x-for="opt in opcionesTipoUnidad" :key="opt.value">
+              <option :value="opt.value" x-text="opt.label"></option>
+            </template>
+          </select>
+        </div>
+        <p x-show="filaBusqueda.articuloSeleccionado" x-cloak class="text-xs font-medium text-gray-600 dark:text-gray-300"
+          x-text="equivalenciaMovimiento(filaBusqueda.cantidad, filaBusqueda.tipo_unidad, filaBusqueda.articuloSeleccionado?.IDArt)"></p>
 
         <!-- Cards de renglones -->
         <template x-for="r in renglones" :key="r.Orden">
@@ -321,6 +333,8 @@
                 <button type="button" @click="abrirModalSeries(r)" class="text-xs text-purple-600 dark:text-purple-400">Series</button>
               </template>
             </div>
+            <p class="mt-2 text-xs font-semibold text-gray-600 dark:text-gray-300"
+              x-text="equivalenciaMovimiento(r.Cantidad, r.tipo_unidad, r.IDArt)"></p>
           </div>
         </template>
         <p x-show="renglones.length === 0 && !filaBusqueda.articuloSeleccionado" x-cloak class="text-center text-sm text-gray-500 dark:text-gray-400 py-4">
@@ -354,14 +368,13 @@
           </div>
           <div class="w-24">
             <label for="busq-cant" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cantidad</label>
-            <input type="number" id="busq-cant" x-model.number="filaBusqueda.cantidad" min="1" step="1"
-              @change="filaBusqueda.cantidad = Math.max(1, Math.round(parseFloat(filaBusqueda.cantidad) || 1))"
+            <input type="number" id="busq-cant" x-model.number="filaBusqueda.cantidad" min="0.000001" step="any"
               @keydown.enter.prevent="confirmarFilaBusqueda()"
               class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
           </div>
           <div x-show="mostrarEmbalaje" x-cloak class="w-28">
-            <label for="busq-emb" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Embalaje</label>
-            <select id="busq-emb" x-model="filaBusqueda.tipo_unidad"
+            <label for="busq-emb" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Presentación</label>
+            <select id="busq-emb" x-model="filaBusqueda.tipo_unidad" :disabled="filaBusqueda.articuloSeleccionado && (filaBusqueda.articuloSeleccionado.lote_articulo === 'Si' || filaBusqueda.articuloSeleccionado.serie_articulo === 'Si')"
               class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
               <template x-for="opt in opcionesTipoUnidad" :key="opt.value">
                 <option :value="opt.value" x-text="opt.label"></option>
@@ -382,6 +395,8 @@
           </div>
           <p x-show="mensajeCodigoInexistente" x-cloak class="w-full text-xs text-red-600 dark:text-red-400">Código inexistente.</p>
         </div>
+        <p x-show="filaBusqueda.articuloSeleccionado" x-cloak class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-300"
+          x-text="equivalenciaMovimiento(filaBusqueda.cantidad, filaBusqueda.tipo_unidad, filaBusqueda.articuloSeleccionado?.IDArt)"></p>
       </div>
 
       <!-- Lista de resultados de búsqueda (solo nombre; navegable con ↑/↓) -->
@@ -415,7 +430,8 @@
               <th class="whitespace-nowrap px-2 py-2 font-semibold">Descripción</th>
               <th class="w-[7.5rem] whitespace-nowrap px-2 py-2 font-semibold">Movimiento</th>
               <th class="w-24 whitespace-nowrap px-2 py-2 text-right font-semibold">Cantidad</th>
-              <th x-show="mostrarEmbalaje" class="w-24 whitespace-nowrap px-2 py-2 font-semibold">Embalaje</th>
+              <th class="w-40 whitespace-nowrap px-2 py-2 font-semibold">Equivalencia</th>
+              <th x-show="mostrarEmbalaje" class="w-24 whitespace-nowrap px-2 py-2 font-semibold">Presentación</th>
               <th x-show="mostrarUnidadPeso" class="w-20 whitespace-nowrap px-2 py-2 text-right font-semibold">Peso</th>
               <th class="w-24 whitespace-nowrap px-2 py-2 font-semibold" title="Nro. pedido interno">Nro. ped.</th>
               <th class="w-28 whitespace-nowrap px-2 py-2 font-semibold">Lote</th>
@@ -441,11 +457,12 @@
                   </template>
                 </td>
                 <td class="px-2 py-1.5 text-right">
-                  <input type="number" x-model.number="r.Cantidad" @change="actualizarMovimientoCantidad(r)" min="1" step="1"
+                <input type="number" x-model.number="r.Cantidad" @change="actualizarMovimientoCantidad(r)" min="0.000001" step="any"
                     class="w-20 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-sm">
                 </td>
+                <td class="px-2 py-1.5 text-xs font-medium" x-text="equivalenciaMovimiento(r.Cantidad, r.tipo_unidad, r.IDArt)"></td>
                 <td x-show="mostrarEmbalaje" class="px-2 py-1.5">
-                  <select x-model="r.tipo_unidad" @change="actualizarMovimientoCantidad(r)"
+                  <select x-model="r.tipo_unidad" @change="actualizarMovimientoCantidad(r)" :disabled="r.lote_articulo === 'Si' || r.serie_articulo === 'Si'"
                     class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs">
                     <template x-for="opt in opcionesTipoUnidad" :key="opt.value">
                       <option :value="opt.value" x-text="opt.label"></option>
@@ -491,7 +508,7 @@
             </template>
             <!-- Estado vacío -->
             <tr x-show="renglones.length === 0" x-cloak>
-              <td :colspan="8 + (mostrarEmbalaje ? 1 : 0) + (mostrarUnidadPeso ? 1 : 0)" class="px-2 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+              <td :colspan="9 + (mostrarEmbalaje ? 1 : 0) + (mostrarUnidadPeso ? 1 : 0)" class="px-2 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                 No hay artículos agregados. Buscá un artículo en la barra de arriba para comenzar.
               </td>
             </tr>
@@ -534,6 +551,18 @@
           <span class="material-icons">close</span>
           Volver a editar
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Detalle del artículo -->
+  <div x-show="mostrarModalPDF" x-cloak role="dialog" aria-modal="true" aria-label="Comprobante PDF" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+    <div class="w-full max-w-sm rounded-xl bg-white p-5 text-slate-900 shadow-xl dark:bg-slate-800 dark:text-white">
+      <h3 class="text-lg font-bold">Movimiento generado</h3>
+      <p class="mt-2 text-sm">¿Querés descargar el comprobante PDF de <strong x-text="nroComprobante"></strong>?</p>
+      <div class="mt-5 flex flex-wrap justify-end gap-2">
+        <button type="button" @click="mostrarModalPDF = false" class="rounded-lg border border-slate-300 px-4 py-2 dark:border-slate-600">Ahora no</button>
+        <a :href="'/stock/movimientos/' + parseInt(codigoMovimiento, 10) + '/pdf/'" target="_blank" rel="noopener noreferrer" @click="mostrarModalPDF = false" class="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white">Descargar PDF</a>
       </div>
     </div>
   </div>
@@ -693,7 +722,7 @@
                 <td class="px-3 py-2" x-text="p.Estado || '—'"></td>
                 <td class="px-3 py-2" x-show="parseInt(cabecera.motivo_movimiento, 10) !== 6" x-text="p.nombre_cliente || '—'"></td>
                 <td class="px-3 py-2">
-                  <button type="button" @click="seleccionarPedido(p)" class="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400 hover:underline text-sm"><span class="material-icons text-base">check_circle</span>Seleccionar</button>
+                  <button type="button" @click="seleccionarPedido(p)" class="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400 hover:underline text-sm"><span class="material-icons text-base">check_circle</span><span x-text="parseInt(cabecera.motivo_movimiento, 10) === 6 ? 'Cargar pendientes' : 'Seleccionar'"></span></button>
                 </td>
               </tr>
             </template>
@@ -825,6 +854,8 @@ document.addEventListener('alpine:init', function() {
       mostrarSugerenciasNueva: false,
       nuevoRenglon: { IDArt: null, CodigoArticulo: '', Descripcion: '', cantidad: 1, ES: 'E' },
       filaBusqueda: { texto: '', articuloSeleccionado: null, cantidad: 1, ES: 'E', tipo_unidad: 'Unidad', unidad_art_peso: null, sugerencias: [], mostrarSugerencias: false },
+      presentacionesArticulos: {},
+      presentacionesEnConsulta: {},
       mensajeCodigoInexistente: false,
       dropdownTop: 0,
       dropdownLeft: 0,
@@ -838,6 +869,7 @@ document.addEventListener('alpine:init', function() {
       agregando: false,
       confirmando: false,
       mostrarModalResumen: false,
+      mostrarModalPDF: false,
       mostrarModalEsquemaFaltante: false,
       mensajeEsquema: '',
       detalleEsquema: [],
@@ -923,13 +955,14 @@ document.addEventListener('alpine:init', function() {
         return this.calculo_stock_saldo === 'Si' && this.cabecera.deposito_origen && this.filaBusqueda && this.filaBusqueda.articuloSeleccionado && parseInt(this.cabecera.motivo_movimiento, 10) === 2;
       },
       get mostrarEmbalaje() {
-        return this.utiliza_bulto_cerrado === 'Si' || this.utiliza_display === 'Si';
+        return Boolean(this.cabecera.motivo_movimiento);
       },
       get opcionesTipoUnidad() {
-        const opciones = [{ value: 'Unidad', label: 'Unidad' }];
-        if (this.utiliza_display === 'Si') opciones.push({ value: 'Display', label: 'Display' });
-        if (this.utiliza_bulto_cerrado === 'Si') opciones.push({ value: 'Bulto', label: 'Bulto' });
-        return opciones;
+        return [
+          { value: 'Unidad', label: 'Unidad' },
+          { value: 'Display', label: 'Display' },
+          { value: 'Bulto', label: 'Bulto' },
+        ];
       },
       get mostrarUnidadPeso() {
         return this.usa_multiplica_bulto_promedio === 'Si' && this.tipo_balanza === 'Bascula';
@@ -1001,7 +1034,28 @@ document.addEventListener('alpine:init', function() {
         this.pedidosPendientes = [];
         this.errorPedidosPendientes = '';
       },
-      seleccionarPedido(p) {
+      async seleccionarPedido(p) {
+        if (parseInt(this.cabecera.motivo_movimiento, 10) === 6) {
+          this.errorPedidosPendientes = '';
+          this.loadingPedidosPendientes = true;
+          try {
+            const r = await fetch('{% url "stock:api_ingreso_importar_pedi" %}', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+              body: JSON.stringify({ codigo_pedi: p.CodigoMovimiento,
+                deposito_origen: this.cabecera.deposito_origen,
+                deposito_destino: this.cabecera.deposito_destino })
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) { this.errorPedidosPendientes = d.error || 'No se pudo cargar el pedido.'; return; }
+            this.renglones = this.normalizarRenglones(d.renglones || []);
+          } catch (e) {
+            this.errorPedidosPendientes = 'No se pudo comunicar con el servidor.';
+            return;
+          } finally {
+            this.loadingPedidosPendientes = false;
+          }
+        }
         this.cabecera.nro_pedi = String(p.CodigoMovimiento);
         this.pedidoSeleccionadoResumen = {
           CodigoMovimiento: p.CodigoMovimiento,
@@ -1274,22 +1328,55 @@ document.addEventListener('alpine:init', function() {
       },
       normalizarRenglones(list) {
         if (!Array.isArray(list)) return [];
+        for (const r of list) this.cargarPresentacionArticulo(r.IDArt);
         return list.map(function(r) {
-          const c = Math.round(parseFloat(r.Cantidad) || 0);
-          return Object.assign({}, r, { Cantidad: c < 1 ? 1 : c });
+          const c = parseFloat(r.Cantidad);
+          return Object.assign({}, r, { Cantidad: Number.isFinite(c) ? c : 0 });
         });
       },
-      seleccionarArticuloFilaBusqueda(a) {
+      async cargarPresentacionArticulo(idArt) {
+        const id = Number(idArt);
+        if (!id || this.presentacionesArticulos[id] || this.presentacionesEnConsulta[id]) return;
+        this.presentacionesEnConsulta[id] = true;
+        try {
+          const params = new URLSearchParams({ id_articulo: String(id) });
+          const response = await fetch('{% url "stock:api_pedido_interno_presentacion" %}?' + params, {
+            credentials: 'same-origin', headers: { 'Accept': 'application/json' }
+          });
+          if (!response.ok) throw new Error('Presentación no disponible');
+          const data = await response.json();
+          this.presentacionesArticulos[id] = data.presentacion || {};
+        } catch (_) {
+          this.presentacionesArticulos[id] = {};
+        } finally {
+          delete this.presentacionesEnConsulta[id];
+        }
+      },
+      equivalenciaMovimiento(cantidad, tipo, idArt) {
+        const n = Number(cantidad || 0);
+        if (!Number.isFinite(n) || n <= 0) return '';
+        const unidad = tipo || 'Unidad';
+        if (unidad === 'Unidad') return `${n} ${n === 1 ? 'unidad' : 'unidades'}`;
+        const presentacion = this.presentacionesArticulos[Number(idArt)];
+        if (!presentacion) return 'Consultando equivalencia…';
+        const factor = Number(presentacion[unidad === 'Display' ? 'unidades_display' : 'unidades_bulto']);
+        if (!(factor > 0)) return 'Equivalencia no disponible';
+        return `${n} ${unidad.toLowerCase()}${n === 1 ? '' : 's'} = ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 4 }).format(n * factor)} unidades`;
+      },
+      seleccionarArticuloFilaBusqueda(a, agregarEnMovil = true) {
         if (!this.filaBusqueda) return;
         this.filaBusqueda.articuloSeleccionado = a;
+        if (a.presentacion) this.presentacionesArticulos[Number(a.IDArt)] = a.presentacion;
+        else this.cargarPresentacionArticulo(a.IDArt);
         this.filaBusqueda.texto = (a.id_manual || a.CodigoArticulo || '') + ' - ' + (a.Descripcion || '');
-        this.filaBusqueda.tipo_unidad = this.tipo_unidad_defecto || 'Unidad';
+        this.filaBusqueda.tipo_unidad = (a.lote_articulo === 'Si' || a.serie_articulo === 'Si') ? 'Unidad'
+          : (this.filaBusqueda.tipo_unidad || this.tipo_unidad_defecto || 'Unidad');
         this.filaBusqueda.mostrarSugerencias = false;
         this.filaBusqueda.sugerencias = [];
         this.dropdownSugerencias = [];
         this.mostrarDropdownArticulos = false;
         this.idxDropdown = -1;
-        if (typeof window !== 'undefined' && window.innerWidth < 768 && this.cabeceraMinimaCompleta) {
+        if (agregarEnMovil && typeof window !== 'undefined' && window.innerWidth < 768 && this.cabeceraMinimaCompleta) {
           const self = this;
           this.$nextTick(async function() { await self.confirmarFilaBusqueda(); });
         }
@@ -1316,7 +1403,7 @@ document.addEventListener('alpine:init', function() {
           const d = await r.json().catch(() => ({}));
           const articulos = Array.isArray(d.articulos) ? d.articulos : [];
           if (articulos.length === 1) {
-            this.seleccionarArticuloFilaBusqueda(articulos[0]);
+            this.seleccionarArticuloFilaBusqueda(articulos[0], false);
             this.dropdownSugerencias = [];
             this.mostrarDropdownArticulos = false;
             this.mensajeCodigoInexistente = false;
@@ -1393,7 +1480,7 @@ document.addEventListener('alpine:init', function() {
           const articulos = Array.isArray(d.articulos) ? d.articulos : [];
           if (articulos.length === 1) {
             this.scannerActivo = false;
-            this.seleccionarArticuloFilaBusqueda(articulos[0]);
+            this.seleccionarArticuloFilaBusqueda(articulos[0], false);
             this.mensajeCodigoInexistente = false;
             const self = this;
             this.$nextTick(async function() {
@@ -1465,8 +1552,24 @@ document.addEventListener('alpine:init', function() {
             es = 'S';
             cantidad = saldoActual - saldoDeseadoNum;
           } else {
-            cantidad = saldoDeseadoNum;
-            es = this.filaBusqueda.ES || 'E';
+            this.mensajeError = 'El depósito ya tiene el saldo deseado.';
+            return;
+          }
+          const tipo = this.filaBusqueda.tipo_unidad || 'Unidad';
+          if (tipo !== 'Unidad') {
+            await this.cargarPresentacionArticulo(idArt);
+            const presentacion = this.presentacionesArticulos[Number(idArt)] || {};
+            const factor = Number(presentacion[tipo === 'Display' ? 'unidades_display' : 'unidades_bulto']);
+            if (!(factor > 1)) {
+              this.mensajeError = `El artículo no tiene una equivalencia válida para ${tipo}.`;
+              return;
+            }
+            const cantidadPresentaciones = cantidad / factor;
+            if (Math.abs(cantidadPresentaciones - Math.round(cantidadPresentaciones)) > 1e-8) {
+              this.mensajeError = `La diferencia de ${cantidad} unidades no forma un ${tipo.toLowerCase()} completo. Elegí Unidad.`;
+              return;
+            }
+            cantidad = Math.round(cantidadPresentaciones);
           }
           this.filaBusqueda.cantidad = Math.round(cantidad * 1000) / 1000;
           this.filaBusqueda.ES = es;
@@ -1478,6 +1581,10 @@ document.addEventListener('alpine:init', function() {
       },
       async agregarRenglon() {
         if (!this.nuevoRenglon.IDArt || !this.cabecera.deposito_origen) return;
+        if (parseInt(this.cabecera.motivo_movimiento, 10) === 6 && this.cabecera.nro_pedi) {
+          this.mensajeError = 'Esta transferencia usa un PEDI. Ajustá las cantidades de sus renglones importados.';
+          return;
+        }
         this.agregando = true;
         this.mensajeError = '';
         const body = {
@@ -1503,14 +1610,19 @@ document.addEventListener('alpine:init', function() {
         this.busquedaArt = '';
       },
       async confirmarFilaBusqueda() {
+        if (this.agregando) return;
+        if (parseInt(this.cabecera.motivo_movimiento, 10) === 6 && this.cabecera.nro_pedi) {
+          this.mensajeError = 'Esta transferencia usa un PEDI. Ajustá las cantidades de sus renglones importados.';
+          return;
+        }
         if (!this.cabeceraMinimaCompleta) {
           this.mensajeError = 'Complete los datos mínimos del movimiento (fecha, motivo, depósito origen' + (this.mostrarDepDestino ? ', depósito destino' : '') + ') para agregar artículos.';
           return;
         }
         if (!this.filaBusqueda || !this.filaBusqueda.articuloSeleccionado) return;
         const a = this.filaBusqueda.articuloSeleccionado;
-        const cantidad = Math.round(parseFloat(this.filaBusqueda.cantidad) || 1);
-        if (cantidad < 1) { this.mensajeError = 'La cantidad debe ser al menos 1.'; return; }
+        const cantidad = parseFloat(this.filaBusqueda.cantidad);
+        if (!Number.isFinite(cantidad) || cantidad <= 0) { this.mensajeError = 'La cantidad debe ser mayor a cero.'; return; }
         this.filaBusqueda.cantidad = cantidad;
         this.agregando = true;
         this.mensajeError = '';
@@ -1545,7 +1657,6 @@ document.addEventListener('alpine:init', function() {
         this.filaBusqueda.texto = '';
         this.filaBusqueda.articuloSeleccionado = null;
         this.filaBusqueda.cantidad = 1;
-        this.filaBusqueda.tipo_unidad = this.tipo_unidad_defecto || 'Unidad';
         this.filaBusqueda.unidad_art_peso = null;
         this.filaBusqueda.sugerencias = [];
         this.dropdownSugerencias = [];
@@ -1555,7 +1666,7 @@ document.addEventListener('alpine:init', function() {
       async actualizarMovimientoCantidad(r) {
         if (!r || !this.cabecera.deposito_origen) return;
         const es = this.puedeCambiarES ? (r.ES || 'E') : this.getDefaultES();
-        const cantidad = Math.round(parseFloat(r.Cantidad) || 0);
+        const cantidad = parseFloat(r.Cantidad);
         if (isNaN(cantidad) || cantidad <= 0) return;
         r.Cantidad = cantidad;
         const ent = es === 'E' ? cantidad : 0;
@@ -1874,6 +1985,7 @@ document.addEventListener('alpine:init', function() {
         this.codigoMovimiento = d.codigo_movimiento;
         this.nroComprobante = d.nro_comprobante;
         this.renglones = [];
+        this.mostrarModalPDF = true;
       }
     };
   });

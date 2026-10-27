@@ -26,8 +26,8 @@ PWA_CONTABILIDAD_DEEP_LINKS = (
     "/contabilidad/cotizacion-dolar/",
 )
 
-# Submenús stock accesibles en Nivel A (conteo móvil).
-PWA_STOCK_MENU_ITEM_IDS = frozenset({"stock_inv_fisico_conteo"})
+# Submenús stock accesibles en Nivel A.
+PWA_STOCK_MENU_ITEM_IDS = frozenset({"stock_inv_fisico_conteo", "stock_prep_cajas"})
 
 # Deep links PWA stock conteo.
 PWA_STOCK_CONTEO_DEEP_LINKS = (
@@ -139,6 +139,16 @@ def usuario_tiene_conteo_en_menu(user, request: Optional[HttpRequest] = None) ->
 def conteo_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
     """Conteo inventario físico accesible en móvil con permiso contar."""
     return usuario_tiene_conteo_en_menu(user, request)
+
+
+def usuario_tiene_stock_movil(user, request: Optional[HttpRequest] = None) -> bool:
+    if usuario_tiene_conteo_en_menu(user, request):
+        return True
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if hasattr(user, "is_admin") and user.is_admin():
+        return True
+    return bool(hasattr(user, "tiene_permiso") and user.tiene_permiso("stock.preparacion_cajas"))
 
 
 def usuario_tiene_contabilidad_cotizacion_en_menu(user, request: Optional[HttpRequest] = None) -> bool:
@@ -271,7 +281,7 @@ def filtrar_apps_menu_para_pwa_movil(
             continue
         if app_id == "ecom" and not usuario_tiene_ecom_en_menu(usuario, request):
             continue
-        if app_id == "stock" and not usuario_tiene_conteo_en_menu(usuario, request):
+        if app_id == "stock" and not usuario_tiene_stock_movil(usuario, request):
             continue
         if app_id == "mpr" and not usuario_tiene_mpr_en_menu(usuario, request):
             continue
@@ -316,7 +326,7 @@ def sidebar_visible_en_pwa(
         return usuario_tiene_pedidos_ventas_en_menu(usuario, request)
     if current_app_id == "stock":
         usuario = user or (getattr(request, "user", None) if request else None)
-        return usuario_tiene_conteo_en_menu(usuario, request)
+        return usuario_tiene_stock_movil(usuario, request)
     if current_app_id == "mpr":
         usuario = user or (getattr(request, "user", None) if request else None)
         return usuario_tiene_mpr_en_menu(usuario, request)
