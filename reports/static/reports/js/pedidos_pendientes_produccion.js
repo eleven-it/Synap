@@ -59,6 +59,17 @@
   let sortKey = "pendiente_qty";
   let sortDir = "desc";
 
+  function ensurePppTableStyles() {
+    if (document.getElementById("ppp-table-header-styles")) return;
+    const style = document.createElement("style");
+    style.id = "ppp-table-header-styles";
+    style.textContent =
+      "#ppp-section .ppp-data-table th.ppp-sort-th { white-space: nowrap; padding: 0.5rem 0.75rem; vertical-align: middle; }" +
+      "#ppp-section .ppp-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }" +
+      "#ppp-section .ppp-data-table { width: max-content; min-width: 100%; }";
+    document.head.appendChild(style);
+  }
+
   function formatUnit(value) {
     if (value === null || value === undefined || value === "") return "0";
     const n = Number(value);
@@ -156,6 +167,7 @@
     const summary = document.getElementById("ppp-filters-summary");
     if (!wrap) return;
 
+    ensurePppTableStyles();
     lastResponse = response;
     const articulos = sortedArticulos(response.data || []);
     const totals = response.totals || {};
@@ -178,8 +190,8 @@
     COLUMNS.forEach(function (col) {
       const arrow = sortKey === col.key ? (sortDir === "asc" ? " ▲" : " ▼") : "";
       head +=
-        '<th class="ppp-sort-th cursor-pointer select-none ' +
-        (col.align === "right" ? "text-right" : "") +
+        '<th class="ppp-sort-th whitespace-nowrap px-3 py-2 cursor-pointer select-none ' +
+        (col.align === "right" ? "text-right" : "text-left") +
         '" data-sort-key="' +
         escHtml(col.key) +
         '">' +
@@ -235,7 +247,7 @@
       formatUnit(n) +
       " | Orden y totales sobre todo el resultado" +
       "</p>" +
-      '<div class="overflow-x-auto"><table class="w-full text-xs text-left border-collapse ppp-data-table">' +
+      '<div class="ppp-table-scroll overflow-x-auto"><table class="ppp-data-table text-xs text-left border-collapse">' +
       '<thead class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase tracking-wide">' +
       head +
       "</thead><tbody>" +
