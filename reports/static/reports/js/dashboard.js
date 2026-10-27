@@ -78,6 +78,7 @@ function detectReportType() {
     "total-consolidado-operativo",
     "bo-stock-facturacion",
     "pedidos-pendientes-produccion",
+    "fabricados-superart",
     "ventas-objetivos-vs-bo",
     "ventas-por-vendedor",
     "ventas-por-articulo",
@@ -116,6 +117,10 @@ const isInventarioDepositoSlug = (slug) => slug === "inventario-deposito-articul
 
 function isPedidosPendientesProduccionSlug(slug) {
   return slug === "pedidos-pendientes-produccion";
+}
+
+function isFabricadosSuperartSlug(slug) {
+  return slug === "fabricados-superart";
 }
 
 /** Informes con doble período (facturación/remitos + backorder), mismos filtros que BO. */
@@ -4295,6 +4300,13 @@ const renderSummary = (meta, totals) => {
 
   // pedidos-pendientes-produccion: KPIs solo en la sección clara (#ppp-section), no tarjetas oscuras del resumen
   if (isPedidosPendientesProduccionSlug(reportSlug)) {
+    summaryGrid.innerHTML = "";
+    if (summaryContainer) summaryContainer.classList.add("hidden");
+    updateLastUpdateTime();
+    return;
+  }
+
+  if (isFabricadosSuperartSlug(reportSlug)) {
     summaryGrid.innerHTML = "";
     if (summaryContainer) summaryContainer.classList.add("hidden");
     updateLastUpdateTime();
@@ -10151,6 +10163,15 @@ if (dashboardRoot) {
         const q = (searchEl.value || "").trim();
         if (q) filters.busqueda = q;
       }
+    } else if (isFabricadosSuperartSlug(currentReportSlug)) {
+      const desde = document.getElementById("fsa_desde")?.value;
+      const hasta = document.getElementById("fsa_hasta")?.value;
+      if (desde) filters.desde = filters.fecha_inicio = desde;
+      if (hasta) filters.hasta = filters.fecha_fin = hasta;
+      const pres = document.getElementById("fsa_presentacion")?.value;
+      if (pres) filters.presentacion = pres;
+      appendTagMultiFilter("marcas_incluidos", filters, "marcas_incluidos");
+      appendTagMultiFilter("superarts_incluidos", filters, "q_superart");
     } else if (isInventarioDepositoSlug(currentReportSlug)) {
       const fechaCorte = document.getElementById("fecha_corte")?.value;
       if (fechaCorte) filters.fecha_corte = fechaCorte;
@@ -10737,6 +10758,29 @@ if (dashboardRoot) {
             document.dispatchEvent(
               new CustomEvent("reportDataLoaded", {
                 detail: { slug: "pedidos-pendientes-produccion", response: pppResponse },
+              })
+            );
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
+        } else if (isFabricadosSuperartSlug(currentReportSlug)) {
+          try {
+            const fsaResponse = {
+              data: payload.data || [],
+              totals: payload.totals || {},
+              meta: payload.meta || {},
+              notes: payload.notes || [],
+            };
+            if (window.fabricadosSuperartHandler?.renderTable) {
+              window.fabricadosSuperartHandler.renderTable(fsaResponse);
+            }
+            document.dispatchEvent(
+              new CustomEvent("reportDataLoaded", {
+                detail: { slug: "fabricados-superart", response: fsaResponse },
               })
             );
           } finally {
