@@ -287,6 +287,17 @@ APPS_MENU = [
                         "permission": ["reports.view_operational", "mpr.reportes", "mpr.ver"],
                         "menu_item_id": "mpr_rep_pedidos_pendientes_produccion",
                     },
+                    {
+                        "label": _("Fabricados por superartículo"),
+                        "url": "mpr:reportes",
+                        "url_query": {
+                            "grupo": "produccion",
+                            "reporte": "fabricados_superart",
+                        },
+                        "icon": "factory",
+                        "permission": ["mpr.ver", "mpr.reportes"],
+                        "menu_item_id": "mpr_rep_fabricados_superart",
+                    },
                 ]
             },
             {
