@@ -9,12 +9,16 @@ from reports.permissions import (
     user_can_access_pedidos_pendientes_produccion,
 )
 from reports.services.pedidos_pendientes_produccion_calcs import (
+    aggregate_totals,
     build_viajante_sql,
     classify_depositos_stock_columns,
     compute_disponible_backorder,
     compute_mpr_pack_fields,
     enrich_articulo_row,
+    sql_unidad_base_join,
+    sql_unidad_base_select,
 )
+import reports.services.pedidos_pendientes_produccion_runner as ppp_runner_mod
 from reports.services.pedidos_pendientes_produccion_seed import (
     PEDIDOS_PENDIENTES_PRODUCCION_SLUG as SEED_SLUG,
 )
@@ -72,6 +76,63 @@ class TestClasificacionDepositos(unittest.TestCase):
         term, prod = classify_depositos_stock_columns(deps)
         self.assertEqual(term, [1])
         self.assertEqual(prod, [2])
+
+
+class TestUnidadBaseSql(unittest.TestCase):
+    def test_join_unidmed_en_helpers(self):
+        self.assertIn("unidmed", sql_unidad_base_join())
+        self.assertIn("id_unimed", sql_unidad_base_join())
+        self.assertIn("nombre_unimed", sql_unidad_base_select())
+
+    def test_runner_no_usa_tipo_unidad_stockp(self):
+        src = inspect.getsource(ppp_runner_mod)
+        self.assertIn("sql_unidad_base_join", src)
+        self.assertNotIn("sp.tipo_unidad", src)
+
+
+class TestAggregateTotals(unittest.TestCase):
+    def test_sin_total_brecha_y_articulos_con_backorder(self):
+        arts = [
+            {
+                "pendiente_qty": 10,
+                "stock_terminado": 0,
+                "stock_produccion": 0,
+                "disponible": -10,
+                "backorder": 10,
+                "importe_pendiente": 100,
+                "mpr_demanda_pedido": 10,
+                "mpr_cantidad_a_fabricar": 10,
+                "mpr_brecha_vs_pendiente": 0,
+            },
+            {
+                "pendiente_qty": 5,
+                "stock_terminado": 100,
+                "stock_produccion": 0,
+                "disponible": 95,
+                "backorder": 0,
+                "importe_pendiente": 50,
+                "mpr_demanda_pedido": 5,
+                "mpr_cantidad_a_fabricar": 0,
+                "mpr_brecha_vs_pendiente": 5,
+            },
+        ]
+        t = aggregate_totals(arts)
+        self.assertEqual(t["articulos_con_backorder"], 1)
+        self.assertNotIn("total_mpr_brecha_vs_pendiente", t)
+        self.assertEqual(t["total_backorder"], 10.0)
+        self.assertEqual(t["total_importe_pendiente"], 150.0)
+
+
+class TestReservaNula(unittest.TestCase):
+    def test_stock_reserva_none_tratado_como_cero(self):
+        mpr = compute_mpr_pack_fields(50, 40, None)
+        self.assertEqual(mpr["mpr_stock_reserva"], 0.0)
+        self.assertEqual(mpr["mpr_cantidad_a_fabricar"], 10.0)
+
+    def test_enrich_sin_segundo_argumento(self):
+        art = {"pendiente_qty": 1, "stock_terminado": 0}
+        enrich_articulo_row(art)
+        self.assertEqual(art["mpr_stock_reserva"], 0.0)
 
 
 class TestVendedorSql(unittest.TestCase):
