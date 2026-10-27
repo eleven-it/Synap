@@ -75,8 +75,8 @@ def listar_recibos_relay(
 
     sql = f"""
         SELECT
-            DATE_FORMAT(cuentacliente.Fecha,'%d/%m/%Y') AS FechaB,
-            DATE_FORMAT(cuentacliente.Fecha,'%Y%m%d') AS FechaYmd,
+            DATE_FORMAT(cuentacliente.Fecha,'%%d/%%m/%%Y') AS FechaB,
+            DATE_FORMAT(cuentacliente.Fecha,'%%Y%%m%%d') AS FechaYmd,
             cuentacliente.TipoComprobante AS TipoComprobante,
             cuentacliente.tiporec AS tipoRecibo,
             cliente.Codigo AS codCliente,

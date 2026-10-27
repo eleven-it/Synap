@@ -74,7 +74,7 @@ def listar_articulo_remito_relay(
             stock.Cantidad,
             comp_ped.CodigoMovimiento,
             comp_ped.id_comp_ped AS id,
-            DATE_FORMAT(comp_ped.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(comp_ped.Fecha,'%%d/%%m/%%Y') AS FechaB,
             comp_ped.NroComprobante,
             comp_ped.CondVenta,
             comp_ped.Estado,

@@ -63,7 +63,7 @@ def listar_no_cancelados_relay(
     where, params = _where(body, idcliente, prefijo_nro=False)
     sql = f"""
         SELECT
-            DATE_FORMAT(recibo_factura.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(recibo_factura.Fecha,'%%d/%%m/%%Y') AS FechaB,
             recibo_factura.Fecha AS Fecha,
             recibo_factura.TipoComprobante AS TipoComprobante,
             recibo_factura.Cancelado AS Cancelado,
@@ -103,7 +103,7 @@ def listar_no_cancelados_resumen_relay(
     where, params = _where(body, idcliente, prefijo_nro=True)
     sql = f"""
         SELECT
-            DATE_FORMAT(recibo_factura.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(recibo_factura.Fecha,'%%d/%%m/%%Y') AS FechaB,
             recibo_factura.Fecha AS Fecha,
             recibo_factura.TipoComprobante AS TipoComprobante,
             recibo_factura.Cancelado AS Cancelado,
