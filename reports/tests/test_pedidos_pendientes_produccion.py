@@ -14,6 +14,7 @@ from reports.services.pedidos_pendientes_produccion_calcs import (
     classify_depositos_stock_columns,
     compute_disponible_backorder,
     compute_mpr_pack_fields,
+    compute_reserva_reposicion,
     enrich_articulo_row,
     sql_unidad_base_join,
     sql_unidad_base_select,
@@ -56,26 +57,61 @@ class TestDisponibleBackorder(unittest.TestCase):
         self.assertEqual(art["backorder"], 490.0)
 
 
+class TestReservaReposicion(unittest.TestCase):
+    def test_objetivo_es_stock_reserva(self):
+        obj, disp, rep = compute_reserva_reposicion(10, 100, 25)
+        self.assertEqual(obj, 25.0)
+        self.assertEqual(disp, 25.0)
+        self.assertEqual(rep, 0.0)
+
+
+class TestInvarianteFabricar(unittest.TestCase):
+    """A fabricar = backorder + reposición = max(0, P + R − terminado)."""
+
+    def _assert_invariante(self, p: float, t: float, r: float):
+        _, backorder = compute_disponible_backorder(p, t)
+        mpr = compute_mpr_pack_fields(p, t, r)
+        mpr.pop("_backorder_check", None)
+        esperado = round(max(0.0, p + r - t), 4)
+        self.assertEqual(mpr["mpr_cantidad_a_fabricar"], esperado)
+        self.assertAlmostEqual(
+            mpr["mpr_cantidad_a_fabricar"],
+            round(backorder + mpr["reposicion_reserva"], 4),
+        )
+
+    def test_terminado_menor_pendiente(self):
+        self._assert_invariante(100, 40, 20)
+
+    def test_terminado_entre_pendiente_y_pendiente_mas_reserva(self):
+        self._assert_invariante(100, 110, 30)
+
+    def test_terminado_mayor_pendiente_mas_reserva(self):
+        self._assert_invariante(50, 200, 10)
+
+    def test_reserva_cero(self):
+        self._assert_invariante(80, 30, 0)
+
+
 class TestMprPackFields(unittest.TestCase):
-    def test_a_fabricar_cero_muestra_demanda_y_ceros(self):
+    def test_a_fabricar_cero_con_stock_cubre(self):
         mpr = compute_mpr_pack_fields(100, 150, 10)
         self.assertEqual(mpr["mpr_demanda_pedido"], 100.0)
         self.assertEqual(mpr["mpr_cantidad_a_fabricar"], 0.0)
-        self.assertEqual(mpr["mpr_stock_terminado"], 150.0)
-        self.assertEqual(mpr["mpr_stock_reserva"], 10.0)
-        self.assertEqual(mpr["mpr_brecha_vs_pendiente"], 100.0)
+        self.assertEqual(mpr["reserva_objetivo"], 10.0)
+        self.assertEqual(mpr["reserva_disponible"], 10.0)
+        self.assertEqual(mpr["reposicion_reserva"], 0.0)
 
-    def test_brecha_con_fabricar(self):
+    def test_solo_backorder_sin_reserva(self):
         mpr = compute_mpr_pack_fields(100, 5, 0)
         self.assertEqual(mpr["mpr_cantidad_a_fabricar"], 95.0)
-        self.assertEqual(mpr["mpr_brecha_vs_pendiente"], 5.0)
+        self.assertEqual(mpr["reposicion_reserva"], 0.0)
 
-    def test_enrich_articulo_sin_fila_mpr_externa(self):
+    def test_enrich_articulo_row(self):
         art = {"pendiente_qty": 120, "stock_terminado": 0, "stock_produccion": 84}
         enrich_articulo_row(art, 0)
         self.assertEqual(art["backorder"], 120.0)
         self.assertEqual(art["mpr_cantidad_a_fabricar"], 120.0)
-        self.assertIsNotNone(art["mpr_demanda_pedido"])
+        self.assertIn("reserva_objetivo", art)
 
 
 class TestClasificacionDepositos(unittest.TestCase):
@@ -89,6 +125,15 @@ class TestClasificacionDepositos(unittest.TestCase):
         term, prod = classify_depositos_stock_columns(deps)
         self.assertEqual(term, [1])
         self.assertEqual(prod, [2])
+
+    def test_consignacion_suma_a_terminado(self):
+        deps = [
+            {"CodDeposito": 10, "tipo_mpr": "Terminado", "suma_stock": "Si", "anulado": "No"},
+            {"CodDeposito": 11, "tipo_mpr": "Consignación", "suma_stock": "Si", "anulado": "No"},
+        ]
+        term, prod = classify_depositos_stock_columns(deps)
+        self.assertEqual(sorted(term), [10, 11])
+        self.assertEqual(prod, [])
 
 
 class TestUnidadBaseSql(unittest.TestCase):
@@ -104,18 +149,20 @@ class TestUnidadBaseSql(unittest.TestCase):
 
 
 class TestAggregateTotals(unittest.TestCase):
-    def test_sin_total_brecha_y_articulos_con_backorder(self):
+    def test_totales_reserva_y_sin_brecha(self):
         arts = [
             {
                 "pendiente_qty": 10,
                 "stock_terminado": 0,
                 "stock_produccion": 0,
-                "disponible": -10,
+                "disponible": 0,
                 "backorder": 10,
                 "importe_pendiente": 100,
                 "mpr_demanda_pedido": 10,
-                "mpr_cantidad_a_fabricar": 10,
-                "mpr_brecha_vs_pendiente": 0,
+                "reserva_objetivo": 5,
+                "reserva_disponible": 0,
+                "reposicion_reserva": 5,
+                "mpr_cantidad_a_fabricar": 15,
             },
             {
                 "pendiente_qty": 5,
@@ -125,27 +172,32 @@ class TestAggregateTotals(unittest.TestCase):
                 "backorder": 0,
                 "importe_pendiente": 50,
                 "mpr_demanda_pedido": 5,
+                "reserva_objetivo": 8,
+                "reserva_disponible": 8,
+                "reposicion_reserva": 0,
                 "mpr_cantidad_a_fabricar": 0,
-                "mpr_brecha_vs_pendiente": 5,
             },
         ]
         t = aggregate_totals(arts)
         self.assertEqual(t["articulos_con_backorder"], 1)
         self.assertNotIn("total_mpr_brecha_vs_pendiente", t)
         self.assertEqual(t["total_backorder"], 10.0)
+        self.assertEqual(t["total_reserva_objetivo"], 13.0)
+        self.assertEqual(t["total_reposicion_reserva"], 5.0)
+        self.assertEqual(t["total_mpr_cantidad_a_fabricar"], 15.0)
         self.assertEqual(t["total_importe_pendiente"], 150.0)
 
 
 class TestReservaNula(unittest.TestCase):
     def test_stock_reserva_none_tratado_como_cero(self):
         mpr = compute_mpr_pack_fields(50, 40, None)
-        self.assertEqual(mpr["mpr_stock_reserva"], 0.0)
+        self.assertEqual(mpr["reserva_objetivo"], 0.0)
         self.assertEqual(mpr["mpr_cantidad_a_fabricar"], 10.0)
 
     def test_enrich_sin_segundo_argumento(self):
         art = {"pendiente_qty": 1, "stock_terminado": 0}
         enrich_articulo_row(art)
-        self.assertEqual(art["mpr_stock_reserva"], 0.0)
+        self.assertEqual(art["reserva_objetivo"], 0.0)
 
 
 class TestVendedorSql(unittest.TestCase):
@@ -185,6 +237,9 @@ class TestTablaEncabezadosUnaLinea(unittest.TestCase):
         self.assertIn("ppp-table-scroll", js)
         self.assertIn("white-space: nowrap", js)
         self.assertIn("#ppp-section .ppp-data-table", js)
+        self.assertIn("Reserva objetivo", js)
+        self.assertNotIn("Brecha", js)
+        self.assertNotIn("mpr_brecha", js)
 
 
 class TestSeedSinMetricasGenerico(unittest.TestCase):
