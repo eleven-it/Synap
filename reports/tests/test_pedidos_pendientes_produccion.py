@@ -21,6 +21,7 @@ from reports.services.pedidos_pendientes_produccion_calcs import (
 import reports.services.pedidos_pendientes_produccion_runner as ppp_runner_mod
 from reports.services.pedidos_pendientes_produccion_seed import (
     PEDIDOS_PENDIENTES_PRODUCCION_SLUG as SEED_SLUG,
+    _report_defaults,
 )
 from reports.services.query_runner import QueryRunnerService
 from reports.views import SLUGS_VENTAS_CON_PUNTO_VENTA
@@ -160,6 +161,24 @@ class TestBoOriginalSinCambios(unittest.TestCase):
     def test_bo_no_aplica_clientes_incluir_en_sql(self):
         body = inspect.getsource(QueryRunnerService._run_backorder_vs_stock_vs_facturacion)
         self.assertNotIn("clientes_incluir", body)
+
+
+class TestSeedSinMetricasGenerico(unittest.TestCase):
+    def test_defaults_sin_metrics(self):
+        cfg = _report_defaults()["config"]
+        self.assertEqual(cfg.get("metrics"), [])
+
+    def test_dashboard_oculta_resumen_generico_ppp(self):
+        from pathlib import Path
+
+        js = (Path(__file__).resolve().parents[1] / "static" / "reports" / "js" / "dashboard.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("isPedidosPendientesProduccionSlug(reportSlug)", js)
+        idx = js.find("pedidos-pendientes-produccion: KPIs solo en la sección clara")
+        self.assertGreater(idx, 0)
+        block = js[idx : idx + 400]
+        self.assertIn("summaryContainer.classList.add(\"hidden\")", block)
 
 
 class TestPermisosYSlug(unittest.TestCase):
