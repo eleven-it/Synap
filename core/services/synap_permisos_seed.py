@@ -9,6 +9,7 @@ por empresa) que el DDL ``synap_*`` y el catálogo existen tras el login, sin
 inyectar nada en las tablas compartidas con AdministraNET.
 """
 import logging
+from hashlib import sha256
 from typing import Any, Dict, List, Tuple
 
 from django.conf import settings
@@ -80,7 +81,10 @@ def asegurar_synap_schema_si_procede(base_empresa: str) -> None:
     if not (base_empresa or "").strip():
         return
 
-    cache_key = f"{CACHE_KEY_PREFIX}{base_empresa.strip()}"
+    # Al cambiar el catálogo, una clave nueva fuerza la siembra inmediatamente,
+    # incluso si Redis conserva el resultado de la versión anterior por 24 horas.
+    revision = sha256(repr(_filas_catalogo()).encode("utf-8")).hexdigest()[:12]
+    cache_key = f"{CACHE_KEY_PREFIX}{base_empresa.strip()}:{revision}"
     ttl = getattr(settings, "SYNAP_AUTO_ENSURE_SCHEMA_TTL", 86400)  # 24h
 
     try:
@@ -97,12 +101,12 @@ def asegurar_synap_schema_si_procede(base_empresa: str) -> None:
         with get_connection(base_empresa) as conn:
             result = run_synap_permisos_tables_mysql(conn)
 
-        try:
-            cache.set(cache_key, True, timeout=ttl)
-        except Exception:
-            pass
-
-        if not result.get("success"):
+        if result.get("success"):
+            try:
+                cache.set(cache_key, True, timeout=ttl)
+            except Exception:
+                pass
+        else:
             logger.warning(
                 "Esquema Synap no aplicado por completo en %s: %s",
                 base_empresa, result.get("message"),

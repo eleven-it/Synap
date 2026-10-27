@@ -48,8 +48,24 @@ aviso de estado arriba. El resumen queda listo para usar con el código de
 movimiento y números de caja cuando todas las cajas con contenido están
 cerradas. Synap no modifica `stockp` ni el pendiente del pedido en este paso.
 
-La pantalla está en **Stock → Cajas de preparación**. Requiere el permiso
-`stock.preparacion_cajas`. La base de datos de cada empresa debe recibir el
+La pantalla está en **Stock → Armado de cajas** y funciona tanto en escritorio
+como en la PWA móvil, en `/stock/preparacion-cajas/`. Requiere el permiso
+`stock.preparacion_cajas`, visible bajo **Stock** en la asignación de permisos
+por puesto. Un puesto con solo este permiso puede entrar desde el menú Stock;
+un puesto sin él no ve la entrada ni puede abrir la página o su API. En móvil,
+el acceso principal de Stock abre una pantalla permitida por ese puesto, no
+Ingreso Mov. Stock.
+
+El permiso se guarda en el catálogo `synap_permiso` de **cada base de empresa**.
+Con `SYNAP_PERMISOS_SOURCE=synap` (o `dual` durante la transición), activar
+el permiso para un puesto controla el acceso efectivo de sus usuarios. Si
+`SYNAP_AUTO_ENSURE_SCHEMA=True`, la apertura de la pantalla de permisos
+siembra los permisos nuevos aunque siga viva la caché de una versión anterior.
+Si está desactivado, un administrador de la base debe sembrar el catálogo
+antes de asignar el permiso; `apply_synap_permisos_tables <base_empresa>`
+incluye esa siembra y requiere permisos de DDL.
+
+La base de datos de cada empresa debe recibir el
 proveedor `stock_prep_cajas_synap` de la herramienta global de migración MySQL.
 También se puede aplicar por empresa desde el contenedor de Synap:
 

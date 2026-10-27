@@ -1,4 +1,4 @@
-"""Pantalla móvil y API del armado previo de cajas por preparación."""
+"""Pantalla responsive y API del armado previo de cajas por preparación."""
 
 from __future__ import annotations
 
