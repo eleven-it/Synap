@@ -20,8 +20,9 @@ def _report_defaults():
         ),
         "category": "operational",
         "config": {
-            "metrics": ["pendiente_qty", "stock_terminado", "backorder", "mpr_cantidad_a_fabricar"],
-            "dimensions": ["articulo", "marca", "deposito"],
+            # Sin métricas de catálogo: los KPI van solo en la sección clara del informe (no resumen genérico).
+            "metrics": [],
+            "dimensions": ["articulo", "marca"],
             "tags": ["mpr", "pedidos", "produccion", "stock", "listados"],
             "catalog_legacy_section": "listados",
             "filters": {
@@ -86,6 +87,11 @@ def seed_pedidos_pendientes_produccion_report(
             empresa=None,
             defaults=defaults,
         )
+
+    cfg = dict(report_def.config or {})
+    cfg["metrics"] = []
+    report_def.config = cfg
+    report_def.save(update_fields=["config"])
 
     cursor = connection.cursor()
     try:
