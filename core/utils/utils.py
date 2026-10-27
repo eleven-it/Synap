@@ -73,6 +73,7 @@ APPS_MENU = [
                     {"label": _("Inventario"), "url": "stock:inventario", "icon": "inventory_2", "permission": "stock.consultas", "menu_item_id": "stock_mov_inventario"},
                     {"label": _("Inventario físico (campañas)"), "url": "stock:inventario_fisico_list", "icon": "fact_check", "permission": "stock.inventario_fisico.gestionar", "menu_item_id": "stock_inv_fisico_campanas"},
                     {"label": _("Conteo inventario físico"), "url": "stock:conteo_mis", "icon": "qr_code_scanner", "permission": "stock.inventario_fisico.contar", "menu_item_id": "stock_inv_fisico_conteo"},
+                    {"label": _("Cajas de preparación"), "url": "stock:prep_cajas", "icon": "inventory_2", "permission": "stock.preparacion_cajas", "menu_item_id": "stock_prep_cajas"},
                 ]
             },
             {

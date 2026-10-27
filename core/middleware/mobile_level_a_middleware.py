@@ -115,6 +115,9 @@ _STOCK_CONTEO_PAGE_PATTERNS = tuple(
 
 _STOCK_CONTEO_API_PREFIX = '/stock/api/conteo/'
 
+_STOCK_PREP_CAJAS_PAGE = re.compile(r'^/stock/preparacion-cajas/?$')
+_STOCK_PREP_CAJAS_API_PREFIX = '/stock/api/preparacion-cajas/'
+
 # Contabilidad — cotización dólar (PWA Nivel A).
 _CONTABILIDAD_COTIZACION_PAGE_PATTERNS = tuple(
     re.compile(p)
@@ -164,6 +167,8 @@ def mobile_path_allowed_for_level_a(path: str) -> bool:
         if rx.match(path):
             return True
     if path.startswith(_STOCK_CONTEO_API_PREFIX):
+        return True
+    if path.startswith(_STOCK_PREP_CAJAS_API_PREFIX) or _STOCK_PREP_CAJAS_PAGE.match(path):
         return True
     for rx in _STOCK_CONTEO_PAGE_PATTERNS:
         if rx.match(path):

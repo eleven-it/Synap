@@ -3,10 +3,18 @@ from django.urls import path
 from . import views
 from . import api_views
 from . import mobile_views
+from . import prep_cajas_views
 
 app_name = "stock"
 
 urlpatterns = [
+    path("preparacion-cajas/", prep_cajas_views.pagina, name="prep_cajas"),
+    path("api/preparacion-cajas/buscar/", prep_cajas_views.buscar, name="prep_cajas_buscar"),
+    path("api/preparacion-cajas/<int:codigo_prep>/", prep_cajas_views.estado, name="prep_cajas_estado"),
+    path("api/preparacion-cajas/<int:codigo_prep>/abrir/", prep_cajas_views.abrir, name="prep_cajas_abrir"),
+    path("api/preparacion-cajas/<int:codigo_prep>/lectura/", prep_cajas_views.lectura, name="prep_cajas_lectura"),
+    path("api/preparacion-cajas/<int:codigo_prep>/accion/", prep_cajas_views.accion, name="prep_cajas_accion"),
+    path("api/preparacion-cajas/<int:codigo_prep>/reserva/", prep_cajas_views.reserva, name="prep_cajas_reserva"),
     path("manual/", views.manual_usuario_view, name="manual_usuario"),
     path("ingreso-movimiento/", views.alta_movimiento_view, name="alta_movimiento"),
     path("pedido-interno/", views.pedido_interno_lista_view, name="pedido_interno_lista"),
