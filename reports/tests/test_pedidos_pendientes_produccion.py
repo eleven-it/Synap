@@ -163,6 +163,18 @@ class TestBoOriginalSinCambios(unittest.TestCase):
         self.assertNotIn("clientes_incluir", body)
 
 
+class TestTablaEncabezadosUnaLinea(unittest.TestCase):
+    def test_js_tabla_ppp_nowrap_y_scroll(self):
+        from pathlib import Path
+
+        js = (Path(__file__).resolve().parents[1] / "static" / "reports" / "js" / "pedidos_pendientes_produccion.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ppp-table-scroll", js)
+        self.assertIn("white-space: nowrap", js)
+        self.assertIn("#ppp-section .ppp-data-table", js)
+
+
 class TestSeedSinMetricasGenerico(unittest.TestCase):
     def test_defaults_sin_metrics(self):
         cfg = _report_defaults()["config"]
