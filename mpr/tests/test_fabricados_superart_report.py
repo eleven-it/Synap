@@ -70,6 +70,23 @@ class TestAgrupacionFabricados(SimpleTestCase):
         self.assertEqual(params[1], "SemiElaborado")
         self.assertNotIn("2daSeleccion", sql)
 
+    def test_sql_date_format_escapado_para_mysqldb_params(self):
+        """MySQLdb formatea la query con %; DATE_FORMAT debe usar %%Y-%%m."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        fetch_fabricado_primera_por_articulo_mes(mock_cursor, ["2026-10"], marcas_ids=[7])
+        sql = mock_cursor.execute.call_args[0][0]
+        params = list(mock_cursor.execute.call_args[0][1])
+        self.assertIn("DATE_FORMAT(t.creado_en, '%%Y-%%m')", sql)
+        self.assertNotIn("'%Y-%m'", sql)
+        try:
+            formatted = sql % tuple(params)
+        except (TypeError, ValueError) as exc:
+            self.fail(f"query % params no debe fallar con DATE_FORMAT: {exc}")
+        self.assertIn("DATE_FORMAT(t.creado_en, '%Y-%m')", formatted)
+        self.assertIn("2026-10", formatted)
+        self.assertIn("CodigoMarca IN (7)", formatted)
+
     def test_totales_y_mes_pico(self):
         filas = [
             {"id_articulo": 1, "id_manual": "A", "ym": "2026-01", "cantidad": 3},

@@ -88,7 +88,7 @@ def listar_nota_credito_relay(
         SELECT
             cc.CodigoMovimiento AS CodigoMovimiento,
             cc.id_cuentacliente AS id,
-            DATE_FORMAT(cc.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(cc.Fecha,'%%d/%%m/%%Y') AS FechaB,
             cc.Fecha AS Fecha,
             cc.TipoComprobante AS TipoComprobante,
             cc.NroComprobante AS NroComprobante,

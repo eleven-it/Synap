@@ -50,13 +50,13 @@ def fetch_fabricado_primera_por_articulo_mes(
         f"""
         SELECT t.id_articulo,
                COALESCE(a.id_manual, '') AS id_manual,
-               DATE_FORMAT(t.creado_en, '%Y-%m') AS ym,
+               DATE_FORMAT(t.creado_en, '%%Y-%%m') AS ym,
                COALESCE(SUM(t.cantidad), 0) AS cantidad
         FROM mpr_transicion_lote t
         INNER JOIN articulo a ON a.IDArt = t.id_articulo
         WHERE t.tipo_origen = %s
           AND t.tipo_destino = %s
-          AND DATE_FORMAT(t.creado_en, '%Y-%m') IN ({ph_meses})
+          AND DATE_FORMAT(t.creado_en, '%%Y-%%m') IN ({ph_meses})
           {marca_sql}
         GROUP BY t.id_articulo, COALESCE(a.id_manual, ''), ym
         """,
