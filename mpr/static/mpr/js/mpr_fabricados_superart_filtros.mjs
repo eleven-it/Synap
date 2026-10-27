@@ -1,16 +1,8 @@
 /**
  * Filtros informe Fabricados por superartículo: panel colapsable, rango de fechas,
- * marcas (tags + API), superartículo predictivo y sincronización con la URL.
+ * marcas y superartículos (tags + API), sincronización con la URL.
  */
-import { initializeTagsFilter } from "/static/reports/js/tags_filter.mjs?v=20261027a";
-
-function debounce(fn, ms) {
-  let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), ms);
-  };
-}
+import { initializeTagsFilter } from "/static/reports/js/tags_filter.mjs?v=20261027b";
 
 function buildFabricadosSuperartFiltros(config) {
   const cfg = config || {};
@@ -19,30 +11,16 @@ function buildFabricadosSuperartFiltros(config) {
     desde: cfg.desdeInicial || "",
     hasta: cfg.hastaInicial || "",
     presentacion: cfg.presentacion || "docenas",
-    qSuperart: cfg.qSuperartInicial || "",
-    sugerenciasSuperart: [],
-    sugerenciasAbiertas: false,
-    sugerenciaActiva: 0,
-    buscandoSuperart: false,
     _marcasInit: false,
+    _superartInit: false,
     _listo: false,
 
     init() {
       this.$nextTick(() => {
         this.initMarcasTags();
-        const sel = document.getElementById("marcas_incluidos");
-        if (sel) {
-          sel.addEventListener("change", () => this.aplicarFiltros());
-        }
+        this.initSuperartTags();
         this._listo = true;
       });
-      this.$watch(
-        "qSuperart",
-        debounce(() => {
-          this.buscarSuperart();
-          this.aplicarFiltros();
-        }, 400),
-      );
     },
 
     initMarcasTags() {
@@ -69,56 +47,46 @@ function buildFabricadosSuperartFiltros(config) {
           },
         },
       });
+      sel.addEventListener("change", () => this.aplicarFiltros());
     },
 
-    async buscarSuperart() {
-      const q = (this.qSuperart || "").trim();
-      if (q.length < 1) {
-        this.sugerenciasSuperart = [];
-        this.sugerenciasAbiertas = false;
-        return;
-      }
-      this.buscandoSuperart = true;
-      try {
-        const url = `${cfg.superartBuscarUrl}?q=${encodeURIComponent(q)}&limit=20`;
-        const resp = await fetch(url, {
-          headers: { Accept: "application/json" },
-          credentials: "same-origin",
-        });
-        if (!resp.ok) {
-          this.sugerenciasSuperart = [];
-          return;
-        }
-        const data = await resp.json();
-        this.sugerenciasSuperart = data.superarts || [];
-        this.sugerenciasAbiertas = this.sugerenciasSuperart.length > 0;
-        this.sugerenciaActiva = 0;
-      } catch {
-        this.sugerenciasSuperart = [];
-      } finally {
-        this.buscandoSuperart = false;
-      }
-    },
-
-    seleccionarSuperart(item) {
-      this.qSuperart = item.codigo || item.descripcion || "";
-      this.sugerenciasAbiertas = false;
-      this.aplicarFiltros();
-    },
-
-    focoSugerencia(delta) {
-      const n = this.sugerenciasSuperart.length;
-      if (!n) return;
-      this.sugerenciaActiva = (this.sugerenciaActiva + delta + n) % n;
-    },
-
-    aplicarSugerenciaActiva() {
-      const item = this.sugerenciasSuperart[this.sugerenciaActiva];
-      if (item) this.seleccionarSuperart(item);
+    initSuperartTags() {
+      if (this._superartInit) return;
+      const sel = document.getElementById("superarts_incluidos");
+      if (!sel) return;
+      this._superartInit = true;
+      const superartUrl = cfg.superartBuscarUrl || "";
+      initializeTagsFilter("superarts_incluidos", "superart", null, {
+        remoteSearch: {
+          minChars: 1,
+          fetchFn: async (q) => {
+            const url = `${superartUrl}?q=${encodeURIComponent(q)}&limit=25`;
+            const resp = await fetch(url, {
+              headers: { Accept: "application/json" },
+              credentials: "same-origin",
+            });
+            if (!resp.ok) return [];
+            const data = await resp.json();
+            return (data.superarts || []).map((s) => ({
+              value: String(s.codigo || s.descripcion || ""),
+              label: s.descripcion || s.codigo || "",
+            }));
+          },
+        },
+      });
+      sel.addEventListener("change", () => this.aplicarFiltros());
     },
 
     marcasSeleccionadas() {
       const sel = document.getElementById("marcas_incluidos");
+      if (!sel) return [];
+      return Array.from(sel.selectedOptions || [])
+        .map((o) => o.value)
+        .filter(Boolean);
+    },
+
+    superartsSeleccionados() {
+      const sel = document.getElementById("superarts_incluidos");
       if (!sel) return [];
       return Array.from(sel.selectedOptions || [])
         .map((o) => o.value)
@@ -132,10 +100,11 @@ function buildFabricadosSuperartFiltros(config) {
       if (this.desde) params.set("desde", this.desde);
       if (this.hasta) params.set("hasta", this.hasta);
       if (this.presentacion) params.set("presentacion", this.presentacion);
-      const q = (this.qSuperart || "").trim();
-      if (q) params.set("q_superart", q);
       this.marcasSeleccionadas().forEach((id) => {
         params.append("marcas_incluidos", id);
+      });
+      this.superartsSeleccionados().forEach((code) => {
+        params.append("q_superart", code);
       });
       return params;
     },

@@ -114,11 +114,62 @@ def superart_desde_id_manual(id_manual: Any) -> Tuple[str, str, str]:
     return manual.upper(), manual, manual
 
 
-def _match_busqueda_superart(codigo: str, descripcion: str, q: str) -> bool:
-    if not q:
+def _normalizar_superarts_incluidos(raw: Sequence[str]) -> List[str]:
+    out: List[str] = []
+    seen: set[str] = set()
+    for item in raw or []:
+        part = str(item or "").strip()
+        if not part:
+            continue
+        key = part.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(part)
+    return out
+
+
+def parse_superarts_incluidos_desde_get(get_params) -> List[str]:
+    """Lista q_superart: parámetro repetido, getlist o valores separados por coma."""
+    raw: List[str] = []
+    if hasattr(get_params, "getlist"):
+        raw = list(get_params.getlist("q_superart") or [])
+    if not raw:
+        single = (get_params.get("q_superart") or get_params.get("q") or "").strip()
+        if single:
+            raw = [p.strip() for p in single.split(",") if p.strip()]
+    else:
+        expanded: List[str] = []
+        for item in raw:
+            for part in str(item).split(","):
+                part = part.strip()
+                if part:
+                    expanded.append(part)
+        raw = expanded
+    return _normalizar_superarts_incluidos(raw)
+
+
+def _match_superarts_filtro(
+    codigo: str,
+    descripcion: str,
+    superart_key: str,
+    terminos: Sequence[str],
+) -> bool:
+    """OR entre términos; vacío = sin filtro. Compatible con búsqueda parcial (un valor)."""
+    if not terminos:
         return True
-    qq = q.lower()
-    return qq in (codigo or "").lower() or qq in (descripcion or "").lower()
+    cod_l = (codigo or "").lower()
+    desc_l = (descripcion or "").lower()
+    key_l = (superart_key or "").lower()
+    for term in terminos:
+        t = str(term or "").strip().lower()
+        if not t:
+            continue
+        if t == cod_l or t == desc_l or t == key_l:
+            return True
+        if t in cod_l or t in desc_l:
+            return True
+    return False
 
 
 def agrupar_fabricados_por_superart(
@@ -126,6 +177,7 @@ def agrupar_fabricados_por_superart(
     meses: Sequence[str],
     desc_map: Dict[int, Tuple[str, str]],
     *,
+    superarts_incluidos: Optional[Sequence[str]] = None,
     busqueda_superart: str = "",
 ) -> Dict[str, Any]:
     meses_ord = normalizar_meses_yyyy_mm(meses)
@@ -180,10 +232,17 @@ def agrupar_fabricados_por_superart(
             sa["por_mes"][m] = round(sa["por_mes"].get(m, 0) + art["por_mes"].get(m, 0), 4)
         sa["total"] = round(sa["total"] + art["total"], 4)
 
-    q = (busqueda_superart or "").strip()
+    terminos = _normalizar_superarts_incluidos(list(superarts_incluidos or []))
+    if not terminos and (busqueda_superart or "").strip():
+        terminos = _normalizar_superarts_incluidos([busqueda_superart])
     filas_super: List[Dict[str, Any]] = []
     for sa in super_idx.values():
-        if not _match_busqueda_superart(sa["codigo_superart"], sa["descripcion_superart"], q):
+        if not _match_superarts_filtro(
+            sa["codigo_superart"],
+            sa["descripcion_superart"],
+            sa.get("superart_key") or "",
+            terminos,
+        ):
             continue
         sa["articulos"].sort(key=lambda a: (-a["total"], a["codigo_articulo"]))
         filas_super.append(sa)
@@ -261,13 +320,15 @@ def parse_filtros_fabricados_superart(
         if mi is not None:
             marcas.append(int(mi))
 
-    busqueda = (get_params.get("q_superart") or get_params.get("q") or "").strip()
+    superarts = parse_superarts_incluidos_desde_get(get_params)
     return {
         "desde_iso": desde_d.isoformat(),
         "hasta_iso": hasta_d.isoformat(),
         "meses": meses,
         "marcas_incluidos": marcas,
-        "busqueda_superart": busqueda,
+        "superarts_incluidos": superarts,
+        # Compat lectura legacy (primer valor o cadena vacía)
+        "busqueda_superart": superarts[0] if len(superarts) == 1 else "",
     }
 
 
@@ -337,6 +398,7 @@ def reporte_mpr_fabricados_superart(
     *,
     meses: Sequence[str],
     marcas_incluidos: Optional[Sequence[int]] = None,
+    superarts_incluidos: Optional[Sequence[str]] = None,
     busqueda_superart: str = "",
 ) -> Dict[str, Any]:
     vacio = {
@@ -372,9 +434,12 @@ def reporte_mpr_fabricados_superart(
     art_ids = list({to_int_or_none(r.get("id_articulo")) for r in rows})
     art_ids = [a for a in art_ids if a is not None]
     desc_map = _fetch_descripciones_articulo(base_empresa, art_ids) if art_ids else {}
+    superarts = _normalizar_superarts_incluidos(list(superarts_incluidos or []))
+    if not superarts and (busqueda_superart or "").strip():
+        superarts = _normalizar_superarts_incluidos([busqueda_superart])
     return agrupar_fabricados_por_superart(
         rows,
         meses_norm,
         desc_map,
-        busqueda_superart=busqueda_superart,
+        superarts_incluidos=superarts,
     )

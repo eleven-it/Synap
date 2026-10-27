@@ -4645,7 +4645,7 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                 base_empresa,
                 meses=filtros_fab["meses"],
                 marcas_incluidos=filtros_fab["marcas_incluidos"] or None,
-                busqueda_superart=filtros_fab["busqueda_superart"],
+                superarts_incluidos=filtros_fab["superarts_incluidos"],
             )
             kpis = fab_raw.get("kpis") or {}
             filas = fab_raw.get("filas_superart") or []
