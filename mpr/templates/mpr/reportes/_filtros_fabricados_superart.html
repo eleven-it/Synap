@@ -1,58 +1,121 @@
-{# Filtros fabricados_superart: meses sueltos (multi), marca, búsqueda superartículo. #}
-<form method="get"
-      class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-    <input type="hidden" name="grupo" value="produccion">
-    <input type="hidden" name="reporte" value="fabricados_superart">
-    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
-
-    <div class="min-w-[12rem]">
-        <label for="meses_fab" class="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">Meses</label>
-        <select name="meses" id="meses_fab" multiple size="4"
-                class="min-h-[6.5rem] w-full min-w-[12rem] rounded-lg border border-gray-300 px-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
-            {% for opt in meses_selector_opciones %}
-            <option value="{{ opt.value }}" {% if opt.value in filtros_fabricados_superart.meses %}selected{% endif %}>
-                {{ opt.label }}
-            </option>
-            {% endfor %}
-        </select>
-        <p class="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">Ctrl/Cmd + clic para varios meses (no contiguos).</p>
+{% load static %}
+<script type="module" src="{% static 'mpr/js/mpr_fabricados_superart_filtros.mjs' %}?v=20261027a"></script>
+{# Filtros fabricados_superart: panel colapsable, rango Desde–Hasta, marcas, superartículo. #}
+<div class="mb-6"
+     x-data="fabricadosSuperartFiltros({
+         desdeInicial: '{{ filtros_fabricados_superart.desde_iso|default:fecha_desde_iso }}',
+         hastaInicial: '{{ filtros_fabricados_superart.hasta_iso|default:fecha_hasta_iso }}',
+         presentacion: '{{ modo_presentacion|default:'docenas' }}',
+         qSuperartInicial: '{{ filtros_fabricados_superart.busqueda_superart|default:''|escapejs }}',
+         marcasBuscarUrl: '{% url 'mpr:reportes_marcas_buscar_api' %}',
+         superartBuscarUrl: '{% url 'mpr:reportes_superart_buscar_api' %}'
+     })"
+     x-init="init()">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <button type="button"
+                @click="panelAbierto = !panelAbierto"
+                class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                :aria-expanded="panelAbierto ? 'true' : 'false'">
+            <span class="material-icons text-base transition-transform" :class="panelAbierto ? 'rotate-180' : ''" aria-hidden="true">expand_more</span>
+            Filtros
+        </button>
+        <div class="flex flex-wrap items-center gap-2">
+            {% if soporta_export_xlsx %}
+            <a :href="'?' + exportQueryString() + '&format=csv'"
+               aria-label="Exportar CSV"
+               class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+                <span class="material-icons text-base" aria-hidden="true">download</span>
+                Exportar CSV
+            </a>
+            <a :href="'?' + exportQueryString() + '&format=xlsx'"
+               aria-label="Exportar Excel"
+               class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-500">
+                <span class="material-icons text-base" aria-hidden="true">table_view</span>
+                Exportar Excel
+            </a>
+            {% endif %}
+        </div>
     </div>
 
-    <div class="min-w-[14rem] flex-1">
-        <label class="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">Marcas</label>
-        {% include "mpr/includes/filtro_marcas_tags.html" with variant="light" marcas_catalogo=marcas_catalogo marcas_incluidos=filtros_fabricados_superart.marcas_incluidos only %}
-    </div>
+    <form id="fabricados-superart-filtros-form"
+          method="get"
+          class="mt-3 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40"
+          x-show="panelAbierto"
+          x-cloak
+          @submit.prevent="aplicarFiltros()">
+        <input type="hidden" name="grupo" value="produccion">
+        <input type="hidden" name="reporte" value="fabricados_superart">
+        <input type="hidden" name="presentacion" :value="presentacion">
 
-    <div class="min-w-[10rem] flex-1">
-        <label for="q_superart" class="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">Superartículo</label>
-        <input type="search"
-               id="q_superart"
-               name="q_superart"
-               value="{{ filtros_fabricados_superart.busqueda_superart|default:'' }}"
-               placeholder="Código o descripción…"
-               class="min-h-10 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
-    </div>
+        <div class="flex flex-wrap items-end gap-4 p-4">
+            <div class="min-w-[16rem] flex-1">
+                <span class="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">Período</span>
+                <div class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-900">
+                    <label for="fab_desde" class="text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Desde</label>
+                    <input type="date"
+                           id="fab_desde"
+                           name="desde"
+                           x-model="desde"
+                           @change="aplicarFiltros()"
+                           class="min-h-9 flex-1 rounded-md border border-gray-200 px-2 text-sm dark:border-gray-600 dark:bg-gray-950 dark:text-white">
+                    <span class="text-gray-400" aria-hidden="true">—</span>
+                    <label for="fab_hasta" class="text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Hasta</label>
+                    <input type="date"
+                           id="fab_hasta"
+                           name="hasta"
+                           x-model="hasta"
+                           @change="aplicarFiltros()"
+                           class="min-h-9 flex-1 rounded-md border border-gray-200 px-2 text-sm dark:border-gray-600 dark:bg-gray-950 dark:text-white">
+                </div>
+                <p class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">Los meses de la tabla se calculan a partir de este rango.</p>
+            </div>
 
-    <button type="submit"
-            class="min-h-10 rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
-        Consultar
-    </button>
+            <div class="min-w-[14rem] flex-1">
+                <label class="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">Marcas</label>
+                {% include "mpr/includes/filtro_marcas_tags.html" with variant="light" marcas_catalogo=marcas_catalogo marcas_incluidos=filtros_fabricados_superart.marcas_incluidos only %}
+            </div>
 
-    {% if soporta_export_xlsx and fabricados_export_query %}
-    <a href="?{{ fabricados_export_query }}&format=csv"
-       aria-label="Exportar CSV"
-       class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
-        <span class="material-icons text-base" aria-hidden="true">download</span>
-        Exportar CSV
-    </a>
-    <a href="?{{ fabricados_export_query }}&format=xlsx"
-       aria-label="Exportar Excel"
-       class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-500">
-        <span class="material-icons text-base" aria-hidden="true">table_view</span>
-        Exportar Excel
-    </a>
-    {% endif %}
-</form>
+            <div class="relative min-w-[12rem] flex-1" @click.outside="sugerenciasAbiertas = false">
+                <label for="q_superart" class="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">Superartículo</label>
+                <input type="search"
+                       id="q_superart"
+                       name="q_superart"
+                       x-model="qSuperart"
+                       @focus="buscarSuperart()"
+                       @keydown.escape="sugerenciasAbiertas = false"
+                       @keydown.arrow-down.prevent="focoSugerencia(1)"
+                       @keydown.arrow-up.prevent="focoSugerencia(-1)"
+                       @keydown.enter.prevent="aplicarSugerenciaActiva()"
+                       placeholder="Código o descripción…"
+                       autocomplete="off"
+                       role="combobox"
+                       aria-autocomplete="list"
+                       aria-controls="fab-superart-sugerencias"
+                       :aria-expanded="sugerenciasAbiertas && sugerenciasSuperart.length ? 'true' : 'false'"
+                       class="min-h-10 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                <ul id="fab-superart-sugerencias"
+                    x-show="sugerenciasAbiertas && sugerenciasSuperart.length"
+                    x-cloak
+                    role="listbox"
+                    class="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                    <template x-for="(item, idx) in sugerenciasSuperart" :key="item.codigo + '-' + idx">
+                        <li>
+                            <button type="button"
+                                    role="option"
+                                    :aria-selected="idx === sugerenciaActiva ? 'true' : 'false'"
+                                    @mousedown.prevent="seleccionarSuperart(item)"
+                                    :class="idx === sugerenciaActiva ? 'bg-purple-50 text-purple-900 dark:bg-purple-950/50 dark:text-purple-100' : 'text-gray-800 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700/60'"
+                                    class="flex w-full flex-col gap-0.5 px-3 py-2 text-left">
+                                <span class="text-sm font-semibold tabular-nums" x-text="item.codigo"></span>
+                                <span class="line-clamp-1 text-xs text-gray-500 dark:text-gray-400" x-text="item.descripcion"></span>
+                            </button>
+                        </li>
+                    </template>
+                </ul>
+            </div>
+        </div>
+    </form>
+</div>
 <p class="mb-4 text-[11px] text-gray-500 dark:text-gray-400">
-    Fabricado de 1ra selección (Producción → Semi elaborado). El período Desde/Hasta del encabezado no aplica a este informe.
+    Fabricado de 1ra selección (Producción → Semi elaborado). Los filtros se aplican automáticamente al cambiar el período, las marcas o el superartículo.
 </p>

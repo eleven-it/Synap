@@ -4602,8 +4602,8 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
         elif grupo == "produccion" and reporte == "fabricados_superart":
             from django.http import QueryDict
 
+            from mpr.reportes_hub import _fmt_fecha_ui, _to_date_obj_hub
             from mpr.services_fabricados_superart import (
-                opciones_meses_selector,
                 parse_filtros_fabricados_superart,
                 reporte_mpr_fabricados_superart,
             )
@@ -4619,7 +4619,14 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
             )
             context.update(_context_filtro_marcas(self.request, base_empresa))
             context["filtros_fabricados_superart"] = filtros_fab
-            context["meses_selector_opciones"] = opciones_meses_selector()
+            context["fecha_desde_iso"] = filtros_fab["desde_iso"]
+            context["fecha_hasta_iso"] = filtros_fab["hasta_iso"]
+            context["fecha_desde_display"] = _fmt_fecha_ui(
+                _to_date_obj_hub(filtros_fab["desde_iso"])
+            )
+            context["fecha_hasta_display"] = _fmt_fecha_ui(
+                _to_date_obj_hub(filtros_fab["hasta_iso"])
+            )
             export_q = QueryDict(mutable=True)
             if hasattr(self.request.GET, "lists"):
                 for key in self.request.GET:
@@ -4921,7 +4928,6 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                 "total_general": fab_ctx.get("total_general", 0),
                 "total_general_display": fab_ctx.get("total_general_display"),
                 "filtros_fabricados_superart": context.get("filtros_fabricados_superart"),
-                "meses_selector_opciones": context.get("meses_selector_opciones"),
                 "fabricados_export_query": context.get("fabricados_export_query"),
                 "marcas_catalogo": context.get("marcas_catalogo"),
                 "dias": dias,
@@ -6187,6 +6193,42 @@ class ReportesArticuloBuscarAPIView(MprLoginRequiredMixin, MprReportesVerMixin, 
             limit = 25
         articulos = buscar_articulos(base_empresa, q, limit=limit)
         return JsonResponse({"articulos": articulos})
+
+
+class ReportesMarcasBuscarAPIView(MprLoginRequiredMixin, MprReportesVerMixin, View):
+    """API JSON: búsqueda predictiva de marcas (fabricados por superartículo y similares)."""
+
+    def get(self, request, *args, **kwargs):
+        from mpr.services_fabricados_superart import buscar_marcas_predictivo
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"marcas": []})
+        q = (request.GET.get("q") or "").strip()
+        try:
+            limit = int(request.GET.get("limit") or 25)
+        except (ValueError, TypeError):
+            limit = 25
+        marcas = buscar_marcas_predictivo(base_empresa, q, limit=limit)
+        return JsonResponse({"marcas": marcas})
+
+
+class ReportesSuperartBuscarAPIView(MprLoginRequiredMixin, MprReportesVerMixin, View):
+    """API JSON: búsqueda predictiva de superartículos (id_manual)."""
+
+    def get(self, request, *args, **kwargs):
+        from mpr.services_fabricados_superart import buscar_superart_predictivo
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"superarts": []})
+        q = (request.GET.get("q") or "").strip()
+        try:
+            limit = int(request.GET.get("limit") or 25)
+        except (ValueError, TypeError):
+            limit = 25
+        items = buscar_superart_predictivo(base_empresa, q, limit=limit)
+        return JsonResponse({"superarts": items})
 
 
 class MaquinaArticuloBuscarAPIView(MprLoginRequiredMixin, MprPermisoMixin, View):
