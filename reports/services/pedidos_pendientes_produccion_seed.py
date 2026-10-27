@@ -20,7 +20,7 @@ def _report_defaults():
         ),
         "category": "operational",
         "config": {
-            "metrics": ["pendiente_qty", "stock_total"],
+            "metrics": ["pendiente_qty", "stock_terminado", "backorder", "mpr_cantidad_a_fabricar"],
             "dimensions": ["articulo", "marca", "deposito"],
             "tags": ["mpr", "pedidos", "produccion", "stock", "listados"],
             "catalog_legacy_section": "listados",
@@ -58,7 +58,8 @@ def _report_defaults():
             "assumptions": [
                 "Default criterio_pendiente=backorder (PED estado Pendiente, SUM cantidad pedida).",
                 "Stock terminado/producción según deposito.tipo_mpr; otros depósitos con suma_stock=Si.",
-                "MPR: listar_demanda_pack_desde_pedidos (brecha pack en vivo).",
+                "MPR: a fabricar = max(0, pendiente + reserva − stock terminado) sobre las mismas líneas del informe.",
+                "Importe neto sin IVA ni descuento de cabecera.",
             ],
         },
         "refresh_interval": "daily",
