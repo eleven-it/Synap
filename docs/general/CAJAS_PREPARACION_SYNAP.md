@@ -9,6 +9,9 @@ Synap ocurre **antes** de ese control y no afecta existencias, pedidos ni
 remitos.
 
 1. El operario selecciona una preparación existente de administraNET.
+   La lista y el encabezado muestran tanto el número de comprobante como
+   `CodigoMovimiento_prep`; este último es el código que se ingresa en el
+   control de salida de VB6 y también figura en el resumen final.
    Synap la reserva para esa sesión: otra sesión no puede abrir cajas ni
    registrar o corregir lecturas de la misma preparación. La pantalla renueva
    la reserva mientras permanece abierta. **Terminar y liberar** la entrega a
