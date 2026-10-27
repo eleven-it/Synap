@@ -214,6 +214,7 @@ class QueryRunnerService:
             'pedidos-pendientes',
             'bo-stock-facturacion',
             'pedidos-pendientes-produccion',
+            'fabricados-superart',
             'ventas-objetivos-vs-bo',
             'ventas-por-vendedor',
             'ventas-por-articulo',
@@ -335,6 +336,10 @@ class QueryRunnerService:
             from .pedidos_pendientes_produccion_runner import run_pedidos_pendientes_produccion
 
             result = run_pedidos_pendientes_produccion(report, payload, self.user)
+        elif report.slug == "fabricados-superart":
+            from .fabricados_superart_runner import run_fabricados_superart
+
+            result = run_fabricados_superart(report, payload, self.user)
         elif report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
             from .ventas_objetivos_bo_runner import run_ventas_objetivos_vs_bo
 

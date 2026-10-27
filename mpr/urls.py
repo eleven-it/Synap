@@ -58,16 +58,6 @@ urlpatterns = [
         views.ReportesArticuloBuscarAPIView.as_view(),
         name="reportes_articulo_buscar_api",
     ),
-    path(
-        "reportes/api/marcas/buscar/",
-        views.ReportesMarcasBuscarAPIView.as_view(),
-        name="reportes_marcas_buscar_api",
-    ),
-    path(
-        "reportes/api/superart/buscar/",
-        views.ReportesSuperartBuscarAPIView.as_view(),
-        name="reportes_superart_buscar_api",
-    ),
     path("config/depositos/", views.ConfigDepositosView.as_view(), name="config_depositos"),
     path("operarios/", views.OperariosListView.as_view(), name="operarios_list"),
     path("operarios/nuevo/", views.OperarioCreateView.as_view(), name="operario_create"),
