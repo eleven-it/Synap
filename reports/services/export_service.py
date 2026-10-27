@@ -1716,20 +1716,24 @@ class ExportService:
     def _generate_excel_pedidos_pendientes_produccion(
         self, file_path: Path, report: ReportDefinition, query_result, payload: Dict
     ):
-        """Excel tabla única: columnas alineadas a la grilla web + MPR stock/reserva."""
+        """Excel: mismas columnas que pantalla + MPR reserva; totales sin Brecha."""
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment
         from openpyxl.utils import get_column_letter
 
+        from reports.services.pedidos_pendientes_produccion_runner import PPP_FOOTER_NOTA
+
         articulos = query_result.data or []
         totals = query_result.totals or {}
+        extra = (query_result.meta or {}).get("extra") or {}
+        footer_nota = extra.get("footer_nota") or PPP_FOOTER_NOTA
 
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Pedidos pendientes"[:31]
 
         headers = [
-            "Código (IDArt)",
+            "Código",
             "Cod. manual",
             "Artículo",
             "Marca",
@@ -1741,11 +1745,12 @@ class ExportService:
             "Backorder",
             "Importe pendiente",
             "MPR demanda",
-            "MPR stock terminado",
             "MPR reserva",
             "MPR a fabricar",
             "Brecha",
         ]
+        unit_cols = {6, 7, 8, 9, 10, 12, 13, 14, 15}
+        money_cols = {11}
 
         header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         header_font = Font(bold=True, color="FFFFFF", size=11)
@@ -1769,41 +1774,55 @@ class ExportService:
                 art.get("backorder"),
                 art.get("importe_pendiente"),
                 art.get("mpr_demanda_pedido"),
-                art.get("mpr_stock_terminado"),
                 art.get("mpr_stock_reserva"),
                 art.get("mpr_cantidad_a_fabricar"),
                 art.get("mpr_brecha_vs_pendiente"),
             ]
 
+        def apply_number_formats(row_idx: int, bold: bool = False):
+            for c in unit_cols:
+                cell = ws.cell(row=row_idx, column=c)
+                cell.number_format = "#.##0"
+                if bold:
+                    cell.font = Font(bold=True)
+            for c in money_cols:
+                cell = ws.cell(row=row_idx, column=c)
+                cell.number_format = '$#.##0,00'
+                if bold:
+                    cell.font = Font(bold=True)
+
         for row_idx, art in enumerate(articulos, 2):
             for col_idx, val in enumerate(row_vals(art), 1):
                 ws.cell(row=row_idx, column=col_idx, value=val)
+            apply_number_formats(row_idx)
 
         if articulos:
-            tot_row = row_vals(
-                {
-                    "codigo": f"TOTALES ({totals.get('row_count', len(articulos))} filas)",
-                    "cod_manual": "",
-                    "articulo": "",
-                    "marca": "",
-                    "unidad_base": "",
-                    "pendiente_qty": totals.get("total_pendiente_qty"),
-                    "stock_terminado": totals.get("total_stock_terminado"),
-                    "stock_produccion": totals.get("total_stock_produccion"),
-                    "disponible": totals.get("total_disponible"),
-                    "backorder": totals.get("total_backorder"),
-                    "importe_pendiente": totals.get("total_importe_pendiente"),
-                    "mpr_demanda_pedido": totals.get("total_mpr_demanda_pedido"),
-                    "mpr_stock_terminado": totals.get("total_stock_terminado"),
-                    "mpr_stock_reserva": None,
-                    "mpr_cantidad_a_fabricar": totals.get("total_mpr_cantidad_a_fabricar"),
-                    "mpr_brecha_vs_pendiente": totals.get("total_mpr_brecha_vs_pendiente"),
-                }
-            )
             r = len(articulos) + 2
-            for col_idx, val in enumerate(tot_row, 1):
-                cell = ws.cell(row=r, column=col_idx, value=val)
-                cell.font = Font(bold=True)
+            tot_vals = [
+                "TOTALES",
+                "",
+                "",
+                "",
+                "",
+                totals.get("total_pendiente_qty"),
+                totals.get("total_stock_terminado"),
+                totals.get("total_stock_produccion"),
+                totals.get("total_disponible"),
+                totals.get("total_backorder"),
+                totals.get("total_importe_pendiente"),
+                totals.get("total_mpr_demanda_pedido"),
+                None,
+                totals.get("total_mpr_cantidad_a_fabricar"),
+                None,
+            ]
+            for col_idx, val in enumerate(tot_vals, 1):
+                ws.cell(row=r, column=col_idx, value=val)
+            apply_number_formats(r, bold=True)
+
+            note_row = r + 2
+            ws.cell(row=note_row, column=1, value=footer_nota)
+            ws.merge_cells(start_row=note_row, start_column=1, end_row=note_row, end_column=len(headers))
+            ws.cell(row=note_row, column=1).alignment = Alignment(wrap_text=True)
 
         for col_num in range(1, len(headers) + 1):
             col_letter = get_column_letter(col_num)

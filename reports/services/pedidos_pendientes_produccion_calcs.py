@@ -25,7 +25,7 @@ def compute_mpr_pack_fields(
     """
     p_ped = float(pendiente_qty or 0)
     st = float(stock_terminado or 0)
-    reserva = float(stock_reserva or 0)
+    reserva = float(stock_reserva or 0) if stock_reserva is not None else 0.0
     a_fab = max(0.0, p_ped + reserva - st)
     brecha = round(p_ped - a_fab, 4)
     return {
@@ -120,16 +120,31 @@ def aggregate_totals(articulos: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     def _sum(key: str) -> float:
         return round(sum(float(a.get(key) or 0) for a in articulos), 4)
 
+    articulos_con_backorder = sum(1 for a in articulos if float(a.get("backorder") or 0) > 0)
+
     return {
         "row_count": len(articulos),
         "total_articulos": len(articulos),
+        "articulos_con_backorder": articulos_con_backorder,
         "total_pendiente_qty": _sum("pendiente_qty"),
         "total_stock_terminado": _sum("stock_terminado"),
         "total_stock_produccion": _sum("stock_produccion"),
         "total_disponible": _sum("disponible"),
         "total_backorder": _sum("backorder"),
-        "total_importe_pendiente": _sum("importe_pendiente"),
+        "total_importe_pendiente": round(_sum("importe_pendiente"), 2),
         "total_mpr_demanda_pedido": _sum("mpr_demanda_pedido"),
         "total_mpr_cantidad_a_fabricar": _sum("mpr_cantidad_a_fabricar"),
-        "total_mpr_brecha_vs_pendiente": _sum("mpr_brecha_vs_pendiente"),
     }
+
+
+def sql_unidad_base_join() -> str:
+    """JOIN unidmed vía articulo.id_unimed (paridad ventas marcas / licenciatarios)."""
+    return "LEFT JOIN unidmed um ON um.id_unimed = a.id_unimed"
+
+
+def sql_unidad_base_select() -> str:
+    return "COALESCE(um.nombre_unimed, '') AS unidad_base"
+
+
+def sql_unidad_base_group_by_suffix() -> str:
+    return ", COALESCE(um.nombre_unimed, '')"

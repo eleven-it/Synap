@@ -18,6 +18,9 @@ from reports.services.pedidos_pendientes_produccion_calcs import (
     build_viajante_sql,
     classify_depositos_stock_columns,
     enrich_articulo_row,
+    sql_unidad_base_group_by_suffix,
+    sql_unidad_base_join,
+    sql_unidad_base_select,
 )
 from reports.services.query_runner import QueryResult, parse_fecha_bo_yyyymmdd
 from reports.services.ventas_objetivos_bo_runner import _vo_sql_filtros_articulo
@@ -27,8 +30,13 @@ logger = logging.getLogger(__name__)
 CRITERIO_BACKORDER = "backorder"
 
 IMPORTE_PENDIENTE_NOTA = (
-    "Importe pendiente: proporción del PrecioNetoxR del renglón según cantidad pendiente "
-    "(qty/Cantidad × PrecioNetoxR). Pendiente de confirmación con negocio."
+    "Importe neto sin IVA ni descuento de cabecera (proporcional PrecioNetoxR por línea pendiente)."
+)
+
+PPP_FOOTER_NOTA = (
+    "Stock actual global: depósitos activos con Suma stock=Si. Disponible = terminado − pendiente. "
+    "Backorder = pendiente sin cobertura de terminado. Producción se muestra aparte. "
+    "Importe neto sin IVA ni descuento de cabecera."
 )
 
 
@@ -188,13 +196,14 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
             COALESCE(a.id_manual, '') AS cod_manual,
             COALESCE(a.NombreArticulo, '') AS articulo,
             COALESCE(m.NombreMarca, '') AS marca,
-            COALESCE(MAX(sp.tipo_unidad), '') AS unidad_base,
+            {sql_unidad_base_select()},
             SUM({qty_sql}) AS pendiente_qty,
             {importe_expr} AS importe_pendiente
         FROM stockp sp
         INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
         LEFT JOIN articulo a ON a.IDArt = sp.IDArt
         LEFT JOIN marca m ON m.CodMarca = a.CodigoMarca
+        {sql_unidad_base_join()}
         WHERE cp.TipoComprobante = 'PED'
           AND (sp.Comprobante = 'PED' OR sp.Comprobante IS NULL)
           AND cp.Anulado = 'No'
@@ -210,7 +219,7 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
           {busq_sql}
           AND {sql_excluir_tipo_art_gasto("a")}
           {filt_art_sql}
-        GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, m.NombreMarca
+        GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, m.NombreMarca{sql_unidad_base_group_by_suffix()}
         HAVING pendiente_qty > 0
         ORDER BY pendiente_qty DESC
     """
@@ -304,6 +313,7 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
             "extra": {
                 "articulos": articulos,
                 "importe_pendiente_field": "PrecioNetoxR proporcional",
+                "footer_nota": PPP_FOOTER_NOTA,
             },
             "filters_applied": {
                 "clientes_incluir": clientes_incluir,
