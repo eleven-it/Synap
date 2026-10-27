@@ -15,17 +15,88 @@ from reports.services.pedidos_pendientes_produccion_calcs import (
     compute_disponible_backorder,
     compute_mpr_pack_fields,
     compute_reserva_reposicion,
+    compute_stock_produccion_armable,
     enrich_articulo_row,
+    es_tipo_art_fab_fabricado,
+    formula_cantidad_por_unidad_terminado,
     sql_unidad_base_join,
     sql_unidad_base_select,
 )
 import reports.services.pedidos_pendientes_produccion_runner as ppp_runner_mod
+from reports.services.pedidos_pendientes_produccion_armable import (
+    fetch_stock_produccion_armable_map,
+)
 from reports.services.pedidos_pendientes_produccion_seed import (
     PEDIDOS_PENDIENTES_PRODUCCION_SLUG as SEED_SLUG,
     _report_defaults,
 )
 from reports.services.query_runner import QueryRunnerService
 from reports.views import SLUGS_VENTAS_CON_PUNTO_VENTA
+
+
+class TestStockProduccionArmable(unittest.TestCase):
+    def test_sin_lineas_cero(self):
+        self.assertEqual(compute_stock_produccion_armable([]), 0.0)
+
+    def test_un_componente_cantidad_dos_saldo_cien(self):
+        self.assertEqual(compute_stock_produccion_armable([(100.0, 2.0)]), 50.0)
+
+    def test_varios_componentes_toma_minimo(self):
+        lineas = [(100.0, 2.0), (30.0, 1.0), (200.0, 5.0)]
+        self.assertEqual(compute_stock_produccion_armable(lineas), 30.0)
+
+    def test_floor_hacia_abajo(self):
+        self.assertEqual(compute_stock_produccion_armable([(99.0, 2.0)]), 49.0)
+
+    def test_caso_verificacion_709_447(self):
+        """Fórmula 371: componente 1641 qty 1, 278 en semi → 278 armables."""
+        self.assertEqual(
+            compute_stock_produccion_armable([(278.0, formula_cantidad_por_unidad_terminado(1, "Unidad"))]),
+            278.0,
+        )
+
+    def test_es_fabricado_case_insensitive(self):
+        self.assertTrue(es_tipo_art_fab_fabricado("Fabricado"))
+        self.assertTrue(es_tipo_art_fab_fabricado("fabricado"))
+        self.assertFalse(es_tipo_art_fab_fabricado("Terminado"))
+        self.assertFalse(es_tipo_art_fab_fabricado(""))
+
+    def test_runner_usa_armable_no_deposito_produccion(self):
+        src = inspect.getsource(ppp_runner_mod)
+        self.assertIn("fetch_stock_produccion_armable_map", src)
+        self.assertNotIn("set_produccion", src)
+
+
+class TestFetchStockProduccionArmableBulk(unittest.TestCase):
+    @patch("reports.services.pedidos_pendientes_produccion_armable.get_deposito_semi_elaborado_mpr", return_value=3)
+    def test_sin_receta_cero(self, _mock_dep):
+        cursor = MagicMock()
+        cursor.fetchall.side_effect = [
+            [],  # articulo ensamblado
+        ]
+        out = fetch_stock_produccion_armable_map(cursor, "emp", [447])
+        self.assertEqual(out[447], 0.0)
+
+    @patch("reports.services.pedidos_pendientes_produccion_armable.get_deposito_semi_elaborado_mpr", return_value=3)
+    def test_ignora_componentes_no_fabricados(self, _mock_dep):
+        cursor = MagicMock()
+        cursor.fetchall.side_effect = [
+            [(100, 371)],
+            [
+                (371, 2001, 1, "Unidad", None, None, "Materia Prima"),
+                (371, 2002, 1, "Unidad", None, None, "Fabricado"),
+            ],
+            [(2002, 40.0)],
+        ]
+        out = fetch_stock_produccion_armable_map(cursor, "emp", [100])
+        self.assertEqual(out[100], 40.0)
+
+    @patch("reports.services.pedidos_pendientes_produccion_armable.get_deposito_semi_elaborado_mpr", return_value=None)
+    def test_sin_deposito_semi_todo_cero(self, _mock_dep):
+        cursor = MagicMock()
+        out = fetch_stock_produccion_armable_map(cursor, "emp", [1, 2])
+        self.assertEqual(out, {1: 0.0, 2: 0.0})
+        cursor.execute.assert_not_called()
 
 
 class TestDisponibleBackorder(unittest.TestCase):
@@ -243,6 +314,7 @@ class TestTablaEncabezadosUnaLinea(unittest.TestCase):
         self.assertIn("position: sticky", js)
         self.assertIn("max-height: calc(100vh - 220px)", js)
         self.assertIn("Reserva objetivo", js)
+        self.assertIn("Cantidad armable", js)
         self.assertNotIn("Brecha", js)
         self.assertNotIn("mpr_brecha", js)
 
