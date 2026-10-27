@@ -360,3 +360,124 @@ def exportar_inventario_deposito_xlsx(
     )
     response["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return response
+
+
+def exportar_fabricados_superart_csv(
+    context: Dict[str, Any],
+    *,
+    modo: str = "docenas",
+) -> HttpResponse:
+    """CSV consolidado por superartículo (mismas columnas que la tabla principal)."""
+    meses_columnas = context.get("meses_columnas") or []
+    filas = context.get("filas_superart") or []
+    columnas: List[Tuple[str, str]] = [
+        ("codigo_superart", "Código superartículo"),
+        ("descripcion_superart", "Descripción superartículo"),
+    ]
+    for col in meses_columnas:
+        ym = col.get("ym") or ""
+        columnas.append((f"mes_{ym}", col.get("label") or ym))
+    columnas.append(("total_display", "Total"))
+
+    csv_rows: List[Dict[str, Any]] = []
+    for sa in filas:
+        row = {
+            "codigo_superart": sa.get("codigo_superart") or "",
+            "descripcion_superart": sa.get("descripcion_superart") or "",
+            "total_display": sa.get("total_display") or sa.get("total"),
+        }
+        for cm in sa.get("columnas_mes") or []:
+            row[f"mes_{cm.get('ym')}"] = cm.get("display")
+        csv_rows.append(row)
+    tot = {
+        "codigo_superart": "TOTALES",
+        "descripcion_superart": "",
+        "total_display": context.get("total_general_display") or context.get("total_general"),
+    }
+    for cm in context.get("totales_columnas") or []:
+        tot[f"mes_{cm.get('ym')}"] = cm.get("display")
+    csv_rows.append(tot)
+
+    payload = filas_a_csv(csv_rows, columnas)
+    resp = HttpResponse(payload, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="fabricados_superart.csv"'
+    return resp
+
+
+def exportar_fabricados_superart_xlsx(
+    context: Dict[str, Any],
+    *,
+    titulo: str = "Fabricados por superartículo",
+) -> HttpResponse:
+    """Excel con hojas Por superartículo y Detalle por artículo."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    meses_columnas = context.get("meses_columnas") or []
+    wb = openpyxl.Workbook()
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+
+    def _write_sheet(ws, headers: List[str], data_rows: List[List[Any]], total_row: Optional[List[Any]] = None):
+        for c, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=c, value=h)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+        r = 2
+        for vals in data_rows:
+            for c, v in enumerate(vals, 1):
+                ws.cell(row=r, column=c, value=v)
+            r += 1
+        if total_row:
+            for c, v in enumerate(total_row, 1):
+                cell = ws.cell(row=r, column=c, value=v)
+                cell.font = Font(bold=True)
+        for col_num in range(1, len(headers) + 1):
+            ws.column_dimensions[get_column_letter(col_num)].width = min(18, max(10, len(str(headers[col_num - 1])) + 2))
+
+    ws1 = wb.active
+    ws1.title = "Por superartículo"
+    h1 = ["Código", "Descripción"] + [c.get("label") or c.get("ym") for c in meses_columnas] + ["Total"]
+    rows1: List[List[Any]] = []
+    for sa in context.get("filas_superart") or []:
+        vals = [
+            sa.get("codigo_superart") or "",
+            sa.get("descripcion_superart") or "",
+        ]
+        vals.extend(cm.get("display") for cm in (sa.get("columnas_mes") or []))
+        vals.append(sa.get("total_display") or sa.get("total"))
+        rows1.append(vals)
+    tot1 = ["TOTALES", ""]
+    tot1.extend(cm.get("display") for cm in (context.get("totales_columnas") or []))
+    tot1.append(context.get("total_general_display") or context.get("total_general"))
+    _write_sheet(ws1, h1, rows1, tot1)
+
+    ws2 = wb.create_sheet("Detalle por artículo")
+    h2 = ["Superartículo", "Código artículo", "Descripción artículo"] + [
+        c.get("label") or c.get("ym") for c in meses_columnas
+    ] + ["Total"]
+    rows2: List[List[Any]] = []
+    for sa in context.get("filas_superart") or []:
+        sa_label = sa.get("descripcion_superart") or sa.get("codigo_superart") or ""
+        for art in sa.get("articulos") or []:
+            vals = [
+                sa_label,
+                art.get("codigo_articulo") or "",
+                art.get("descripcion_articulo") or "",
+            ]
+            vals.extend(cm.get("display") for cm in (art.get("columnas_mes") or []))
+            vals.append(art.get("total_display") or art.get("total"))
+            rows2.append(vals)
+    _write_sheet(ws2, h2, rows2, None)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="fabricados_superart.xlsx"'
+    return response
