@@ -11,6 +11,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.conf import settings
 
 from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
+from reports.services.pedidos_pendientes_produccion_armable import (
+    fetch_stock_produccion_armable_map,
+)
 from reports.services.pedidos_pendientes_produccion_calcs import (
     aggregate_totals,
     build_busqueda_sql,
@@ -35,11 +38,13 @@ IMPORTE_PENDIENTE_NOTA = (
 
 PPP_FOOTER_NOTA = (
     "Stock terminado: depósitos activos con Suma stock=Si y tipo Terminado o Consignación. "
+    "Stock producción: cantidad armable según saldo en Semi elaborado de componentes Fabricado "
+    "de la receta (ensamblado=Si); no usa saldo propio del artículo en depósitos de producción. "
     "Disponible = max(0, terminado − pendiente). Backorder = pendiente sin cobertura de terminado. "
     "Reserva objetivo = stock_reserva; reserva disponible = min(R, max(0, terminado − pendiente)); "
     "reposición reserva = max(0, R − reserva disponible). "
     "MPR a fabricar = backorder + reposición = max(0, pendiente + reserva − terminado). "
-    "Producción se muestra aparte. Importe neto sin IVA ni descuento de cabecera."
+    "Stock producción es solo informativo. Importe neto sin IVA ni descuento de cabecera."
 )
 
 
@@ -149,7 +154,7 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
         except Exception:
             pass
 
-    ids_terminado, ids_produccion = classify_depositos_stock_columns(depositos_cfg)
+    ids_terminado, _ids_produccion = classify_depositos_stock_columns(depositos_cfg)
 
     filt_art_sql, filt_art_params = _vo_sql_filtros_articulo(
         "a",
@@ -259,7 +264,7 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
         for aid, res in cursor.fetchall() or []:
             reserva_map[int(aid)] = float(res or 0)
 
-        dep_ids = list(set(ids_terminado) | set(ids_produccion))
+        dep_ids = list(set(ids_terminado))
         saldo_map: Dict[Tuple[int, int], float] = {}
         if dep_ids:
             ph_art = ",".join(["%s"] * len(id_arts))
@@ -279,12 +284,13 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
             for sid_art, sid_dep, saldo in cursor.fetchall() or []:
                 saldo_map[(int(sid_art), int(sid_dep))] = float(saldo or 0)
 
+        armable_map = fetch_stock_produccion_armable_map(cursor, base_empresa, id_arts)
+
         set_terminado = set(ids_terminado)
-        set_produccion = set(ids_produccion)
         for art in articulos:
             aid = art["id_art"]
             art["stock_terminado"] = sum(saldo_map.get((aid, d), 0.0) for d in set_terminado)
-            art["stock_produccion"] = sum(saldo_map.get((aid, d), 0.0) for d in set_produccion)
+            art["stock_produccion"] = float(armable_map.get(aid, 0.0))
             enrich_articulo_row(art, reserva_map.get(aid, 0.0))
 
     totals = aggregate_totals(articulos)
@@ -292,7 +298,8 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
     notes = [
         f"Período pedidos (sp.Fecha): {svc._format_date(fecha_inicio)} a {svc._format_date(fecha_fin)}",
         "Pendiente: PED en estado Pendiente, cantidad = stockp.Cantidad (backorder).",
-        "Stock terminado: depósitos Terminado y Consignación (suma_stock=Si); producción: tipo Producción.",
+        "Stock terminado: depósitos Terminado y Consignación (suma_stock=Si). "
+        "Stock producción: armable desde Semi elaborado (componentes Fabricado de la receta).",
         "MPR: reserva objetivo/disponible/reposición; a fabricar = backorder + reposición = max(0, P+R−terminado).",
         IMPORTE_PENDIENTE_NOTA,
         f"Filas: {totals.get('row_count', 0)}.",
