@@ -479,6 +479,7 @@
     const input = el('prep-codigo');
     const codigo = input.value.trim();
     const modo_lectura = el('prep-modo-lectura').value;
+    input.value = '';
     if (!cajaActiva || !codigo) return;
     input.disabled = true;
     if (!lecturaPendiente || lecturaPendiente.codigo !== codigo || lecturaPendiente.id_caja !== cajaActiva
@@ -490,7 +491,6 @@
         ...lecturaPendiente,
       });
       lecturaPendiente = null;
-      input.value = '';
       const actualizado = await refrescar();
       const articulo = actualizado && (estado.articulos || []).find((item) =>
         Number(item.id_articulo) === Number(result.id_articulo)
@@ -512,6 +512,7 @@
       ultimo.textContent = `Lectura rechazada: ${error.message}`;
     }
     finally {
+      input.value = '';
       input.disabled = !cajaActiva || Boolean(estado?.sin_faltantes);
       if (!input.disabled) input.focus();
     }

@@ -25,6 +25,8 @@ remitos.
    faltantes en tiempo real, junto al escáner y por artículo. Las lecturas
    activas de otras preparaciones del mismo pedido también descuentan el
    disponible, para no volver a preparar un parcial ya puesto en cajas.
+   El campo del escáner se vacía al enviar cada código, incluso si la lectura
+   es rechazada, y recupera el foco mientras la caja siga disponible para leer.
    Una caja puede contener varios pedidos solo si
    son del mismo cliente y sucursal/domicilio.
 5. Puede deshacer lecturas, cerrar incluso una caja vacía abierta por error y
