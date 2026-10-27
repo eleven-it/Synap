@@ -8,68 +8,82 @@ from reports.permissions import (
     PEDIDOS_PENDIENTES_PRODUCCION_SLUG,
     user_can_access_pedidos_pendientes_produccion,
 )
-from reports.services.pedidos_pendientes_produccion_runner import (
-    CRITERIO_BACKORDER,
-    classify_depositos_columns,
-    criterio_estados_sql,
-    merge_mpr_into_articulos,
-    qty_expression_for_criterio,
-    resolve_criterio_pendiente,
+from reports.services.pedidos_pendientes_produccion_calcs import (
+    build_viajante_sql,
+    classify_depositos_stock_columns,
+    compute_disponible_backorder,
+    compute_mpr_pack_fields,
+    enrich_articulo_row,
 )
 from reports.services.pedidos_pendientes_produccion_seed import (
     PEDIDOS_PENDIENTES_PRODUCCION_SLUG as SEED_SLUG,
 )
 from reports.services.query_runner import QueryRunnerService
+from reports.views import SLUGS_VENTAS_CON_PUNTO_VENTA
 
 
-class TestCriterioPendiente(unittest.TestCase):
-    def test_default_backorder(self):
-        self.assertEqual(resolve_criterio_pendiente(None), CRITERIO_BACKORDER)
-        self.assertEqual(resolve_criterio_pendiente("invalid"), CRITERIO_BACKORDER)
+class TestDisponibleBackorder(unittest.TestCase):
+    def test_referencia_1478(self):
+        d, b = compute_disponible_backorder(1500, 628)
+        self.assertEqual(d, -872.0)
+        self.assertEqual(b, 872.0)
 
-    def test_estados_backorder(self):
-        sql, _ = criterio_estados_sql(CRITERIO_BACKORDER)
-        self.assertIn("Pendiente", sql)
-        self.assertNotIn("Parcial", sql)
+    def test_referencia_262(self):
+        d, b = compute_disponible_backorder(12, 1483)
+        self.assertEqual(d, 1471.0)
+        self.assertEqual(b, 0.0)
 
-    def test_qty_backorder_usa_cantidad(self):
-        self.assertIn("Cantidad", qty_expression_for_criterio(CRITERIO_BACKORDER))
+    def test_referencia_444(self):
+        d, b = compute_disponible_backorder(120, 0)
+        self.assertEqual(d, -120.0)
+        self.assertEqual(b, 120.0)
 
-    def test_qty_saldo_usa_pendiente(self):
-        expr = qty_expression_for_criterio("en_preparacion")
-        self.assertIn("cantidad_pendiente", expr)
+
+class TestMprPackFields(unittest.TestCase):
+    def test_a_fabricar_cero_muestra_demanda_y_ceros(self):
+        mpr = compute_mpr_pack_fields(100, 150, 10)
+        self.assertEqual(mpr["mpr_demanda_pedido"], 100.0)
+        self.assertEqual(mpr["mpr_cantidad_a_fabricar"], 0.0)
+        self.assertEqual(mpr["mpr_stock_terminado"], 150.0)
+        self.assertEqual(mpr["mpr_stock_reserva"], 10.0)
+        self.assertEqual(mpr["mpr_brecha_vs_pendiente"], 100.0)
+
+    def test_brecha_con_fabricar(self):
+        mpr = compute_mpr_pack_fields(100, 5, 0)
+        self.assertEqual(mpr["mpr_cantidad_a_fabricar"], 95.0)
+        self.assertEqual(mpr["mpr_brecha_vs_pendiente"], 5.0)
+
+    def test_enrich_articulo_sin_fila_mpr_externa(self):
+        art = {"pendiente_qty": 120, "stock_terminado": 0, "stock_produccion": 84}
+        enrich_articulo_row(art, 0)
+        self.assertEqual(art["backorder"], 120.0)
+        self.assertEqual(art["mpr_cantidad_a_fabricar"], 120.0)
+        self.assertIsNotNone(art["mpr_demanda_pedido"])
 
 
 class TestClasificacionDepositos(unittest.TestCase):
-    def test_clasifica_terminado_produccion_y_otros(self):
+    def test_solo_suma_stock_activos(self):
         deps = [
-            {"CodDeposito": 1, "NombreDeposito": "Term", "tipo_mpr": "Terminado", "suma_stock": "Si"},
-            {"CodDeposito": 2, "NombreDeposito": "Fab", "tipo_mpr": "Produccion", "suma_stock": "Si"},
-            {"CodDeposito": 3, "NombreDeposito": "Semi", "tipo_mpr": "SemiElaborado", "suma_stock": "Si"},
-            {"CodDeposito": 4, "NombreDeposito": "No suma", "tipo_mpr": "", "suma_stock": "No"},
+            {"CodDeposito": 1, "tipo_mpr": "Terminado", "suma_stock": "Si", "anulado": "No"},
+            {"CodDeposito": 2, "tipo_mpr": "Produccion", "suma_stock": "Si", "anulado": "No"},
+            {"CodDeposito": 3, "tipo_mpr": "Terminado", "suma_stock": "No", "anulado": "No"},
+            {"CodDeposito": 4, "tipo_mpr": "Terminado", "suma_stock": "Si", "anulado": "Si"},
         ]
-        term, prod, otros = classify_depositos_columns(deps)
+        term, prod = classify_depositos_stock_columns(deps)
         self.assertEqual(term, [1])
         self.assertEqual(prod, [2])
-        self.assertEqual(len(otros), 1)
-        self.assertEqual(otros[0]["id_deposito"], 3)
 
 
-class TestMergeMpr(unittest.TestCase):
-    def test_merge_calcula_brecha(self):
-        arts = [{"id_art": 10, "pendiente_qty": 100.0}]
-        mpr = [
-            {
-                "id_articulo": 10,
-                "cantidad_pedida_pedido": 80,
-                "stock_terminado": 5,
-                "stock_reserva": 0,
-                "cantidad_a_fabricar": 75,
-            }
-        ]
-        merge_mpr_into_articulos(arts, mpr)
-        self.assertEqual(arts[0]["mpr_cantidad_a_fabricar"], 75.0)
-        self.assertEqual(arts[0]["mpr_brecha_vs_pendiente"], 25.0)
+class TestVendedorSql(unittest.TestCase):
+    def test_incluir_cod_viajante(self):
+        sql, params = build_viajante_sql([3, 7], [])
+        self.assertIn("cp.CodViajante IN", sql)
+        self.assertEqual(params, [3, 7])
+
+    def test_excluir_si_no_hay_incluir(self):
+        sql, params = build_viajante_sql([], [9])
+        self.assertIn("NOT IN", sql)
+        self.assertEqual(params, [9])
 
 
 class TestBoOriginalSinCambios(unittest.TestCase):
@@ -77,9 +91,10 @@ class TestBoOriginalSinCambios(unittest.TestCase):
         src = inspect.getsource(QueryRunnerService.run)
         self.assertIn('report.slug == "bo-stock-facturacion"', src)
         self.assertIn("_run_backorder_vs_stock_vs_facturacion", src)
-        self.assertNotIn("pedidos-pendientes-produccion", inspect.getsource(
-            QueryRunnerService._run_backorder_vs_stock_vs_facturacion
-        ))
+        self.assertNotIn(
+            "pedidos-pendientes-produccion",
+            inspect.getsource(QueryRunnerService._run_backorder_vs_stock_vs_facturacion),
+        )
 
     def test_bo_no_aplica_clientes_incluir_en_sql(self):
         body = inspect.getsource(QueryRunnerService._run_backorder_vs_stock_vs_facturacion)
@@ -97,7 +112,10 @@ class TestPermisosYSlug(unittest.TestCase):
         user.tiene_permiso = lambda code: code == "mpr.reportes"
         self.assertTrue(user_can_access_pedidos_pendientes_produccion(user))
 
-    def test_runner_registrado_en_query_runner(self):
+    def test_pv_visible_en_slug(self):
+        self.assertIn(PEDIDOS_PENDIENTES_PRODUCCION_SLUG, SLUGS_VENTAS_CON_PUNTO_VENTA)
+
+    def test_runner_registrado_sin_mysql(self):
         from reports.models import ReportDefinition
 
         report = ReportDefinition(slug=PEDIDOS_PENDIENTES_PRODUCCION_SLUG, name="T", category="operational")
