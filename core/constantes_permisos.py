@@ -157,6 +157,7 @@ PERMISOS_POR_MODULO = {
         ("stock.inventario_fisico.contar", "Conteo móvil de inventario físico"),
         ("stock.inventario_fisico.gestionar", "Gestionar campañas de inventario físico"),
         ("stock.inventario_fisico.autorizar", "Autorizar y aplicar ajustes de inventario físico"),
+        ("stock.preparacion_cajas", "Armar cajas de preparaciones de pedido"),
     ],
     "Producción (MPR)": [
         ("mpr.ver", "Ver módulo Producción (MPR)"),

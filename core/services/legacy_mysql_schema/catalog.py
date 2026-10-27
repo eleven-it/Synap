@@ -2696,6 +2696,43 @@ def run_stock_inv_fisico_tables_mysql(conn) -> Dict[str, Any]:
     }
 
 
+def run_stock_prep_cajas_mysql(conn) -> Dict[str, Any]:
+    """Crea las tablas propias del armado de cajas previo al control VB6."""
+    from django.apps import apps
+
+    applied: List[str] = []
+    failed: List[str] = []
+    try:
+        sql_path = Path(apps.get_app_config("stock").path) / "sql" / "003_prep_cajas_synap.sql"
+        with conn.cursor() as cursor:
+            for statement in _split_sql_statements(sql_path.read_text(encoding="utf-8")):
+                statement = _sc_sql_strip_leading_comments(statement)
+                if statement:
+                    cursor.execute(statement)
+            cursor.execute("SHOW COLUMNS FROM synap_prep_caja LIKE 'numero_caja_vigente'")
+            if not cursor.fetchone():
+                cursor.execute(
+                    """ALTER TABLE synap_prep_caja
+                       ADD COLUMN numero_caja_vigente INT GENERATED ALWAYS AS
+                         (CASE WHEN estado='Anulada' THEN NULL ELSE numero_caja END) VIRTUAL,
+                       DROP INDEX uq_synap_prep_numero,
+                       ADD UNIQUE KEY uq_synap_prep_numero_vigente
+                         (codigo_movimiento_prep,numero_caja_vigente)"""
+                )
+        conn.commit()
+        applied.append("Tablas de cajas y numeración reiniciable por preparación")
+    except Exception as exc:
+        conn.rollback()
+        logger.exception("run_stock_prep_cajas_mysql: %s", exc)
+        failed.append(str(exc))
+    return {
+        "success": not failed,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 def run_stock_indice_fechacontrol_mysql(conn) -> Dict[str, Any]:
     """
     Índice compuesto ``(CodDeposito, FechaControl)`` en tabla legacy ``stock``.
@@ -3067,6 +3104,17 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "medio",
         "run": run_stock_inv_fisico_tables_mysql,
+    },
+    {
+        "id": "stock_prep_cajas_synap",
+        "title": "Stock — cajas por preparación de pedidos",
+        "description": (
+            "Crea las tablas de armado previo de cajas, reserva de operador, lecturas y numeración reiniciable por "
+            "preparación. No modifica el control de salida VB6. "
+            "Fuente: stock/sql/003_prep_cajas_synap.sql."
+        ),
+        "risk": "medio",
+        "run": run_stock_prep_cajas_mysql,
     },
     {
         "id": "stock_indice_fechacontrol",
