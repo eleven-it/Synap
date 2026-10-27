@@ -159,7 +159,13 @@ const SLUGS_VENTAS_PV = new Set([
   "ventas-marca-superart",
   "ventas-bom-docenas",
   "ventas-marcas-mensual",
+  "pedidos-pendientes-produccion",
 ]);
+
+/** Clientes/vendedores tags (incluir/excluir) como ventas BO. */
+function loadsBoClientesVendedoresTags(slug) {
+  return isInformeVentasMarcasFamiliaSlug(slug) || isPedidosPendientesProduccionSlug(slug);
+}
 
 /** Informe Monthly Reporting licenciatarios (pack + rango calendario). */
 function isVentasMensualesLicenciatariosSlug(slug) {
@@ -6768,7 +6774,7 @@ if (dashboardRoot) {
       return;
     }
     
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "cash_flow_detailed_movements" && reportSlug !== "uninvoiced_remitos" && !isInformeBoDualPeriodo(reportSlug) && reportSlug !== "total-consolidado-operativo" && reportSlug !== "stock-existencias" && !isInventarioDepositoSlug(reportSlug) && !isVentasMensualesLicenciatariosSlug(reportSlug)) {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "cash_flow_detailed_movements" && reportSlug !== "uninvoiced_remitos" && !isInformeBoDualPeriodo(reportSlug) && reportSlug !== "total-consolidado-operativo" && reportSlug !== "stock-existencias" && !isInventarioDepositoSlug(reportSlug) && !isVentasMensualesLicenciatariosSlug(reportSlug) && !isPedidosPendientesProduccionSlug(reportSlug)) {
       return;
     }
     
@@ -6839,7 +6845,7 @@ if (dashboardRoot) {
       }
       
       // Cargar clientes para "Clientes a excluir" (Ventas Netas, Remitos, Total Consolidado, BO Stock Facturación)
-      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasMensualesLicenciatariosSlug(reportSlug);
+      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasMensualesLicenciatariosSlug(reportSlug) || isPedidosPendientesProduccionSlug(reportSlug);
       if (reportShowsClientesExcluir) {
         const clientesResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
           headers: {
@@ -6865,12 +6871,12 @@ if (dashboardRoot) {
             initializeTagsFilter(
               "clientes_excluidos",
               "clientes",
-              isInformeVentasMarcasFamiliaSlug(reportSlug) ? "clientes_incluir" : undefined
+              loadsBoClientesVendedoresTags(reportSlug) ? "clientes_incluir" : undefined
             );
           }
         }
       }
-      if (isInformeVentasMarcasFamiliaSlug(reportSlug)) {
+      if (loadsBoClientesVendedoresTags(reportSlug)) {
         const clientesIncludeSelect = document.getElementById("clientes_incluir");
         if (clientesIncludeSelect) {
           const clientesIncResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
@@ -6897,7 +6903,7 @@ if (dashboardRoot) {
         }
       }
 
-      if (isInformeVentasMarcasFamiliaSlug(reportSlug)) {
+      if (loadsBoClientesVendedoresTags(reportSlug)) {
         const viajResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=viajantes`, {
           headers: {
             "X-Requested-With": "XMLHttpRequest",
@@ -6945,7 +6951,6 @@ if (dashboardRoot) {
       if (
         isInformeBoDualPeriodo(reportSlug) ||
         reportSlug === "stock-existencias" ||
-        isPedidosPendientesProduccionSlug(reportSlug) ||
         isInventarioDepositoSlug(reportSlug)
       ) {
         const depositosResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=depositos`, {
@@ -7016,12 +7021,6 @@ if (dashboardRoot) {
           }
         } catch (e) {
           console.error("Error cargando marcas/rubros/subrubros:", e);
-        }
-        if (isPedidosPendientesProduccionSlug(reportSlug)) {
-          const clientesIncluirSelect = document.getElementById("clientes_incluir");
-          if (clientesIncluirSelect) {
-            initializeTagsFilter("clientes_incluir", "clientes", "clientes_excluidos");
-          }
         }
         const gbCtr = document.getElementById("stock_existencias_group_by_tags_container");
         if (gbCtr && !gbCtr.dataset.tagsFilterReady) {
@@ -7142,7 +7141,7 @@ if (dashboardRoot) {
         });
       }
 
-      if (isInformeVentasMarcasFamiliaSlug(reportSlug)) {
+      if (loadsBoClientesVendedoresTags(reportSlug)) {
         const ci = document.getElementById("clientes_incluir");
         const ce = document.getElementById("clientes_excluidos");
         const vi = document.getElementById("vendedores_incluir");
@@ -10133,20 +10132,17 @@ if (dashboardRoot) {
       setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
       if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
-      appendTagMultiFilter("depositos_incluidos", filters, "depositos_incluidos");
+      appendTagMultiFilter("punto_venta", filters, "punto_venta");
+      appendTagMultiFilter("sucursales", filters, "sucursales");
       appendTagMultiFilter("clientes_incluir", filters, "clientes_incluir");
       appendTagMultiFilter("clientes_excluidos", filters, "clientes_excluidos");
+      appendTagMultiFilter("vendedores_incluir", filters, "vendedores_incluir");
+      appendTagMultiFilter("vendedores_excluidos", filters, "vendedores_excluidos");
       appendTagMultiFilter("marcas_incluidos", filters, "marcas_incluidos");
-      const criterioEl = document.getElementById("ppp_criterio_pendiente");
-      if (criterioEl && criterioEl.value) filters.criterio_pendiente = criterioEl.value;
-      const soloTerm = document.getElementById("ppp_solo_terminados");
-      filters.solo_terminados = soloTerm && soloTerm.checked;
-      const sucursalesSelect = document.getElementById("sucursales");
-      if (sucursalesSelect) {
-        const selectedSucursales = Array.from(sucursalesSelect.selectedOptions)
-          .map((opt) => opt.value)
-          .filter((v) => v);
-        if (selectedSucursales.length > 0) filters.sucursales = selectedSucursales;
+      const searchEl = document.getElementById("ppp_busqueda");
+      if (searchEl) {
+        const q = (searchEl.value || "").trim();
+        if (q) filters.busqueda = q;
       }
     } else if (isInventarioDepositoSlug(currentReportSlug)) {
       const fechaCorte = document.getElementById("fecha_corte")?.value;
