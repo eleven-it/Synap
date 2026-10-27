@@ -1,0 +1,65 @@
+{% include "mpr/reportes/_filtros_fabricados_superart.html" %}
+
+{% if not filas_superart %}
+{% include "mpr/reportes/partials/empty_state.html" with empty_titulo="Sin fabricado de 1ra en los meses seleccionados" empty_cta_url="mpr:clasificacion_produccion" empty_cta_label="Ver clasificación CC" %}
+{% else %}
+<div class="overflow-x-auto" x-data="{ open: {} }">
+    <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-800/50">
+            <tr>
+                <th class="w-8 px-2 py-2"></th>
+                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">Superartículo</th>
+                {% for col in meses_columnas %}
+                <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ col.label }}</th>
+                {% endfor %}
+                <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">Total</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+            {% for sa in filas_superart %}
+            <tr class="bg-white hover:bg-gray-50/80 dark:bg-gray-900/30 dark:hover:bg-gray-800/40">
+                <td class="px-2 py-2 text-center">
+                    {% if sa.articulos %}
+                    <button type="button"
+                            class="rounded p-1 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700"
+                            @click="open['{{ sa.superart_key }}'] = !open['{{ sa.superart_key }}']"
+                            :aria-expanded="open['{{ sa.superart_key }}'] ? 'true' : 'false'"
+                            title="Ver artículos">
+                        <span class="material-icons text-base" x-text="open['{{ sa.superart_key }}'] ? 'expand_more' : 'chevron_right'"></span>
+                    </button>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-2">
+                    <span class="block font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ sa.codigo_superart|default:"—" }}</span>
+                    <span class="block text-xs text-gray-600 dark:text-gray-400">{{ sa.descripcion_superart }}</span>
+                </td>
+                {% for col in sa.columnas_mes %}
+                <td class="px-3 py-2 text-right tabular-nums text-gray-900 dark:text-gray-100">{{ col.display }}</td>
+                {% endfor %}
+                <td class="px-3 py-2 text-right font-medium tabular-nums">{{ sa.total_display }}</td>
+            </tr>
+            {% for art in sa.articulos %}
+            <tr x-show="open['{{ sa.superart_key }}']" x-cloak class="bg-slate-50/80 dark:bg-slate-800/30">
+                <td></td>
+                <td class="px-3 py-1.5 pl-8">
+                    <span class="block text-xs font-medium tabular-nums text-gray-800 dark:text-gray-200">{{ art.codigo_articulo|default:"-" }}</span>
+                    <span class="block text-[11px] text-gray-500 dark:text-gray-400">{{ art.descripcion_articulo }}</span>
+                </td>
+                {% for col in art.columnas_mes %}
+                <td class="px-3 py-1.5 text-right text-xs tabular-nums text-gray-700 dark:text-gray-300">{{ col.display }}</td>
+                {% endfor %}
+                <td class="px-3 py-1.5 text-right text-xs font-medium tabular-nums">{{ art.total_display }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+            <tr class="bg-slate-100 font-semibold dark:bg-slate-800">
+                <td colspan="2" class="px-3 py-2 text-xs uppercase tracking-wide text-gray-700 dark:text-gray-300">Totales</td>
+                {% for col in totales_columnas %}
+                <td class="px-3 py-2 text-right tabular-nums">{{ col.display }}</td>
+                {% endfor %}
+                <td class="px-3 py-2 text-right tabular-nums">{{ total_general_display }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endif %}
