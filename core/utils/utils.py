@@ -73,7 +73,7 @@ APPS_MENU = [
                     {"label": _("Inventario"), "url": "stock:inventario", "icon": "inventory_2", "permission": "stock.consultas", "menu_item_id": "stock_mov_inventario"},
                     {"label": _("Inventario físico (campañas)"), "url": "stock:inventario_fisico_list", "icon": "fact_check", "permission": "stock.inventario_fisico.gestionar", "menu_item_id": "stock_inv_fisico_campanas"},
                     {"label": _("Conteo inventario físico"), "url": "stock:conteo_mis", "icon": "qr_code_scanner", "permission": "stock.inventario_fisico.contar", "menu_item_id": "stock_inv_fisico_conteo"},
-                    {"label": _("Cajas de preparación"), "url": "stock:prep_cajas", "icon": "inventory_2", "permission": "stock.preparacion_cajas", "menu_item_id": "stock_prep_cajas"},
+                    {"label": _("Armado de cajas"), "url": "stock:prep_cajas", "icon": "inventory_2", "permission": "stock.preparacion_cajas", "menu_item_id": "stock_prep_cajas"},
                 ]
             },
             {
@@ -1497,7 +1497,11 @@ def apps_visibles_sin_filtro_pwa(
         # REGLA 4: Verificar permisos
         # Solo usuarios con permisos "*" (usuario supervisor) o con el permiso específico pueden acceder
         # El puesto/rol "Supervisor" solo tiene permisos específicos (reports.ver)
-        if _permiso_menu_ok(app["permiso"], permisos_usuario):
+        permiso_modulo = _permiso_menu_ok(app["permiso"], permisos_usuario)
+        permiso_stock_operativo = app_id == "stock" and _permiso_menu_ok(
+            ["stock.inventario_fisico.contar", "stock.preparacion_cajas"], permisos_usuario
+        )
+        if permiso_modulo or permiso_stock_operativo:
             app_copy = app.copy()
             
             # Resolver la URL principal de la app
@@ -1511,10 +1515,12 @@ def apps_visibles_sin_filtro_pwa(
                 submenus_visibles = obtener_submenus_por_app(app["id"], permisos_usuario, request)
                 if submenus_visibles:
                     app_copy["submenus"] = submenus_visibles
-                    # Perfiles granulares MPR (p. ej. solo mpr.reportes o solo
-                    # mpr.tablero_ver): la URL de la card debe ser el primer ítem
-                    # visible, no el default de escritorio completo.
-                    if app_id == "mpr" and "mpr.ver" not in permisos_usuario:
+                    # Un perfil MPR o Stock sin acceso a la pantalla principal
+                    # debe abrir el primer ítem visible de su menú.
+                    if (app_id == "mpr" and "mpr.ver" not in permisos_usuario) or (
+                        app_id == "stock" and "stock.crear_movimiento" not in permisos_usuario
+                        and "*" not in permisos_usuario
+                    ):
                         for sm in submenus_visibles:
                             for it in sm.get("items") or []:
                                 if it.get("url"):
