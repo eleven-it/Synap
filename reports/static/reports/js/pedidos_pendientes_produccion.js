@@ -69,9 +69,12 @@
     const style = document.createElement("style");
     style.id = "ppp-table-header-styles";
     style.textContent =
-      "#ppp-section .ppp-data-table th.ppp-sort-th { white-space: nowrap; padding: 0.5rem 0.75rem; vertical-align: middle; }" +
-      "#ppp-section .ppp-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }" +
-      "#ppp-section .ppp-data-table { width: max-content; min-width: 100%; }";
+      "#ppp-section { max-width: 100%; min-width: 0; overflow-x: hidden; }" +
+      "#ppp-section #ppp-table-wrap { max-width: 100%; min-width: 0; overflow: hidden; }" +
+      "#ppp-section .ppp-table-scroll { overflow: auto; max-width: 100%; max-height: calc(100vh - 220px); -webkit-overflow-scrolling: touch; }" +
+      "#ppp-section .ppp-data-table { width: max-content; min-width: 100%; }" +
+      "#ppp-section .ppp-data-table th.ppp-sort-th { position: sticky; top: 0; z-index: 2; white-space: nowrap; padding: 0.5rem 0.75rem; vertical-align: middle; background: rgb(241 245 249); box-shadow: inset 0 -1px 0 rgb(226 232 240); }" +
+      ".dark #ppp-section .ppp-data-table th.ppp-sort-th { background: rgb(30 41 59); box-shadow: inset 0 -1px 0 rgb(51 65 85); }";
     document.head.appendChild(style);
   }
 
@@ -240,7 +243,7 @@
       formatUnit(n) +
       " | Orden y totales sobre todo el resultado" +
       "</p>" +
-      '<div class="ppp-table-scroll overflow-x-auto"><table class="ppp-data-table text-xs text-left border-collapse">' +
+      '<div class="ppp-table-scroll"><table class="ppp-data-table text-xs text-left border-collapse">' +
       '<thead class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase tracking-wide">' +
       head +
       "</thead><tbody>" +
