@@ -4293,6 +4293,13 @@ const renderSummary = (meta, totals) => {
     return;
   }
 
+  // pedidos-pendientes-produccion: KPIs solo en la sección clara (#ppp-section), no tarjetas oscuras del resumen
+  if (isPedidosPendientesProduccionSlug(reportSlug)) {
+    summaryGrid.innerHTML = "";
+    if (summaryContainer) summaryContainer.classList.add("hidden");
+    updateLastUpdateTime();
+    return;
+  }
 
   // ventas-mensuales-licenciatarios: sin KPIs; totales en fila pie de matriz
   if (isVentasMensualesLicenciatariosSlug(reportSlug)) {
