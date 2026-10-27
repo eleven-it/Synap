@@ -1,8 +1,11 @@
 from rest_framework.permissions import BasePermission
 
 INVENTARIO_DEPOSITO_SLUG = "inventario-deposito-articulo"
+PEDIDOS_PENDIENTES_PRODUCCION_SLUG = "pedidos-pendientes-produccion"
 # Slugs MPR en catálogo Reportes con acceso OR mpr.reportes / mpr.ver.
-MPR_CATALOG_OR_PERMISSION_SLUGS = frozenset({INVENTARIO_DEPOSITO_SLUG})
+MPR_CATALOG_OR_PERMISSION_SLUGS = frozenset(
+    {INVENTARIO_DEPOSITO_SLUG, PEDIDOS_PENDIENTES_PRODUCCION_SLUG}
+)
 
 
 def _user_has_permission_code(user, code: str) -> bool:
@@ -31,6 +34,13 @@ def user_can_access_inventario_deposito(user) -> bool:
     Acceso al informe inventario-deposito-articulo:
     reports.view_operational, mpr.reportes o mpr.ver.
     """
+    if _user_has_permission_code(user, "reports.view_operational"):
+        return True
+    return user_has_mpr_reportes(user)
+
+
+def user_can_access_pedidos_pendientes_produccion(user) -> bool:
+    """Pedidos pendientes producción: operativo Reportes o permisos MPR de reportes."""
     if _user_has_permission_code(user, "reports.view_operational"):
         return True
     return user_has_mpr_reportes(user)

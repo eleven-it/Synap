@@ -18,7 +18,9 @@ from .permissions import (
     BuilderReportsPermission,
     DabraConsolidadoRemitosPermission,
     INVENTARIO_DEPOSITO_SLUG,
+    PEDIDOS_PENDIENTES_PRODUCCION_SLUG,
     user_can_access_inventario_deposito,
+    user_can_access_pedidos_pendientes_produccion,
 )
 
 # Reportes con UI/dashboard propio (runner legacy por slug) que deben listarse también bajo «Declarativos»
@@ -32,6 +34,7 @@ BUILDER_HYBRID_SLUGS = frozenset(
         "ventas-marca-superart",
         "ventas-bom-docenas",
         "bo-stock-facturacion",
+        "pedidos-pendientes-produccion",
         "stock-existencias",
     }
 )
@@ -212,6 +215,13 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
 
             ensure_inventario_deposito_report()
             report = ReportDefinition.objects.filter(filters).first()
+        if not report and slug == PEDIDOS_PENDIENTES_PRODUCCION_SLUG:
+            from reports.services.pedidos_pendientes_produccion_seed import (
+                ensure_pedidos_pendientes_produccion_report,
+            )
+
+            ensure_pedidos_pendientes_produccion_report()
+            report = ReportDefinition.objects.filter(filters).first()
         if not report:
             raise Http404("Report not found")
         if report.slug == self.DABRA_CONSOLIDADO_REMITOS_SLUG:
@@ -220,6 +230,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
         elif report.slug == INVENTARIO_DEPOSITO_SLUG:
             if not user_can_access_inventario_deposito(self.request.user):
                 raise Http404("Not authorized for inventario por depósito")
+        elif report.slug == PEDIDOS_PENDIENTES_PRODUCCION_SLUG:
+            if not user_can_access_pedidos_pendientes_produccion(self.request.user):
+                raise Http404("Not authorized for pedidos pendientes producción")
         elif report.slug == self.COMMAND_CENTER_SLUG:
             from reports.services.report_visibility import command_center_visible_for_user
 
