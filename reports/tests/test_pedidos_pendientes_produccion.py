@@ -30,7 +30,7 @@ from reports.views import SLUGS_VENTAS_CON_PUNTO_VENTA
 class TestDisponibleBackorder(unittest.TestCase):
     def test_referencia_1478(self):
         d, b = compute_disponible_backorder(1500, 628)
-        self.assertEqual(d, -872.0)
+        self.assertEqual(d, 0.0)
         self.assertEqual(b, 872.0)
 
     def test_referencia_262(self):
@@ -40,8 +40,20 @@ class TestDisponibleBackorder(unittest.TestCase):
 
     def test_referencia_444(self):
         d, b = compute_disponible_backorder(120, 0)
-        self.assertEqual(d, -120.0)
+        self.assertEqual(d, 0.0)
         self.assertEqual(b, 120.0)
+
+    def test_pendiente_mayor_que_terminado_disponible_cero(self):
+        d, b = compute_disponible_backorder(100, 40)
+        self.assertEqual(d, 0.0)
+        self.assertEqual(b, 60.0)
+        self.assertGreaterEqual(d, 0.0)
+
+    def test_enrich_nunca_disponible_negativo(self):
+        art = {"pendiente_qty": 500, "stock_terminado": 10}
+        enrich_articulo_row(art)
+        self.assertEqual(art["disponible"], 0.0)
+        self.assertEqual(art["backorder"], 490.0)
 
 
 class TestMprPackFields(unittest.TestCase):
