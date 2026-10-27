@@ -70,9 +70,11 @@
       const lista = el('prep-lista');
       lista.replaceChildren();
       for (const item of data.preparaciones) {
-        const b = nodo('button', 'block w-full rounded-lg border border-slate-200 bg-white p-3 text-left text-sm text-slate-900 hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-700',
-          `${item.numero || `Prep. ${item.codigo}`} · ${item.pedidos} pedido(s)`);
+        const b = nodo('button', 'block w-full rounded-lg border border-slate-200 bg-white p-3 text-left text-sm text-slate-900 hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-700');
         b.type = 'button';
+        b.append(nodo('span', 'block font-semibold', `Preparación ${item.numero || item.codigo}`));
+        b.append(nodo('span', 'mt-1 block text-xs text-slate-600 dark:text-slate-300',
+          `Movimiento ${item.codigo} · ${item.pedidos} pedido(s)`));
         b.addEventListener('click', () => seleccionar(Number(item.codigo)));
         lista.append(b);
       }
@@ -193,7 +195,7 @@
           `Faltan ${unidadesYDisplays(articulo.faltante, Number(articulo.unidades_display))} · ${articulo.articulo} · Pedido ${articulo.nro_pedido}`));
       }
     }
-    el('prep-resumen-movimiento').textContent = String(prep);
+    el('prep-resumen-movimiento').textContent = String(estado.codigo || prep);
     el('prep-resumen-numero').textContent = numeroPrep;
     const lista = el('prep-resumen-cajas');
     lista.replaceChildren();
@@ -245,6 +247,7 @@
     el('prep-sin-seleccion').classList.add('hidden');
     el('prep-contenido').classList.remove('hidden');
     el('prep-titulo').textContent = `Preparación ${estado.numero_preparacion || prep}`;
+    el('prep-codigo-movimiento').textContent = String(estado.codigo || prep);
     const cajas = estado.cajas || [];
     renderFinalizacion(cajas);
     renderProgreso();
