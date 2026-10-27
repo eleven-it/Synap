@@ -73,8 +73,17 @@
 
         <div id="prep-lectura-panel" class="rounded-xl border-2 border-blue-400 bg-blue-50 p-4 text-slate-900 dark:border-blue-700 dark:bg-blue-950/40 dark:text-slate-100">
           <p class="text-sm font-semibold uppercase tracking-wide">Caja de lectura</p>
-          <p id="prep-caja-activa" class="mt-1 text-3xl font-black tabular-nums">Ninguna</p>
+          <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
+            <p id="prep-caja-activa" class="text-3xl font-black tabular-nums">Ninguna</p>
+            <button id="prep-cerrar-activa" type="button"
+                    class="hidden rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white">Cerrar caja</button>
+          </div>
           <p id="prep-caja-destino" class="mt-1 text-sm"></p>
+          <div id="prep-caja-resumen" class="mt-3 hidden rounded-lg border border-blue-300 bg-white p-3 dark:border-blue-700 dark:bg-slate-900">
+            <p class="text-xs font-semibold uppercase">En esta caja</p>
+            <strong id="prep-caja-cantidad" class="block text-xl"></strong>
+            <span id="prep-caja-equivalencia" class="block text-sm text-slate-600 dark:text-slate-300"></span>
+          </div>
           <label for="prep-modo-lectura" class="mt-3 block text-sm font-semibold">Modo de lectura</label>
           <select id="prep-modo-lectura"
                   class="mt-1 block w-full min-w-0 rounded-lg border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white sm:max-w-sm">
@@ -85,8 +94,8 @@
           <div id="prep-progreso" class="mt-4 rounded-lg border border-blue-300 bg-white p-3 dark:border-blue-700 dark:bg-slate-900" aria-live="polite">
             <p id="prep-progreso-titulo" class="font-bold"></p>
             <div class="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-              <p>Por leer: <strong id="prep-progreso-faltante" class="block text-lg text-amber-800 dark:text-amber-200"></strong></p>
-              <p>En cajas: <strong id="prep-progreso-leido" class="block text-lg"></strong></p>
+              <p>Por leer: <strong id="prep-progreso-faltante" class="block text-lg text-amber-800 dark:text-amber-200"></strong><span id="prep-progreso-faltante-unidades" class="block text-xs text-slate-600 dark:text-slate-300"></span></p>
+              <p>En cajas: <strong id="prep-progreso-leido" class="block text-lg"></strong><span id="prep-progreso-leido-unidades" class="block text-xs text-slate-600 dark:text-slate-300"></span></p>
               <p>Artículos completos: <strong id="prep-progreso-articulos" class="block text-lg"></strong></p>
             </div>
             <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" role="progressbar"
@@ -126,5 +135,5 @@
     </main>
   </div>
 </section>
-<script src="{% static 'stock/js/prep_cajas.js' %}?v=lectura-limpia-2"></script>
+<script src="{% static 'stock/js/prep_cajas.js' %}?v=display-caja-1"></script>
 {% endblock %}

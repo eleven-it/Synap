@@ -147,6 +147,9 @@ def _contenido_cajas(cursor, codigo_prep):
                   l.codigo_leido, l.tipo_lectura,
                   MAX(IFNULL(a.NombreArticulo,'')) AS articulo,
                   MAX(IFNULL(cp.NroComprobante,'')) AS nro_pedido,
+                  IFNULL((SELECT MAX(NULLIF(ap.cantidad_unidad_display,0))
+                          FROM articulo_prov ap WHERE ap.IDArt=l.id_articulo
+                            AND IFNULL(ap.anulado,'No')='No'),1) AS unidades_display,
                   SUM(l.cantidad_unidades) AS cantidad_unidades,
                   COUNT(*) AS lecturas
            FROM synap_prep_caja_lectura l
