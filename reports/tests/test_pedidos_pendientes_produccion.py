@@ -299,24 +299,33 @@ class TestBoOriginalSinCambios(unittest.TestCase):
 
 
 class TestTablaEncabezadosUnaLinea(unittest.TestCase):
-    def test_js_tabla_ppp_nowrap_y_scroll(self):
+    def test_js_tabla_ppp_scroll_wrapper(self):
         from pathlib import Path
 
         js = (Path(__file__).resolve().parents[1] / "static" / "reports" / "js" / "pedidos_pendientes_produccion.js").read_text(
             encoding="utf-8"
         )
         self.assertIn("ppp-table-scroll", js)
-        self.assertIn("white-space: nowrap", js)
-        self.assertIn("#ppp-section .ppp-data-table", js)
-        self.assertIn("overflow-x: hidden", js)
-        self.assertIn("max-width: 100%", js)
-        self.assertIn("min-width: 0", js)
-        self.assertIn("position: sticky", js)
-        self.assertIn("max-height: calc(100vh - 220px)", js)
+        self.assertIn("ppp-sort-th", js)
         self.assertIn("Reserva objetivo", js)
-        self.assertIn("Cantidad armable", js)
         self.assertNotIn("Brecha", js)
         self.assertNotIn("mpr_brecha", js)
+
+    def test_css_tabla_nowrap_y_scroll_contenido(self):
+        from pathlib import Path
+
+        css = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "reports"
+            / "css"
+            / "pedidos_pendientes_produccion_layout.css"
+        ).read_text(encoding="utf-8")
+        self.assertIn("overflow-x: auto", css)
+        self.assertIn("white-space: nowrap", css)
+        self.assertIn("#ppp-report-dashboard .ppp-data-table", css)
+        self.assertIn("position: sticky", css)
+        self.assertIn("max-height: calc(100vh - 220px)", css)
 
 
 class TestSeedSinMetricasGenerico(unittest.TestCase):

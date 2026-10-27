@@ -74,17 +74,7 @@
   let sortDir = "desc";
 
   function ensurePppTableStyles() {
-    if (document.getElementById("ppp-table-header-styles")) return;
-    const style = document.createElement("style");
-    style.id = "ppp-table-header-styles";
-    style.textContent =
-      "#ppp-section { max-width: 100%; min-width: 0; overflow-x: hidden; }" +
-      "#ppp-section #ppp-table-wrap { max-width: 100%; min-width: 0; overflow: hidden; }" +
-      "#ppp-section .ppp-table-scroll { overflow: auto; max-width: 100%; max-height: calc(100vh - 220px); -webkit-overflow-scrolling: touch; }" +
-      "#ppp-section .ppp-data-table { width: max-content; min-width: 100%; }" +
-      "#ppp-section .ppp-data-table th.ppp-sort-th { position: sticky; top: 0; z-index: 2; white-space: nowrap; padding: 0.5rem 0.75rem; vertical-align: middle; background: rgb(241 245 249); box-shadow: inset 0 -1px 0 rgb(226 232 240); }" +
-      ".dark #ppp-section .ppp-data-table th.ppp-sort-th { background: rgb(30 41 59); box-shadow: inset 0 -1px 0 rgb(51 65 85); }";
-    document.head.appendChild(style);
+    /* Layout en pedidos_pendientes_produccion_layout.css (#ppp-report-dashboard). */
   }
 
   function formatUnit(value) {

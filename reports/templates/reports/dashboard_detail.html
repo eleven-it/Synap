@@ -109,24 +109,27 @@
         overflow: hidden;
     }
 </style>
+{% if report.slug == 'pedidos-pendientes-produccion' %}
+<link rel="stylesheet" href="{% static 'reports/css/pedidos_pendientes_produccion_layout.css' %}?v=20261028a">
+{% endif %}
 {% endblock %}
 
 {% block content %}
-<section {% if report.slug == 'ventas-mensuales-licenciatarios' %}id="vml-page"{% endif %}
-         class="{% if report.slug == 'ventas-mensuales-licenciatarios' %}flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950{% else %}min-h-screen bg-slate-50 dark:bg-slate-950 pb-24{% endif %}">
+<section {% if report.slug == 'ventas-mensuales-licenciatarios' %}id="vml-page"{% elif report.slug == 'pedidos-pendientes-produccion' %}id="ppp-report-dashboard"{% endif %}
+         class="{% if report.slug == 'ventas-mensuales-licenciatarios' %}flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950{% elif report.slug == 'pedidos-pendientes-produccion' %}min-h-screen min-w-0 max-w-full overflow-x-clip bg-slate-50 dark:bg-slate-950 pb-24{% else %}min-h-screen bg-slate-50 dark:bg-slate-950 pb-24{% endif %}">
     <div class="relative overflow-hidden{% if report.slug == 'ventas-mensuales-licenciatarios' %} shrink-0{% endif %}">
         <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-90 dark:opacity-95"></div>
         <div class="relative w-full px-4 sm:px-6 lg:px-12 {% if report.slug == 'ventas-mensuales-licenciatarios' %}py-3{% else %}py-8{% endif %}">
-            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4{% if report.slug == 'pedidos-pendientes-produccion' %} reports-ppp-hero-actions w-full min-w-0 max-w-full{% endif %}">
+                <div class="min-w-0 flex-1">
                     <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 dark:text-slate-400 font-semibold mb-2">
                         {% if report.is_operational %}Foco operativo{% else %}Foco gerencial{% endif %}
                     </p>
-                    <h1 class="text-3xl md:text-4xl font-semibold text-white dark:text-slate-100 tracking-tight">
+                    <h1 class="text-2xl sm:text-3xl md:text-4xl font-semibold text-white dark:text-slate-100 tracking-tight break-words">
                         {{ report.name }}
                     </h1>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div class="flex flex-wrap items-center justify-start sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto min-w-0 shrink-0">
                     <button type="button"
                             data-refresh-dashboard
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-sky-500 hover:text-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400 transition-all duration-300">
@@ -187,8 +190,8 @@
     <br><br><br>
     {% endif %}
 
-    <div class="relative w-full px-4 sm:px-6 lg:px-12 {% if report.slug == 'ventas-mensuales-licenciatarios' %}flex min-h-0 flex-1 flex-col overflow-hidden pt-2{% else %}-mt-10{% endif %}">
-        <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow{% if report.slug == 'ventas-mensuales-licenciatarios' %} flex min-h-0 flex-1 flex-col{% endif %}">
+    <div class="relative w-full px-4 sm:px-6 lg:px-12 {% if report.slug == 'ventas-mensuales-licenciatarios' %}flex min-h-0 flex-1 flex-col overflow-hidden pt-2{% elif report.slug == 'pedidos-pendientes-produccion' %}reports-ppp-outer -mt-10 min-w-0 max-w-full overflow-x-clip{% else %}-mt-10{% endif %}">
+        <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow{% if report.slug == 'ventas-mensuales-licenciatarios' %} flex min-h-0 flex-1 flex-col{% elif report.slug == 'pedidos-pendientes-produccion' %} reports-ppp-card min-w-0 max-w-full overflow-x-clip{% endif %}">
             <div id="report-summary" data-summary-container class="px-6 sm:px-10 py-6 border-b border-slate-100 dark:border-slate-800 {% if report.slug == 'ventas-mensuales-licenciatarios' %}hidden{% elif is_declarative %}{% else %}hidden{% endif %}">
                 <div class="flex flex-row flex-wrap justify-between items-center gap-2 mb-4">
                     <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-100 uppercase tracking-wide">
@@ -200,9 +203,9 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-summary-grid></div>
             </div>
 
-            <div class="px-6 sm:px-10 py-0 border-b border-slate-100 dark:border-slate-800 hidden" data-filters-wrapper{% if report.slug == 'ventas-marcas-mensual' %} data-filters-sheet{% endif %}>
+            <div class="px-6 sm:px-10 py-0 border-b border-slate-100 dark:border-slate-800 hidden{% if report.slug == 'pedidos-pendientes-produccion' %} min-w-0 max-w-full overflow-x-clip{% endif %}" data-filters-wrapper{% if report.slug == 'ventas-marcas-mensual' %} data-filters-sheet{% endif %}>
                 {{ report_config_for_script|json_script:"report-config-data" }}
-                <form class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 py-8 hidden" id="report-filters" data-filters-container data-report-slug="{{ report.slug }}">
+                <form class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 py-8 hidden{% if report.slug == 'pedidos-pendientes-produccion' %} min-w-0 max-w-full{% endif %}" id="report-filters" data-filters-container data-report-slug="{{ report.slug }}">
                     {% if is_declarative %}
                         <!-- Filtros de período y fechas solo se muestran si hay filtros de fecha definidos en el builder -->
                         <!-- Estos se mostrarán dinámicamente con JavaScript si detecta filtros de fecha -->
@@ -423,7 +426,7 @@
                 </form>
             </div>
 
-            <div class="{% if report.slug == 'ventas-mensuales-licenciatarios' %}flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4{% else %}p-6 sm:p-10{% endif %}" id="dashboard-root"
+            <div class="{% if report.slug == 'ventas-mensuales-licenciatarios' %}flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4{% elif report.slug == 'pedidos-pendientes-produccion' %}p-6 sm:p-10 min-w-0 max-w-full overflow-x-clip{% else %}p-6 sm:p-10{% endif %}" id="dashboard-root"
                  data-dashboard-url="{{ dashboard_api_url }}"
                  data-report-slug="{{ report.slug }}"
                  data-report-refresh-interval="{{ report.refresh_interval }}"
@@ -538,12 +541,12 @@
                 {% endif %}
 
                 {% if report.slug == 'pedidos-pendientes-produccion' %}
-                <section id="ppp-section" class="relative mt-4 max-w-full min-w-0 overflow-x-hidden rounded-2xl border border-slate-100 bg-white shadow-lg shadow-slate-900/5 dark:border-slate-800 dark:bg-slate-950">
+                <section id="ppp-section" class="relative mt-4 w-full max-w-full min-w-0 overflow-x-clip rounded-2xl border border-slate-100 bg-white shadow-lg shadow-slate-900/5 dark:border-slate-800 dark:bg-slate-950">
                     <header class="px-4 sm:px-6 py-3 border-b border-slate-100 dark:border-slate-800">
                         <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Pedidos pendientes por artículo</h2>
                         <p id="ppp-filters-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1" aria-live="polite"></p>
                     </header>
-                    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
+                    <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 min-w-0">
                         <div class="rounded-xl bg-slate-50 dark:bg-slate-900/40 p-4">
                             <p class="text-[10px] uppercase tracking-wide text-slate-500">Pedido pendiente (u.)</p>
                             <p id="ppp-kpi-pendiente" class="text-xl font-bold text-sky-600 dark:text-sky-400">—</p>
@@ -5361,7 +5364,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>
 {% endif %}
 {% if report.slug == 'pedidos-pendientes-produccion' %}
-<script src="{% static 'reports/js/pedidos_pendientes_produccion.js' %}?v=20261027"></script>
+<script src="{% static 'reports/js/pedidos_pendientes_produccion.js' %}?v=20261028a"></script>
 {% endif %}
 {% if report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' %}
 <script src="{% static 'reports/js/objetivos_ventas_bo.js' %}?v=202604353"></script>
