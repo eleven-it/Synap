@@ -105,6 +105,24 @@ class ParserEncabezadosTests(SimpleTestCase):
         parsed = parse_workbook(buf.getvalue())
         self.assertEqual(len(parsed.filas), 1)
 
+    def test_totales_en_otra_columna_ignora_pie(self):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.cell(HEADER_ROW, 4, "Articulos CODIGOS")
+        ws.cell(HEADER_ROW, 7, "Precio Retail Q1")
+        ws.cell(HEADER_ROW, 8, "Precio Sugerido Publico")
+        ws.cell(HEADER_ROW, 14, "EAN")
+        ws.cell(DATA_START_ROW, 4, "935478-01")
+        ws.cell(DATA_START_ROW, 7, 10)
+        ws.cell(DATA_START_ROW, 8, 20)
+        ws.cell(DATA_START_ROW + 1, 2, "Totales")
+        ws.cell(DATA_START_ROW + 3, 4, "30 dias F.F. con valores.")
+        buf = BytesIO()
+        wb.save(buf)
+        parsed = parse_workbook(buf.getvalue())
+        self.assertEqual(len(parsed.filas), 1)
+        self.assertEqual(parsed.errores_fila, [])
+
     def test_ean_numerico_y_float(self):
         self.assertEqual(_normalize_ean(8720245243285), "8720245243285")
         self.assertEqual(_normalize_ean(4050375068187.0), "4050375068187")
