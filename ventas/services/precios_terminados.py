@@ -240,6 +240,8 @@ def _where_base(alias: str = "a", *, tipo_producto: str = TIPO_PRODUCTO_TERMINAD
     """
     Universo base: no discontinuos + tipo de fabricación.
     Terminado incluye vacío (legacy sin tipo_art_fab cargado) y 'Terminado'.
+    Excluye artículos de gasto (tipo_art = 'Gasto'), que en administraNET
+    pueden tener tipo_art_fab = 'Terminado'.
     """
     campo = f"LOWER(COALESCE(TRIM({alias}.tipo_art_fab), ''))"
     t = (tipo_producto or TIPO_PRODUCTO_TERMINADO).strip().lower()
@@ -250,7 +252,8 @@ def _where_base(alias: str = "a", *, tipo_producto: str = TIPO_PRODUCTO_TERMINAD
         tipo_sql = f"{campo} IN (%s, %s)"
         tipo_params = ["terminado", ""]
     return (
-        f"{tipo_sql} AND COALESCE({alias}.Discontinuo, 'No') = 'No'",
+        f"{tipo_sql} AND COALESCE({alias}.Discontinuo, 'No') = 'No'"
+        f" AND LOWER(COALESCE(TRIM({alias}.tipo_art), '')) <> 'gasto'",
         tipo_params,
     )
 
