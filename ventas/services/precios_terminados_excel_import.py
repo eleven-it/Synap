@@ -299,13 +299,18 @@ def parse_workbook(
     errores_codigo: List[str] = []
     precios_por_codigo: Dict[str, Tuple[Decimal, Decimal]] = {}
 
-    for row_num in range(DATA_START_ROW, (ws.max_row or DATA_START_ROW) + 1):
+    for row_num, row_vals in enumerate(
+        ws.iter_rows(min_row=DATA_START_ROW, values_only=True), start=DATA_START_ROW
+    ):
+        # Fila TOTALES (en cualquier celda): fin de datos; se ignora el pie posterior.
+        if any(
+            v is not None and TOTALES_MARK in str(v).strip().upper() for v in row_vals
+        ):
+            break
         raw_codigo = ws.cell(row_num, COL_CODIGO).value
         codigo = _normalize_codigo(raw_codigo)
         if not codigo:
             continue
-        if codigo.upper() == TOTALES_MARK:
-            break
 
         if not CODIGO_RE.match(codigo):
             errores_fila.append(
