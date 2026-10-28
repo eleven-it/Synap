@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from calendar import monthrange
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from core.utils.administranet_types import to_int_or_none
+from core.utils.administranet_types import to_date_or_none, to_int_or_none
 
 from mpr.reportes_transicion_lote_sql import (
     fetch_fabricado_primera_por_articulo_mes,
@@ -39,6 +40,42 @@ _MESES_CORTO = (
 def mes_actual_yyyy_mm(hoy: Optional[date] = None) -> str:
     d = hoy or date.today()
     return f"{d.year:04d}-{d.month:02d}"
+
+
+def _parse_fecha_iso(value: Any) -> Optional[date]:
+    iso = to_date_or_none(value)
+    if not iso:
+        return None
+    try:
+        return datetime.strptime(str(iso)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def primer_dia_mes_calendario(hoy: Optional[date] = None) -> date:
+    d = hoy or date.today()
+    return d.replace(day=1)
+
+
+def ultimo_dia_mes_calendario(hoy: Optional[date] = None) -> date:
+    d = hoy or date.today()
+    return d.replace(day=monthrange(d.year, d.month)[1])
+
+
+def meses_en_rango(desde: date, hasta: date) -> List[str]:
+    """Meses calendario AAAA-MM que intersectan [desde, hasta] (inclusive)."""
+    if desde > hasta:
+        desde, hasta = hasta, desde
+    out: List[str] = []
+    y, m = desde.year, desde.month
+    end_y, end_m = hasta.year, hasta.month
+    while (y, m) <= (end_y, end_m):
+        out.append(f"{y:04d}-{m:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return out
 
 
 def opciones_meses_selector(cantidad: int = 36, hoy: Optional[date] = None) -> List[Dict[str, str]]:
@@ -77,11 +114,62 @@ def superart_desde_id_manual(id_manual: Any) -> Tuple[str, str, str]:
     return manual.upper(), manual, manual
 
 
-def _match_busqueda_superart(codigo: str, descripcion: str, q: str) -> bool:
-    if not q:
+def _normalizar_superarts_incluidos(raw: Sequence[str]) -> List[str]:
+    out: List[str] = []
+    seen: set[str] = set()
+    for item in raw or []:
+        part = str(item or "").strip()
+        if not part:
+            continue
+        key = part.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(part)
+    return out
+
+
+def parse_superarts_incluidos_desde_get(get_params) -> List[str]:
+    """Lista q_superart: parámetro repetido, getlist o valores separados por coma."""
+    raw: List[str] = []
+    if hasattr(get_params, "getlist"):
+        raw = list(get_params.getlist("q_superart") or [])
+    if not raw:
+        single = (get_params.get("q_superart") or get_params.get("q") or "").strip()
+        if single:
+            raw = [p.strip() for p in single.split(",") if p.strip()]
+    else:
+        expanded: List[str] = []
+        for item in raw:
+            for part in str(item).split(","):
+                part = part.strip()
+                if part:
+                    expanded.append(part)
+        raw = expanded
+    return _normalizar_superarts_incluidos(raw)
+
+
+def _match_superarts_filtro(
+    codigo: str,
+    descripcion: str,
+    superart_key: str,
+    terminos: Sequence[str],
+) -> bool:
+    """OR entre términos; vacío = sin filtro. Compatible con búsqueda parcial (un valor)."""
+    if not terminos:
         return True
-    qq = q.lower()
-    return qq in (codigo or "").lower() or qq in (descripcion or "").lower()
+    cod_l = (codigo or "").lower()
+    desc_l = (descripcion or "").lower()
+    key_l = (superart_key or "").lower()
+    for term in terminos:
+        t = str(term or "").strip().lower()
+        if not t:
+            continue
+        if t == cod_l or t == desc_l or t == key_l:
+            return True
+        if t in cod_l or t in desc_l:
+            return True
+    return False
 
 
 def agrupar_fabricados_por_superart(
@@ -89,6 +177,7 @@ def agrupar_fabricados_por_superart(
     meses: Sequence[str],
     desc_map: Dict[int, Tuple[str, str]],
     *,
+    superarts_incluidos: Optional[Sequence[str]] = None,
     busqueda_superart: str = "",
 ) -> Dict[str, Any]:
     meses_ord = normalizar_meses_yyyy_mm(meses)
@@ -143,10 +232,17 @@ def agrupar_fabricados_por_superart(
             sa["por_mes"][m] = round(sa["por_mes"].get(m, 0) + art["por_mes"].get(m, 0), 4)
         sa["total"] = round(sa["total"] + art["total"], 4)
 
-    q = (busqueda_superart or "").strip()
+    terminos = _normalizar_superarts_incluidos(list(superarts_incluidos or []))
+    if not terminos and (busqueda_superart or "").strip():
+        terminos = _normalizar_superarts_incluidos([busqueda_superart])
     filas_super: List[Dict[str, Any]] = []
     for sa in super_idx.values():
-        if not _match_busqueda_superart(sa["codigo_superart"], sa["descripcion_superart"], q):
+        if not _match_superarts_filtro(
+            sa["codigo_superart"],
+            sa["descripcion_superart"],
+            sa.get("superart_key") or "",
+            terminos,
+        ):
             continue
         sa["articulos"].sort(key=lambda a: (-a["total"], a["codigo_articulo"]))
         filas_super.append(sa)
@@ -192,6 +288,14 @@ def parse_filtros_fabricados_superart(
     marcas_getlist: Optional[Sequence[str]] = None,
     hoy: Optional[date] = None,
 ) -> Dict[str, Any]:
+    ref = hoy or date.today()
+    desde_raw = (get_params.get("desde") or get_params.get("fecha_desde") or "").strip()
+    hasta_raw = (get_params.get("hasta") or get_params.get("fecha_hasta") or "").strip()
+    desde_d = _parse_fecha_iso(desde_raw) or primer_dia_mes_calendario(ref)
+    hasta_d = _parse_fecha_iso(hasta_raw) or ref
+    if hasta_d < desde_d:
+        desde_d, hasta_d = hasta_d, desde_d
+
     meses_raw: List[str] = []
     if hasattr(get_params, "getlist"):
         meses_raw = list(get_params.getlist("meses") or [])
@@ -199,9 +303,13 @@ def parse_filtros_fabricados_superart(
         single = (get_params.get("meses") or "").strip()
         if single:
             meses_raw = [p.strip() for p in single.split(",") if p.strip()]
-    meses = normalizar_meses_yyyy_mm(meses_raw)
+    meses_legacy = normalizar_meses_yyyy_mm(meses_raw)
+    if meses_legacy and not desde_raw and not hasta_raw:
+        meses = meses_legacy
+    else:
+        meses = meses_en_rango(desde_d, hasta_d)
     if not meses:
-        meses = [mes_actual_yyyy_mm(hoy)]
+        meses = [mes_actual_yyyy_mm(ref)]
 
     marcas: List[int] = []
     raw_marcas = list(marcas_getlist or [])
@@ -212,12 +320,77 @@ def parse_filtros_fabricados_superart(
         if mi is not None:
             marcas.append(int(mi))
 
-    busqueda = (get_params.get("q_superart") or get_params.get("q") or "").strip()
+    superarts = parse_superarts_incluidos_desde_get(get_params)
     return {
+        "desde_iso": desde_d.isoformat(),
+        "hasta_iso": hasta_d.isoformat(),
         "meses": meses,
         "marcas_incluidos": marcas,
-        "busqueda_superart": busqueda,
+        "superarts_incluidos": superarts,
+        # Compat lectura legacy (primer valor o cadena vacía)
+        "busqueda_superart": superarts[0] if len(superarts) == 1 else "",
     }
+
+
+def buscar_marcas_predictivo(
+    base_empresa: str,
+    q: str,
+    *,
+    limit: int = 25,
+) -> List[Dict[str, Any]]:
+    """Sugerencias de marca para autocompletar (value/label)."""
+    from stock.services.inventario_tabla import listar_marcas_catalogo
+
+    texto = (q or "").strip().lower()
+    if not texto or not (base_empresa or "").strip():
+        return []
+    catalogo = listar_marcas_catalogo(base_empresa)
+    out: List[Dict[str, Any]] = []
+    for item in catalogo:
+        label = str(item.get("label") or "")
+        if texto in label.lower():
+            out.append({"value": item.get("value"), "label": label})
+            if len(out) >= max(1, limit):
+                break
+    return out
+
+
+def buscar_superart_predictivo(
+    base_empresa: str,
+    q: str,
+    *,
+    limit: int = 25,
+) -> List[Dict[str, str]]:
+    """Superartículos distintos (id_manual) para autocompletar."""
+    texto = (q or "").strip()
+    if len(texto) < 1 or not (base_empresa or "").strip():
+        return []
+    lim = max(1, min(int(limit or 25), 50))
+    like = f"%{texto}%"
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT TRIM(a.id_manual) AS codigo
+                FROM articulo a
+                WHERE TRIM(COALESCE(a.id_manual, '')) <> ''
+                  AND a.id_manual LIKE %s
+                ORDER BY codigo
+                LIMIT %s
+                """,
+                (like, lim),
+            )
+            rows = cursor.fetchall() or []
+    except Exception as exc:
+        logger.warning("buscar_superart_predictivo %s: %s", base_empresa, exc)
+        return []
+    out: List[Dict[str, str]] = []
+    for row in rows:
+        codigo = str((row.get("codigo") if isinstance(row, dict) else row[0]) or "").strip()
+        if not codigo:
+            continue
+        out.append({"codigo": codigo, "descripcion": codigo})
+    return out
 
 
 def reporte_mpr_fabricados_superart(
@@ -225,6 +398,7 @@ def reporte_mpr_fabricados_superart(
     *,
     meses: Sequence[str],
     marcas_incluidos: Optional[Sequence[int]] = None,
+    superarts_incluidos: Optional[Sequence[str]] = None,
     busqueda_superart: str = "",
 ) -> Dict[str, Any]:
     vacio = {
@@ -260,9 +434,12 @@ def reporte_mpr_fabricados_superart(
     art_ids = list({to_int_or_none(r.get("id_articulo")) for r in rows})
     art_ids = [a for a in art_ids if a is not None]
     desc_map = _fetch_descripciones_articulo(base_empresa, art_ids) if art_ids else {}
+    superarts = _normalizar_superarts_incluidos(list(superarts_incluidos or []))
+    if not superarts and (busqueda_superart or "").strip():
+        superarts = _normalizar_superarts_incluidos([busqueda_superart])
     return agrupar_fabricados_por_superart(
         rows,
         meses_norm,
         desc_map,
-        busqueda_superart=busqueda_superart,
+        superarts_incluidos=superarts,
     )

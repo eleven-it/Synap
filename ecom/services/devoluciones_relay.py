@@ -94,7 +94,7 @@ def listar_devoluciones_relay(
         SELECT
             comp_ped.CodigoMovimiento AS CodigoMovimiento,
             comp_ped.id_comp_ped AS id,
-            DATE_FORMAT(comp_ped.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(comp_ped.Fecha,'%%d/%%m/%%Y') AS FechaB,
             comp_ped.Fecha AS Fecha,
             punto_venta.nro_punto_venta AS nro_punto_venta,
             comp_ped.NroCompBusq AS NroCompBusq,
@@ -104,7 +104,7 @@ def listar_devoluciones_relay(
             comp_ped.IVA2 AS IVA2,
             comp_ped.Exento AS Exento,
             comp_ped.CondVenta AS CondVenta,
-            DATE_FORMAT(comp_ped.FechaEntrega,'%d/%m/%Y') AS FechaEntrega,
+            DATE_FORMAT(comp_ped.FechaEntrega,'%%d/%%m/%%Y') AS FechaEntrega,
             comp_ped.FormaEntrega AS FormaEntrega,
             comp_ped.Estado AS Estado,
             comp_ped.Detalle AS Detalle,

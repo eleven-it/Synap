@@ -72,7 +72,7 @@ def listar_facturas_imputar_relay(
             rf.id_recibo_factura AS id_recibo_factura,
             rf.TipoComprobante AS TipoComprobante,
             rf.Fecha AS Fecha,
-            DATE_FORMAT(rf.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(rf.Fecha,'%%d/%%m/%%Y') AS FechaB,
             rf.NroComprobante AS NroComprobante,
             rf.CodigoMovimiento AS CodigoMovimiento,
             rf.Importe AS Importe,

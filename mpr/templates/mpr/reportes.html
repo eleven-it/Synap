@@ -82,6 +82,8 @@ function mprReportesHub() {
         enviarFiltros() {
             const form = this.$refs.filtrosForm;
             if (!form) return;
+            const reporteInput = form.querySelector('[name="reporte"]');
+            const reporteActual = reporteInput ? reporteInput.value : '';
             if (typeof window.mprShowPostLoadingProgress === 'function') {
                 window.mprShowPostLoadingProgress({
                     title: form.getAttribute('data-mpr-loading-title') || 'Reconstruyendo análisis',
