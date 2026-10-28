@@ -78,12 +78,20 @@
     const style = document.createElement("style");
     style.id = "ppp-table-header-styles";
     style.textContent =
-      "#ppp-section { max-width: 100%; min-width: 0; overflow-x: hidden; }" +
+      "main.app-content:has(#ppp-section) { min-width: 0; }" +
+      "#ppp-section { width: 100%; max-width: 100%; min-width: 0; overflow-x: hidden; contain: inline-size; }" +
       "#ppp-section #ppp-table-wrap { max-width: 100%; min-width: 0; overflow: hidden; }" +
       "#ppp-section .ppp-table-scroll { overflow: auto; max-width: 100%; max-height: calc(100vh - 220px); -webkit-overflow-scrolling: touch; }" +
       "#ppp-section .ppp-data-table { width: max-content; min-width: 100%; }" +
       "#ppp-section .ppp-data-table th.ppp-sort-th { position: sticky; top: 0; z-index: 2; white-space: nowrap; padding: 0.5rem 0.75rem; vertical-align: middle; background: rgb(241 245 249); box-shadow: inset 0 -1px 0 rgb(226 232 240); }" +
-      ".dark #ppp-section .ppp-data-table th.ppp-sort-th { background: rgb(30 41 59); box-shadow: inset 0 -1px 0 rgb(51 65 85); }";
+      ".dark #ppp-section .ppp-data-table th.ppp-sort-th { background: rgb(30 41 59); box-shadow: inset 0 -1px 0 rgb(51 65 85); }" +
+      "#ppp-section .ppp-data-table td { color: rgb(30 41 59); padding: 0.375rem 0.75rem; border-bottom: 1px solid rgb(241 245 249); white-space: nowrap; }" +
+      "#ppp-section .ppp-data-table th.ppp-sort-th { color: rgb(71 85 105); }" +
+      ".dark #ppp-section .ppp-data-table td { color: rgb(226 232 240); border-bottom-color: rgb(30 41 59); }" +
+      ".dark #ppp-section .ppp-data-table th.ppp-sort-th { color: rgb(203 213 225); }" +
+      ".dark #ppp-section .ppp-data-table tr.ppp-totals-row td { color: rgb(248 250 252); background: rgb(30 41 59); }" +
+      "#ppp-section .ppp-data-table td.ppp-backorder-hit { color: rgb(146 64 14); }" +
+      ".dark #ppp-section .ppp-data-table td.ppp-backorder-hit { color: rgb(253 230 138); }";
     document.head.appendChild(style);
   }
 
@@ -136,7 +144,7 @@
 
   function cellExtraClass(col, row) {
     if (col.key === "backorder" && Number(row.backorder) > 0) {
-      return " bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 font-semibold";
+      return " ppp-backorder-hit bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 font-semibold";
     }
     return "";
   }
@@ -230,7 +238,7 @@
     });
 
     if (articulos.length) {
-      body += '<tr class="bg-slate-100 dark:bg-slate-800 font-semibold">';
+      body += '<tr class="ppp-totals-row bg-slate-100 dark:bg-slate-800 font-semibold">';
       COLUMNS.forEach(function (col, idx) {
         if (idx === 0) {
           body += '<td colspan="5">TOTALES</td>';
@@ -255,7 +263,7 @@
       formatUnit(n) +
       " | Orden y totales sobre todo el resultado" +
       "</p>" +
-      '<div class="ppp-table-scroll"><table class="ppp-data-table text-xs text-left border-collapse">' +
+      '<div class="ppp-table-scroll"><table class="ppp-data-table text-xs text-left border-collapse text-slate-800 dark:text-slate-200">' +
       '<thead class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase tracking-wide">' +
       head +
       "</thead><tbody>" +
