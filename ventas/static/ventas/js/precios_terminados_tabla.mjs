@@ -22,8 +22,13 @@ function getCsrf() {
 
 function preciosTerminadosTabla(config) {
   const historial = typeof historialPreciosMixin === "function" ? historialPreciosMixin(config) : {};
+  const importMx =
+    typeof window.preciosTerminadosImportMixin === "function"
+      ? window.preciosTerminadosImportMixin(config)
+      : {};
   return {
     ...historial,
+    ...importMx,
     busqueda: "",
     dirtyCount: 0,
     guardarModalOpen: false,
