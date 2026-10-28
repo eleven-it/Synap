@@ -5,7 +5,7 @@
 
 {% block extra_js %}
 <script src="{% static 'ventas/js/precios_terminados_historial.mjs' %}"></script>
-<script src="{% static 'ventas/js/precios_terminados_import.mjs' %}?v=20261028c"></script>
+<script src="{% static 'ventas/js/precios_terminados_import.mjs' %}?v=20261028d"></script>
 <script src="{% static 'ventas/js/precios_terminados_tabla.mjs' %}?v=20261028b"></script>
 {{ block.super }}
 <script type="module" src="{% static 'ventas/js/precios_terminados_filtros.mjs' %}"></script>
@@ -476,66 +476,115 @@
                     </div>
                 </div>
                 <div x-show="importStep === 2 && importPreview" x-cloak class="space-y-3">
-                    <div class="grid grid-cols-2 gap-2 text-center text-[10px] sm:grid-cols-3 lg:grid-cols-6">
-                        <div class="rounded-lg bg-slate-50 p-2 dark:bg-slate-800"><span class="block text-sm font-bold" x-text="importPreview.resumen.codigos_encontrados"></span>Códigos OK</div>
-                        <div class="rounded-lg bg-emerald-50 p-2 dark:bg-emerald-950/30"><span class="block text-sm font-bold" x-text="importPreview.resumen.articulos_actualizar"></span>A actualizar</div>
-                        <div class="rounded-lg bg-red-50 p-2 dark:bg-red-950/30"><span class="block text-sm font-bold" x-text="importPreview.resumen.no_encontrados"></span>No encontr.</div>
-                        <div class="rounded-lg bg-amber-50 p-2 dark:bg-amber-950/30"><span class="block text-sm font-bold" x-text="importPreview.resumen.advertencias"></span>Advertencias</div>
-                        <div class="rounded-lg bg-orange-50 p-2 dark:bg-orange-950/30"><span class="block text-sm font-bold" x-text="importPreview.resumen.errores_fila"></span>Errores fila</div>
-                        <div class="rounded-lg bg-slate-100 p-2 dark:bg-slate-700"><span class="block text-sm font-bold" x-text="importPreview.resumen.excluidos"></span>Excluidos 2da</div>
+                    <div class="flex flex-wrap items-center gap-1 border-b border-slate-200 text-xs dark:border-slate-700" role="tablist">
+                        <template x-for="tab in [{id: 'revisar', label: 'Revisar'}, {id: 'actualiza', label: 'Se actualizan'}, {id: 'sin_cambios', label: 'Sin cambios'}, {id: 'todos', label: 'Todos'}]" :key="tab.id">
+                            <button type="button" role="tab" @click="importFiltroEstado = tab.id"
+                                    :aria-selected="importFiltroEstado === tab.id"
+                                    :class="importFiltroEstado === tab.id ? 'border-purple-600 text-purple-700 dark:text-purple-300' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                                    class="-mb-px inline-flex items-center gap-1 border-b-2 px-2 py-1.5 font-semibold">
+                                <span x-text="tab.label"></span>
+                                <span class="rounded-full px-1.5 text-[10px]"
+                                      :class="tab.id === 'revisar' && importTabCount('revisar') ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'"
+                                      x-text="importTabCount(tab.id)"></span>
+                            </button>
+                        </template>
+                        <button type="button" @click="descargarIncidenciasImport()" class="ml-auto text-xs font-semibold text-purple-600 hover:underline">Descargar incidencias</button>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <label class="text-xs text-slate-600 dark:text-slate-400">Estado</label>
-                        <select x-model="importFiltroEstado" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800">
-                            <option value="todos">Todos</option>
-                            <option value="actualiza">Actualiza</option>
-                            <option value="advertencia">Advertencia</option>
-                            <option value="sin_cambios">Sin cambios</option>
-                            <option value="no_encontrado">No encontrado</option>
-                        </select>
-                        <button type="button" @click="descargarIncidenciasImport()" class="text-xs font-semibold text-purple-600 hover:underline">Descargar incidencias</button>
-                    </div>
-                    <div class="max-h-[50vh] overflow-y-auto rounded border border-slate-200 dark:border-slate-700">
+                    <p class="text-[11px] text-slate-500" x-show="importPreview && importPreview.resumen && importPreview.resumen.excluidos">
+                        <span x-text="importPreview && importPreview.resumen.excluidos"></span> talles de 2da selección quedan afuera.
+                    </p>
+                    <div class="max-h-[60vh] overflow-y-auto rounded border border-slate-200 dark:border-slate-700">
+                        <template x-if="importFiltroEstado === 'revisar' || importFiltroEstado === 'todos'">
+                            <div>
+                                <template x-for="(err, i) in importErroresFila()" :key="'err-' + i">
+                                    <div class="flex items-start gap-2 border-b border-slate-100 bg-red-50/40 px-3 py-2 text-xs dark:border-slate-800 dark:bg-red-950/20">
+                                        <span class="material-icons text-sm text-red-500">error_outline</span>
+                                        <div class="min-w-0">
+                                            <p class="font-semibold text-red-800 dark:text-red-300" x-text="err.fila ? 'Fila ' + err.fila : 'Error en el archivo'"></p>
+                                            <p class="text-red-700 dark:text-red-300" x-text="err.mensaje"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
                         <template x-for="grupo in importGruposFiltrados()" :key="grupo.codigo">
                             <div class="border-b border-slate-100 dark:border-slate-800">
                                 <div class="flex items-start gap-2 px-3 py-2 text-xs">
                                     <input type="checkbox" class="mt-0.5"
-                                           :checked="importCodigosSel[grupo.codigo]"
+                                           :checked="!importCheckboxDisabled(grupo) && importCodigosSel[grupo.codigo]"
                                            @change="toggleImportCodigo(grupo.codigo)"
-                                           :disabled="importCheckboxDisabled(grupo)"/>
-                                    <button type="button" class="flex min-w-0 flex-1 items-center gap-1 text-left"
-                                            @click="grupo.talles && grupo.talles.length ? toggleImportExpand(grupo.codigo) : null">
-                                        <span class="material-icons text-sm text-slate-400" x-show="grupo.talles && grupo.talles.length"
-                                              x-text="importExpandedCodigos[grupo.codigo] ? 'expand_more' : 'chevron_right'"></span>
-                                        <span class="font-semibold" x-text="grupo.codigo"></span>
-                                        <span :class="estadoImportClass(grupo.estado)" class="rounded px-1.5 py-0.5 text-[10px] uppercase" x-text="grupo.estado.replace('_',' ')"></span>
-                                    </button>
+                                           :disabled="importCheckboxDisabled(grupo)"
+                                           :title="importCheckboxDisabled(grupo) ? 'No se puede aplicar' : ''"/>
+                                    <div class="min-w-0 flex-1">
+                                        <button type="button" class="flex w-full min-w-0 items-start gap-1 text-left"
+                                                @click="grupo.talles && grupo.talles.length ? toggleImportExpand(grupo.codigo) : null">
+                                            <span class="material-icons text-sm text-slate-400" x-show="grupo.talles && grupo.talles.length"
+                                                  x-text="importExpandedCodigos[grupo.codigo] ? 'expand_more' : 'chevron_right'"></span>
+                                            <span class="min-w-0 flex-1">
+                                                <span class="block truncate">
+                                                    <span class="font-semibold" x-text="grupo.codigo"></span><span class="text-slate-600 dark:text-slate-300" x-show="grupo.descripcion" x-text="' · ' + grupo.descripcion"></span>
+                                                </span>
+                                                <span class="block text-[10px] text-slate-500">
+                                                    <span x-text="(grupo.cantidad_talles != null ? grupo.cantidad_talles : (grupo.talles || []).length) + ((grupo.cantidad_talles === 1) ? ' talle' : ' talles')"></span>
+                                                    · Fila <span x-text="grupo.fila_excel"></span>
+                                                </span>
+                                            </span>
+                                        </button>
+                                        <ul class="mt-1 space-y-0.5" x-show="importMotivos(grupo).length">
+                                            <template x-for="(m, mi) in importMotivos(grupo)" :key="mi">
+                                                <li class="text-[11px] leading-snug" :class="importMotivoClass(m.tipo)" x-text="m.mensaje"></li>
+                                            </template>
+                                        </ul>
+                                        <div class="mt-1 grid grid-cols-2 gap-2 text-[10px] tabular-nums" x-show="grupo.talles && grupo.talles.length">
+                                            <div>
+                                                <span class="text-slate-500">L1 neto:</span>
+                                                <span x-text="importRangoActual(grupo, 'lista1_neto_actual')"></span> →
+                                                <span class="font-semibold" x-text="fmtImportMoney(grupo.precio_retail)"></span>
+                                                <span :class="importVarClass(importVarGrupo(grupo, 'lista1_neto_actual', grupo.precio_retail))" x-text="fmtImportVar(importVarGrupo(grupo, 'lista1_neto_actual', grupo.precio_retail))"></span>
+                                            </div>
+                                            <div>
+                                                <span class="text-slate-500">L5 final:</span>
+                                                <span x-text="importRangoActual(grupo, 'lista5_final_actual')"></span> →
+                                                <span class="font-semibold" x-text="fmtImportMoney(grupo.precio_sugerido)"></span>
+                                                <span :class="importVarClass(importVarGrupo(grupo, 'lista5_final_actual', grupo.precio_sugerido))" x-text="fmtImportVar(importVarGrupo(grupo, 'lista5_final_actual', grupo.precio_sugerido))"></span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div x-show="importExpandedCodigos[grupo.codigo] && grupo.talles && grupo.talles.length" x-cloak class="overflow-x-auto px-3 pb-2">
                                     <table class="min-w-full text-[10px]">
                                         <thead class="text-slate-500">
                                             <tr>
                                                 <th class="px-1 py-0.5 text-left">Talle</th>
-                                                <th class="px-1 py-0.5 text-right">L1 neto act.</th>
+                                                <th class="px-1 py-0.5 text-right">L1 act.</th>
                                                 <th class="px-1 py-0.5 text-right">L1 nuevo</th>
                                                 <th class="px-1 py-0.5 text-right">Δ%</th>
-                                                <th class="px-1 py-0.5 text-right">L5 final act.</th>
+                                                <th class="px-1 py-0.5 text-right">L5 act.</th>
                                                 <th class="px-1 py-0.5 text-right">L5 nuevo</th>
                                                 <th class="px-1 py-0.5 text-right">Δ%</th>
-                                                <th class="px-1 py-0.5 text-left">Estado</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <template x-for="t in grupo.talles" :key="t.id_articulo">
-                                                <tr class="border-t border-slate-100 dark:border-slate-800">
-                                                    <td class="max-w-[8rem] truncate px-1 py-0.5" :title="t.nombre" x-text="t.id_manual || t.id_articulo"></td>
+                                                <tr class="border-t border-slate-100 align-top dark:border-slate-800" :class="t.estado === 'sin_cambios' ? 'text-slate-400' : ''">
+                                                    <td class="px-1 py-0.5" :title="t.nombre">
+                                                        <span class="font-semibold" x-text="t.talle || '—'"></span>
+                                                        <span class="block text-[9px] text-slate-400" x-text="'IDArt ' + t.id_articulo"></span>
+                                                    </td>
                                                     <td class="px-1 py-0.5 text-right tabular-nums" x-text="fmtImportNum(t.lista1_neto_actual)"></td>
                                                     <td class="px-1 py-0.5 text-right tabular-nums font-medium" x-text="fmtImportNum(t.lista1_neto_nuevo)"></td>
-                                                    <td class="px-1 py-0.5 text-right tabular-nums" x-text="fmtImportPct(t.lista1_var_pct)"></td>
+                                                    <td class="px-1 py-0.5 text-right tabular-nums" :class="importVarClass(importVarTalle(t, 1))" x-text="fmtImportVar(importVarTalle(t, 1))"></td>
                                                     <td class="px-1 py-0.5 text-right tabular-nums" x-text="fmtImportNum(t.lista5_final_actual)"></td>
                                                     <td class="px-1 py-0.5 text-right tabular-nums font-medium" x-text="fmtImportNum(t.lista5_final_nuevo)"></td>
-                                                    <td class="px-1 py-0.5 text-right tabular-nums" x-text="fmtImportPct(t.lista5_var_pct)"></td>
-                                                    <td class="px-1 py-0.5"><span :class="estadoImportClass(t.estado)" class="rounded px-1" x-text="t.estado"></span></td>
+                                                    <td class="px-1 py-0.5 text-right tabular-nums" :class="importVarClass(importVarTalle(t, 5))" x-text="fmtImportVar(importVarTalle(t, 5))"></td>
+                                                </tr>
+                                            </template>
+                                            <template x-for="t in grupo.talles.filter((x) => x.motivos && x.motivos.length)" :key="'m-' + t.id_articulo">
+                                                <tr>
+                                                    <td colspan="7" class="px-1 pb-1 text-[10px] text-amber-800 dark:text-amber-300">
+                                                        <span class="font-semibold" x-text="(t.talle || ('IDArt ' + t.id_articulo)) + ': '"></span>
+                                                        <span x-text="t.motivos.map((m) => m.mensaje).join(' ')"></span>
+                                                    </td>
                                                 </tr>
                                             </template>
                                         </tbody>
@@ -543,8 +592,14 @@
                                 </div>
                             </div>
                         </template>
+                        <p x-show="!importGruposFiltrados().length && !((importFiltroEstado === 'revisar' || importFiltroEstado === 'todos') && importErroresFila().length)"
+                           class="px-3 py-6 text-center text-xs text-slate-500">
+                            <span x-text="importFiltroEstado === 'revisar' ? 'No hay nada para revisar. Todo listo para aplicar.' : 'No hay códigos en esta pestaña.'"></span>
+                        </p>
                     </div>
-                    <button type="button" @click="irImportConfirmar()" class="rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white">Continuar</button>
+                    <button type="button" @click="irImportConfirmar()" :disabled="!importResumenAplicar().articulos"
+                            class="rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                            x-text="importBotonAplicarLabel()">Aplicar</button>
                 </div>
                 <div x-show="importStep === 3" x-cloak class="space-y-3">
                     <p class="text-sm text-slate-700 dark:text-slate-200">

@@ -237,7 +237,11 @@ class ResolucionTests(SimpleTestCase):
         preview = build_preview("emp", parse)
         talle = preview["grupos"][0]["talles"][0]
         self.assertEqual(talle["estado"], "advertencia")
-        self.assertTrue(any("difieren" in a for a in talle["advertencias"]))
+        msg = "En administraNET, el artículo #21 tiene código de proveedor 907947-01 pero el nombre dice 907947-02."
+        self.assertIn(msg, talle["advertencias"])
+        self.assertIn({"tipo": "codigo_inconsistente", "mensaje": msg}, talle["motivos"])
+        grupo = preview["grupos"][0]
+        self.assertFalse(grupo["selected_default"])
 
 
 class ImportUrlsTests(SimpleTestCase):
@@ -348,3 +352,150 @@ def test_where_base_excluye_gastos():
         sql, _ = _where_base("a", tipo_producto=tipo)
         assert "a.tipo_art" in sql
         assert "<> 'gasto'" in sql
+
+
+def _art(**kw):
+    base = {
+        "id_articulo": 1,
+        "id_manual": "1",
+        "nombre": "907964-01 T4 Puma Crew Sock Negro",
+        "cod_art_prov": "907964-01 T4",
+        "nro_cod_barra": "",
+        "nro_cod_barra_f": "",
+        "precio1_neto": 100,
+        "precio1_final": 121,
+        "precio5_neto": 4000,
+        "precio5_final": 6080.49,
+    }
+    base.update(kw)
+    return base
+
+
+def _preview_con(arts, *, retail="110", sugerido="6200", ean=""):
+    from ventas.services.precios_terminados_excel_import import FilaExcel, ParseExcelResult
+
+    parse = ParseExcelResult(
+        ok=True,
+        filas=[
+            FilaExcel(
+                fila=20,
+                codigo="907964-01",
+                precio_retail=Decimal(retail),
+                precio_sugerido=Decimal(sugerido),
+                ean=ean,
+            )
+        ],
+        errores_fila=["Fila 17: Precio Retail vacío."],
+    )
+    with patch(
+        "ventas.services.precios_terminados_excel_import._cargar_articulos_terminados",
+        return_value=arts,
+    ):
+        return build_preview("emp", parse)
+
+
+class MotivosRevisionTests(SimpleTestCase):
+    def test_fmt_ars(self):
+        from ventas.services.precios_terminados_excel_import import fmt_ars
+
+        self.assertEqual(fmt_ars(Decimal("6080.49")), "$6.080,49")
+        self.assertEqual(fmt_ars(9799), "$9.799,00")
+        self.assertEqual(fmt_ars(Decimal("1234567.5")), "$1.234.567,50")
+        self.assertEqual(fmt_ars(5), "$5,00")
+
+    def test_motivo_salto_precio_sube(self):
+        from ventas.services.precios_terminados_excel_import import motivo_salto_precio
+
+        m = motivo_salto_precio("5", Decimal("6080.49"), Decimal("9799"))
+        self.assertEqual(m["tipo"], "salto_precio")
+        self.assertEqual(
+            m["mensaje"],
+            "La lista 5 sube 61% (de $6.080,49 a $9.799,00). Supera el 30% habitual: "
+            "confirmá que el precio es correcto.",
+        )
+
+    def test_motivo_salto_precio_baja_y_umbral(self):
+        from ventas.services.precios_terminados_excel_import import motivo_salto_precio
+
+        m = motivo_salto_precio("1", Decimal("1000"), Decimal("500"))
+        self.assertTrue(m["mensaje"].startswith("La lista 1 baja 50% (de $1.000,00 a $500,00)."))
+        self.assertIsNone(motivo_salto_precio("1", Decimal("100"), Decimal("130")))
+
+    def test_preview_salto_genera_motivo_y_queda_tildado(self):
+        preview = _preview_con([_art()], retail="110", sugerido="9799")
+        g = preview["grupos"][0]
+        self.assertEqual(g["estado"], "advertencia")
+        self.assertEqual([m["tipo"] for m in g["motivos"]], ["salto_precio"])
+        self.assertIn("La lista 5 sube 61%", g["motivos"][0]["mensaje"])
+        self.assertTrue(g["selected_default"])
+        self.assertEqual(g["talles"][0]["advertencias"], [g["motivos"][0]["mensaje"]])
+
+    def test_preview_ean_no_cargado_informativo(self):
+        preview = _preview_con([_art()], ean="7790001")
+        g = preview["grupos"][0]
+        self.assertEqual(
+            g["motivos"][0]["mensaje"],
+            "El EAN del Excel (7790001) no está cargado en ningún talle. El precio se aplica igual por el código.",
+        )
+        self.assertEqual(g["motivos"][0]["tipo"], "ean_no_cargado")
+        self.assertTrue(g["selected_default"])
+        self.assertEqual(g["advertencias"], [g["motivos"][0]["mensaje"]])
+
+    def test_preview_ean_otro_articulo_destildado(self):
+        otro = _art(
+            id_articulo=9,
+            nombre="935478-01 T110 Puma Otro",
+            cod_art_prov="935478-01 T110",
+            nro_cod_barra="7790001",
+        )
+        preview = _preview_con([_art(), otro], ean="7790001")
+        g = preview["grupos"][0]
+        self.assertEqual(g["motivos"][0]["tipo"], "ean_otro_articulo")
+        self.assertEqual(
+            g["motivos"][0]["mensaje"],
+            "El EAN del Excel (7790001) pertenece a 935478-01 (935478-01 T110 Puma Otro). "
+            "Revisá que el código del Excel sea el correcto.",
+        )
+        self.assertFalse(g["selected_default"])
+
+    def test_descripcion_talle_y_rangos(self):
+        arts = [
+            _art(),
+            _art(id_articulo=2, nombre="907964-01 T110 Puma Crew Sock Negro", cod_art_prov="907964-01 T110", precio1_neto=90),
+        ]
+        preview = _preview_con(arts)
+        g = preview["grupos"][0]
+        self.assertEqual(g["descripcion"], "Puma Crew Sock Negro")
+        self.assertEqual(g["cantidad_talles"], 2)
+        self.assertEqual([t["talle"] for t in g["talles"]], ["T4", "T110"])
+        self.assertEqual(g["lista1_neto_actual"], {"min": 90.0, "max": 100.0})
+        self.assertEqual(g["estado"], "actualiza")
+        self.assertTrue(g["selected_default"])
+        self.assertEqual(g["motivos"], [])
+
+    def test_errores_fila_detalle_y_no_encontrado(self):
+        preview = _preview_con([])
+        g = preview["grupos"][0]
+        self.assertEqual(g["estado"], "no_encontrado")
+        self.assertEqual(g["motivos"][0]["mensaje"], "No existe en BestSox.")
+        self.assertFalse(g["selected_default"])
+        det = preview["errores_fila_detalle"][0]
+        self.assertEqual(det["fila"], 17)
+        self.assertEqual(det["motivo"], "Precio Retail vacío.")
+
+    def test_descripcion_sin_talle(self):
+        from ventas.services.precios_terminados_excel_import import descripcion_sin_talle
+
+        self.assertEqual(descripcion_sin_talle("907964-01 T4 Puma Crew Sock Negro"), "Puma Crew Sock Negro")
+        self.assertEqual(descripcion_sin_talle("907964-01 Puma T110 Sock"), "Puma Sock")
+        self.assertEqual(descripcion_sin_talle("Media Lisa"), "Media Lisa")
+
+    def test_selected_default_reglas(self):
+        from ventas.services.precios_terminados_excel_import import selected_default_grupo
+
+        self.assertTrue(selected_default_grupo("actualiza", []))
+        self.assertTrue(selected_default_grupo("advertencia", [{"tipo": "salto_precio"}, {"tipo": "ean_no_cargado"}]))
+        self.assertFalse(selected_default_grupo("advertencia", [{"tipo": "codigo_inconsistente"}]))
+        self.assertFalse(selected_default_grupo("advertencia", [{"tipo": "ean_otro_articulo"}]))
+        self.assertFalse(selected_default_grupo("no_encontrado", []))
+        self.assertFalse(selected_default_grupo("sin_cambios", []))

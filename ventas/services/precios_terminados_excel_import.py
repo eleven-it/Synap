@@ -138,6 +138,125 @@ def variacion_pct(anterior: Decimal, nuevo: Decimal) -> Optional[Decimal]:
     return q2(abs((nuevo - anterior) / anterior * Decimal("100")))
 
 
+def fmt_ars(value: Any) -> str:
+    """Formato pesos argentino: $6.080,49."""
+    try:
+        dec = q2(Decimal(str(value)))
+    except (InvalidOperation, ValueError, TypeError):
+        return "$—"
+    neg = dec < 0
+    entero, _, dec_part = f"{abs(dec):.2f}".partition(".")
+    grupos = []
+    while len(entero) > 3:
+        grupos.insert(0, entero[-3:])
+        entero = entero[:-3]
+    grupos.insert(0, entero)
+    return f"{'-' if neg else ''}${'.'.join(grupos)},{dec_part}"
+
+
+def fmt_pct_ar(value: Any) -> str:
+    """Porcentaje redondeado a entero (o 1 decimal si < 10)."""
+    dec = Decimal(str(value))
+    if dec >= 10:
+        return f"{dec.quantize(Decimal('1'))}%"
+    return f"{dec.quantize(Decimal('0.1'))}%".replace(".", ",")
+
+
+TALLE_RE = re.compile(r"^T\d+[A-Z]?$|^T[A-Z]{1,3}$", re.IGNORECASE)
+
+
+def talle_desde_articulo(art: Dict[str, Any]) -> str:
+    """Token de talle (T4, T110…) desde NombreArticulo o CodArtProv."""
+    for key in ("nombre", "cod_art_prov"):
+        toks = str_or_default(art.get(key), "").split()
+        if len(toks) >= 2 and TALLE_RE.match(toks[1]):
+            return toks[1].upper()
+    toks = str_or_default(art.get("cod_art_prov"), "").split()
+    return toks[1].upper() if len(toks) >= 2 else ""
+
+
+def descripcion_sin_talle(nombre: Any, codigo: str = "") -> str:
+    """'907964-01 T4 Puma Crew Sock Negro' -> 'Puma Crew Sock Negro'."""
+    toks = str_or_default(nombre, "").split()
+    if toks and (CODIGO_RE.match(toks[0]) or (codigo and toks[0].upper() == codigo.upper())):
+        toks = toks[1:]
+    toks = [t for t in toks if not TALLE_RE.match(t)]
+    return " ".join(toks).strip()
+
+
+def descripcion_grupo(arts: Sequence[Dict[str, Any]], codigo: str) -> str:
+    conteo: Dict[str, int] = {}
+    for a in arts:
+        d = descripcion_sin_talle(a.get("nombre"), codigo)
+        if d:
+            conteo[d] = conteo.get(d, 0) + 1
+    if not conteo:
+        return ""
+    return max(conteo.items(), key=lambda kv: (kv[1], -len(kv[0])))[0]
+
+
+def motivo_salto_precio(lista: str, actual: Decimal, nuevo: Decimal) -> Optional[Dict[str, str]]:
+    """Motivo si la variación supera VAR_ADVERTENCIA_PCT; None si no."""
+    if actual is None or nuevo is None:
+        return None
+    var = variacion_pct(actual, nuevo) or Decimal("0")
+    if var <= VAR_ADVERTENCIA_PCT:
+        return None
+    if actual == 0:
+        msg = (
+            f"La lista {lista} no tenía precio y pasa a {fmt_ars(nuevo)}. "
+            "Confirmá que el precio es correcto."
+        )
+    else:
+        verbo = "sube" if nuevo > actual else "baja"
+        msg = (
+            f"La lista {lista} {verbo} {fmt_pct_ar(var)} (de {fmt_ars(actual)} a {fmt_ars(nuevo)}). "
+            f"Supera el {VAR_ADVERTENCIA_PCT.quantize(Decimal('1'))}% habitual: confirmá que el precio es correcto."
+        )
+    return {"tipo": "salto_precio", "mensaje": msg}
+
+
+MOTIVOS_IDENTIFICACION = ("ean_otro_articulo", "codigo_inconsistente")
+
+
+def selected_default_grupo(estado: str, motivos: Sequence[Dict[str, str]]) -> bool:
+    if estado not in ("actualiza", "advertencia"):
+        return False
+    return not any(m.get("tipo") in MOTIVOS_IDENTIFICACION for m in motivos)
+
+
+def _dedupe_motivos(motivos: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
+    out, seen = [], set()
+    for m in motivos:
+        k = (m.get("tipo"), m.get("mensaje"))
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(m)
+    return out
+
+
+def errores_fila_estructurados(errores: Sequence[str]) -> List[Dict[str, Any]]:
+    out = []
+    for e in errores:
+        m = re.match(r"^Fila (\d+):\s*(.*)$", e or "")
+        out.append(
+            {
+                "fila": int(m.group(1)) if m else None,
+                "tipo": "error_fila",
+                "mensaje": e,
+                "motivo": m.group(2) if m else e,
+            }
+        )
+    return out
+
+
+def _rango(vals: Sequence[float]) -> Dict[str, Any]:
+    if not vals:
+        return {"min": None, "max": None}
+    return {"min": min(vals), "max": max(vals)}
+
+
 @dataclass
 class FilaExcel:
     fila: int
@@ -356,20 +475,37 @@ def build_preview(
                 continue
             aplicables.append(art)
 
-        advertencias_codigo: List[str] = []
+        motivos_codigo: List[Dict[str, str]] = []
         if fila.ean:
             arts_ean = ean_index.get(fila.ean, [])
             if not arts_ean:
-                advertencias_codigo.append(
-                    f"EAN {fila.ean} no encontrado en códigos de barra de los talles."
+                motivos_codigo.append(
+                    {
+                        "tipo": "ean_no_cargado",
+                        "mensaje": (
+                            f"El EAN del Excel ({fila.ean}) no está cargado en ningún talle. "
+                            "El precio se aplica igual por el código."
+                        ),
+                    }
                 )
             else:
                 for ae in arts_ean:
                     if not _articulo_coincide_codigo(ae, codigo):
-                        advertencias_codigo.append(
-                            f"EAN {fila.ean} pertenece a otro código ({_first_token(ae.get('cod_art_prov')) or _first_token(ae.get('nombre'))})."
+                        otro = (
+                            _first_token(ae.get("cod_art_prov")) or _first_token(ae.get("nombre"))
+                        ).upper()
+                        nombre_otro = str_or_default(ae.get("nombre"), "-")
+                        motivos_codigo.append(
+                            {
+                                "tipo": "ean_otro_articulo",
+                                "mensaje": (
+                                    f"El EAN del Excel ({fila.ean}) pertenece a {otro} ({nombre_otro}). "
+                                    "Revisá que el código del Excel sea el correcto."
+                                ),
+                            }
                         )
                         break
+        advertencias_codigo: List[str] = [m["mensaje"] for m in motivos_codigo]
 
         if not aplicables:
             no_encontrados.append(codigo)
@@ -381,6 +517,10 @@ def build_preview(
                     "precio_sugerido": float(fila.precio_sugerido),
                     "ean": fila.ean,
                     "estado": "no_encontrado",
+                    "descripcion": "",
+                    "cantidad_talles": 0,
+                    "motivos": [{"tipo": "no_encontrado", "mensaje": "No existe en BestSox."}]
+                    + motivos_codigo,
                     "advertencias": advertencias_codigo,
                     "selected_default": False,
                     "talles": [],
@@ -393,16 +533,32 @@ def build_preview(
         for art in aplicables:
             tok_p = _first_token(art.get("cod_art_prov"))
             tok_n = _first_token(art.get("nombre"))
-            adv_talle: List[str] = list(advertencias_codigo)
+            motivos_talle: List[Dict[str, str]] = []
             if tok_p and tok_n and tok_p != tok_n:
-                adv_talle.append(
-                    f"CodArtProv ({tok_p}) y nombre ({tok_n}) difieren para IDArt {art.get('id_articulo')}."
+                motivos_talle.append(
+                    {
+                        "tipo": "codigo_inconsistente",
+                        "mensaje": (
+                            f"En administraNET, el artículo #{art.get('id_articulo')} tiene código de "
+                            f"proveedor {tok_p.upper()} pero el nombre dice {tok_n.upper()}."
+                        ),
+                    }
                 )
 
             neto_act = q2(Decimal(str(art.get("precio1_neto") or 0)))
             final_act = q2(Decimal(str(art.get("precio5_final") or 0)))
             neto_nuevo = fila.precio_retail
             final_nuevo = fila.precio_sugerido
+            sin_cambio_precio = (
+                abs(neto_act - neto_nuevo) < Decimal("0.005")
+                and abs(final_act - final_nuevo) < Decimal("0.005")
+            )
+            if not sin_cambio_precio:
+                for lista, act, nue in (("1", neto_act, neto_nuevo), ("5", final_act, final_nuevo)):
+                    m = motivo_salto_precio(lista, act, nue)
+                    if m:
+                        motivos_talle.append(m)
+            adv_talle: List[str] = list(advertencias_codigo) + [m["mensaje"] for m in motivos_talle]
             estado = _estado_talle(
                 neto_actual=neto_act,
                 final_actual=final_act,
@@ -418,6 +574,7 @@ def build_preview(
                     "id_articulo": art.get("id_articulo"),
                     "id_manual": str_codigo_manual_articulo(art.get("id_manual")),
                     "nombre": str_or_default(art.get("nombre"), "-"),
+                    "talle": talle_desde_articulo(art),
                     "lista1_neto_actual": float(neto_act),
                     "lista1_neto_nuevo": float(neto_nuevo),
                     "lista1_var_pct": float(variacion_pct(neto_act, neto_nuevo) or 0),
@@ -426,6 +583,7 @@ def build_preview(
                     "lista5_var_pct": float(variacion_pct(final_act, final_nuevo) or 0),
                     "estado": estado,
                     "advertencias": adv_talle,
+                    "motivos": motivos_talle,
                     "precios_guardar": {
                         "1": {"neto": float(neto_nuevo)},
                         "5": {"final": float(final_nuevo)},
@@ -444,6 +602,13 @@ def build_preview(
         else:
             estado_grupo = "sin_cambios"
 
+        motivos_grupo = _dedupe_motivos(
+            list(motivos_codigo)
+            + [m for t in talles_out if t["estado"] != "sin_cambios" for m in t["motivos"]]
+        )
+        if estado_grupo == "sin_cambios":
+            # Info de identificación igual se muestra, pero no hay nada a aplicar.
+            motivos_grupo = [m for m in motivos_grupo if m["tipo"] != "salto_precio"]
         grupos.append(
             {
                 "codigo": codigo,
@@ -452,8 +617,13 @@ def build_preview(
                 "precio_sugerido": float(fila.precio_sugerido),
                 "ean": fila.ean,
                 "estado": estado_grupo,
+                "descripcion": descripcion_grupo(aplicables, codigo),
+                "cantidad_talles": len(talles_out),
+                "lista1_neto_actual": _rango([t["lista1_neto_actual"] for t in talles_out]),
+                "lista5_final_actual": _rango([t["lista5_final_actual"] for t in talles_out]),
+                "motivos": motivos_grupo,
                 "advertencias": advertencias_codigo,
-                "selected_default": estado_grupo in ("actualiza", "advertencia"),
+                "selected_default": selected_default_grupo(estado_grupo, motivos_grupo),
                 "talles": talles_out,
             }
         )
@@ -480,6 +650,7 @@ def build_preview(
         },
         "grupos": grupos,
         "errores_fila": parse.errores_fila,
+        "errores_fila_detalle": errores_fila_estructurados(parse.errores_fila),
         "excluidos": excluidos,
         "no_encontrados": no_encontrados,
     }
