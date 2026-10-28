@@ -1,0 +1,30 @@
+{# Filtro multi superartículo — tags + búsqueda predictiva (tags_filter.mjs). #}
+{% with fid=field_id|default:"superarts_incluidos" %}
+{% with v=variant|default:"light" %}
+<div class="relative z-40 flex min-w-0 flex-col gap-0.5 overflow-visible min-w-[12rem] flex-1">
+    <label for="{{ fid }}_search" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Superartículo</label>
+    <div class="relative overflow-visible">
+        <select name="q_superart" id="{{ fid }}" multiple class="hidden" data-tags-field="{{ fid }}">
+            {% for code in superarts_incluidos %}
+            <option value="{{ code }}" selected>{{ code }}</option>
+            {% endfor %}
+        </select>
+        <div id="{{ fid }}_tags_container"
+             class="tags-filter-container relative flex min-h-9 flex-wrap items-center gap-1 overflow-visible rounded-lg border border-gray-300 bg-white px-2 py-1.5 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-gray-600 dark:bg-gray-900">
+            <div class="tags-chips flex min-w-0 flex-1 flex-wrap items-center gap-1"></div>
+            <input type="text"
+                   id="{{ fid }}_search"
+                   class="tags-input min-w-[5rem] flex-1 basis-[5.5rem] border-none bg-transparent text-xs text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500"
+                   placeholder="Código o descripción…"
+                   autocomplete="off"
+                   aria-label="Buscar superartículo"
+                   aria-controls="{{ fid }}_dropdown"
+                   aria-expanded="false">
+            <div id="{{ fid }}_dropdown"
+                 role="listbox"
+                 class="tags-dropdown absolute left-0 right-0 top-[calc(100%+0.25rem)] z-[80] hidden max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white text-slate-800 shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"></div>
+        </div>
+    </div>
+</div>
+{% endwith %}
+{% endwith %}

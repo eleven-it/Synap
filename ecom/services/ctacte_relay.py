@@ -56,8 +56,8 @@ def listar_movimientos_ctacte_relay(
 
     sql = f"""
         SELECT
-            DATE_FORMAT(cuentacliente.Fecha,'%d/%m/%Y') AS FechaB,
-            DATE_FORMAT(cuentacliente.Fecha,'%Y%m%d') AS FechaYmd,
+            DATE_FORMAT(cuentacliente.Fecha,'%%d/%%m/%%Y') AS FechaB,
+            DATE_FORMAT(cuentacliente.Fecha,'%%Y%%m%%d') AS FechaYmd,
             cuentacliente.Fecha AS Fecha,
             cuentacliente.TipoComprobante AS TipoComprobante,
             cuentacliente.NroComprobante AS NroComprobante,
@@ -65,7 +65,7 @@ def listar_movimientos_ctacte_relay(
             cuentacliente.ImporteVenta AS Debito,
             cuentacliente.ImporteCobro AS Credito,
             cuentacliente.saldo AS saldo,
-            DATE_FORMAT(cuentacliente.Vencimiento,'%d/%m/%Y') AS Vencimiento,
+            DATE_FORMAT(cuentacliente.Vencimiento,'%%d/%%m/%%Y') AS Vencimiento,
             cuentacliente.Vencido AS Vencido,
             cuentacliente.Estado AS Estado,
             cuentacliente.Anulado AS Anulado,

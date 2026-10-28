@@ -523,6 +523,9 @@ class ExportService:
                 file_path, report, query_result, payload
             )
             return
+        if report.slug == "fabricados-superart":
+            self._generate_excel_fabricados_superart(file_path, report, query_result, payload)
+            return
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
@@ -1833,6 +1836,24 @@ class ExportService:
 
         wb.save(file_path)
         logger.info("Excel pedidos-pendientes-produccion: %s", file_path)
+
+    def _generate_excel_fabricados_superart(
+        self,
+        file_path,
+        report,
+        query_result,
+        payload,
+    ) -> None:
+        from mpr.export import exportar_fabricados_superart_xlsx
+
+        extra = (query_result.meta or {}).get("extra") or {}
+        fab = extra.get("fabricados") or {}
+        filtros = extra.get("filtros_fabricados_superart") or {}
+        ctx = {**fab, "filtros_fabricados_superart": filtros}
+        resp = exportar_fabricados_superart_xlsx(ctx, titulo=report.name)
+        with open(file_path, "wb") as fh:
+            fh.write(resp.content)
+        logger.info("Excel fabricados-superart: %s", file_path)
 
     def get_file_response(self, export_result: ExportResult) -> HttpResponse:
         """

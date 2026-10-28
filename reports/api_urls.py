@@ -31,6 +31,10 @@ from .executive_summary_api_views import (
     PuntoVentaCanalEjecutivoAPIView,
     SucursalCanalEjecutivoAPIView,
 )
+from .fabricados_superart_api_views import (
+    FabricadosSuperartMarcasBuscarAPIView,
+    FabricadosSuperartSuperartBuscarAPIView,
+)
 from .ventas_marcas_mensual_api_views import VentasMarcasMensualPresetAPIView
 from .ventas_mensuales_licenciatarios_api_views import (
     LicenciatariosAnetClientsAPIView,
@@ -447,6 +451,16 @@ urlpatterns = [
     path("builder/data-map/clusters/<str:cluster_id>/", ClusterManagementAPIView.as_view(), name="reports-cluster-detail"),
     # API para valores de referencia (filtros dinámicos)
     path("builder/reference-values/", ReferenceValuesAPIView.as_view(), name="reports-reference-values"),
+    path(
+        "fabricados-superart/marcas/buscar/",
+        FabricadosSuperartMarcasBuscarAPIView.as_view(),
+        name="fabricados-superart-marcas-buscar",
+    ),
+    path(
+        "fabricados-superart/superart/buscar/",
+        FabricadosSuperartSuperartBuscarAPIView.as_view(),
+        name="fabricados-superart-superart-buscar",
+    ),
 ]
 
 

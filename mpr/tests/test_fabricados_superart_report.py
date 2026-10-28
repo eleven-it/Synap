@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests reporte fabricados_superart (agrupación y SQL helper)."""
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -12,6 +13,7 @@ from mpr.services_fabricados_superart import (
     SIN_SUPERART_LABEL,
     agrupar_fabricados_por_superart,
     parse_filtros_fabricados_superart,
+    parse_superarts_incluidos_desde_get,
     reporte_mpr_fabricados_superart,
     superart_desde_id_manual,
 )
@@ -26,17 +28,22 @@ class TestNormalizarMeses(SimpleTestCase):
 
 
 class TestAgrupacionFabricados(SimpleTestCase):
-    def _agrupar(self, filas, meses, busqueda=""):
+    def _agrupar(self, filas, meses, superarts=None, busqueda=""):
         desc = {
             1: ("ART-1", "Artículo uno"),
             2: ("ART-2", "Artículo dos"),
             3: ("ART-3", "Sin manual"),
         }
+        kwargs = {}
+        if superarts is not None:
+            kwargs["superarts_incluidos"] = superarts
+        else:
+            kwargs["busqueda_superart"] = busqueda
         return agrupar_fabricados_por_superart(
             filas,
             meses,
             desc,
-            busqueda_superart=busqueda,
+            **kwargs,
         )
 
     def test_agrupa_por_superart_y_suma_meses(self):
@@ -70,6 +77,23 @@ class TestAgrupacionFabricados(SimpleTestCase):
         self.assertEqual(params[1], "SemiElaborado")
         self.assertNotIn("2daSeleccion", sql)
 
+    def test_sql_date_format_escapado_para_mysqldb_params(self):
+        """MySQLdb formatea la query con %; DATE_FORMAT debe usar %%Y-%%m."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        fetch_fabricado_primera_por_articulo_mes(mock_cursor, ["2026-10"], marcas_ids=[7])
+        sql = mock_cursor.execute.call_args[0][0]
+        params = list(mock_cursor.execute.call_args[0][1])
+        self.assertIn("DATE_FORMAT(t.creado_en, '%%Y-%%m')", sql)
+        self.assertNotIn("'%Y-%m'", sql)
+        try:
+            formatted = sql % tuple(params)
+        except (TypeError, ValueError) as exc:
+            self.fail(f"query % params no debe fallar con DATE_FORMAT: {exc}")
+        self.assertIn("DATE_FORMAT(t.creado_en, '%Y-%m')", formatted)
+        self.assertIn("2026-10", formatted)
+        self.assertIn("CodigoMarca IN (7)", formatted)
+
     def test_totales_y_mes_pico(self):
         filas = [
             {"id_articulo": 1, "id_manual": "A", "ym": "2026-01", "cantidad": 3},
@@ -88,7 +112,7 @@ class TestAgrupacionFabricados(SimpleTestCase):
         r = self._agrupar(filas, ["2026-01"])
         self.assertEqual(len(r["filas_superart"]), 300)
 
-    def test_busqueda_superart(self):
+    def test_busqueda_superart_un_valor_legacy(self):
         filas = [
             {"id_articulo": 1, "id_manual": "ALPHA", "ym": "2026-01", "cantidad": 1},
             {"id_articulo": 2, "id_manual": "BETA", "ym": "2026-01", "cantidad": 1},
@@ -97,6 +121,16 @@ class TestAgrupacionFabricados(SimpleTestCase):
         self.assertEqual(len(r["filas_superart"]), 1)
         self.assertEqual(r["filas_superart"][0]["codigo_superart"], "BETA")
 
+    def test_filtro_varios_superarts_or(self):
+        filas = [
+            {"id_articulo": 1, "id_manual": "ALPHA", "ym": "2026-01", "cantidad": 1},
+            {"id_articulo": 2, "id_manual": "BETA", "ym": "2026-01", "cantidad": 2},
+            {"id_articulo": 3, "id_manual": "GAMMA", "ym": "2026-01", "cantidad": 3},
+        ]
+        r = self._agrupar(filas, ["2026-01"], superarts=["ALPHA", "GAMMA"])
+        codes = {row["codigo_superart"] for row in r["filas_superart"]}
+        self.assertEqual(codes, {"ALPHA", "GAMMA"})
+
     def test_orden_por_total_desc(self):
         filas = [
             {"id_articulo": 1, "id_manual": "LOW", "ym": "2026-01", "cantidad": 1},
@@ -104,6 +138,26 @@ class TestAgrupacionFabricados(SimpleTestCase):
         ]
         r = self._agrupar(filas, ["2026-01"])
         self.assertEqual(r["filas_superart"][0]["codigo_superart"], "HIGH")
+
+
+class TestParseSuperarts(SimpleTestCase):
+    def test_getlist_repetido(self):
+        from django.http import QueryDict
+
+        q = QueryDict("q_superart=SA1&q_superart=SA2")
+        self.assertEqual(parse_superarts_incluidos_desde_get(q), ["SA1", "SA2"])
+
+    def test_coma_y_valor_unico(self):
+        from django.http import QueryDict
+
+        self.assertEqual(
+            parse_superarts_incluidos_desde_get(QueryDict("q_superart=ALPHA,BETA")),
+            ["ALPHA", "BETA"],
+        )
+        self.assertEqual(
+            parse_superarts_incluidos_desde_get(QueryDict("q_superart=BETA")),
+            ["BETA"],
+        )
 
 
 class TestParseFiltros(SimpleTestCase):
@@ -117,8 +171,10 @@ class TestParseFiltros(SimpleTestCase):
             def getlist(self, k):
                 return []
 
-        f = parse_filtros_fabricados_superart(Q())
-        self.assertEqual(f["meses"], [mes_actual_yyyy_mm()])
+        f = parse_filtros_fabricados_superart(Q(), hoy=date(2026, 10, 15))
+        self.assertEqual(f["meses"], [mes_actual_yyyy_mm(date(2026, 10, 15))])
+        self.assertEqual(f["desde_iso"], "2026-10-01")
+        self.assertEqual(f["hasta_iso"], "2026-10-15")
 
 
 class TestReporteIntegracion(SimpleTestCase):
@@ -148,6 +204,7 @@ class TestExportExcelDosHojas(SimpleTestCase):
         from mpr.export import exportar_fabricados_superart_xlsx
 
         ctx = {
+            "filtros_fabricados_superart": {"superarts_incluidos": ["SA1", "SA2"]},
             "meses_columnas": [{"ym": "2026-01", "label": "Ene 2026"}],
             "filas_superart": [
                 {

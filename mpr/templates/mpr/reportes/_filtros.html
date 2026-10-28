@@ -9,6 +9,7 @@
     {% if meta.id_articulo %}<input type="hidden" name="id_articulo" value="{{ meta.id_articulo }}">{% endif %}
     {% if meta.id_deposito %}<input type="hidden" name="id_deposito" value="{{ meta.id_deposito }}">{% endif %}
 
+    {% if not ignora_periodo_shell %}
     <div class="flex flex-col gap-0.5">
         <label for="desde" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Desde</label>
         <input type="date" id="desde" name="desde" x-model="desde"
@@ -19,6 +20,7 @@
         <input type="date" id="hasta" name="hasta" x-model="hasta"
                class="mpr-reportes-fecha h-9 w-[9.25rem] rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
     </div>
+    {% endif %}
 
     {% include "includes/toggle_docenas_pares.html" with interaction="alpine" variant="dark" modo_presentacion=modo_presentacion only %}
 
@@ -35,7 +37,7 @@
         <span class="hidden 2xl:inline">Exportar CSV</span>
         {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Exportar CSV" only %}
     </a>
-    {% if soporta_export_xlsx and reporte != 'inventario_deposito' and reporte != 'fabricados_superart' %}
+    {% if soporta_export_xlsx and reporte != 'inventario_deposito' %}
     <a href="?grupo={{ grupo }}&reporte={{ reporte }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}{% if meta.id_deposito %}&id_deposito={{ meta.id_deposito }}{% endif %}&format=xlsx"
        aria-label="Exportar Excel"
        class="group relative inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-700 px-2.5 text-xs font-medium text-white transition-colors hover:bg-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
