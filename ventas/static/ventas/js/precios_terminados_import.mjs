@@ -10,6 +10,22 @@ function preciosTerminadosImportMixin(config) {
     importFile: null,
     importFileName: "",
     importLoading: false,
+    importElapsed: 0,
+    _importTimer: null,
+
+    _importStartTimer() {
+      this.importElapsed = 0;
+      clearInterval(this._importTimer);
+      const t0 = Date.now();
+      this._importTimer = setInterval(() => {
+        this.importElapsed = Math.round((Date.now() - t0) / 1000);
+      }, 1000);
+    },
+
+    _importStopTimer() {
+      clearInterval(this._importTimer);
+      this._importTimer = null;
+    },
     importError: "",
     importPreview: null,
     importFiltroEstado: "todos",
@@ -46,6 +62,7 @@ function preciosTerminadosImportMixin(config) {
         return;
       }
       this.importLoading = true;
+      this._importStartTimer();
       this.importError = "";
       try {
         const fd = new FormData();
@@ -73,6 +90,7 @@ function preciosTerminadosImportMixin(config) {
         this.importError = "Error de red al subir el archivo.";
       } finally {
         this.importLoading = false;
+        this._importStopTimer();
       }
     },
 
@@ -159,6 +177,7 @@ function preciosTerminadosImportMixin(config) {
     async aplicarImportExcel() {
       if (!urls.importAplicar || !this.importPreview) return;
       this.importLoading = true;
+      this._importStartTimer();
       this.importError = "";
       try {
         const resp = await fetch(urls.importAplicar, {
@@ -183,6 +202,7 @@ function preciosTerminadosImportMixin(config) {
         this.importError = "Error al aplicar cambios.";
       } finally {
         this.importLoading = false;
+        this._importStopTimer();
       }
     },
 
