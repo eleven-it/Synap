@@ -159,6 +159,7 @@ def aplicar_cambios_articulo(
     cambios: Dict[str, Any],
     *,
     id_usuario: Optional[int] = None,
+    tipo_modificacion: str = "Synap precios terminados",
 ) -> Dict[str, Any]:
     """
     Aplica cambios de precios y/o reserva a un artículo.
@@ -247,6 +248,7 @@ def aplicar_cambios_articulo(
                     tbl_hist=tbl_hist,
                     articulo=art,
                     id_usuario=id_usuario,
+                    tipo_modificacion=tipo_modificacion,
                 )
             except Exception as exc:
                 logger.warning(
@@ -265,6 +267,7 @@ def guardar_lote(
     items: Sequence[Dict[str, Any]],
     *,
     id_usuario: Optional[int] = None,
+    tipo_modificacion: str = "Synap precios terminados",
 ) -> Dict[str, Any]:
     ok_ids: List[int] = []
     errores: List[Dict[str, Any]] = []
@@ -274,7 +277,7 @@ def guardar_lote(
             errores.append({"item": item, "error": "id_articulo_invalido"})
             continue
         res = aplicar_cambios_articulo(
-            base_empresa, aid, item, id_usuario=id_usuario
+            base_empresa, aid, item, id_usuario=id_usuario, tipo_modificacion=tipo_modificacion
         )
         if res.get("ok") and res.get("actualizado"):
             ok_ids.append(aid)

@@ -115,6 +115,21 @@ urlpatterns = [
         name="precios_terminados_masivo_aplicar",
     ),
     path(
+        "precios-terminados/importar/preview/",
+        views_precios_terminados.precios_terminados_import_preview_view,
+        name="precios_terminados_import_preview",
+    ),
+    path(
+        "precios-terminados/importar/aplicar/",
+        views_precios_terminados.precios_terminados_import_aplicar_view,
+        name="precios_terminados_import_aplicar",
+    ),
+    path(
+        "precios-terminados/importar/incidencias/",
+        views_precios_terminados.precios_terminados_import_incidencias_view,
+        name="precios_terminados_import_incidencias",
+    ),
+    path(
         "precios-terminados/api/historial/<int:id_articulo>/",
         views_precios_historial.api_precios_historial_articulo,
         name="api_precios_historial_articulo",

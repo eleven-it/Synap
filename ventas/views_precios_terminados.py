@@ -8,13 +8,20 @@ import logging
 from typing import Any, Dict, List
 
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from core.decorators import tiene_permiso
 from core.utils.permissions import user_has_permission
+from ventas.services.precios_terminados_excel_import import (
+    build_preview,
+    encabezados_esperados_para_ui,
+    generar_excel_incidencias,
+    items_desde_preview_seleccion,
+    parse_workbook,
+)
 from ventas.services.precios_terminados import (
     PAGE_SIZE,
     RESERVA_EQ0,
@@ -160,11 +167,15 @@ def precios_terminados_view(request):
             "guardar": reverse("ventas:precios_terminados_guardar"),
             "masivoPreview": reverse("ventas:precios_terminados_masivo_preview"),
             "masivoAplicar": reverse("ventas:precios_terminados_masivo_aplicar"),
+            "importPreview": reverse("ventas:precios_terminados_import_preview"),
+            "importAplicar": reverse("ventas:precios_terminados_import_aplicar"),
+            "importIncidencias": reverse("ventas:precios_terminados_import_incidencias"),
             "historialArticulo": reverse(
                 "ventas:api_precios_historial_articulo",
                 kwargs={"id_articulo": 0},
             ),
         },
+        "importExcelEncabezados": encabezados_esperados_para_ui(),
     }
     listas_header = [
         {
@@ -351,6 +362,89 @@ def precios_terminados_masivo_aplicar_view(request):
     )
     status = 200 if res.get("ok") else 400
     return JsonResponse(res, status=status)
+
+
+@tiene_permiso(_PERMISO)
+@require_POST
+def precios_terminados_import_preview_view(request):
+    base_empresa = _base_empresa(request)
+    if not base_empresa:
+        return JsonResponse({"ok": False, "error": "sin_empresa"}, status=400)
+
+    upload = request.FILES.get("archivo") or request.FILES.get("file")
+    if not upload:
+        return JsonResponse({"ok": False, "error": "sin_archivo"}, status=400)
+
+    raw = upload.read()
+    if len(raw) > 15 * 1024 * 1024:
+        return JsonResponse({"ok": False, "error": "archivo_demasiado_grande"}, status=400)
+
+    parsed = parse_workbook(raw)
+    if not parsed.ok:
+        return JsonResponse({"ok": False, "error": parsed.error_fatal}, status=400)
+
+    preview = build_preview(base_empresa, parsed, nombre_archivo=upload.name or "import.xlsx")
+    if not preview.get("ok"):
+        return JsonResponse(preview, status=400)
+    return JsonResponse(preview)
+
+
+@tiene_permiso(_PERMISO)
+@require_POST
+def precios_terminados_import_aplicar_view(request):
+    base_empresa = _base_empresa(request)
+    if not base_empresa:
+        return JsonResponse({"ok": False, "error": "sin_empresa"}, status=400)
+
+    payload = _parse_json_body(request)
+    preview = payload.get("preview") or {}
+    codigos = payload.get("codigos_seleccionados") or []
+    nombre_archivo = (payload.get("nombre_archivo") or preview.get("archivo") or "import.xlsx").strip()
+
+    items = items_desde_preview_seleccion(preview, codigos)
+    if not items:
+        return JsonResponse({"ok": False, "error": "sin_items_seleccionados"}, status=400)
+
+    tipo_hist = f"Synap import Excel: {nombre_archivo[:120]}"
+    batch_size = 40
+    total_ok = 0
+    errores: List[Dict[str, Any]] = []
+    for i in range(0, len(items), batch_size):
+        chunk = items[i : i + batch_size]
+        res = guardar_lote(
+            base_empresa,
+            chunk,
+            id_usuario=_id_usuario(request),
+            tipo_modificacion=tipo_hist,
+        )
+        total_ok += int(res.get("actualizados") or 0)
+        errores.extend(res.get("errores") or [])
+
+    return JsonResponse(
+        {
+            "ok": len(errores) == 0,
+            "actualizados": total_ok,
+            "errores": errores,
+            "total_items": len(items),
+        }
+    )
+
+
+@tiene_permiso(_PERMISO)
+@require_POST
+def precios_terminados_import_incidencias_view(request):
+    payload = _parse_json_body(request)
+    preview = payload.get("preview") or {}
+    if not preview:
+        return JsonResponse({"ok": False, "error": "sin_preview"}, status=400)
+    data = generar_excel_incidencias(preview)
+    nombre = (preview.get("archivo") or "incidencias").replace(".xlsx", "")
+    resp = HttpResponse(
+        data,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{nombre}_incidencias.xlsx"'
+    return resp
 
 
 class _DictParams:
