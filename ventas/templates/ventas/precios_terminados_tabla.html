@@ -5,8 +5,8 @@
 
 {% block extra_js %}
 <script src="{% static 'ventas/js/precios_terminados_historial.mjs' %}"></script>
-<script type="module" src="{% static 'ventas/js/precios_terminados_import.mjs' %}?v=20261028"></script>
-<script src="{% static 'ventas/js/precios_terminados_tabla.mjs' %}?v=20261028"></script>
+<script src="{% static 'ventas/js/precios_terminados_import.mjs' %}?v=20261028b"></script>
+<script src="{% static 'ventas/js/precios_terminados_tabla.mjs' %}?v=20261028b"></script>
 {{ block.super }}
 <script type="module" src="{% static 'ventas/js/precios_terminados_filtros.mjs' %}"></script>
 {% endblock %}
@@ -112,7 +112,7 @@
                     <input type="hidden" name="orden" value="{{ filtros.orden }}">
                     <input type="hidden" name="dir" value="{{ filtros.dir }}">
                     <input type="hidden" name="reserva" value="{{ filtros.reserva }}">
-                    <div class="relative z-40 grid w-full grid-cols-2 items-end gap-2 overflow-visible md:grid-cols-4">
+                    <div class="relative z-[60] grid w-full grid-cols-2 items-end gap-2 overflow-visible md:grid-cols-4">
                         {% include "mpr/includes/filtro_marcas_tags.html" with variant="light" marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos equal=1 only %}
                         {% include "ventas/includes/filtro_tags_generico.html" with field_id="proveedores_incluidos" label="Proveedor" catalogo=proveedores_catalogo incluidos=proveedores_incluidos equal=1 only %}
                         {% include "ventas/includes/filtro_tags_generico.html" with field_id="rubros_incluidos" label="Rubro" catalogo=rubros_catalogo incluidos=rubros_incluidos equal=1 only %}

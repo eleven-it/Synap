@@ -339,3 +339,12 @@ class GuardarLoteTipoModificacionTests(SimpleTestCase):
             mock_aplicar.call_args.kwargs.get("tipo_modificacion"),
             "Synap import Excel: test.xlsx",
         )
+
+
+def test_where_base_excluye_gastos():
+    from ventas.services.precios_terminados import _where_base, TIPO_PRODUCTO_TERMINADO, TIPO_PRODUCTO_2DA
+
+    for tipo in (TIPO_PRODUCTO_TERMINADO, TIPO_PRODUCTO_2DA):
+        sql, _ = _where_base("a", tipo_producto=tipo)
+        assert "a.tipo_art" in sql
+        assert "<> 'gasto'" in sql
