@@ -24,6 +24,10 @@ from ventas.services.precios_terminados_excel_import import (
     _parse_precio_positivo,
     items_desde_preview_seleccion,
 )
+from ventas.tests.fixtures.precios_import_sample_builder import (
+    SAMPLE_ROWS,
+    build_minimal_precios_import_xlsx_bytes,
+)
 from ventas.views_precios_terminados import (
     _PERMISO,
     precios_terminados_import_aplicar_view,
@@ -31,6 +35,7 @@ from ventas.views_precios_terminados import (
 )
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "precios_import_q1_sample.xlsx"
+MINIMAL_XLSX = build_minimal_precios_import_xlsx_bytes()
 
 
 def _mock_user():
@@ -43,11 +48,13 @@ def _mock_user():
 
 class ParserEncabezadosTests(SimpleTestCase):
     def test_encabezados_ok_fixture(self):
-        raw = FIXTURE.read_bytes()
+        raw = FIXTURE.read_bytes() if FIXTURE.is_file() else MINIMAL_XLSX
         parsed = parse_workbook(raw)
         self.assertTrue(parsed.ok, parsed.error_fatal)
-        self.assertGreater(len(parsed.filas), 5)
+        self.assertEqual(len(parsed.filas), len(SAMPLE_ROWS))
         self.assertEqual(parsed.hoja, "Pedido total Q1-26")
+        fila_float = next(f for f in parsed.filas if f.codigo == "907947-01")
+        self.assertEqual(fila_float.precio_retail, Decimal("5025.20"))
 
     def test_encabezado_g_mal_rechaza(self):
         wb = openpyxl.Workbook()
@@ -105,6 +112,13 @@ class ParserEncabezadosTests(SimpleTestCase):
         retail, err = _parse_precio_positivo(5025.2000000001, campo="Precio Retail", fila=16)
         self.assertIsNone(err)
         self.assertEqual(retail, Decimal("5025.20"))
+
+    def test_minimal_bytes_corte_en_totales(self):
+        parsed = parse_workbook(MINIMAL_XLSX)
+        self.assertTrue(parsed.ok)
+        codigos = [f.codigo for f in parsed.filas]
+        self.assertEqual(codigos.count("935478-01"), 2)
+        self.assertNotIn("TOTALES", codigos)
 
     def test_codigo_duplicado_precios_distintos(self):
         wb = openpyxl.Workbook()
@@ -301,11 +315,12 @@ class PreviewFixtureIntegrationTests(SimpleTestCase):
     @patch("ventas.services.precios_terminados_excel_import._cargar_articulos_terminados")
     def test_parse_fixture_sin_db(self, mock_load):
         mock_load.return_value = []
-        parsed = parse_workbook(FIXTURE.read_bytes())
+        raw = FIXTURE.read_bytes() if FIXTURE.is_file() else MINIMAL_XLSX
+        parsed = parse_workbook(raw)
         self.assertTrue(parsed.ok)
         preview = build_preview("emp", parsed, nombre_archivo="precios.xlsx")
         self.assertTrue(preview["ok"])
-        self.assertGreater(preview["resumen"]["codigos_total"], 0)
+        self.assertEqual(preview["resumen"]["codigos_total"], len(SAMPLE_ROWS))
 
 
 class GuardarLoteTipoModificacionTests(SimpleTestCase):
