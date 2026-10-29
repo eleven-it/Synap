@@ -179,6 +179,126 @@
     });
   }
 
+
+  // ---------------------------------------------------------------
+  // Agrupación anidada (mismo componente que bo-stock-facturacion)
+  // ---------------------------------------------------------------
+  const RNG = window.ReportsNestedGrouping || null;
+  const GROUP_SELECT_ID = "ppp-group-by";
+  const SEARCH_INPUT_ID = "ppp-search";
+  const SEARCH_KEYS = ["codigo", "cod_manual", "articulo", "marca", "cliente", "unidad_base"];
+  const GROUP_DIMENSIONS = [
+    { key: "cliente", label: "Cliente" },
+    { key: "marca", label: "Marca" },
+    { key: "articulo", label: "Artículo" },
+  ];
+  /** Métricas que se reparten por cliente (las demás son por artículo y no se subtotalizan al agrupar por cliente). */
+  const CLIENTE_METRIC_KEYS = ["pendiente_qty", "importe_pendiente"];
+  let groupByInitialized = false;
+
+  function buildGroupConfig(metricKeys) {
+    const metrics = COLUMNS.filter((c) => c.type === "unit" || c.type === "money").map((c) => ({
+      key: c.key,
+      label: c.label,
+      format: c.type === "money" ? "currency" : "number",
+    }));
+    const dims = GROUP_DIMENSIONS.concat(
+      COLUMNS.filter((c) => c.type === "text" && !GROUP_DIMENSIONS.some((d) => d.key === c.key)).map((c) => ({
+        key: c.key,
+        label: c.label,
+      }))
+    );
+    return {
+      // Solo Cliente/Marca/Artículo se ofrecen en "Agrupar por".
+      groupDimensions: GROUP_DIMENSIONS,
+      dimensions: dims,
+      metrics: metrics,
+      metricKeys: metricKeys,
+      columns: COLUMNS.map((c) => c.key),
+      formatCell: function (value, colKey) {
+        const col = COLUMNS.find((c) => c.key === colKey);
+        if (!col) return value == null ? "" : escHtml(value);
+        return cellValue(col, Object.fromEntries([[colKey, value]]));
+      },
+      decorateCell: function (colKey, row) {
+        const col = COLUMNS.find((c) => c.key === colKey);
+        if (!col) return {};
+        return { cellClass: ((col.cellClass || "") + cellExtraClass(col, row)).trim() };
+      },
+    };
+  }
+
+  /**
+   * Si se agrupa por Cliente, cada artículo se abre en una fila por cliente con su pendiente/importe.
+   * Stock y MPR son por artículo: se muestran en el detalle pero no se subtotalizan.
+   */
+  function explodeByCliente(rows) {
+    const out = [];
+    rows.forEach(function (row) {
+      const det = Array.isArray(row.clientes_detalle) ? row.clientes_detalle : [];
+      if (!det.length) {
+        out.push(Object.assign({}, row, { cliente: "" }));
+        return;
+      }
+      det.forEach(function (d) {
+        out.push(
+          Object.assign({}, row, {
+            cliente: d.cliente,
+            id_cliente: d.id_cliente,
+            pendiente_qty: d.pendiente_qty,
+            importe_pendiente: d.importe_pendiente,
+          })
+        );
+      });
+    });
+    return out;
+  }
+
+  function currentSearchQuery() {
+    const el = document.getElementById(SEARCH_INPUT_ID);
+    return (el && el.value) || "";
+  }
+
+  function ensureSearchInput() {
+    if (!RNG) return;
+    const slot = document.getElementById("ppp-search-slot");
+    if (!slot || document.getElementById(SEARCH_INPUT_ID)) return;
+    slot.innerHTML = RNG.searchInputHtml(SEARCH_INPUT_ID, "Buscar por código, artículo, marca, cliente...", "");
+    RNG.attachSearchListener(SEARCH_INPUT_ID, function () {
+      if (lastResponse) renderTable(lastResponse);
+    });
+  }
+
+  function ensureGroupByUI() {
+    if (!RNG || groupByInitialized) return;
+    if (!document.getElementById(GROUP_SELECT_ID)) return;
+    groupByInitialized = true;
+    RNG.initializeGroupByUI(
+      GROUP_SELECT_ID,
+      { dimensions: GROUP_DIMENSIONS },
+      function () { return lastResponse; },
+      function (resp) { if (resp) renderTable(resp); }
+    );
+  }
+
+  function currentGroupByFields() {
+    if (!RNG) return [];
+    return RNG.getGroupByFieldsInSelectionOrder(GROUP_SELECT_ID);
+  }
+
+  function renderGroupedBody(rows, groupByFields) {
+    const byCliente = groupByFields.indexOf("cliente") !== -1;
+    const data = byCliente ? explodeByCliente(rows) : rows;
+    const metricKeys = byCliente ? CLIENTE_METRIC_KEYS.slice() : Object.keys(TOTAL_KEYS);
+    const config = buildGroupConfig(metricKeys);
+    const grouped = RNG.groupTableDataGeneric(data, groupByFields, metricKeys, sortedArticulos);
+    return {
+      html: RNG.renderGroupedTableRows(grouped, config, 0, true),
+      groups: grouped.length,
+      byCliente: byCliente,
+    };
+  }
+
   function renderTable(response) {
     const wrap = document.getElementById("ppp-table-wrap");
     const summary = document.getElementById("ppp-filters-summary");
@@ -186,7 +306,13 @@
 
     ensurePppTableStyles();
     lastResponse = response;
-    const articulos = sortedArticulos(response.data || []);
+    ensureSearchInput();
+    ensureGroupByUI();
+    const searchQuery = currentSearchQuery();
+    const allRows = response.data || [];
+    const filteredRows = RNG ? RNG.filterBySearch(allRows, searchQuery, SEARCH_KEYS) : allRows;
+    const articulos = sortedArticulos(filteredRows);
+    const groupByFields = currentGroupByFields();
     const totals = response.totals || {};
     const footerNota =
       (response.meta && response.meta.extra && response.meta.extra.footer_nota) || FOOTER_NOTA;
@@ -222,7 +348,11 @@
     head += "</tr>";
 
     let body = "";
-    articulos.forEach(function (row) {
+    let groupedInfo = null;
+    if (RNG && groupByFields.length && articulos.length) {
+      groupedInfo = renderGroupedBody(articulos, groupByFields);
+      body = groupedInfo.html;
+    } else articulos.forEach(function (row) {
       body += "<tr>";
       COLUMNS.forEach(function (col) {
         body +=
@@ -237,7 +367,7 @@
       body += "</tr>";
     });
 
-    if (articulos.length) {
+    if (articulos.length && !groupedInfo && searchQuery.trim().length < 2) {
       body += '<tr class="ppp-totals-row bg-slate-100 dark:bg-slate-800 font-semibold">';
       COLUMNS.forEach(function (col, idx) {
         if (idx === 0) {
@@ -261,7 +391,13 @@
       '<p class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">' +
       "FILAS: " +
       formatUnit(n) +
-      " | Orden y totales sobre todo el resultado" +
+      (searchQuery.trim().length >= 2 ? " | Mostrando " + formatUnit(articulos.length) + " por búsqueda" : "") +
+      (groupedInfo
+        ? " | Agrupado por: " +
+          escHtml(groupByFields.map((f) => (GROUP_DIMENSIONS.find((d) => d.key === f) || { label: f }).label).join(" → ")) +
+          " · " + groupedInfo.groups + " agrupación" + (groupedInfo.groups !== 1 ? "es" : "") +
+          (groupedInfo.byCliente ? " · Subtotales por cliente: pendiente e importe" : "")
+        : " | Orden y totales sobre todo el resultado") +
       "</p>" +
       '<div class="ppp-table-scroll"><table class="ppp-data-table text-xs text-left border-collapse text-slate-800 dark:text-slate-200">' +
       '<thead class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase tracking-wide">' +
@@ -274,6 +410,7 @@
       "</p>";
 
     bindSortHandlers(wrap);
+    if (groupedInfo) RNG.attachGroupToggleListeners(wrap);
   }
 
   document.addEventListener("reportDataLoaded", function (event) {
@@ -283,5 +420,5 @@
     renderTable(event.detail.response || {});
   });
 
-  window.pedidosPendientesProduccionHandler = { renderTable };
+  window.pedidosPendientesProduccionHandler = { renderTable, explodeByCliente };
 })();

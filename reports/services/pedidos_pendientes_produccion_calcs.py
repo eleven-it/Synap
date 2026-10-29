@@ -229,3 +229,39 @@ def sql_unidad_base_select() -> str:
 
 def sql_unidad_base_group_by_suffix() -> str:
     return ", COALESCE(um.nombre_unimed, '')"
+
+
+def attach_clientes_detalle(
+    articulos: Sequence[Dict[str, Any]], rows: Sequence[Sequence[Any]]
+) -> None:
+    """Adjunta desglose por cliente a cada fila de artículo.
+
+    ``rows``: (id_art, id_cliente, cliente, pendiente_qty, importe_pendiente).
+    Setea ``clientes_detalle`` (lista ordenada por pendiente desc) y ``cliente``
+    (nombres separados por coma, para búsqueda/visualización).
+    """
+    by_art: Dict[int, List[Dict[str, Any]]] = {}
+    for r in rows:
+        try:
+            aid = int(r[0])
+        except (TypeError, ValueError):
+            continue
+        id_cli = r[1]
+        nombre = (r[2] or "").strip() if isinstance(r[2], str) else (r[2] or "")
+        if not nombre:
+            nombre = f"Cliente {id_cli}" if id_cli is not None else "Sin especificar"
+        by_art.setdefault(aid, []).append(
+            {
+                "id_cliente": int(id_cli) if id_cli is not None else None,
+                "cliente": nombre,
+                "pendiente_qty": float(r[3] or 0),
+                "importe_pendiente": round(float(r[4] or 0), 2),
+            }
+        )
+    for art in articulos:
+        det = sorted(
+            by_art.get(int(art.get("id_art") or 0), []),
+            key=lambda d: (-d["pendiente_qty"], str(d["cliente"]).lower()),
+        )
+        art["clientes_detalle"] = det
+        art["cliente"] = ", ".join(str(d["cliente"]) for d in det)
