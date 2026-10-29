@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.test import RequestFactory, SimpleTestCase
 
 from core.middleware.base_middleware import DeviceDetectionMiddleware
+from core.utils.utils import APPS_MENU, _permiso_menu_ok
 from ecom.menu_config import MENU_CONFIG
 
 from core.pwa_nivel_a import (
@@ -12,12 +13,14 @@ from core.pwa_nivel_a import (
     PWA_ECOM_DEEP_LINKS,
     PWA_ECOM_MENU_ITEM_IDS,
     PWA_MENU_APP_IDS,
+    PWA_VENTAS_PEDIDOS_MENU_ITEM_IDS,
     PWA_MPR_DEEP_LINKS,
     PWA_MPR_MENU_ITEM_IDS,
     ecom_visible_en_movil,
     filtrar_apps_menu_para_pwa_movil,
     filtrar_submenus_contabilidad_para_pwa_movil,
     filtrar_submenus_ecom_para_pwa_movil,
+    filtrar_submenus_ventas_pedidos_para_pwa_movil,
     filtrar_submenus_mpr_para_pwa_movil,
     mpr_visible_en_movil,
     sidebar_visible_en_pwa,
@@ -42,6 +45,11 @@ def _req(ua):
 
 
 class FiltrarAppsMenuPwaTests(SimpleTestCase):
+    def test_menu_acepta_permiso_comodin_del_modulo(self):
+        self.assertTrue(_permiso_menu_ok('ecom.ver', {'ecom.*'}))
+        self.assertTrue(_permiso_menu_ok(['ventas.ver', 'ecom.pedidos.crear'], {'ecom.*'}))
+        self.assertFalse(_permiso_menu_ok('stock.ver', {'ecom.*'}))
+
     def test_escritorio_no_reduce_lista(self):
         request = _req(DESKTOP_UA)
         apps = [{'id': 'reports'}, {'id': 'self_checkout'}]
@@ -83,6 +91,24 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
         self.assertEqual(out[0]['id'], 'ecom')
         ids = {i['menu_item_id'] for i in out[0]['submenus'][0]['items']}
         self.assertEqual(ids, {'ecom_compra', 'ecom_pedidos', 'ecom_pedido_masivo'})
+
+    def test_movil_vendedor_con_ventas_conserva_solo_pedidos(self):
+        request = _req(MOBILE_UA)
+        apps = [{
+            'id': 'ventas', 'url': '/ventas/objetivos/',
+            'submenus': [{'seccion': 'Comprobantes', 'items': [
+                {'menu_item_id': 'ventas_cb_pedidos', 'url': '/ecom/mayoristapp/pedidos/'},
+                {'menu_item_id': 'ventas_cb_nuevo_pedido', 'url': '/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple'},
+                {'menu_item_id': 'ventas_cb_precios', 'url': '/ventas/precios/'},
+            ]}],
+        }]
+        out = filtrar_apps_menu_para_pwa_movil(apps, request)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['url'], '/ecom/mayoristapp/pedidos/')
+        self.assertEqual(
+            {item['menu_item_id'] for item in out[0]['submenus'][0]['items']},
+            {'ventas_cb_pedidos', 'ventas_cb_nuevo_pedido'},
+        )
 
     @patch('core.pwa_nivel_a.usuario_tiene_mpr_en_menu', return_value=True)
     @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=False)
@@ -136,13 +162,17 @@ class SidebarPwaTests(SimpleTestCase):
     def test_sidebar_reports_no(self):
         self.assertFalse(sidebar_visible_en_pwa('reports'))
 
-    @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=True)
+    @patch('core.pwa_nivel_a.ecom_visible_en_movil', return_value=True)
     def test_sidebar_ecom_con_modulo(self, _mock):
         self.assertTrue(sidebar_visible_en_pwa('ecom'))
 
-    @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=False)
+    @patch('core.pwa_nivel_a.ecom_visible_en_movil', return_value=False)
     def test_sidebar_ecom_sin_modulo(self, _mock):
         self.assertFalse(sidebar_visible_en_pwa('ecom'))
+
+    @patch('core.pwa_nivel_a.usuario_tiene_pedidos_ventas_en_menu', return_value=True)
+    def test_sidebar_ventas_con_pedidos(self, _mock):
+        self.assertTrue(sidebar_visible_en_pwa('ventas'))
 
     @patch('core.pwa_nivel_a.usuario_tiene_mpr_en_menu', return_value=True)
     def test_sidebar_mpr_con_modulo(self, _mock):
@@ -174,6 +204,19 @@ class SidebarPwaTests(SimpleTestCase):
         ids = {i['menu_item_id'] for s in out for i in s['items']}
         self.assertEqual(ids, PWA_ECOM_MENU_ITEM_IDS)
 
+    def test_filtrar_submenus_ventas_solo_pedidos(self):
+        submenus = [{'seccion': 'Comprobantes', 'items': [
+            {'menu_item_id': 'ventas_cb_pedidos'},
+            {'menu_item_id': 'ventas_cb_nuevo_pedido'},
+            {'menu_item_id': 'ventas_cb_pedido_masivo'},
+            {'menu_item_id': 'ventas_cb_precios'},
+        ]}]
+        out = filtrar_submenus_ventas_pedidos_para_pwa_movil(submenus)
+        self.assertEqual(
+            {item['menu_item_id'] for item in out[0]['items']},
+            PWA_VENTAS_PEDIDOS_MENU_ITEM_IDS,
+        )
+
     def test_filtrar_submenus_mpr_solo_kpis_e_inventario(self):
         submenus = [
             {
@@ -199,6 +242,7 @@ class SidebarPwaTests(SimpleTestCase):
     def test_constantes(self):
         self.assertIn('self_checkout', PWA_MENU_APP_IDS)
         self.assertIn('ecom', PWA_MENU_APP_IDS)
+        self.assertIn('ventas', PWA_MENU_APP_IDS)
         self.assertIn('mpr', PWA_MENU_APP_IDS)
         self.assertIn('contabilidad', PWA_MENU_APP_IDS)
         # ADR-2: reports NO entra al navbar PWA; acceso vía Command Center / deep-link allowlist.
@@ -241,6 +285,17 @@ class SidebarPwaTests(SimpleTestCase):
                 if "pedido-masivo-sucursales" in dl
             )
         )
+
+    def test_menu_venta_usa_permiso_de_captura_y_modo_simple(self):
+        ecom = next(app for app in APPS_MENU if app.get('id') == 'ecom')
+        compra = next(
+            item
+            for section in ecom['submenus']
+            for item in section['items']
+            if item.get('menu_item_id') == 'ecom_compra'
+        )
+        self.assertEqual(compra['permission'], ['ecom.pedidos.crear', 'ecom.pedido_masivo.usar'])
+        self.assertEqual(compra['url_query'], {'modo': 'simple'})
 
 
 class TpvVisibleEnMovilTests(SimpleTestCase):
