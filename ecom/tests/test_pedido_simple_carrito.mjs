@@ -14,6 +14,7 @@ function appEditable(modoSimple) {
   app.draftId = 1;
   app.draftEstado = 'borrador';
   app.sucursales = [{ id_cliente_domicilio: 7 }];
+  app.$nextTick = async () => {};
   return app;
 }
 
@@ -36,6 +37,8 @@ test('pedido simple guarda las cantidades de varios artículos y despliega el ca
   app.cantidadesSeleccionadas['10'] = 2;
   app.cantidadesSeleccionadas['11'] = 3;
   app.onCelda = async (id, domicilio, cantidad) => {
+    assert.equal(app.esperaOperacion, true);
+    assert.equal(app.esperaMensaje, `Agregando ${guardados.length + 1} de 2 artículos al carrito…`);
     guardados.push([id, domicilio, cantidad]);
     app.celdas[`${id}:${domicilio}`] = cantidad;
     return true;
@@ -48,6 +51,7 @@ test('pedido simple guarda las cantidades de varios artículos y despliega el ca
   assert.equal(app.carritoEnLineaAbierto, true);
   assert.equal(app.cantidadesCarrito['10'], '2');
   assert.equal(app.cantidadSeleccionados, 0);
+  assert.equal(app.esperaOperacion, false);
 });
 
 test('la cantidad editada en el carrito se guarda solo al pulsar Actualizar', async () => {

@@ -6,7 +6,7 @@
 {% block content %}
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
-<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=8">
+<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=9">
 
 <section class="pm-matrix-viewport pm-matrix-viewport--sin-desc flex min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible {% if pm_embed %}h-full{% else %}h-[calc(100dvh-4.5rem)]{% endif %}"
          x-data="pedidoMasivoApp()"
@@ -45,7 +45,9 @@
                   class="rounded-full bg-slate-500/25 px-2.5 py-1 text-[11px] font-semibold text-slate-200">Solo lectura</span>
           </div>
           <div class="pm-hero-actions ml-auto flex flex-wrap items-center gap-2">
-            {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="pedido-masivo" class_extra="text-slate-300 hover:text-sky-300 dark:hover:text-sky-300" only %}
+            <span class="pm-simple-help">
+              {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="pedido-masivo" class_extra="text-slate-300 hover:text-sky-300 dark:hover:text-sky-300" only %}
+            </span>
             <span x-show="guardadoChip" x-cloak
                   class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"
                   x-text="guardadoChip"></span>
@@ -319,6 +321,10 @@
                class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
               Sin clientes
             </p>
+            <p x-show="panelCli && cargandoCli" x-cloak role="status"
+               class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+              Buscando clientes…
+            </p>
           </div>
         </div>
 
@@ -353,6 +359,10 @@
                class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
               Sin sucursales
             </p>
+            <p x-show="panelSuc && cargandoSuc" x-cloak role="status"
+               class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+              Cargando sucursales…
+            </p>
           </div>
         </div>
 
@@ -385,7 +395,7 @@
         </div>
       </div>
 
-      <div class="mt-2 flex flex-wrap items-center gap-2" x-show="puedeImportarExcel || (draftId && sucursales.length)" x-cloak>
+      <div class="pm-simple-mobile-extras mt-2 flex flex-wrap items-center gap-2" x-show="puedeImportarExcel || (draftId && sucursales.length)" x-cloak>
         <div x-show="puedeImportarExcel" x-cloak class="flex flex-wrap items-center gap-2">
           <button type="button"
                   @click="descargarPlantillaExcel()"
@@ -1543,5 +1553,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple52"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple53"></script>
 {% endblock %}
