@@ -92,6 +92,7 @@ class CheckoutInput:
     operador_logistico: str = ""
     nro_seguimiento: str = ""
     observaciones: str = ""
+    observacion_interna: str = ""
     es_cliente: bool = False                    # alta por el propio cliente (autogestión)
     dias_entrega: int = 0
     dias_no_laborables: List[int] = field(default_factory=list)  # ISO weekday (1=lun..7=dom)
@@ -390,6 +391,7 @@ def confirmar(
                 "CodViajante": to_int_or_none(cod_viajante) or 0,
                 "TipoPedido": "Ecom cliente" if datos.es_cliente else "Ecom vendedor",
                 "Detalle": str_or_default(datos.observaciones, ""),
+                "observacion_interna": str_or_default(datos.observacion_interna, ""),
                 "ImporteVenta": importe_venta,
                 "ImporteVentaL": numero_a_letras(float(importe_venta)),
                 "IVA1": _dec(cart.iva_21),
@@ -887,6 +889,7 @@ _SQL_INSERT_COMP_PED = """
         CodViajante = %(CodViajante)s,
         TipoPedido = %(TipoPedido)s,
         Detalle = %(Detalle)s,
+        observacion_interna = %(observacion_interna)s,
         ImporteVenta = %(ImporteVenta)s,
         IVA1 = %(IVA1)s,
         IVA2 = %(IVA2)s,

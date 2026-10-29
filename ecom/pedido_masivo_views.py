@@ -389,6 +389,7 @@ class PedidoMasivoConfirmarAPIView(APIView):
             seguimientos_por_domicilio=(data.get("seguimientos_por_domicilio")
                                         if isinstance(data.get("seguimientos_por_domicilio"), dict) else {}),
             observaciones=str(data.get("observaciones") or ""),
+            observacion_interna=str(data.get("observacion_interna") or ""),
             agente_percep=_session_agente_percep(request),
             sess_user=sess,
             cabecera=cabecera,
@@ -668,6 +669,8 @@ class PedidoMasivoAbrirPedidoAPIView(APIView):
             "anulado": str(cab.get("anulado") or "").strip(),
             "email_cliente": str(cab.get("email_cliente") or "").strip(),
             "forma_entrega": str(cab.get("forma_entrega") or "").strip(),
+            "observaciones": str(cab.get("observaciones") or ""),
+            "observacion_interna": str(cab.get("observacion_interna") or ""),
             "id_ruta": to_int_or_none(cab.get("id_ruta")),
             "id_repartidor": to_int_or_none(cab.get("id_repartidor")),
             "operador_logistico": str(cab.get("operador_logistico") or "").strip(),

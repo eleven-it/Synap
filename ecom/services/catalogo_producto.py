@@ -695,8 +695,9 @@ def obtener_detalle_articulo(
                 COALESCE(sd.saldo, 0) AS saldo,
                 COALESCE(sd.saldo_pedido_cliente, 0) AS saldo_pedido_cliente
             FROM stock_deposito sd
-            LEFT JOIN deposito d ON d.CodDeposito = sd.id_deposito
-            WHERE sd.id_articulo = %s
+              INNER JOIN deposito d ON d.CodDeposito = sd.id_deposito
+              WHERE sd.id_articulo = %s
+                AND TRIM(COALESCE(d.tipo_mpr, '')) = 'Terminado'
         """
         cur.execute(sql_stock_depositos, [id_art])
         stock_depositos = []

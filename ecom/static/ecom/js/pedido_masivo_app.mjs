@@ -74,6 +74,8 @@ function pedidoMasivoCore() {
     clienteSel: '',
     qCliente: '',
     panelCli: false,
+    busquedaMovilActiva: false,
+    _mobileSearchInput: null,
     idxCli: 0,
     cargandoCli: false,
     opcionesSucursal: [],
@@ -88,6 +90,8 @@ function pedidoMasivoCore() {
     celdasInvalidas: {},
     descuentosFila: {},
     descPiePct: 0,
+    detalleComprobante: '',
+    observacionInterna: '',
     ultimoError: {},
     articulosBusqueda: [],
     qArt: '',
@@ -456,7 +460,7 @@ function pedidoMasivoCore() {
       }
       // Al hacer scroll de la matriz, cerrar el dropdown (evita menú desfasado).
       this._onMatrixScrollCloseArt = () => {
-        if (this.panelArt) this.cerrarPanelArt();
+        if (this.panelArt && !this._scrollBuscadorProgramatico) this.cerrarPanelArt();
       };
       this.$watch('draftId', () => {
         this.$nextTick(() => {
@@ -570,7 +574,65 @@ function pedidoMasivoCore() {
       if (totMid) totMid.scrollLeft = mid.scrollLeft;
     },
     abrirPanelCli() { this.panelCli = true; },
-    cerrarPanelCli() { this.panelCli = false; },
+    cerrarPanelCli() {
+      this.panelCli = false;
+      this.cerrarBusquedaMovil('pm-cli');
+    },
+    prepararBusquedaMovil(event) {
+      if (!this.modoSimple || !window.matchMedia('(max-width: 1023px)').matches) return;
+      this.busquedaMovilActiva = true;
+      this._mobileSearchInput = event.target;
+      const ajustar = () => {
+        const input = this._mobileSearchInput;
+        if (!input || !input.isConnected || document.activeElement !== input) return;
+        const viewport = window.visualViewport;
+        const visibleTop = viewport ? viewport.offsetTop : 0;
+        const visibleBottom = visibleTop + (viewport ? viewport.height : window.innerHeight);
+        const rect = input.getBoundingClientRect();
+        const esArticulo = input.id === 'pm-art-mob';
+        // Artículos abre hacia arriba; clientes y sucursales conservan la lista abajo.
+        const topDeseado = esArticulo
+          ? Math.max(visibleTop + 96, visibleBottom - rect.height - 16)
+          : visibleTop + 120;
+        const desplazamiento = rect.top - topDeseado;
+        if (Math.abs(desplazamiento) > 16) window.scrollBy(0, desplazamiento);
+        requestAnimationFrame(() => {
+          if (this._mobileSearchInput !== input) return;
+          const actual = input.getBoundingClientRect();
+          const contenedor = esArticulo
+            ? input.closest('.pm-art-search-mobile')?.getBoundingClientRect()
+            : null;
+          const espacio = esArticulo
+            ? (contenedor?.top ?? actual.top) - visibleTop - 8
+            : visibleBottom - actual.bottom - 12;
+          this.$el.style.setProperty('--pm-search-space', `${Math.max(56, Math.floor(espacio))}px`);
+        });
+      };
+      this._mobileSearchAdjust = ajustar;
+      if (!this._mobileSearchResize) {
+        this._mobileSearchResize = () => {
+          clearTimeout(this._mobileSearchTimer);
+          this._mobileSearchTimer = setTimeout(() => {
+            requestAnimationFrame(() => this._mobileSearchAdjust?.());
+          }, 180);
+        };
+        window.visualViewport?.addEventListener('resize', this._mobileSearchResize);
+      }
+      clearTimeout(this._mobileSearchTimer);
+      this._mobileSearchTimer = setTimeout(() => requestAnimationFrame(ajustar), 300);
+    },
+    cerrarBusquedaMovil(idInput) {
+      if (this._mobileSearchInput?.id !== idInput) return;
+      this.busquedaMovilActiva = false;
+      this._mobileSearchInput = null;
+      this._mobileSearchAdjust = null;
+      clearTimeout(this._mobileSearchTimer);
+      this.$el.style.removeProperty('--pm-search-space');
+      if (this._mobileSearchResize) {
+        window.visualViewport?.removeEventListener('resize', this._mobileSearchResize);
+        this._mobileSearchResize = null;
+      }
+    },
     abrirPanelSuc() {
       if (!this.clienteSel) return;
       this.panelSuc = true;
@@ -578,7 +640,10 @@ function pedidoMasivoCore() {
         this.cargarOpcionesSucursal(this.clienteSel);
       }
     },
-    cerrarPanelSuc() { this.panelSuc = false; },
+    cerrarPanelSuc() {
+      this.panelSuc = false;
+      this.cerrarBusquedaMovil('pm-sucursal');
+    },
     _etiquetaSucursal(s) {
       return String(
         s?.etiqueta || s?.nombre || s?.NroCalle || s?.nro || s?.id_cliente_domicilio || '',
@@ -1240,6 +1305,8 @@ function pedidoMasivoCore() {
       history.replaceState(null, '', `?${modoQ}draft=${this.draftId}${roQ}`);
     },
     _resetPedidoCargado() {
+      this.detalleComprobante = '';
+      this.observacionInterna = '';
       this.pedidoCodMov = null;
       this.pedidoNro = '';
       this.pedidoEstado = '';
@@ -1286,6 +1353,8 @@ function pedidoMasivoCore() {
     },
     _aplicarPedidoInfo(info, advertencias) {
       const p = info || {};
+      this.detalleComprobante = String(p.observaciones || '');
+      this.observacionInterna = String(p.observacion_interna || '');
       if (p.forma_entrega) this.formaEntrega = p.forma_entrega;
       if (p.id_ruta) this.idRuta = Number(p.id_ruta);
       if (p.id_repartidor) this.idRepartidor = Number(p.id_repartidor);
@@ -2312,6 +2381,14 @@ function pedidoMasivoCore() {
       clearTimeout(this._chipTimer);
       this._chipTimer = setTimeout(() => { this.guardadoChip = ''; }, 1500);
     },
+    invalidarBusquedaArticulos() {
+      ++this._artBusquedaSeq;
+      this._articulosBusquedaAbort?.abort();
+      this._articulosBusquedaAbort = null;
+      this.articulosBusqueda = [];
+      this.artBusquedaHecha = false;
+      this.cargandoArt = false;
+    },
     async buscarArticulos() {
       if (!this.idCliente || !this.urls.articulos) return;
       const q = (this.qArt || '').trim();
@@ -2340,6 +2417,7 @@ function pedidoMasivoCore() {
      */
     async listarTodosArticulos() {
       if (!this.idCliente || !this.urls.articulos) return;
+      this.qArt = '';
       this.paginaGaleriaSimple = 1;
       await this._fetchArticulos({ q: '', todos: true,
         tam: this.modoSimple && this.vistaCatalogoSimple === 'galeria' ? 24 : 5000 });
@@ -2361,11 +2439,8 @@ function pedidoMasivoCore() {
         + '&pagina=' + encodeURIComponent(String(pagina))
         + this.parametroDomicilioCatalogo();
       if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') u += '&fotos=1';
-      if (todos) {
-        u += '&todos=1';
-      } else {
-        u += '&q=' + encodeURIComponent(q || '');
-      }
+      if (todos) u += '&todos=1';
+      if (q) u += '&q=' + encodeURIComponent(q);
       const filtros = this.parametrosFiltrosCatalogo();
       if (filtros) u += `&${filtros}`;
       try {
@@ -2430,19 +2505,25 @@ function pedidoMasivoCore() {
       }
       this.panelArt = false;
       this.artDropdownStyle = '';
+      this.cerrarBusquedaMovil('pm-art-mob');
     },
     actualizarPosDropdownArt() {
       // Dropdown anclado con CSS absolute al input; no requiere coords fixed.
     },
-    /** Baja la matriz hasta la fila-buscador (línea nueva al pie). */
+    /** El buscador está en la primera fila de la matriz. */
     scrollBuscadorIntoView() {
       const mid = this.$refs.pmZoneMid;
       const leftScroll = this.$refs.pmZoneLeftScroll;
       const rightScroll = this.$refs.pmZoneRightScroll;
-      if (mid) mid.scrollTop = mid.scrollHeight;
+      this._scrollBuscadorProgramatico = true;
+      if (mid) mid.scrollTop = 0;
       const top = mid ? mid.scrollTop : 0;
       if (leftScroll) leftScroll.scrollTop = top;
       if (rightScroll) rightScroll.scrollTop = top;
+      clearTimeout(this._scrollBuscadorTimer);
+      this._scrollBuscadorTimer = setTimeout(() => {
+        this._scrollBuscadorProgramatico = false;
+      }, 120);
     },
     focusBuscadorArt() {
       this.$nextTick(() => {
@@ -3018,6 +3099,8 @@ function pedidoMasivoCore() {
             draft_id: this.draftId,
             desc_pie_pct: this.descPiePct,
             forma_entrega: this.formaEntrega,
+            observaciones: this.detalleComprobante,
+            observacion_interna: this.observacionInterna,
             id_ruta: this.muestraRutaEntrega ? this.idRuta : null,
             id_repartidor: this.formaEntrega.trim().toLowerCase() === 'envia repartidor' ? this.idRepartidor : null,
             operador_logistico: this.formaEntrega.trim().toLowerCase() === 'operador logistico' ? this.operadorLogistico : '',

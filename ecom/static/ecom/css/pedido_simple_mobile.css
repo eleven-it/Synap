@@ -23,7 +23,7 @@
 .pm-simple-navbar-cart { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: .55rem; color: #0369a1; }
 .pm-simple-navbar-cart .material-icons { font-size: 1.35rem; }
 .pm-simple-navbar-count { position: absolute; top: -.25rem; right: -.3rem; display: flex; align-items: center; justify-content: center; min-width: 1.1rem; height: 1.1rem; padding: 0 .17rem; border-radius: 999px; background: #f97316; color: white; font-size: .64rem; font-weight: 800; }
-.pm-simple-mode .pm-simple-search-review { padding: .35rem; border-bottom: 1px solid #e2e8f0; background: #f0f9ff; }
+.pm-simple-mode .pm-simple-search-review { padding: .35rem; border-top: 1px solid #e2e8f0; background: #f0f9ff; }
 .pm-simple-mode .pm-simple-search-review button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; width: 100%; min-height: 2.4rem; border-radius: .4rem; background: #0284c7; color: white; font-size: .8rem; font-weight: 750; }
 .pm-simple-mode .pm-simple-search-review .material-icons { font-size: 1.1rem; }
 .pm-simple-mode .pm-simple-qty-trigger { box-sizing: border-box; height: 2.5rem; min-height: 2.5rem; }
@@ -100,10 +100,102 @@
 .pm-simple-mode .pm-simple-tax-note { color: #64748b; font-size: .7rem; }
 .pm-simple-mode .pm-simple-confirm { display: inline-flex; align-items: center; justify-content: center; gap: .3rem; min-height: 2.6rem; padding: .35rem .8rem; border-radius: .5rem; background: #f97316; color: white; font-size: .85rem; font-weight: 750; justify-self: start; }
 .pm-simple-mode .pm-simple-confirm .material-icons { font-size: 1.05rem; }
-.pm-simple-mode .pm-simple-next-action { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.75rem; border: 1px solid #7dd3fc; border-radius: .5rem; color: #075985; font-weight: 700; }
-.pm-simple-mode .pm-simple-next-action .material-icons { font-size: 1.1rem; }
+.pm-simple-next-action { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.75rem; border: 1px solid #7dd3fc; border-radius: .5rem; color: #075985; font-weight: 700; }
+.pm-simple-next-action .material-icons { font-size: 1.1rem; }
+
+/* El pedido simple usa tarjetas propias: acompañan el tema oscuro del resto de Synap. */
+.dark .pm-simple-mode .pm-simple-actions button { color: #e2e8f0; }
+.dark .pm-simple-mode .pm-simple-section-title,
+.dark .pm-simple-mode .pm-simple-footer-head,
+.dark .pm-simple-mode .pm-simple-cart-toggle,
+.dark .pm-simple-mode .pm-simple-cart-modal-btn,
+.dark .pm-simple-mode .pm-simple-search-price,
+.dark .pm-simple-mode .pm-simple-info-btn,
+.dark .pm-simple-mode .pm-simple-gallery-actions button,
+.dark .pm-simple-mode .pm-simple-gallery-more,
+.dark .pm-simple-mode .pm-simple-cart-line-title button,
+.dark .pm-simple-mode .pm-simple-cart-line-edit button:not(.pm-simple-save-icon):not(:last-child),
+.dark .pm-simple-next-action,
+.dark .pm-simple-navbar-cart { color: #7dd3fc; }
+.dark .pm-simple-mode .pm-simple-actions .pm-simple-view-active {
+  background: #0c4a6e; border-color: #38bdf8; color: #f0f9ff;
+}
+.dark .pm-simple-mode .pm-simple-search-review,
+.dark .pm-simple-mode .pm-simple-inline-cart-head { background: #0f172a; border-color: #475569; }
+.dark .pm-simple-mode .pm-simple-keypad,
+.dark .pm-simple-mode .pm-simple-gallery-card,
+.dark .pm-simple-mode .pm-simple-inline-cart,
+.dark .pm-simple-mode .pm-simple-footer {
+  background: #1e293b; border-color: #475569; color: #f8fafc;
+}
+.dark .pm-simple-mode .pm-simple-footer { border-top-color: #0ea5e9; }
+.dark .pm-simple-mode .pm-simple-gallery-photo { background: #334155; color: #cbd5e1; }
+.dark .pm-simple-mode .pm-simple-gallery-data,
+.dark .pm-simple-mode .pm-simple-gallery-data small,
+.dark .pm-simple-mode .pm-simple-gallery-empty,
+.dark .pm-simple-mode .pm-simple-empty-cart,
+.dark .pm-simple-mode .pm-simple-cart-line small,
+.dark .pm-simple-mode .pm-simple-cart-line-edit label,
+.dark .pm-simple-mode .pm-simple-footer-tools label,
+.dark .pm-simple-mode .pm-simple-estimate,
+.dark .pm-simple-mode .pm-simple-totals span,
+.dark .pm-simple-mode .pm-simple-tax-note { color: #cbd5e1; }
+.dark .pm-simple-mode .pm-simple-gallery-data strong,
+.dark .pm-simple-mode .pm-simple-cart-line-title strong,
+.dark .pm-simple-mode .pm-simple-totals strong { color: #f8fafc; }
+.dark .pm-simple-mode .pm-simple-cart-line,
+.dark .pm-simple-mode .pm-simple-totals > div { background: #0f172a; border-color: #475569; }
+.dark .pm-simple-mode .pm-simple-totals .pm-simple-grand-total {
+  background: #0c4a6e; border-color: #38bdf8;
+}
+.dark .pm-simple-mode .pm-simple-grand-total strong { color: #f0f9ff; }
+.dark .pm-simple-mode .pm-simple-keypad-grid button,
+.dark .pm-simple-mode .pm-simple-keypad-tools button,
+.dark .pm-simple-mode .pm-simple-footer-tools button {
+  background: #0f172a; border-color: #64748b; color: #f8fafc;
+}
+.dark .pm-simple-mode .pm-simple-keypad output,
+.dark .pm-simple-mode .pm-simple-cart-line-edit input,
+.dark .pm-simple-mode .pm-simple-footer-tools input,
+.dark .pm-simple-mode .pm-simple-footer textarea {
+  background: #0f172a; border-color: #64748b; color: #f8fafc;
+}
+.dark .pm-simple-mode .pm-simple-footer textarea::placeholder { color: #94a3b8; }
+.dark .pm-simple-mode .pm-simple-footer label[for="pm-detalle-comprobante"],
+.dark .pm-simple-mode .pm-simple-footer label[for="pm-observacion-interna"] { color: #e2e8f0; }
+.dark .pm-simple-mode .pm-simple-cart-line-edit button:last-child { color: #fda4af; border-color: #9f1239; }
+
+@media (min-width: 1024px) {
+  .pm-matrix-viewport.pm-simple-mode {
+    height: auto !important;
+    min-height: calc(100dvh - 8rem);
+    overflow: visible;
+  }
+  .pm-simple-mode .pm-matrix-shell--simple {
+    flex: 0 0 auto;
+    height: clamp(18rem, 43dvh, 34rem);
+  }
+}
 
 @media (max-width: 1023px) {
+  .pm-simple-mode.pm-search-mobile-active .pm-simple-footer { display: none !important; }
+  .pm-simple-mode.pm-search-mobile-active #pm-cli + ul,
+  .pm-simple-mode.pm-search-mobile-active #pm-sucursal + ul,
+  .pm-simple-mode.pm-search-mobile-active .pm-art-search-mobile .pm-art-dropdown {
+    max-height: var(--pm-search-space, 12rem);
+  }
+  .pm-simple-mode.pm-search-mobile-active .pm-art-search-mobile .pm-art-dropdown {
+    min-width: 0;
+    max-width: none;
+  }
+  .pm-simple-mode .pm-art-search-mobile .pm-art-dropdown {
+    top: auto;
+    bottom: calc(100% + .25rem);
+    margin-top: 0;
+  }
+  .pm-simple-mode.pm-search-mobile-active .pm-art-search-mobile .pm-art-dropdown-list {
+    max-height: calc(var(--pm-search-space, 12rem) - 3.25rem);
+  }
   .pm-matrix-viewport.pm-simple-mode .pm-simple-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pm-matrix-viewport.pm-simple-mode .pm-simple-qty-desktop { display: none !important; }
   .pm-matrix-viewport.pm-simple-mode .pm-simple-qty-trigger { display: block !important; }

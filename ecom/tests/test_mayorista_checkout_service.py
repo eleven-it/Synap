@@ -237,6 +237,23 @@ class CheckoutTestBase(TestCase):
 
 
 class TestCheckoutPedido(CheckoutTestBase):
+    def test_guarda_detalle_y_observacion_interna_en_comp_ped(self):
+        conn = FakeConn({})
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(
+                    tipo="PED", id_punto_venta=3,
+                    observaciones="Entregar por recepción",
+                    observacion_interna="Prioridad comercial",
+                ),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(conn.state["comp_ped_params"]["Detalle"], "Entregar por recepción")
+        self.assertEqual(conn.state["comp_ped_params"]["observacion_interna"], "Prioridad comercial")
+
     def test_guarda_ruta_elegida_sin_forzar_ruta_uno(self):
         conn = FakeConn({"domicilio": {"id_transporte": 123}})
         cart = self._cart(tipo="PED")

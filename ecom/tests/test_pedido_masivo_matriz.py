@@ -465,6 +465,9 @@ class TestCatalogoFiltrado(TestCase):
         self.assertIn("Discontinuo = 'No'", sql)
         self.assertIn("Precio1V", sql)
         self.assertIn("NroCodBarra", sql)
+        self.assertIn("NroCodBarraF = %s", sql)
+        self.assertIn("NroCodBarraF LIKE %s", sql)
+        self.assertEqual(cur.execute.call_args[0][1].count("2401"), 5)
         self.assertIn("CodArtProv LIKE", sql)
         self.assertIn("articulo.CodigoMarca = %s", sql)
         self.assertIn("articulo.CodigoRubro = %s", sql)
@@ -534,7 +537,8 @@ class TestCatalogoFiltrado(TestCase):
         sql = cur.execute.call_args[0][0]
         self.assertNotIn("id_manual LIKE", sql)
         self.assertIn("LIMIT %s", sql)
-        self.assertEqual(cur.execute.call_args[0][1][-1], 5000)
+        self.assertEqual(cur.execute.call_args[0][1][-2], 5000)
+        self.assertEqual(cur.execute.call_args[0][1][-1], 0)
 
     @patch(
         "ecom.services.pedido_masivo_matriz.marcas_asignadas_viajante_cliente",
@@ -709,13 +713,15 @@ class TestSerializarMatriz(TestCase):
         self.assertEqual(m["celdas"]["4:9"], "1")
 
     @patch("ecom.services.pedido_masivo_matriz._stock_disponible_packs_map", return_value={})
+    @patch("ecom.services.pedido_masivo_matriz.precios_fila_efectivos", return_value={})
+    @patch("ecom.services.pedido_masivo_matriz.descuentos_fila_efectivos", return_value={})
     @patch(
         "ecom.services.pedido_masivo_matriz.listar_sucursales_cliente",
         return_value=[{"id_cliente_domicilio": 9, "etiqueta": "Suc A"}],
     )
     @patch("ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo")
     @patch("ecom.services.pedido_masivo_matriz._nombres_articulos")
-    def test_articulos_ordenados_por_nombre(self, mock_n, mock_ctx, _s, _stock):
+    def test_articulos_ordenados_por_nombre(self, mock_n, mock_ctx, _s, _desc, _precios, _stock):
         mock_ctx.return_value = {
             "descRenglon": Decimal("0"),
             "descPie": Decimal("0"),
