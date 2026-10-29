@@ -281,3 +281,6 @@
   .pm-matrix-viewport.pm-simple-mode .pm-simple-totals .pm-simple-grand-total { grid-column: span 2; display: flex; align-items: baseline; justify-content: space-between; }
   .pm-matrix-viewport.pm-simple-mode .pm-simple-confirm { width: 100%; }
 }
+.pm-simple-mode .pedidos-modal-root {
+  z-index: 160;
+}

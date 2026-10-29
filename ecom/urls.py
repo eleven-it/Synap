@@ -62,6 +62,7 @@ from ecom.pedido_masivo_views import (
     PedidoMasivoPrecioFilaAPIView,
     PedidoMasivoRecalcularPreciosAPIView,
     PedidoMasivoEliminarFilaAPIView,
+    PedidoMasivoVaciarCarritoAPIView,
     PedidoMasivoImportarAPIView,
     PedidoMasivoMatrizAPIView,
     PedidoMasivoPlantillaExcelAPIView,
@@ -278,6 +279,11 @@ urlpatterns = [
         "api/mayoristapp/pedido-masivo/eliminar-fila/",
         PedidoMasivoEliminarFilaAPIView.as_view(),
         name="api_pedido_masivo_eliminar_fila",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/vaciar-carrito/",
+        PedidoMasivoVaciarCarritoAPIView.as_view(),
+        name="api_pedido_masivo_vaciar_carrito",
     ),
     path(
         "api/mayoristapp/pedido-masivo/articulos/",

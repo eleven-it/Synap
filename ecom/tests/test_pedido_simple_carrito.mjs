@@ -54,6 +54,33 @@ test('pedido simple guarda las cantidades de varios artículos y despliega el ca
   assert.equal(app.esperaOperacion, false);
 });
 
+test('vaciar el carrito pide confirmación y quita todos los renglones en una sola operación', async () => {
+  const app = appEditable(true);
+  app.articulos = [{ id_articulo: 10, nombre: 'A' }, { id_articulo: 11, nombre: 'B' }];
+  app.celdas = { '10:7': '2', '11:7': '3' };
+  app.urls = { vaciar_carrito_simple: '/vaciar' };
+  app._yieldUi = async () => {};
+  app.mostrarAviso = () => {};
+  let confirmar;
+  let solicitudes = 0;
+  app.abrirDialogo = (_tipo, opciones) => { confirmar = opciones.onConfirm; };
+  app.postJson = async (url, body) => {
+    solicitudes += 1;
+    assert.equal(url, '/vaciar');
+    assert.deepEqual(body, { draft_id: 1 });
+    return { data: { ok: true, matriz: { articulos: [], celdas: {} } } };
+  };
+  app.aplicarMatriz = () => { app.articulos = []; app.celdas = {}; };
+
+  app.solicitarVaciarCarritoSimple();
+  assert.equal(solicitudes, 0);
+  assert.equal(app.carritoItems.length, 2);
+  assert.equal(await confirmar(), true);
+  assert.equal(solicitudes, 1);
+  assert.equal(app.carritoItems.length, 0);
+  assert.equal(app.esperaOperacion, false);
+});
+
 test('la cantidad editada en el carrito se guarda solo al pulsar Actualizar', async () => {
   const app = appEditable(true);
   app.articulos = [{ id_articulo: 10, nombre: 'A' }];
