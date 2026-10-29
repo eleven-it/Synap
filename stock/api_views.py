@@ -795,6 +795,7 @@ def api_campana_autorizar(request, id_campana):
         id_puesto=ctx.get("id_puesto"),
         pendientes_cliente=pendientes_cliente,
         id_punto_venta=ctx.get("id_punto_venta") or 1,
+        aceptar_descuadre=data.get("aceptar_descuadre") is True,
     )
     if not ok:
         status = 409 if result.get("bloqueado") else 400
@@ -806,6 +807,7 @@ def api_campana_autorizar(request, id_campana):
         "movimientos_mstock": result.get("movimientos_mstock", 0),
         "lineas_ajustadas": result.get("lineas_ajustadas", 0),
         "codigo_movimiento": result.get("codigo_movimiento"),
+        "descuadre_aceptado": result.get("descuadre_aceptado", 0),
         "mensaje": "Campaña aplicada. Ajustes MSTOCK generados.",
     })
 
