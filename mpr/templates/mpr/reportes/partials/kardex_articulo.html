@@ -250,8 +250,8 @@
     {% if not filas %}
     {% include "mpr/reportes/partials/empty_state.html" with empty_titulo="Sin movimientos que muevan stock en el rango para este artículo" empty_cta_url="mpr:tablero_produccion" empty_cta_label="Ver tablero de producción" %}
     {% else %}
-    {# Un solo scrollport: #mpr-reportes-scroll. thead sticky con fondo opaco.
-       Sin máscara hacia arriba: tapaba Saldo inicial / cierre (hermanos del table). #}
+    {% comment %}Un solo scrollport: #mpr-reportes-scroll. thead sticky con fondo opaco.
+       Sin máscara hacia arriba: tapaba Saldo inicial / cierre (hermanos del table).{% endcomment %}
     <div class="relative z-0 rounded-lg border border-slate-200 dark:border-slate-700"
          role="region"
          aria-label="Movimientos del período con encabezado fijo">
