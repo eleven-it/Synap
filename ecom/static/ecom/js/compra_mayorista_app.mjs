@@ -158,6 +158,12 @@ function compraMayoristaCore() {
 
     _limpiarClienteUi() {
       this.clienteActivo = null;
+      this.idClienteDomicilio = null;
+      this.idRuta = null;
+      this.idTransporte = null;
+      this.nroSeguimiento = '';
+      this.linkSeguimiento = '';
+      this.domiciliosCliente = [];
       this.clienteActivoLabel = '';
       this.creditoWidget = null;
       this.listaPrecio = '';

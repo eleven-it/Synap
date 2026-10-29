@@ -9,8 +9,9 @@ from ecom.services.pedido_masivo_matriz import credito_cliente_masivo
 
 
 class PedidoMasivoMatrizCreditoTests(SimpleTestCase):
+    @patch("ecom.services.pedido_masivo_matriz.dias_atraso", return_value=12)
     @patch("ecom.services.pedido_masivo_matriz.get_mysql_pool")
-    def test_separa_cupo_monetario_y_limite_dias(self, mock_pool):
+    def test_separa_cupo_monetario_y_limite_dias(self, mock_pool, mock_atraso):
         conn = MagicMock()
         cursor = MagicMock()
         mock_pool.return_value.get_connection.return_value.__enter__.return_value = conn
@@ -23,6 +24,8 @@ class PedidoMasivoMatrizCreditoTests(SimpleTestCase):
         self.assertEqual(res["saldo"], 1500.50)
         self.assertEqual(res["credito_cupo"], 50000.0)
         self.assertEqual(res["credito_limite_dias"], 30)
+        self.assertEqual(res["dias_vencidos"], 12)
+        mock_atraso.assert_called_once_with(cursor, 42)
         self.assertNotEqual(res["credito_cupo"], res["credito_limite_dias"])
         sql = cursor.execute.call_args[0][0].lower()
         self.assertIn("credito_limite_dias", sql)
@@ -38,4 +41,4 @@ class PedidoMasivoMatrizCreditoTests(SimpleTestCase):
 
         res = credito_cliente_masivo("emp1", 99)
 
-        self.assertEqual(res, {"saldo": 0.0, "credito_cupo": 0.0, "credito_limite_dias": 0})
+        self.assertEqual(res, {"saldo": 0.0, "credito_cupo": 0.0, "credito_limite_dias": 0, "dias_vencidos": 0})

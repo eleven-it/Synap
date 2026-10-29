@@ -38,10 +38,17 @@ def cabecera_comprobante_relay(
             cp.id_pv AS id_punto_venta,
             cp.id_deposito_despacho AS id_deposito,
             cp.FormaEntrega AS forma_entrega,
+            cda.id_cliente_domicilio AS id_cliente_domicilio,
+            cda.id_ruta AS id_ruta,
+            cda.id_transporte AS id_transporte,
+            cda.id_repartidor AS id_repartidor,
+            cda.operador_logistico AS operador_logistico,
+            cda.nro_seguimiento AS nro_seguimiento,
             cp.Detalle AS observaciones,
             cliente.descuento_por_cli AS descuento_cliente
         FROM comp_ped cp
         LEFT JOIN cliente ON cliente.Codigo = cp.Codigo
+        LEFT JOIN cliente_datos_adicionales cda ON cda.CodigoMovimiento = cp.CodigoMovimiento
         WHERE cp.CodigoMovimiento = %s AND cp.TipoComprobante = %s
         LIMIT 1
     """
@@ -144,6 +151,12 @@ def convertir_presupuesto_a_pedido(
         tipo=EcomCart.TIPO_PEDIDO,
         id_punto_venta=id_punto_venta,
         forma_entrega=forma_entrega or str(cab.get("forma_entrega") or ""),
+        id_cliente_domicilio=to_int_or_none(cab.get("id_cliente_domicilio")),
+        id_ruta=to_int_or_none(cab.get("id_ruta")),
+        id_transporte=to_int_or_none(cab.get("id_transporte")),
+        id_repartidor=to_int_or_none(cab.get("id_repartidor")),
+        operador_logistico=str(cab.get("operador_logistico") or ""),
+        nro_seguimiento=str(cab.get("nro_seguimiento") or ""),
         observaciones=observaciones or str(cab.get("observaciones") or ""),
         es_cliente=es_cliente,
         cod_mov_presupuesto_origen=cod_mov_pre,
