@@ -215,6 +215,7 @@ function pedidoMasivoCore() {
     tecladoCantidadValor: '',
     tecladoCantidadReemplazar: true,
     guardandoCantidadSimple: false,
+    vaciandoCarritoSimple: false,
     fichaArticuloAbierta: false,
     fichaArticulo: null,
     fichaDetalle: null,
@@ -442,7 +443,14 @@ function pedidoMasivoCore() {
         if (!this.modoSimple && guardado === '1') this.contextoAbierto = true;
       } catch { /* sessionStorage no disponible */ }
       this.cargarCarteraVendedor();
-      this.buscarClientes();
+      if (this.modoSimple && !boot.cod_mov && !boot.draft_id) {
+        this._iniciarEspera('Cargando selección de clientes…');
+        this.buscarClientes()
+          .catch(() => this.mostrarAviso('No se pudo cargar la lista de clientes.', 'error'))
+          .finally(() => this._finEspera());
+      } else {
+        this.buscarClientes();
+      }
       // Prioridad: abrir PED (cod_mov) → recuperar borrador → nuevo simple.
       if (boot.cod_mov) {
         this.modoSimple = true;
@@ -1238,14 +1246,20 @@ function pedidoMasivoCore() {
     async buscarClientes() {
       if (!this.urls.clientes) return;
       this.cargandoCli = true;
-      const data = await this.getJson(this.urls.clientes + '?q=' + encodeURIComponent(this.qCliente || ''));
-      this.cargandoCli = false;
-      if (data.ok) {
-        this.clientes = data.items || [];
-        this.idxCli = 0;
-      } else {
-        if (data.error) this.mostrarAviso(data.error, 'error');
+      try {
+        const data = await this.getJson(this.urls.clientes + '?q=' + encodeURIComponent(this.qCliente || ''));
+        if (data.ok) {
+          this.clientes = data.items || [];
+          this.idxCli = 0;
+        } else {
+          if (data.error) this.mostrarAviso(data.error, 'error');
+          this.clientes = [];
+        }
+      } catch {
+        this.mostrarAviso('No se pudo cargar la lista de clientes.', 'error');
         this.clientes = [];
+      } finally {
+        this.cargandoCli = false;
       }
     },
     async abrirCliente() {
@@ -1712,6 +1726,44 @@ function pedidoMasivoCore() {
         String(this.celda(art.id_articulo, this.sucursales[0].id_cliente_domicilio)),
       ]));
       this.carritoAbierto = true;
+    },
+    solicitarVaciarCarritoSimple() {
+      if (!this.modoSimple || !this.matrizEditable || !this.carritoItems.length || this.vaciandoCarritoSimple) return;
+      this.abrirDialogo('vaciar', {
+        titulo: 'Vaciar carrito',
+        mensaje: 'Se quitarán todos los artículos de este pedido. ¿Querés continuar?',
+        confirmarTexto: 'Quitar todos',
+        cancelarTexto: 'Conservar artículos',
+        onConfirm: () => this.vaciarCarritoSimple(),
+      });
+    },
+    async vaciarCarritoSimple() {
+      if (!this.modoSimple || !this.matrizEditable || !this.carritoItems.length || this.vaciandoCarritoSimple) return false;
+      if (!this.draftId || !this.urls.vaciar_carrito_simple) {
+        this.mostrarAviso('No se encontró el borrador del pedido.', 'error');
+        return false;
+      }
+      this.vaciandoCarritoSimple = true;
+      this._iniciarEspera('Quitando artículos del carrito…');
+      try {
+        await this._yieldUi();
+        const { data } = await this.postJson(this.urls.vaciar_carrito_simple, { draft_id: this.draftId });
+        if (!data?.ok || !data.matriz) {
+          this.mostrarAviso(data?.error || 'No se pudo vaciar el carrito.', 'error');
+          return false;
+        }
+        this.aplicarMatriz(data.matriz);
+        this.cantidadesCarrito = {};
+        this.carritoEnLineaAbierto = false;
+        this.mostrarAviso('Se quitaron todos los artículos del carrito.', 'success');
+        return true;
+      } catch {
+        this.mostrarAviso('No se pudo vaciar el carrito. Intentá de nuevo.', 'error');
+        return false;
+      } finally {
+        this._finEspera();
+        this.vaciandoCarritoSimple = false;
+      }
     },
     async agregarArticuloSeleccionadoSimple(articulo) {
       const domicilio = this.sucursales[0]?.id_cliente_domicilio;
@@ -2759,7 +2811,10 @@ function pedidoMasivoCore() {
     /** Mismo destino que el Hub: captura limpia simple o masiva. */
     onNuevoSimple() {
       const u = this.urls.nuevo_simple;
-      if (u) window.location.href = u;
+      if (u) {
+        this._iniciarEspera('Abriendo nuevo pedido…');
+        setTimeout(() => { window.location.href = u; }, 30);
+      }
     },
     onNuevoMismoCliente() {
       if (!this.modoSimple || !this.idCliente) return;
