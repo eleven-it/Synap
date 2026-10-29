@@ -27,7 +27,7 @@ from ecom.services.ecom_config_mysql import (
     aprobacion_pedidos_activa,
     credito_pedidos_activo,
 )
-from ecom.services.pedido_permisos import puede_ver_todos_pedidos
+from ecom.services.pedido_permisos import puede_ver_todos_pedidos, puesto_ve_todos_pedidos
 
 logger = logging.getLogger(__name__)
 
@@ -477,19 +477,39 @@ def _columna_ped_mysql(
     return "enviado"
 
 
+def _es_vendedor_de_pedidos(sess_user: Dict[str, Any]) -> bool:
+    """Preventista o vendedor de puesto común: en Pedidos ve solo su CodViajante."""
+    if puesto_ve_todos_pedidos(sess_user):
+        return False
+    puesto = str(sess_user.get("nombre_puesto") or "").strip().lower()
+    tipo = str(sess_user.get("tipousuario") or "").strip().lower()
+    return tipo == "vendedor" or puesto.startswith(("vendedor", "preventista"))
+
+
+def _cod_viajante_propio(sess_user: Dict[str, Any]) -> Optional[int]:
+    return to_int_or_none(
+        sess_user.get("id_vendedor_usr")
+        or sess_user.get("CodViajante")
+        or sess_user.get("cod_viajante")
+    )
+
+
 def _draft_en_alcance_hub(
     draft: EcomPedidoMasivoDraft,
     sess_user: Dict[str, Any],
     base_empresa: str,
 ) -> bool:
     """Draft confirmado visible en el hub según usuario y alcance comercial."""
-    id_u = to_int_or_none(sess_user.get("id_usuario"))
-    if id_u is not None and draft.id_usuario == id_u:
-        return True
     tipousuario = (sess_user.get("tipousuario") or "").strip().lower()
     if tipousuario == "cliente":
         idc = to_int_or_none(sess_user.get("idcliente") or sess_user.get("Codigo"))
         return idc is not None and draft.id_cliente == idc
+    if _es_vendedor_de_pedidos(sess_user):
+        propio = _cod_viajante_propio(sess_user)
+        return propio is not None and to_int_or_none(draft.cod_viajante) == propio
+    id_u = to_int_or_none(sess_user.get("id_usuario"))
+    if id_u is not None and draft.id_usuario == id_u:
+        return True
     # Puestos gerenciales / permiso ver_todos: sin filtro de viajante.
     if puede_ver_todos_pedidos(sess_user):
         return True
@@ -823,6 +843,15 @@ def _pedidos_mysql(
         if idc is not None:
             where.append("cp.Codigo = %s")
             params.append(idc)
+        else:
+            where.append("1 = 0")
+    elif _es_vendedor_de_pedidos(sess_user):
+        propio = _cod_viajante_propio(sess_user)
+        if propio is None:
+            where.append("1 = 0")
+        else:
+            where.append("cp.CodViajante = %s")
+            params.append(propio)
     elif puede_ver_todos_pedidos(sess_user):
         # Supervisor / Supervisor venta / Administracion, todos_clientes o
         # ecom.pedidos.ver_todos: sin filtro CodViajante (ven todos los PED).

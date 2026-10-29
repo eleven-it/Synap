@@ -10,6 +10,7 @@ from ecom.models import EcomCart, EcomCartItem, EcomPedidoMasivoDraft, EcomPedid
 from ecom.services.pedidos_hub_pipeline import (
     _columna_lote_desde_contexto,
     _columna_ped_mysql,
+    _draft_en_alcance_hub,
     _etiqueta_sucursal,
     _etiqueta_sucursal_kanban,
     _nro_sucursal,
@@ -535,10 +536,16 @@ class TestConstruirHub(TestCase):
 
 
 class TestPedidosMysqlAlcance(TestCase):
+    def test_draft_de_otro_viajante_no_es_propio_aunque_lo_creo_el_usuario(self):
+        draft = MagicMock(id_usuario=77, cod_viajante=20)
+        sess = {"id_usuario": 77, "id_vendedor_usr": 10, "nombre_puesto": "Vendedor"}
+        self.assertFalse(_draft_en_alcance_hub(draft, sess, "emp_hub"))
+
+    @patch("ecom.services.pedidos_hub_pipeline.credito_pedidos_activo", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial", return_value=[10, 20, 21])
     @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
-    def test_vendedor_filtra_por_alcance(self, mock_cursor_ctx, mock_alcance, _apr):
+    def test_vendedor_ve_solo_pedidos_propios(self, mock_cursor_ctx, mock_alcance, _apr, _cred):
         cursor = MagicMock()
         cursor.fetchall.return_value = []
 
@@ -550,14 +557,45 @@ class TestPedidosMysqlAlcance(TestCase):
 
         _pedidos_mysql(
             "emp_hub",
-            {"id_vendedor_usr": 10, "synap_permisos": [], "nombre_puesto": "Vendedor"},
+            {"id_vendedor_usr": 10, "synap_permisos": [], "nombre_puesto": "Vendedores ecom", "todos_clientes": "Si"},
         )
-        mock_alcance.assert_called_once()
+        mock_alcance.assert_not_called()
         sql = cursor.execute.call_args[0][0]
         params = cursor.execute.call_args[0][1]
-        self.assertIn("CodViajante IN", sql)
-        self.assertEqual(params[:3], [10, 20, 21])
-        self.assertEqual(params[3], 5000)
+        self.assertIn("cp.CodViajante = %s", sql)
+        self.assertNotIn("CodViajante IN", sql)
+        self.assertEqual(params, [10, 5000])
+
+    @patch("ecom.services.pedidos_hub_pipeline.credito_pedidos_activo", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
+    def test_preventista_sin_viajante_no_ve_pedidos(self, mock_cursor_ctx, _apr, _cred):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _fake_cursor
+        _pedidos_mysql("emp_hub", {"nombre_puesto": "Preventista"})
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("1 = 0", sql)
+
+    @patch("ecom.services.pedidos_hub_pipeline.credito_pedidos_activo", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
+    def test_cliente_sin_id_no_ve_pedidos(self, mock_cursor_ctx, _apr, _cred):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _fake_cursor
+        _pedidos_mysql("emp_hub", {"tipousuario": "cliente"})
+        self.assertIn("1 = 0", cursor.execute.call_args[0][0])
 
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial", return_value=[10])
