@@ -6,7 +6,7 @@
 {% block content %}
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
-<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=7">
+<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=8">
 
 <section class="pm-matrix-viewport pm-matrix-viewport--sin-desc flex min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible {% if pm_embed %}h-full{% else %}h-[calc(100dvh-4.5rem)]{% endif %}"
          x-data="pedidoMasivoApp()"
@@ -864,12 +864,17 @@
                @focusout="onFocusOutBuscadorArt($event)"
                @click.outside="cerrarPanelArt()">
             <div x-show="busquedaArtMovilActiva" x-cloak class="pm-art-mobile-head">
-              <div>
+              <div class="pm-art-mobile-head-title">
                 <strong>Buscar artículos</strong>
-                <span x-show="cantidadSeleccionados > 0" x-text="cantidadSeleccionados + ' seleccionados'"></span>
               </div>
-              <button type="button" @click.stop="$refs.pmArtInputMob.blur(); cerrarPanelArt()"
-                      aria-label="Cerrar búsqueda de artículos">Cerrar</button>
+              <div class="pm-art-mobile-head-actions">
+                <button type="button" x-show="modoSimple && cantidadSeleccionados > 0" x-cloak
+                        class="pm-art-mobile-review" @mousedown.stop.prevent="null" @click.stop.prevent="abrirSeleccionSimple()"
+                        :aria-label="'Ver ' + cantidadSeleccionados + ' artículos seleccionados'"
+                        x-text="'Ver (' + cantidadSeleccionados + ')'"></button>
+                <button type="button" @click.stop="$refs.pmArtInputMob.blur(); cerrarPanelArt()"
+                        aria-label="Cerrar búsqueda de artículos">Cerrar</button>
+              </div>
             </div>
             <label class="sr-only" for="pm-art-mob">Agregar artículo</label>
             <div class="pm-art-mobile-field flex items-center gap-1">
@@ -934,7 +939,7 @@
                    </li>
                 </template>
               </ul>
-              <div x-show="modoSimple && cantidadSeleccionados > 0" x-cloak class="pm-simple-search-review">
+              <div x-show="modoSimple && cantidadSeleccionados > 0 && !busquedaArtMovilActiva" x-cloak class="pm-simple-search-review">
                 <button type="button" @mousedown.stop.prevent="null" @click.stop.prevent="abrirSeleccionSimple()">
                   <span class="material-icons" aria-hidden="true">playlist_add_check</span>
                   <span x-text="'Revisar ' + cantidadSeleccionados + ' seleccionados'"></span>
