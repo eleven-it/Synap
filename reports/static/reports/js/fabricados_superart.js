@@ -42,14 +42,16 @@
 
   function syncUrlFromForm() {
     const params = new URLSearchParams();
-    const desde = document.getElementById("fsa_desde")?.value;
-    const hasta = document.getElementById("fsa_hasta")?.value;
+    const desde = document.getElementById("fecha_inicio")?.value;
+    const hasta = document.getElementById("fecha_fin")?.value;
     const pres = document.getElementById("fsa_presentacion")?.value;
     if (desde) params.set("desde", desde);
     if (hasta) params.set("hasta", hasta);
     if (pres) params.set("presentacion", pres);
     readMultiSelect("marcas_incluidos").forEach((v) => params.append("marcas_incluidos", v));
+    readMultiSelect("marcas_excluidos").forEach((v) => params.append("marcas_excluidos", v));
     readMultiSelect("superarts_incluidos").forEach((v) => params.append("q_superart", v));
+    readMultiSelect("superarts_excluidos").forEach((v) => params.append("superarts_excluidos", v));
     const next = `${window.location.pathname}?${params.toString()}`;
     if (window.location.href.split("?")[0] + (window.location.search ? "?" + params.toString() : "") !== next) {
       window.history.replaceState({}, "", next);
@@ -61,90 +63,89 @@
     const desde = params.get("desde");
     const hasta = params.get("hasta");
     const pres = params.get("presentacion");
-    if (desde) document.getElementById("fsa_desde").value = desde;
-    if (hasta) document.getElementById("fsa_hasta").value = hasta;
+    const inicio = document.getElementById("fecha_inicio");
+    const fin = document.getElementById("fecha_fin");
+    if (desde || hasta) {
+      // Fechas explícitas en URL ⇒ período personalizado (mismo control que Ventas por artículo).
+      const personalizado = document.querySelector('.periodo-tipo-btn[data-periodo="personalizado"]');
+      if (personalizado) personalizado.click();
+      if (inicio) {
+        inicio.disabled = false;
+        if (desde) inicio.value = desde;
+      }
+      if (fin) {
+        fin.disabled = false;
+        if (hasta) fin.value = hasta;
+      }
+    }
     if (pres) document.getElementById("fsa_presentacion").value = pres;
-    const marcasSel = document.getElementById("marcas_incluidos");
-    const superSel = document.getElementById("superarts_incluidos");
-    const marcas = params.getAll("marcas_incluidos");
-    const superarts = params.getAll("q_superart");
-    if (marcasSel && marcas.length) {
-      marcasSel.innerHTML = "";
-      marcas.forEach((v) => {
+    [
+      ["marcas_incluidos", "marcas_incluidos"],
+      ["marcas_excluidos", "marcas_excluidos"],
+      ["superarts_incluidos", "q_superart"],
+      ["superarts_excluidos", "superarts_excluidos"],
+    ].forEach(([id, param]) => {
+      const sel = document.getElementById(id);
+      const vals = params.getAll(param);
+      if (!sel || !vals.length) return;
+      sel.innerHTML = "";
+      vals.forEach((v) => {
         const opt = document.createElement("option");
         opt.value = v;
         opt.textContent = v;
         opt.selected = true;
-        marcasSel.appendChild(opt);
+        sel.appendChild(opt);
       });
-    }
-    if (superSel && superarts.length) {
-      superSel.innerHTML = "";
-      superarts.forEach((v) => {
-        const opt = document.createElement("option");
-        opt.value = v;
-        opt.textContent = v;
-        opt.selected = true;
-        superSel.appendChild(opt);
-      });
-    }
+    });
+  }
+
+  async function fetchMarcas(q) {
+    const resp = await fetch(`${marcasUrl}?q=${encodeURIComponent(q)}&limit=25`, {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.marcas || []).map((m) => ({ value: String(m.value), label: m.label }));
+  }
+
+  async function fetchSuperarts(q) {
+    const resp = await fetch(`${superartUrl}?q=${encodeURIComponent(q)}&limit=25`, {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.superarts || []).map((s) => ({
+      value: String(s.codigo || ""),
+      label: s.descripcion || s.codigo || "",
+    }));
   }
 
   async function initTagsFilters() {
     if (tagsReady || !window.initializeTagsFilter) return;
     tagsReady = true;
+    const specs = [];
     if (marcasUrl) {
-      window.initializeTagsFilter("marcas_incluidos", "marcas", null, {
-        remoteSearch: {
-          minChars: 1,
-          fetchFn: async (q) => {
-            const resp = await fetch(`${marcasUrl}?q=${encodeURIComponent(q)}&limit=25`, {
-              headers: { Accept: "application/json" },
-              credentials: "same-origin",
-            });
-            if (!resp.ok) return [];
-            const data = await resp.json();
-            return (data.marcas || []).map((m) => ({
-              value: String(m.value),
-              label: m.label,
-            }));
-          },
-        },
-      });
-      document.getElementById("marcas_incluidos")?.addEventListener("change", debouncedApply);
+      specs.push(["marcas_incluidos", "marcas", fetchMarcas]);
+      specs.push(["marcas_excluidos", "marcas", fetchMarcas]);
     }
     if (superartUrl) {
-      window.initializeTagsFilter("superarts_incluidos", "superart", null, {
-        remoteSearch: {
-          minChars: 1,
-          fetchFn: async (q) => {
-            const resp = await fetch(`${superartUrl}?q=${encodeURIComponent(q)}&limit=25`, {
-              headers: { Accept: "application/json" },
-              credentials: "same-origin",
-            });
-            if (!resp.ok) return [];
-            const data = await resp.json();
-            return (data.superarts || []).map((s) => ({
-              value: String(s.codigo || ""),
-              label: s.descripcion || s.codigo || "",
-            }));
-          },
-        },
-      });
-      document.getElementById("superarts_incluidos")?.addEventListener("change", debouncedApply);
+      specs.push(["superarts_incluidos", "superart", fetchSuperarts]);
+      specs.push(["superarts_excluidos", "superart", fetchSuperarts]);
     }
+    specs.forEach(([id, kind, fetchFn]) => {
+      if (!document.getElementById(id)) return;
+      window.initializeTagsFilter(id, kind, null, { remoteSearch: { minChars: 1, fetchFn } });
+      document.getElementById(id)?.addEventListener("change", debouncedApply);
+    });
   }
 
-  function bindPanel() {
-    const toggle = document.getElementById("fsa-toggle-panel");
-    const panel = document.getElementById("fsa-panel");
-    const icon = document.getElementById("fsa-toggle-icon");
-    toggle?.addEventListener("click", () => {
-      const open = panel?.classList.toggle("hidden") === false;
-      if (icon) icon.textContent = open ? "expand_more" : "chevron_right";
-      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  function bindFilterChanges() {
+    document.querySelectorAll(".periodo-tipo-btn").forEach((btn) => {
+      btn.addEventListener("click", debouncedApply);
     });
-    ["fsa_desde", "fsa_hasta", "fsa_presentacion"].forEach((id) => {
+    ["fecha_inicio", "fecha_fin", "fsa_presentacion"].forEach((id) => {
       document.getElementById(id)?.addEventListener("change", debouncedApply);
     });
   }
@@ -200,11 +201,11 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     hydrateFormFromUrl();
-    bindPanel();
+    bindFilterChanges();
     const mod = document.createElement("script");
     mod.type = "module";
     mod.textContent = `
-      import { initializeTagsFilter } from "/static/reports/js/tags_filter.mjs?v=20261027c";
+      import { initializeTagsFilter } from "/static/reports/js/tags_filter.mjs?v=20261029a";
       window.initializeTagsFilter = initializeTagsFilter;
       document.dispatchEvent(new CustomEvent("fsa-tags-ready"));
     `;

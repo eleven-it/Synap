@@ -20,6 +20,7 @@ from reports.services.pedidos_pendientes_produccion_calcs import (
     build_pv_sql,
     build_viajante_sql,
     classify_depositos_stock_columns,
+    attach_clientes_detalle,
     enrich_articulo_row,
     sql_unidad_base_group_by_suffix,
     sql_unidad_base_join,
@@ -198,15 +199,7 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
     params_bo.extend(busq_params)
     params_bo.extend(filt_art_params)
 
-    sql_pendiente = f"""
-        SELECT
-            sp.IDArt AS id_art,
-            COALESCE(a.id_manual, '') AS cod_manual,
-            COALESCE(a.NombreArticulo, '') AS articulo,
-            COALESCE(m.NombreMarca, '') AS marca,
-            {sql_unidad_base_select()},
-            SUM({qty_sql}) AS pendiente_qty,
-            {importe_expr} AS importe_pendiente
+    from_where = f"""
         FROM stockp sp
         INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
         LEFT JOIN articulo a ON a.IDArt = sp.IDArt
@@ -227,7 +220,18 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
           {busq_sql}
           AND {sql_excluir_tipo_art_gasto("a")}
           {filt_art_sql}
-        GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, m.NombreMarca{sql_unidad_base_group_by_suffix()}
+    """
+
+    sql_pendiente = f"""
+        SELECT
+            sp.IDArt AS id_art,
+            COALESCE(a.id_manual, '') AS cod_manual,
+            COALESCE(a.NombreArticulo, '') AS articulo,
+            COALESCE(m.NombreMarca, '') AS marca,
+            {sql_unidad_base_select()},
+            SUM({qty_sql}) AS pendiente_qty,
+            {importe_expr} AS importe_pendiente
+{from_where}        GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, m.NombreMarca{sql_unidad_base_group_by_suffix()}
         HAVING pendiente_qty > 0
         ORDER BY pendiente_qty DESC
     """
@@ -253,6 +257,27 @@ def run_pedidos_pendientes_produccion(report, payload: Dict, user) -> QueryResul
                 "stock_produccion": 0.0,
             }
         )
+
+    if id_arts:
+        # Desglose por cliente (misma base/filtros) para agrupación anidada por Cliente.
+        from_where_clientes = from_where.replace(
+            "        WHERE cp.TipoComprobante = 'PED'",
+            "        LEFT JOIN cliente cli ON cli.Codigo = cp.Codigo\n        WHERE cp.TipoComprobante = 'PED'",
+            1,
+        )
+        sql_clientes = f"""
+            SELECT
+                sp.IDArt AS id_art,
+                cp.Codigo AS id_cliente,
+                COALESCE(MAX(cli.nombre_cliente), '') AS cliente,
+                SUM({qty_sql}) AS pendiente_qty,
+                {importe_expr} AS importe_pendiente
+            {from_where_clientes}
+            GROUP BY sp.IDArt, cp.Codigo
+            HAVING pendiente_qty > 0
+        """
+        cursor.execute(sql_clientes, params_bo)
+        attach_clientes_detalle(articulos, cursor.fetchall() or [])
 
     reserva_map: Dict[int, float] = {}
     if id_arts:
