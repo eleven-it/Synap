@@ -5,12 +5,17 @@ from __future__ import annotations
 from django.urls import path
 
 from ecom.mayoristapp_listado_config import MAYORISTAPP_LISTADOS, PORTAL_CLIENTE_LISTADOS
-from ecom.mayoristapp_listado_views import ClientesMayoristappView, listado_view_factory
+from ecom.mayoristapp_listado_views import CobranzasCarteraMayoristappView, ClientesMayoristappView, listado_view_factory
 
 
 def mayoristapp_listado_urlpatterns():
     """Genera urlpatterns para shells F1/F2."""
     patterns = [
+        path(
+            "mayoristapp/cobranzas-cartera/",
+            CobranzasCarteraMayoristappView.as_view(),
+            name="mayoristapp_cobranzas_cartera",
+        ),
         path(
             "mayoristapp/clientes/",
             ClientesMayoristappView.as_view(),

@@ -783,6 +783,13 @@ APPS_MENU = [
                         "menu_item_id": "ecom_clientes",
                     },
                     {
+                        "label": _("Cobranzas de cartera"),
+                        "url": "ecom:mayoristapp_cobranzas_cartera",
+                        "icon": "account_balance_wallet",
+                        "permission": "ecom.ctacte.ver",
+                        "menu_item_id": "ecom_cobranzas_cartera",
+                    },
+                    {
                         "label": _("Promociones"),
                         "url": "ecom:mayoristapp_listado_promociones",
                         "icon": "sell",

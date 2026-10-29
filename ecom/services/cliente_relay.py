@@ -14,6 +14,25 @@ from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import to_int_or_none
 
 from ecom.services.vendedor_asignacion_sql import where_vendedor_cliente
+from ecom.services.pedido_permisos import puesto_ve_todos_pedidos
+
+
+def _sesion_para_cartera(sess_user: Dict[str, Any], solo_cartera: bool) -> Dict[str, Any]:
+    """En cobranzas, Vendedor/Preventista usa su viajante propio aun con acceso comercial ampliado."""
+    if not solo_cartera or puesto_ve_todos_pedidos(sess_user):
+        return sess_user
+    puesto = str(sess_user.get("nombre_puesto") or "").strip().lower()
+    tipo = str(sess_user.get("tipousuario") or "").strip().lower()
+    if tipo != "vendedor" and not puesto.startswith(("vendedor", "preventista")):
+        return sess_user
+    return {
+        **sess_user,
+        "todos_clientes": "No",
+        "supervisor_venta": "No",
+        "permiso_supervisor_venta_web": "No",
+        "vendedor_a_cargo": [],
+        "cod_viajante_operativo": None,
+    }
 
 
 def _si_no(val: Any, default: str = "No") -> str:
@@ -123,6 +142,7 @@ def buscar_clientes_relay(
     codigo_cliente: str,
     sess_user: Dict[str, Any],
     limit: int = 10,
+    solo_cartera: bool = False,
 ) -> tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Devuelve ``(filas, error)``. Si error, filas vacías.
@@ -169,7 +189,7 @@ def buscar_clientes_relay(
             )
             params.extend(p_params)
 
-    w_viaj, p_viaj = _where_viajante(sess_user, base_empresa)
+    w_viaj, p_viaj = _where_viajante(_sesion_para_cartera(sess_user, solo_cartera), base_empresa)
     params.extend(p_viaj)
 
     lim = max(1, min(int(limit), 50))
@@ -217,6 +237,8 @@ def cliente_accesible_por_sesion(
     base_empresa: str,
     codigo_cliente: int,
     sess_user: Dict[str, Any],
+    *,
+    solo_cartera: bool = False,
 ) -> bool:
     """
     El cliente existe, está activo y cumple restricción de vendedor (paridad búsqueda).
@@ -224,7 +246,7 @@ def cliente_accesible_por_sesion(
     cod_int = to_int_or_none(codigo_cliente)
     if cod_int is None or cod_int == 1:
         return False
-    w_viaj, p_viaj = _where_viajante(sess_user, base_empresa)
+    w_viaj, p_viaj = _where_viajante(_sesion_para_cartera(sess_user, solo_cartera), base_empresa)
     params: List[Any] = [cod_int]
     params.extend(p_viaj)
     sql = f"""

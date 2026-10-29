@@ -24,14 +24,24 @@ def _json_safe_row(item: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _where(body: Dict[str, Any], idcliente: int, prefijo_nro: bool) -> tuple[List[str], List[Any]]:
-    where = [
-        "recibo_factura.TipoComprobante <> 'INIC'",
-        "recibo_factura.TipoComprobante <> 'INID'",
-        "recibo_factura.Saldo <> 0",
-        "recibo_factura.Codigo = %s",
-        "recibo_factura.Anulado = 'No'",
-        "recibo_factura.Estado = 'N/Canc'",
-    ]
+    if body.get("solo_cobranzas") is True:
+        # Reporte de cobranza: facturas pendientes y NC con saldo sin imputar.
+        # Las NC restan en SaldoSigned; ND y recibos pertenecen a cuenta corriente.
+        where = [
+            "recibo_factura.TipoComprobante IN ('FA','FB','FC','FM','FE','NCA','NCB','NCC','NCM','NCE')",
+            "recibo_factura.Saldo > 0",
+            "recibo_factura.Codigo = %s",
+            "recibo_factura.Anulado = 'No'",
+        ]
+    else:
+        where = [
+            "recibo_factura.TipoComprobante <> 'INIC'",
+            "recibo_factura.TipoComprobante <> 'INID'",
+            "recibo_factura.Saldo <> 0",
+            "recibo_factura.Codigo = %s",
+            "recibo_factura.Anulado = 'No'",
+            "recibo_factura.Estado = 'N/Canc'",
+        ]
     params: List[Any] = [idcliente]
     campo = (body.get("campoBusca") or "").strip()
     if campo == "Fecha":
@@ -70,6 +80,8 @@ def listar_no_cancelados_relay(
             recibo_factura.NroComprobante AS NroComprobante,
             recibo_factura.Importe AS Importe,
             recibo_factura.CondVenta AS CondVenta,
+            DATE_FORMAT(recibo_factura.Vencimiento,'%%d/%%m/%%Y') AS FechaVto,
+            DATEDIFF(CURDATE(), recibo_factura.Vencimiento) AS DiasVto,
             recibo_factura.Saldo AS Saldo
         FROM recibo_factura
         WHERE {" AND ".join(where)}
@@ -110,6 +122,8 @@ def listar_no_cancelados_resumen_relay(
             recibo_factura.NroComprobante AS NroComprobante,
             recibo_factura.Importe AS Importe,
             recibo_factura.CondVenta AS CondVenta,
+            DATE_FORMAT(recibo_factura.Vencimiento,'%%d/%%m/%%Y') AS FechaVto,
+            DATEDIFF(CURDATE(), recibo_factura.Vencimiento) AS DiasVto,
             recibo_factura.Saldo AS Saldo
         FROM recibo_factura
         WHERE {" AND ".join(where)}
