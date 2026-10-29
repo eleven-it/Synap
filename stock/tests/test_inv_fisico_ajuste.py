@@ -118,6 +118,15 @@ class BloqueoAutorizacionSyncTest(SimpleTestCase):
 
 
 class AutorizarCampanaServiceTest(SimpleTestCase):
+    def setUp(self):
+        for nombre, valor in (
+            ("verificar_snapshot_vs_kardex", (True, [])),
+            ("mstock_existente_campana", None),
+        ):
+            patcher = patch(f"stock.services.inventario_fisico.{nombre}", return_value=valor)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def _campana_revision(self):
         return {
             "id_campana": 7,
