@@ -29,6 +29,7 @@ def fetch_fabricado_primera_por_articulo_mes(
     meses_yyyy_mm: Sequence[str],
     *,
     marcas_ids: Optional[Sequence[int]] = None,
+    marcas_excluidos_ids: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Fabricado de 1ra selección: Produccion → SemiElaborado por mes de DATE(creado_en).
@@ -46,6 +47,12 @@ def fetch_fabricado_primera_por_articulo_mes(
             ph_m = ",".join(["%s"] * len(ids))
             marca_sql = f" AND a.CodigoMarca IN ({ph_m})"
             params.extend(ids)
+    if marcas_excluidos_ids:
+        ids_ex = [int(m) for m in marcas_excluidos_ids]
+        if ids_ex:
+            ph_ex = ",".join(["%s"] * len(ids_ex))
+            marca_sql += f" AND (a.CodigoMarca IS NULL OR a.CodigoMarca NOT IN ({ph_ex}))"
+            params.extend(ids_ex)
     cursor.execute(
         f"""
         SELECT t.id_articulo,

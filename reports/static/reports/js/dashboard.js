@@ -1,7 +1,7 @@
 // Comentario: Controlador básico para dashboards interactivos con gráficos D3.
 
-import { initializeTagsFilter } from "./tags_filter.mjs?v=20260901b";
-import { resolveVmlPvSelection } from "./vml_pv_default.mjs?v=20261008";
+import { initializeTagsFilter } from "./tags_filter.mjs?v=20261029a";
+import { resolveVmlPvSelection } from "./vml_pv_default.mjs?v=20261029a";
 
 function selectedOptionLabels(selectId, emptyLabel) {
   const sel = document.getElementById(selectId);
@@ -10164,14 +10164,18 @@ if (dashboardRoot) {
         if (q) filters.busqueda = q;
       }
     } else if (isFabricadosSuperartSlug(currentReportSlug)) {
-      const desde = document.getElementById("fsa_desde")?.value;
-      const hasta = document.getElementById("fsa_hasta")?.value;
+      const periodoTipo = document.getElementById("periodo_tipo")?.value;
+      if (periodoTipo) filters.periodo_tipo = periodoTipo;
+      const desde = document.getElementById("fecha_inicio")?.value;
+      const hasta = document.getElementById("fecha_fin")?.value;
       if (desde) filters.desde = filters.fecha_inicio = desde;
       if (hasta) filters.hasta = filters.fecha_fin = hasta;
       const pres = document.getElementById("fsa_presentacion")?.value;
       if (pres) filters.presentacion = pres;
       appendTagMultiFilter("marcas_incluidos", filters, "marcas_incluidos");
+      appendTagMultiFilter("marcas_excluidos", filters, "marcas_excluidos");
       appendTagMultiFilter("superarts_incluidos", filters, "q_superart");
+      appendTagMultiFilter("superarts_excluidos", filters, "superarts_excluidos");
     } else if (isInventarioDepositoSlug(currentReportSlug)) {
       const fechaCorte = document.getElementById("fecha_corte")?.value;
       if (fechaCorte) filters.fecha_corte = fechaCorte;
@@ -10307,7 +10311,8 @@ if (dashboardRoot) {
       slug === "ventas-marca-superart" ||
       slug === "ventas-bom-docenas" ||
       slug === "ventas-marcas-mensual" ||
-      slug === "ventas-mensuales-licenciatarios"
+      slug === "ventas-mensuales-licenciatarios" ||
+      isFabricadosSuperartSlug(slug)
     ) {
       return true;
     }
@@ -10340,6 +10345,10 @@ if (dashboardRoot) {
     "ventas-por-articulo": {
       title: "Cargando ventas por artículo",
       subtitle: "Consultando facturación por artículo, proveedor y cliente…",
+    },
+    "fabricados-superart": {
+      title: "Cargando fabricados por superartículo",
+      subtitle: "Consultando fabricado de 1ra (Producción → Semi elaborado) por mes…",
     },
     "ventas-marca-superart": {
       title: "Cargando ventas por marca y SuperArt",
