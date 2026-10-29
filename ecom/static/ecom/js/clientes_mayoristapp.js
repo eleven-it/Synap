@@ -140,7 +140,13 @@ async function init() {
       const opt = select.querySelector(`option[value="${CSS.escape(cod)}"]`);
       const label = opt ? opt.textContent : cod;
       seleccionarCliente(seleccionarUrl, cod, statusEl).then((ok) => {
-        if (ok) mostrarPanelSeleccion(label);
+        if (!ok) return;
+        mostrarPanelSeleccion(label);
+        const reporteUrl = root.getAttribute("data-reporte-url");
+        if (reporteUrl) {
+          statusEl.textContent = "Cargando reporte…";
+          window.location.assign(reporteUrl);
+        }
       });
     });
   }
