@@ -106,6 +106,9 @@ function mprReportesHub() {
             if (this.presentacion) params.set('presentacion', this.presentacion);
             if (idArt && idArt.value) params.set('id_articulo', idArt.value);
             if (idDep && idDep.value) params.set('id_deposito', idDep.value);
+            const depKardex = document.querySelector('#kardex-filtros-form [name="deposito"]');
+            const depFiltro = depKardex ? depKardex.value : new URLSearchParams(window.location.search).get('deposito');
+            if (depFiltro) params.set('deposito', depFiltro);
             const opActual = new URLSearchParams(window.location.search).get('op');
             if (opActual) params.set('op', opActual);
             window.location.search = '?' + params.toString();
