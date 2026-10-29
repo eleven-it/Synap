@@ -163,8 +163,15 @@ class CobranzasCarteraMayoristappView(ClientesMayoristappView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["page_title"] = "Cobranzas de cartera"
-        context["page_intro"] = "Elegí un cliente de tu cartera para consultar comprobantes a cobrar y cuenta corriente."
+        reporte = self.request.GET.get("reporte", "")
+        destinos = {
+            "cobrar": ("Comprobantes a cobrar por cliente", "ecom:mayoristapp_portal_no_cancelados"),
+            "ctacte": ("Cuenta corriente por cliente", "ecom:mayoristapp_portal_cuenta_corriente"),
+        }
+        context["page_title"] = destinos.get(reporte, ("Cobranzas de cartera", ""))[0]
+        context["page_intro"] = "Elegí un cliente de tu cartera para consultar el reporte."
+        context["reporte_destino"] = reporte if reporte in destinos else ""
+        context["reporte_url"] = reverse(destinos[reporte][1]) if reporte in destinos else ""
         context["clientes_buscar_api"] = f"{context['clientes_buscar_api']}?cartera=1"
         return context
 

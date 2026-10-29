@@ -261,6 +261,16 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
         self.assertTrue(mobile_path_allowed_for_level_a('/reports/builder/'))
         self.assertTrue(mobile_path_allowed_for_level_a('/reports/builder/data-map/'))
 
+    def test_movil_reportes_de_cartera_sin_bloqueo(self):
+        for path in (
+            '/ecom/mayoristapp/cobranzas-cartera/',
+            '/ecom/mayoristapp/portal/no-cancelados/',
+            '/ecom/mayoristapp/portal/cuenta-corriente/',
+        ):
+            self.assertTrue(mobile_path_allowed_for_level_a(path), path)
+            req = _build_request('GET', path, MOBILE_UA, _minimal_session_user())
+            self.assertIsNone(self.mw.process_request(req))
+
     def test_movil_autenticado_command_center_sin_bloqueo(self):
         req = _build_request(
             'GET',

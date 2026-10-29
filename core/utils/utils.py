@@ -168,6 +168,27 @@ APPS_MENU = [
                 ]
             },
             {
+                "seccion": _("Reportes"),
+                "items": [
+                    {
+                        "label": _("Comprobantes a cobrar por cliente"),
+                        "url": "ecom:mayoristapp_cobranzas_cartera",
+                        "url_query": {"reporte": "cobrar"},
+                        "icon": "request_quote",
+                        "permission": "ecom.ctacte.ver",
+                        "menu_item_id": "ventas_rep_comprobantes_cobrar",
+                    },
+                    {
+                        "label": _("Cuenta corriente por cliente"),
+                        "url": "ecom:mayoristapp_cobranzas_cartera",
+                        "url_query": {"reporte": "ctacte"},
+                        "icon": "account_balance_wallet",
+                        "permission": "ecom.ctacte.ver",
+                        "menu_item_id": "ventas_rep_cuenta_corriente",
+                    },
+                ],
+            },
+            {
                 "seccion": _("Ajustes"),
                 "items": [
                     {

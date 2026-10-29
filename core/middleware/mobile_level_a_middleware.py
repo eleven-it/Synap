@@ -90,6 +90,9 @@ _ECOM_PEDIDO_SIMPLE_PAGE_PATTERNS = tuple(
         r'^/ecom/mayoristapp/compra/?$',
         r'^/ecom/mayoristapp/pedidos/?$',
         r'^/ecom/mayoristapp/pedido-masivo-sucursales/?$',
+        r'^/ecom/mayoristapp/cobranzas-cartera/?$',
+        r'^/ecom/mayoristapp/portal/no-cancelados/?$',
+        r'^/ecom/mayoristapp/portal/cuenta-corriente/?$',
     )
 )
 

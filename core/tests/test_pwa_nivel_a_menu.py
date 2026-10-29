@@ -110,6 +110,23 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
             {'ventas_cb_pedidos', 'ventas_cb_nuevo_pedido'},
         )
 
+    def test_movil_ventas_muestra_reportes_de_cartera(self):
+        request = _req(MOBILE_UA)
+        apps = [{
+            'id': 'ventas', 'url': '/ventas/',
+            'submenus': [{'seccion': 'Reportes', 'items': [
+                {'menu_item_id': 'ventas_rep_comprobantes_cobrar', 'url': '/ecom/mayoristapp/cobranzas-cartera/?reporte=cobrar'},
+                {'menu_item_id': 'ventas_rep_cuenta_corriente', 'url': '/ecom/mayoristapp/cobranzas-cartera/?reporte=ctacte'},
+                {'menu_item_id': 'ventas_cb_precios', 'url': '/ventas/precios/'},
+            ]}],
+        }]
+        out = filtrar_apps_menu_para_pwa_movil(apps, request)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(
+            {item['menu_item_id'] for item in out[0]['submenus'][0]['items']},
+            {'ventas_rep_comprobantes_cobrar', 'ventas_rep_cuenta_corriente'},
+        )
+
     @patch('core.pwa_nivel_a.usuario_tiene_mpr_en_menu', return_value=True)
     @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=False)
     @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
@@ -204,11 +221,13 @@ class SidebarPwaTests(SimpleTestCase):
         ids = {i['menu_item_id'] for s in out for i in s['items']}
         self.assertEqual(ids, PWA_ECOM_MENU_ITEM_IDS)
 
-    def test_filtrar_submenus_ventas_solo_pedidos(self):
+    def test_filtrar_submenus_ventas_pedidos_y_reportes(self):
         submenus = [{'seccion': 'Comprobantes', 'items': [
             {'menu_item_id': 'ventas_cb_pedidos'},
             {'menu_item_id': 'ventas_cb_nuevo_pedido'},
             {'menu_item_id': 'ventas_cb_pedido_masivo'},
+            {'menu_item_id': 'ventas_rep_comprobantes_cobrar'},
+            {'menu_item_id': 'ventas_rep_cuenta_corriente'},
             {'menu_item_id': 'ventas_cb_precios'},
         ]}]
         out = filtrar_submenus_ventas_pedidos_para_pwa_movil(submenus)
