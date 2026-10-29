@@ -639,6 +639,22 @@ def calcular_neto_movimientos_post_snapshot(
     return total
 
 
+def calcular_diferencia_real_saldo_actual(
+    cantidad_contada: Any,
+    mov_post_conteo: Any,
+    saldo_actual: Any,
+) -> Optional[Decimal]:
+    """Delta para que el depósito quede en ``contado + Mov.B`` partiendo del saldo real.
+
+    No depende de ``saldo_snapshot``. None si no hay conteo o no se conoce el saldo actual.
+    """
+    contado = to_decimal_or_none(cantidad_contada)
+    actual = to_decimal_or_none(saldo_actual)
+    if contado is None or actual is None:
+        return None
+    return contado + (to_decimal_or_none(mov_post_conteo) or Decimal("0")) - actual
+
+
 def calcular_ajuste_sistema_linea(
     cantidad_contada: Any,
     movimientos: Sequence[Dict[str, Any]],
@@ -1627,6 +1643,7 @@ ACCION_AUDIT_OVERRIDE_GUARDADO = "override_guardado"
 ACCION_AUDIT_OVERRIDE_QUITADO = "override_quitado"
 ACCION_AUDIT_OVERRIDE_PISADO = "override_pisado"
 ACCION_AUDIT_AUTORIZACION = "autorizacion"
+ACCION_AUDIT_DESCUADRE_ACEPTADO = "descuadre_aceptado"
 ACCION_AUDIT_CONTADO_CERO_MASIVO = "contado_cero_masivo"
 
 MOTIVO_CONTADO_CERO_SUPERVISOR = "Supervisor: no encontrado / contado 0"
@@ -2070,14 +2087,39 @@ def _fetch_saldos_deposito(
     return out
 
 
+def _fetch_saldo_kardex(cursor, id_articulo: int, id_deposito: int) -> Optional[Decimal]:
+    """Saldo actual según kardex: Σ(Entrada − Salida) de filas de ``stock`` que movieron
+    el depósito (misma regla que el kardex, ``_filtro_movimiento_efectivo_deposito``)."""
+    tbl_stock = _nombre_tabla(cursor, "stock")
+    if not tbl_stock:
+        return None
+    ts = tbl_stock.replace("`", "``")
+    filtro = _filtro_movimiento_efectivo_deposito(cursor, tbl_stock)
+    cursor.execute(
+        f"SELECT COALESCE(SUM(COALESCE(s.Entrada, 0)) - SUM(COALESCE(s.Salida, 0)), 0) AS saldo "
+        f"FROM `{ts}` s WHERE s.IDArt = %s AND s.CodDeposito = %s {filtro}",
+        [id_articulo, id_deposito],
+    )
+    row = cursor.fetchone() or {}
+    return to_decimal_or_none(row.get("saldo")) or Decimal("0")
+
+
 def recalcular_ajuste_post_snapshot(
     base_empresa: str,
     id_campana: int,
     *,
     id_usuario: int,
     pisar_overrides: bool = False,
+    base_saldo_actual: bool = False,
 ) -> Tuple[bool, Dict[str, Any]]:
     """Persiste ajuste_sistema, saldo_actual_ref y diferencia_real por línea.
+
+    ``base_saldo_actual=True`` (lo usa la autorización): para líneas contadas sin
+    override manual, ``diferencia_real = contado + Mov.B − saldo_kardex_actual`` donde Mov.B
+    son los movimientos efectivos posteriores al conteo y el saldo sale del kardex
+    (no de ``stock_deposito``). Tras el MSTOCK el kardex queda en ``contado + Mov.B``
+    aunque ``saldo_snapshot`` esté descuadrado (el snapshot no se toca). Las líneas donde
+    ``stock_deposito`` ≠ kardex se informan en ``lineas_sd_distinto_kardex``.
 
     Líneas contadas: neto de movimientos entre snapshot y t_conteo (momento del conteo).
     Líneas sin contar: neto post-snapshot hasta ahora (informativo); diferencia_real NULL.
@@ -2099,6 +2141,7 @@ def recalcular_ajuste_post_snapshot(
     lineas_actualizadas = 0
     overrides_pisados = 0
     sin_ts_conteo = 0
+    sd_distinto_kardex: List[Dict[str, Any]] = []
 
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
@@ -2168,6 +2211,29 @@ def recalcular_ajuste_post_snapshot(
                 ajuste_eff = ajuste_efectivo(ajuste_sys, ajuste_manual)
                 disp_ajust = calcular_disponible_ajustado(saldo_snap, ajuste_eff)
                 diff_real = calcular_diferencia_real(linea.get("cantidad_contada"), disp_ajust)
+                if base_saldo_actual and ajuste_manual is None:
+                    mov_b = Decimal("0")
+                    if not fallback_sin_ts:
+                        mov_b = calcular_neto_movimientos_post_snapshot(movs) - ajuste_sys
+                    saldo_kardex = _fetch_saldo_kardex(cursor, id_art, id_dep)
+                    if (
+                        saldo_kardex is not None
+                        and saldo_actual is not None
+                        and saldo_kardex != saldo_actual
+                    ):
+                        sd_distinto_kardex.append(
+                            {
+                                "id_articulo": id_art,
+                                "id_deposito": id_dep,
+                                "stock_deposito": str(saldo_actual),
+                                "kardex": str(saldo_kardex),
+                            }
+                        )
+                    diff_base = calcular_diferencia_real_saldo_actual(
+                        linea.get("cantidad_contada"), mov_b, saldo_kardex
+                    )
+                    if diff_base is not None:
+                        diff_real = diff_base
 
                 if pisar_overrides:
                     cursor.execute(
@@ -2194,6 +2260,8 @@ def recalcular_ajuste_post_snapshot(
         }
         if sin_ts_conteo:
             resultado["lineas_sin_ts_conteo"] = sin_ts_conteo
+        if sd_distinto_kardex:
+            resultado["lineas_sd_distinto_kardex"] = sd_distinto_kardex
         return True, resultado
     except Exception as exc:
         logger.exception("recalcular_ajuste_post_snapshot %s: %s", id_campana, exc)
@@ -3156,6 +3224,48 @@ def verificar_snapshot_vs_kardex(
     return not diffs, diffs
 
 
+def _serializar_diffs(diffs: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Decimal → str para JSON."""
+    return [
+        {k: (str(v) if isinstance(v, Decimal) else v) for k, v in d.items()} for d in diffs
+    ]
+
+
+def registrar_aceptacion_descuadre(
+    base_empresa: str,
+    id_campana: int,
+    diffs: Sequence[Dict[str, Any]],
+    *,
+    id_usuario: int,
+) -> bool:
+    """Una fila de auditoría por diferencia aceptada (quién = id_usuario, cuándo = created_at).
+
+    ``ajuste_anterior`` = saldo_snapshot, ``ajuste_nuevo`` = kardex a fecha_snapshot,
+    ``diferencia_real`` = snapshot − kardex. Si no se pudo verificar, una fila con
+    id_linea/id_articulo/id_deposito = 0.
+    """
+    uid = to_int_or_none(id_usuario) or 0
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            for d in diffs or [{}]:
+                _insert_auditoria_ajuste(
+                    cursor,
+                    id_campana=id_campana,
+                    id_linea=to_int_or_none(d.get("id_linea")) or 0,
+                    id_articulo=to_int_or_none(d.get("id_articulo")) or 0,
+                    id_deposito=to_int_or_none(d.get("id_deposito")) or 0,
+                    accion=ACCION_AUDIT_DESCUADRE_ACEPTADO,
+                    id_usuario=uid,
+                    ajuste_anterior=to_decimal_or_none(d.get("saldo_snapshot")),
+                    ajuste_nuevo=to_decimal_or_none(d.get("kardex_a_snapshot")),
+                    diferencia_real=to_decimal_or_none(d.get("diferencia")),
+                )
+        return True
+    except Exception as exc:
+        logger.exception("registrar_aceptacion_descuadre %s/%s: %s", base_empresa, id_campana, exc)
+        return False
+
+
 def mstock_existente_campana(base_empresa: str, id_campana: int) -> Optional[int]:
     """Código de un MSTOCK vigente ya emitido por la campaña (detalle 'campaña #N'), o None."""
     try:
@@ -3185,7 +3295,15 @@ def autorizar_y_aplicar_campana(
     id_puesto: Optional[int],
     pendientes_cliente: int = 0,
     id_punto_venta: int = 1,
+    aceptar_descuadre: bool = False,
 ) -> Tuple[bool, Dict[str, Any]]:
+    """Autoriza y emite MSTOCK.
+
+    Si el snapshot no coincide con el kardex a ``fecha_snapshot`` (o no se puede verificar)
+    bloquea con ``snapshot_descuadrado`` salvo ``aceptar_descuadre=True``; en ese caso
+    registra la aceptación en auditoría y continúa. El ajuste siempre se calcula contra el
+    saldo actual real del depósito (``base_saldo_actual``), no contra el snapshot.
+    """
     from core.services.administranet_stock import alta_movimiento
 
     campana = obtener_campana(base_empresa, id_campana)
@@ -3227,22 +3345,33 @@ def autorizar_y_aplicar_campana(
         campana.get("fecha_snapshot"),
         campana.get("depositos") or [],
     )
+    descuadre_aceptado = 0
     if not ok_snap:
-        return False, {
-            "bloqueado": True,
-            "codigo": "snapshot_descuadrado",
-            "error": (
-                "El saldo_snapshot no coincide con el kardex reconstruido a fecha_snapshot "
-                f"en {len(diffs_snap)} línea(s). Revisar antes de autorizar."
-            ),
-            "diferencias_snapshot": diffs_snap,
-        }
+        if not aceptar_descuadre:
+            return False, {
+                "bloqueado": True,
+                "codigo": "snapshot_descuadrado",
+                "puede_aceptar": True,
+                "error": (
+                    "El saldo_snapshot no coincide con el kardex reconstruido a fecha_snapshot "
+                    f"en {len(diffs_snap)} línea(s). Podés aceptar el descuadre: el ajuste se "
+                    "calcula contra el saldo actual del depósito."
+                ),
+                "diferencias_snapshot": _serializar_diffs(diffs_snap),
+            }
+        ok_aud = registrar_aceptacion_descuadre(
+            base_empresa, id_campana, diffs_snap, id_usuario=id_usuario
+        )
+        if not ok_aud:
+            return False, {"error": "No se pudo registrar la aceptación del descuadre en auditoría."}
+        descuadre_aceptado = len(diffs_snap)
 
     ok_recalc, recalc_info = recalcular_ajuste_post_snapshot(
         base_empresa,
         id_campana,
         id_usuario=id_usuario,
         pisar_overrides=False,
+        base_saldo_actual=True,
     )
     if not ok_recalc:
         return False, {"error": recalc_info.get("error", "No se pudo recalcular ajustes.")}
@@ -3336,5 +3465,7 @@ def autorizar_y_aplicar_campana(
         "movimientos_mstock": movimientos_ok,
         "lineas_ajustadas": len(lineas_ajustar),
         "codigo_movimiento": ultimo_codigo,
+        "descuadre_aceptado": descuadre_aceptado,
+        "lineas_sd_distinto_kardex": recalc_info.get("lineas_sd_distinto_kardex", []),
     }
 

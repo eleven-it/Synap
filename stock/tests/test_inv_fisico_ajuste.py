@@ -243,7 +243,7 @@ class AutorizarCampanaServiceTest(SimpleTestCase):
         self.assertEqual(mock_alta.call_count, 2)
         self.assertGreaterEqual(mock_transicion.call_count, 2)
         mock_recalc.assert_called_once_with(
-            "emp", 7, id_usuario=9, pisar_overrides=False
+            "emp", 7, id_usuario=9, pisar_overrides=False, base_saldo_actual=True
         )
         cabecera = mock_alta.call_args_list[0].kwargs.get("cabecera") or mock_alta.call_args_list[0][1].get("cabecera")
         if cabecera is None and len(mock_alta.call_args_list[0][0]) >= 4:
