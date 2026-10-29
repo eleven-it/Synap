@@ -2238,3 +2238,102 @@ def construir_kardex_articulo(
         },
         "advertencias": analisis.get("advertencias") or [],
     }
+
+
+def resolver_etapa_filtro_kardex(
+    valor: Optional[str],
+    etapas: Optional[List[Dict[str, Any]]],
+) -> Optional[str]:
+    """Normaliza el filtro ``deposito`` (tipo_mpr o id_deposito) a un tipo_mpr del pipeline.
+
+    Devuelve ``None`` ("Todos") si el valor está vacío o no corresponde a una etapa.
+    """
+    raw = (valor or "").strip()
+    if not raw or raw.lower() == "todos":
+        return None
+    for et in etapas or []:
+        tipo = str(et.get("tipo_mpr") or "")
+        if not tipo:
+            continue
+        if raw.lower() == tipo.lower():
+            return tipo
+        dep = to_int_or_none(et.get("id_deposito"))
+        if dep is not None and to_int_or_none(raw) == dep:
+            return tipo
+    return None
+
+
+def filtrar_analisis_por_etapa(
+    analisis: Dict[str, Any],
+    tipo_mpr: Optional[str],
+) -> Dict[str, Any]:
+    """Restringe un análisis pipeline a un solo depósito/etapa.
+
+    Lista solo los movimientos de esa etapa y usa como saldo corrido el saldo
+    de esa etapa (que arranca en su saldo inicial al Desde). Saldo inicial,
+    cierre, stock, totales y columnas de etapa quedan acotados a la etapa.
+    Sin filtro (``None``) o en artículos sin pipeline devuelve el análisis intacto.
+    """
+    if not tipo_mpr or not isinstance(analisis, dict):
+        return analisis
+    deposito = analisis.get("deposito") or {}
+    if deposito.get("tipo_eje") != "pipeline_fabricados":
+        return analisis
+    etapas = [e for e in (deposito.get("etapas") or []) if e.get("tipo_mpr") == tipo_mpr]
+    if not etapas:
+        return analisis
+
+    out = dict(analisis)
+    saldo_ini_src = analisis.get("saldo_inicial") or {}
+    ini_por_etapa = saldo_ini_src.get("por_etapa") or {}
+    saldo_ini = int(ini_por_etapa.get(tipo_mpr, 0) or 0)
+
+    movimientos: List[Dict[str, Any]] = []
+    for mov in analisis.get("movimientos") or []:
+        tipo = (mov.get("etapa") or {}).get("tipo_mpr")
+        if tipo != tipo_mpr:
+            continue
+        fila = dict(mov)
+        saldos = fila.get("saldos_por_etapa") or {}
+        valor = int(saldos.get(tipo_mpr, 0) or 0)
+        fila["saldos_por_etapa"] = {tipo_mpr: valor}
+        fila["saldos_etapa_ui"] = [{"tipo_mpr": tipo_mpr, "saldo": valor}]
+        fila["saldo_corrido"] = valor
+        movimientos.append(fila)
+    out["movimientos"] = movimientos
+
+    kpis_src = analisis.get("kpis") or {}
+    kpis = dict(kpis_src)
+    cierre_src = kpis_src.get("saldo_final_por_etapa") or {}
+    saldo_final = int(cierre_src.get(tipo_mpr, movimientos[-1]["saldo_corrido"] if movimientos else saldo_ini) or 0)
+    stock_src = kpis_src.get("stock_por_etapa") or (analisis.get("stock") or {}).get("por_etapa") or {}
+    stock_etapa = int(stock_src.get(tipo_mpr, 0) or 0)
+    kpis["saldo_final"] = saldo_final
+    kpis["saldo_final_por_etapa"] = {tipo_mpr: saldo_final}
+    kpis["stock_por_etapa"] = {tipo_mpr: stock_etapa}
+    kpis["total_entradas"] = sum(int(m.get("entrada") or 0) for m in movimientos)
+    kpis["total_salidas"] = sum(int(m.get("salida") or 0) for m in movimientos)
+    kpis["etapas"] = [{"tipo_mpr": e.get("tipo_mpr"), "label": e.get("label")} for e in etapas]
+    conc = kpis_src.get("conciliacion_por_etapa") or {}
+    if conc:
+        kpis["conciliacion_por_etapa"] = {k: v for k, v in conc.items() if k == tipo_mpr}
+    kpis["etapa_filtro"] = tipo_mpr
+    out["kpis"] = kpis
+
+    saldo_ini_out = dict(saldo_ini_src)
+    saldo_ini_out["valor"] = saldo_ini
+    saldo_ini_out["por_etapa"] = {tipo_mpr: saldo_ini}
+    out["saldo_inicial"] = saldo_ini_out
+
+    stock_out = dict(analisis.get("stock") or {})
+    stock_out["por_etapa_todas"] = dict(stock_out.get("por_etapa") or {})
+    stock_out["por_etapa"] = {tipo_mpr: stock_etapa}
+    out["stock"] = stock_out
+
+    dep_out = dict(deposito)
+    dep_out["etapas_todas"] = list(deposito.get("etapas") or [])
+    dep_out["etapas"] = etapas
+    dep_out["etapa_filtro"] = tipo_mpr
+    dep_out["etapa_filtro_label"] = etapas[0].get("label")
+    out["deposito"] = dep_out
+    return out
