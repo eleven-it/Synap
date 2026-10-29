@@ -4712,13 +4712,20 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
             filas = data.get("filas") or []
         elif grupo == "trazabilidad" and reporte == "kardex_articulo":
             from core.utils.administranet_types import to_int_or_none
-            from mpr.services_kardex_articulo import construir_analisis_trazabilidad_articulo
+            from mpr.services_kardex_articulo import (
+                construir_analisis_trazabilidad_articulo,
+                filtrar_analisis_por_etapa,
+                resolver_etapa_filtro_kardex,
+            )
 
             id_art = to_int_or_none(self.request.GET.get("id_articulo"))
+            deposito_param = (self.request.GET.get("deposito") or "").strip()
 
             meta = {
                 "id_articulo": id_art,
                 "id_deposito": None,
+                "deposito_filtro": "",
+                "etapas_filtro_opciones": [],
                 "advertencias": [],
                 "demanda_ped": {"filas": [], "totales": {"p_ped": 0}},
                 "stock": {"terminado": 0, "semi_componentes": [], "negativo": False},
@@ -4743,6 +4750,19 @@ class ReportesMPRView(MprLoginRequiredMixin, MprReportesVerMixin, TemplateView):
                     fecha_desde=fd_iso,
                     fecha_hasta=fh_iso,
                 )
+                dep_todas = data.get("deposito") or {}
+                if dep_todas.get("tipo_eje") == "pipeline_fabricados":
+                    meta["etapas_filtro_opciones"] = [
+                        {"tipo_mpr": e.get("tipo_mpr"), "label": e.get("label")}
+                        for e in (dep_todas.get("etapas") or [])
+                        if e.get("tipo_mpr")
+                    ]
+                    etapa_sel = resolver_etapa_filtro_kardex(
+                        deposito_param, dep_todas.get("etapas") or []
+                    )
+                    if etapa_sel:
+                        data = filtrar_analisis_por_etapa(data, etapa_sel)
+                        meta["deposito_filtro"] = etapa_sel
                 meta["articulo"] = data.get("articulo")
                 meta["bom"] = data.get("bom")
                 meta["deposito"] = data.get("deposito")
