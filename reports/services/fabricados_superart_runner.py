@@ -46,6 +46,8 @@ def run_fabricados_superart(report, payload: Dict, user) -> QueryResult:
             meses=filtros["meses"],
             marcas_incluidos=filtros["marcas_incluidos"] or None,
             superarts_incluidos=filtros["superarts_incluidos"] or None,
+            marcas_excluidos=filtros.get("marcas_excluidos") or None,
+            superarts_excluidos=filtros.get("superarts_excluidos") or None,
         )
     except Exception as exc:
         logger.warning("run_fabricados_superart %s: %s", base_empresa, exc, exc_info=True)
@@ -73,6 +75,8 @@ def run_fabricados_superart(report, payload: Dict, user) -> QueryResult:
                 "hasta": filtros.get("hasta_iso"),
                 "marcas_incluidos": filtros.get("marcas_incluidos"),
                 "superarts_incluidos": filtros.get("superarts_incluidos"),
+                "marcas_excluidos": filtros.get("marcas_excluidos"),
+                "superarts_excluidos": filtros.get("superarts_excluidos"),
                 "presentacion": modo,
             },
         },

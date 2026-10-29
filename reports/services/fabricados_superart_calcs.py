@@ -40,6 +40,10 @@ def parse_filters_from_payload(filters: Dict[str, Any]) -> Dict[str, Any]:
             part = part.strip()
             if part:
                 qd.appendlist("q_superart", part)
+    for m in _as_list(filters.get("marcas_excluidos") or []):
+        qd.appendlist("marcas_excluidos", m)
+    for s in _as_list(filters.get("superarts_excluidos") or []):
+        qd.appendlist("superarts_excluidos", s)
     return parse_filtros_fabricados_superart(
         qd,
         marcas_getlist=qd.getlist("marcas_incluidos"),

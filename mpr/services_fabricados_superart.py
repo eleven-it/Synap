@@ -179,6 +179,7 @@ def agrupar_fabricados_por_superart(
     *,
     superarts_incluidos: Optional[Sequence[str]] = None,
     busqueda_superart: str = "",
+    superarts_excluidos: Optional[Sequence[str]] = None,
 ) -> Dict[str, Any]:
     meses_ord = normalizar_meses_yyyy_mm(meses)
     if not meses_ord:
@@ -235,6 +236,7 @@ def agrupar_fabricados_por_superart(
     terminos = _normalizar_superarts_incluidos(list(superarts_incluidos or []))
     if not terminos and (busqueda_superart or "").strip():
         terminos = _normalizar_superarts_incluidos([busqueda_superart])
+    terminos_ex = _normalizar_superarts_incluidos(list(superarts_excluidos or []))
     filas_super: List[Dict[str, Any]] = []
     for sa in super_idx.values():
         if not _match_superarts_filtro(
@@ -242,6 +244,13 @@ def agrupar_fabricados_por_superart(
             sa["descripcion_superart"],
             sa.get("superart_key") or "",
             terminos,
+        ):
+            continue
+        if terminos_ex and _match_superarts_filtro(
+            sa["codigo_superart"],
+            sa["descripcion_superart"],
+            sa.get("superart_key") or "",
+            terminos_ex,
         ):
             continue
         sa["articulos"].sort(key=lambda a: (-a["total"], a["codigo_articulo"]))
@@ -321,12 +330,35 @@ def parse_filtros_fabricados_superart(
             marcas.append(int(mi))
 
     superarts = parse_superarts_incluidos_desde_get(get_params)
+
+    marcas_ex: List[int] = []
+    raw_ex: List[str] = []
+    if hasattr(get_params, "getlist"):
+        raw_ex = list(get_params.getlist("marcas_excluidos") or [])
+    if not raw_ex and get_params.get("marcas_excluidos"):
+        raw_ex = [get_params.get("marcas_excluidos")]
+    for m in raw_ex:
+        for part in str(m).split(","):
+            mi = to_int_or_none(part.strip())
+            if mi is not None and int(mi) not in marcas_ex:
+                marcas_ex.append(int(mi))
+    sa_ex_raw: List[str] = []
+    if hasattr(get_params, "getlist"):
+        sa_ex_raw = list(get_params.getlist("superarts_excluidos") or [])
+    if not sa_ex_raw and get_params.get("superarts_excluidos"):
+        sa_ex_raw = [get_params.get("superarts_excluidos")]
+    sa_ex_parts: List[str] = []
+    for s_ in sa_ex_raw:
+        sa_ex_parts.extend(p.strip() for p in str(s_).split(",") if p.strip())
+    superarts_ex = _normalizar_superarts_incluidos(sa_ex_parts)
     return {
         "desde_iso": desde_d.isoformat(),
         "hasta_iso": hasta_d.isoformat(),
         "meses": meses,
         "marcas_incluidos": marcas,
         "superarts_incluidos": superarts,
+        "marcas_excluidos": marcas_ex,
+        "superarts_excluidos": superarts_ex,
         # Compat lectura legacy (primer valor o cadena vacía)
         "busqueda_superart": superarts[0] if len(superarts) == 1 else "",
     }
@@ -400,6 +432,8 @@ def reporte_mpr_fabricados_superart(
     marcas_incluidos: Optional[Sequence[int]] = None,
     superarts_incluidos: Optional[Sequence[str]] = None,
     busqueda_superart: str = "",
+    marcas_excluidos: Optional[Sequence[int]] = None,
+    superarts_excluidos: Optional[Sequence[str]] = None,
 ) -> Dict[str, Any]:
     vacio = {
         "meses": normalizar_meses_yyyy_mm(meses) or [mes_actual_yyyy_mm()],
@@ -426,6 +460,7 @@ def reporte_mpr_fabricados_superart(
                 cursor,
                 meses_norm,
                 marcas_ids=marcas_incluidos or None,
+                marcas_excluidos_ids=marcas_excluidos or None,
             )
     except Exception as exc:
         logger.warning("reporte_mpr_fabricados_superart %s: %s", base_empresa, exc, exc_info=True)
@@ -442,4 +477,5 @@ def reporte_mpr_fabricados_superart(
         meses_norm,
         desc_map,
         superarts_incluidos=superarts,
+        superarts_excluidos=superarts_excluidos,
     )
