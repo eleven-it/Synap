@@ -1456,6 +1456,24 @@ def eliminar_fila_articulo(
     return True, "Artículo quitado de la matriz."
 
 
+def vaciar_articulos_borrador(draft: EcomPedidoMasivoDraft) -> Tuple[bool, str]:
+    """Quita todas las líneas del borrador en una sola transacción."""
+    if draft.estado not in (
+        EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+    ):
+        return False, "El borrador no es editable."
+
+    with transaction.atomic():
+        EcomPedidoMasivoDraftCelda.objects.filter(draft=draft).delete()
+        draft.descuentos_fila = {}
+        draft.precios_fila = {}
+        if draft.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
+            draft.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
+        draft.save(update_fields=["estado", "descuentos_fila", "precios_fila", "updated_at"])
+    return True, "Carrito vacío."
+
+
 def guardar_celda(
     draft: EcomPedidoMasivoDraft,
     *,

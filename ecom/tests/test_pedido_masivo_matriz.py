@@ -19,6 +19,7 @@ from ecom.services.pedido_masivo_matriz import (
     buscar_articulos_filtrados_ternas,
     filtros_articulos_filtrados_ternas,
     eliminar_fila_articulo,
+    vaciar_articulos_borrador,
     guardar_celda,
     guardar_descuento_fila,
     guardar_descuento_pie,
@@ -148,6 +149,30 @@ class TestGuardarCelda(TestCase):
         self.assertEqual(d.celdas.filter(id_articulo=8).count(), 1)
         self.assertNotIn("9", d.descuentos_fila or {})
         self.assertIn("8", d.descuentos_fila or {})
+
+
+    def test_vaciar_carrito_quita_todas_las_celdas_y_reinicia_confirmacion(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=10,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+            descuentos_fila={"9": 5.0},
+            precios_fila={"8": 12.0},
+        )
+        guardar_celda(d, id_articulo=9, id_cliente_domicilio=1, cantidad_packs=3)
+        guardar_celda(d, id_articulo=8, id_cliente_domicilio=1, cantidad_packs=1)
+        d.estado = EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO
+        d.save(update_fields=["estado"])
+
+        ok, msg = vaciar_articulos_borrador(d)
+
+        self.assertTrue(ok, msg)
+        d.refresh_from_db()
+        self.assertEqual(d.celdas.count(), 0)
+        self.assertEqual(d.estado, EcomPedidoMasivoDraft.ESTADO_BORRADOR)
+        self.assertEqual(d.descuentos_fila, {})
+        self.assertEqual(d.precios_fila, {})
 
 
 class TestObtenerDraft(TestCase):

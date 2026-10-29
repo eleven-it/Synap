@@ -13,9 +13,12 @@ from django.http import HttpRequest
 # IDs de `APPS_MENU` (`app["id"]`) que pueden mostrarse en el menú principal en móvil/PWA.
 PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom", "ventas", "stock", "mpr", "contabilidad"})
 
-# El vendedor puede tener Ventas y permisos de pedidos sin el permiso general ecom.ver.
+# El vendedor puede tener Ventas y permisos de pedidos o cobranzas sin ecom.ver.
 PWA_VENTAS_PEDIDOS_MENU_ITEM_IDS = frozenset(
-    {"ventas_cb_pedidos", "ventas_cb_nuevo_pedido", "ventas_cb_pedido_masivo"}
+    {
+        "ventas_cb_pedidos", "ventas_cb_nuevo_pedido", "ventas_cb_pedido_masivo",
+        "ventas_rep_comprobantes_cobrar", "ventas_rep_cuenta_corriente",
+    }
 )
 
 # Submenús contabilidad accesibles en Nivel A (cotización dólar).
@@ -49,6 +52,9 @@ PWA_ECOM_DEEP_LINKS = (
     "/ecom/mayoristapp/pedido-masivo-sucursales/",
     "/ecom/mayoristapp/venta/",  # redirect legacy → masivo ?modo=simple
     "/ecom/mayoristapp/compra/",  # alias redirect legacy
+    "/ecom/mayoristapp/cobranzas-cartera/",
+    "/ecom/mayoristapp/portal/no-cancelados/",
+    "/ecom/mayoristapp/portal/cuenta-corriente/",
 )
 
 # Submenús MPR accesibles en Nivel A (tablero KPIs e inventario móvil).
@@ -225,7 +231,7 @@ def filtrar_submenus_ecom_para_pwa_movil(
 def filtrar_submenus_ventas_pedidos_para_pwa_movil(
     submenus: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """En móvil, Ventas expone solo las pantallas de pedidos habilitadas."""
+    """En móvil, Ventas expone pedidos y las consultas de cobranzas habilitadas."""
     resultado: List[Dict[str, Any]] = []
     for seccion in submenus or []:
         items = [
