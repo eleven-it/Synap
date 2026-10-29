@@ -91,7 +91,7 @@
       ".dark #ppp-section .ppp-data-table th.ppp-sort-th { color: rgb(203 213 225); }" +
       ".dark #ppp-section .ppp-data-table tr.ppp-totals-row td { color: rgb(248 250 252); background: rgb(30 41 59); }" +
       "#ppp-section .ppp-data-table td.ppp-backorder-hit { color: rgb(146 64 14); }" +
-      ".dark #ppp-section .ppp-data-table td.ppp-backorder-hit { color: rgb(253 230 138); }";
+      ".dark #ppp-section .ppp-data-table td.ppp-backorder-hit { color: rgb(254 243 199); background-color: rgb(69 26 3 / 0.85) !important; }";
     document.head.appendChild(style);
   }
 
