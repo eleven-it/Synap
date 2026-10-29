@@ -1744,21 +1744,27 @@ function pedidoMasivoCore() {
       const items = this.seleccionadosSimple;
       if (!items.length) return;
       this.guardandoCantidadSimple = true;
+      this._iniciarEspera(`Agregando 1 de ${items.length} artículos al carrito…`);
       try {
-        for (const articulo of items) {
+        await this._yieldUi();
+        for (const [indice, articulo] of items.entries()) {
+          this.esperaMensaje = `Agregando ${indice + 1} de ${items.length} artículos al carrito…`;
           if (!await this.agregarArticuloSeleccionadoSimple(articulo)) return;
         }
         this.seleccionSimpleAbierta = false;
         this.carritoEnLineaAbierto = false;
         this.abrirCarritoEnLineaSimple();
       } finally {
+        this._finEspera();
         this.guardandoCantidadSimple = false;
       }
     },
     async agregarUnoSeleccionadoSimple(articulo) {
       if (this.guardandoCantidadSimple) return;
       this.guardandoCantidadSimple = true;
+      this._iniciarEspera('Agregando artículo al carrito…');
       try {
+        await this._yieldUi();
         const guardado = await this.agregarArticuloSeleccionadoSimple(articulo);
         if (guardado && !this.cantidadSeleccionados) {
           this.seleccionSimpleAbierta = false;
@@ -1766,6 +1772,7 @@ function pedidoMasivoCore() {
           this.abrirCarritoEnLineaSimple();
         }
       } finally {
+        this._finEspera();
         this.guardandoCantidadSimple = false;
       }
     },
@@ -1775,11 +1782,14 @@ function pedidoMasivoCore() {
       const domicilio = this.sucursales[0]?.id_cliente_domicilio;
       const valor = String(this.cantidadesCarrito[id] ?? '').trim();
       this.guardandoCantidadSimple = true;
+      this._iniciarEspera('Guardando cantidad del carrito…');
       try {
+        await this._yieldUi();
         const guardado = await this.onCelda(id, domicilio, valor);
         if (guardado) this.cantidadesCarrito[id] = String(this.celda(id, domicilio));
         return guardado;
       } finally {
+        this._finEspera();
         this.guardandoCantidadSimple = false;
       }
     },

@@ -51,7 +51,7 @@ class CtacteMovimientosRelayAPIView(APIView):
         if idc is None:
             return Response({"detail": "No hay idcliente en sesión (seleccione un cliente)."}, status=400)
         sess_user = _session_user(request)
-        if not cliente_accesible_por_sesion(base, idc, sess_user):
+        if not cliente_accesible_por_sesion(base, idc, sess_user, solo_cartera=True):
             return Response({"detail": "Cliente no disponible para esta sesión."}, status=403)
         lim = to_int_or_none(request.data.get("limit")) or 500
         rows = listar_movimientos_ctacte_relay(base, dict(request.data), idc, limit=lim)
@@ -77,7 +77,7 @@ class CtacteSugerenciasNroRelayAPIView(APIView):
         if idc is None:
             return Response({"detail": "No hay idcliente en sesión."}, status=400)
         sess_user = _session_user(request)
-        if not cliente_accesible_por_sesion(base, idc, sess_user):
+        if not cliente_accesible_por_sesion(base, idc, sess_user, solo_cartera=True):
             return Response({"detail": "Cliente no disponible."}, status=403)
         q = request.query_params.get("q") or request.query_params.get("queryString") or ""
         nums = sugerencias_nro_ctacte_relay(base, q, idc)
@@ -104,7 +104,7 @@ class CuentaCorrientePedidosRelayAPIView(APIView):
         if idc is None:
             return Response({"detail": "No hay idcliente en sesión (seleccione un cliente)."}, status=400)
         sess_user = _session_user(request)
-        if not cliente_accesible_por_sesion(base, idc, sess_user):
+        if not cliente_accesible_por_sesion(base, idc, sess_user, solo_cartera=True):
             return Response({"detail": "Cliente no disponible para esta sesión."}, status=403)
         lim = to_int_or_none(request.data.get("limit")) or 500
         rows = listar_pedidos_cuenta_corriente_relay(
@@ -136,7 +136,7 @@ class CuentaCorrientePedidosSugerenciasNroRelayAPIView(APIView):
         if idc is None:
             return Response({"detail": "No hay idcliente en sesión."}, status=400)
         sess_user = _session_user(request)
-        if not cliente_accesible_por_sesion(base, idc, sess_user):
+        if not cliente_accesible_por_sesion(base, idc, sess_user, solo_cartera=True):
             return Response({"detail": "Cliente no disponible."}, status=403)
         q = request.query_params.get("q") or request.query_params.get("queryString") or ""
         nums = sugerencias_nro_pedido_cuenta_corriente_relay(base, q, idc)
@@ -162,7 +162,7 @@ class ConsumosResumenRelayAPIView(APIView):
         if idc is None:
             return Response({"detail": "No hay idcliente en sesión (seleccione un cliente)."}, status=400)
         sess_user = _session_user(request)
-        if not cliente_accesible_por_sesion(base, idc, sess_user):
+        if not cliente_accesible_por_sesion(base, idc, sess_user, solo_cartera=True):
             return Response({"detail": "Cliente no disponible para esta sesión."}, status=403)
 
         bag = (getattr(request, "session", None) or {}).get("mayoristapp") or {}

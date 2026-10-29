@@ -97,7 +97,7 @@ async function init() {
           q: q,
           limit: "15",
         });
-        return fetch(`${buscarUrl}?${params}`, {
+        return fetch(`${buscarUrl}${buscarUrl.includes("?") ? "&" : "?"}${params}`, {
           credentials: "same-origin",
           headers: { Accept: "application/json" },
         })

@@ -28,7 +28,7 @@
       <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">Portal mayorista</p>
       <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">{{ page_title }}</h1>
       <p class="mt-2 text-sm text-slate-300 max-w-3xl">
-        Búsqueda predictiva y selección de cliente para operar en cuenta corriente, pedidos y recibos.
+        {{ page_intro|default:"Búsqueda predictiva y selección de cliente para operar en cuenta corriente, pedidos y recibos." }}
       </p>
     </div>
   </div>
@@ -76,6 +76,10 @@
           <a href="{% url 'ecom:mayoristapp_portal_cuenta_corriente' %}"
              class="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/40 hover:bg-sky-200 dark:hover:bg-sky-900/60 transition">
             Cuenta corriente
+          </a>
+          <a href="{% url 'ecom:mayoristapp_portal_no_cancelados' %}"
+             class="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-amber-900 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition">
+            Comprobantes a cobrar
           </a>
         </div>
       </div>

@@ -3,9 +3,13 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-import pytest
+try:
+    import pytest
+except ImportError:  # manage.py test en el contenedor de Synap no instala pytest.
+    pytest = None
 
-pytestmark = pytest.mark.django_db
+if pytest is not None:
+    pytestmark = pytest.mark.django_db
 
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse
@@ -224,8 +228,9 @@ class TestComprobantesNoCanceladosView(unittest.TestCase):
         u.is_superuser = False
         return u
 
+    @patch("ecom.comprobantes_relay_views.cliente_accesible_por_sesion", return_value=True)
     @patch("ecom.comprobantes_relay_views.listar_no_cancelados_relay")
-    def test_post_ok(self, mock_fn):
+    def test_post_ok(self, mock_fn, _accesible):
         mock_fn.return_value = {"filas": [{"TipoComprobante": "FA"}], "saldo_al_dia": 10}
         req = _req_post(
             "/ecom/api/mayoristapp/comprobantes/no-cancelados/?ajax=1",
@@ -239,8 +244,9 @@ class TestComprobantesNoCanceladosView(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["total"], 1)
 
+    @patch("ecom.comprobantes_relay_views.cliente_accesible_por_sesion", return_value=True)
     @patch("ecom.comprobantes_relay_views.listar_no_cancelados_resumen_relay")
-    def test_post_resumen_ok(self, mock_fn):
+    def test_post_resumen_ok(self, mock_fn, _accesible):
         mock_fn.return_value = {"filas": [{"TipoComprobante": "FA"}], "saldo_al_dia": 10}
         req = _req_post(
             "/ecom/api/mayoristapp/comprobantes/no-cancelados-resumen/?ajax=1",
@@ -253,6 +259,21 @@ class TestComprobantesNoCanceladosView(unittest.TestCase):
         resp = ComprobantesNoCanceladosResumenRelayAPIView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["total"], 1)
+
+    @patch("ecom.comprobantes_relay_views.cliente_accesible_por_sesion", return_value=False)
+    @patch("ecom.comprobantes_relay_views.listar_no_cancelados_relay")
+    def test_cliente_ajeno_no_puede_ver_comprobantes(self, mock_fn, _accesible):
+        req = _req_post(
+            "/ecom/api/mayoristapp/comprobantes/no-cancelados/?ajax=1",
+            {},
+            {"base_empresa": "emp1"},
+        )
+        req.session["mayoristapp"] = {"idcliente": 5}
+        req.session.save()
+        force_authenticate(req, user=self._user())
+        resp = ComprobantesNoCanceladosRelayAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 403)
+        mock_fn.assert_not_called()
 
 
 class TestComprobantesAnularPedidoView(unittest.TestCase):

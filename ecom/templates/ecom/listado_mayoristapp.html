@@ -27,6 +27,17 @@
 
 {% block content %}
 {% if pedidos_acciones %}{% include "ecom/includes/repetir_pedido_modal.html" %}{% endif %}
+{% if detalle_comprobante %}
+<div id="comprobante-detalle-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4" role="dialog" aria-modal="true" aria-labelledby="comprobante-detalle-titulo">
+  <div class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+    <div class="flex items-start justify-between gap-3">
+      <h2 id="comprobante-detalle-titulo" class="text-lg font-semibold text-slate-900 dark:text-white">Datos del comprobante</h2>
+      <button type="button" data-cerrar-detalle class="rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800" aria-label="Cerrar detalle">Cerrar</button>
+    </div>
+    <dl id="comprobante-detalle-datos" class="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2"></dl>
+  </div>
+</div>
+{% endif %}
 <section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
   <div class="w-full px-4 sm:px-6 lg:px-12 pt-6">
     {% include "ecom/includes/ventas_breadcrumb.html" with current_label=listado_title %}
@@ -109,6 +120,7 @@
       data-results-key="{{ listado_results_key }}"
       data-columns="{{ listado_columns }}"
       data-slug="{{ listado_slug }}"
+      data-detalle-comprobante="{% if detalle_comprobante %}1{% else %}0{% endif %}"
       data-filter-mode="{{ filter_mode }}"
       data-usa-id-manual="{% if usa_id_manual_cliente %}1{% else %}0{% endif %}"
       {% if pedidos_acciones %}data-pedidos-acciones="1" data-pedidos-urls="{{ pedidos_urls_json }}" data-es-cliente="{% if es_cliente_portal %}1{% else %}0{% endif %}"{% endif %}
@@ -119,6 +131,7 @@
       <div class="px-6 sm:px-10 py-5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div class="min-w-0">
           <p id="list-filters-summary" class="text-sm text-slate-600 dark:text-slate-400 m-0" aria-live="polite"></p>
+          {% if listado_slug == 'no-cancelados' %}<p id="listado-saldo-total" class="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100" aria-live="polite"></p>{% endif %}
           <p class="text-xs text-slate-500 dark:text-slate-500 mt-1 m-0">{{ listado_subtitle }}</p>
         </div>
         <div id="list-last-update" class="text-right text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap"></div>
@@ -229,6 +242,6 @@
 
 {% block extra_js %}
 {% if pedidos_acciones %}<script src="{% static 'ecom/js/repetir_pedido_modal.js' %}"></script>{% endif %}
-<script src="{% static 'ecom/js/listado_mayoristapp.js' %}"></script>
+<script src="{% static 'ecom/js/listado_mayoristapp.js' %}?v=cartera1"></script>
 <script type="module" src="{% static 'ecom/js/ecom_predictive_boot.mjs' %}"></script>
 {% endblock %}

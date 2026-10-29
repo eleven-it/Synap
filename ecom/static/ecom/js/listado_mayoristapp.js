@@ -3,6 +3,7 @@
  */
 (function () {
   "use strict";
+  var filasActuales = [];
 
   function el(id) {
     return document.getElementById(id);
@@ -86,7 +87,7 @@
     if (wt) wt.classList.toggle("hidden", v !== "TipoPedido");
   }
 
-  function renderHead(columns, withAcciones) {
+  function renderHead(columns, withAcciones, withDetalle) {
     var head = el("tabla-listado-head");
     if (!head) return;
     var ths = ['<th class="py-3 pr-3 font-semibold">#</th>'];
@@ -100,7 +101,7 @@
           "</th>"
       );
     });
-    if (withAcciones) {
+    if (withAcciones || withDetalle) {
       ths.push('<th class="py-3 pr-3 font-semibold">Acciones</th>');
     }
     head.innerHTML =
@@ -125,7 +126,7 @@
     return t.replace(/\/0\/?$/, "/" + codMov + "/");
   }
 
-  function renderRows(rows, columns, accCfg) {
+  function renderRows(rows, columns, accCfg, withDetalle) {
     var tbody = el("tabla-listado-body");
     if (!tbody) return;
     tbody.innerHTML = "";
@@ -155,6 +156,8 @@
             '">Repetir</button>';
         }
         tds.push('<td class="py-2.5 pr-3 whitespace-nowrap">' + btns + "</td>");
+      } else if (withDetalle) {
+        tds.push('<td class="py-2.5 pr-3"><button type="button" class="text-xs font-semibold text-sky-700 hover:underline dark:text-sky-300" data-ver-comprobante="' + idx + '">Ver detalle</button></td>');
       }
       var tr = document.createElement("tr");
       tr.className =
@@ -162,6 +165,30 @@
       tr.innerHTML = tds.join("");
       tbody.appendChild(tr);
     });
+  }
+
+  function abrirDetalleComprobante(fila, columns) {
+    var modal = el("comprobante-detalle-modal");
+    var datos = el("comprobante-detalle-datos");
+    if (!modal || !datos || !fila) return;
+    var campos = columns.slice();
+    [
+      ["CondVenta", "Condición de venta"], ["Vencimiento", "Vencimiento"],
+      ["Estado", "Estado"], ["Anulado", "Anulado"], ["Vencido", "Vencido"],
+      ["Recibo", "Recibo"], ["Detalle", "Detalle"], ["NroFactura", "Factura relacionada"],
+    ].forEach(function (extra) {
+      if (!campos.some(function (c) { return c.key === extra[0]; }) && pick(fila, extra[0]) != null) {
+        campos.push({ key: extra[0], label: extra[1] });
+      }
+    });
+    datos.innerHTML = campos.map(function (campo) {
+      var valor = pick(fila, campo.key);
+      var texto = campo.fmt === "money" ? fmtMoney(valor) : (valor == null || valor === "" ? "—" : String(valor));
+      return '<div class="min-w-0"><dt class="text-xs text-slate-500 dark:text-slate-400">' + esc(campo.label) +
+        '</dt><dd class="break-words font-medium text-slate-900 dark:text-slate-100">' + esc(texto) + '</dd></div>';
+    }).join("");
+    modal.classList.remove("hidden");
+    modal.querySelector("[data-cerrar-detalle]")?.focus();
   }
 
   function runSearch() {
@@ -183,7 +210,8 @@
       return;
     }
 
-    renderHead(columns, !!accCfg);
+    var withDetalle = root.getAttribute("data-detalle-comprobante") === "1";
+    renderHead(columns, !!accCfg, withDetalle);
     if (btn) btn.disabled = true;
     if (status) status.textContent = "Buscando…";
 
@@ -207,7 +235,10 @@
       })
       .then(function (data) {
         if (data.ok === false) throw new Error(data.error || "Error API");
+        var saldoTotal = el("listado-saldo-total");
+        if (saldoTotal) saldoTotal.textContent = "Total a cobrar: " + fmtMoney(data.saldo_al_dia || 0);
         var filas = data[resultsKey] || data.filas || data.results || [];
+        filasActuales = filas;
         if (!filas.length) {
           if (emptyBox) {
             emptyBox.classList.remove("hidden");
@@ -219,7 +250,7 @@
         }
         if (emptyBox) emptyBox.classList.add("hidden");
         if (wrap) wrap.classList.remove("hidden");
-        renderRows(filas, columns, accCfg);
+        renderRows(filas, columns, accCfg, withDetalle);
         if (status) status.textContent = filas.length + " resultado(s).";
         var lu = el("list-last-update");
         if (lu) {
@@ -229,6 +260,9 @@
         }
       })
       .catch(function () {
+        var saldoTotal = el("listado-saldo-total");
+        if (saldoTotal) saldoTotal.textContent = "";
+        filasActuales = [];
         if (emptyBox) {
           emptyBox.classList.remove("hidden");
           emptyBox.textContent = "No se pudo cargar el listado.";
@@ -249,11 +283,10 @@
     if (!tbody || !tbody.rows.length) return;
     var lines = [columns.map(function (c) { return c.label; }).join(";")];
     Array.prototype.forEach.call(tbody.rows, function (tr) {
-      var cells = Array.prototype.map.call(tr.cells, function (td, i) {
-        if (i === 0) return "";
+      var cells = Array.prototype.map.call(Array.prototype.slice.call(tr.cells, 1, columns.length + 1), function (td) {
         return (td.textContent || "").replace(/;/g, ",");
       });
-      lines.push(cells.slice(1).join(";"));
+      lines.push(cells.join(";"));
     });
     var blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
     var a = document.createElement("a");
@@ -269,6 +302,21 @@
   document.addEventListener("DOMContentLoaded", function () {
     var root = el("listado-app");
     var accCfg = pedidosAccionesCfg(root);
+    if (root && root.getAttribute("data-detalle-comprobante") === "1") {
+      document.addEventListener("click", function (ev) {
+        var boton = ev.target.closest?.("[data-ver-comprobante]");
+        if (boton) {
+          var indice = Number(boton.getAttribute("data-ver-comprobante"));
+          abrirDetalleComprobante(filasActuales[indice], parseJsonAttr(root, "data-columns", []));
+        }
+        if (ev.target.closest?.("[data-cerrar-detalle]") || ev.target.id === "comprobante-detalle-modal") {
+          el("comprobante-detalle-modal")?.classList.add("hidden");
+        }
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape") el("comprobante-detalle-modal")?.classList.add("hidden");
+      });
+    }
     if (accCfg && window.SynapRepetirPedido) {
       SynapRepetirPedido.init({
         previewTpl: accCfg.urls.preview_tpl,
