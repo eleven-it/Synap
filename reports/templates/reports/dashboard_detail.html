@@ -379,7 +379,9 @@
                         {% endif %}
                         
                         {% if is_declarative %}
+                        {% if report.slug != 'fabricados-superart' %}
                         {% include "reports/includes/filters_interval.html" %}
+                        {% endif %}
                         {% endif %}
                     {% else %}
                         <!-- Reportes Legacy: Usar templates unificados -->
@@ -390,6 +392,7 @@
                         {% elif report.slug == 'pedidos-pendientes-produccion' %}
                         {% include "reports/includes/filters_pedidos_pendientes_produccion.html" %}
                         {% elif report.slug == 'fabricados-superart' %}
+                        {% include "reports/includes/filters_period.html" %}
                         {% include "reports/includes/filters_fabricados_superart.html" %}
                         {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-bom-docenas' or report.slug == 'ventas-marcas-mensual' %}
                         {% include "reports/includes/filters_period_bo_dual.html" %}
@@ -412,7 +415,9 @@
                         {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
                         {% include "reports/includes/filters_sucursal_punto_venta.html" %}
                         {% endif %}
+                        {% if report.slug != 'fabricados-superart' %}
                         {% include "reports/includes/filters_interval.html" %}
+                        {% endif %}
                         {% if report.slug == 'comprobantes-rutas' %}
                         {% include "reports/includes/filters_logistica_lista_comprobantes_rutas.html" %}
                         {% endif %}
@@ -599,7 +604,7 @@
                         </div>
                     </div>
                     <div id="fsa-table-wrap" class="min-h-[120px] min-w-0 max-w-full overflow-hidden p-4 sm:p-6">
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Los filtros se aplican automáticamente al cargar.</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Cargando fabricados por superartículo…</p>
                     </div>
                 </section>
                 {% endif %}
@@ -5381,7 +5386,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 {% else %}
 <script src="{% static 'reports/js/reports_responsive.js' %}?v=20260903c" defer></script>
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20261008a"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20261029a"></script>
 {% if report.slug == 'comprobantes-rutas' %}
 <script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260430b" defer></script>
 {% endif %}
@@ -5392,7 +5397,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/pedidos_pendientes_produccion.js' %}?v=20261028a"></script>
 {% endif %}
 {% if report.slug == 'fabricados-superart' %}
-<script src="{% static 'reports/js/fabricados_superart.js' %}?v=20261027c"></script>
+<script src="{% static 'reports/js/fabricados_superart.js' %}?v=20261029a"></script>
 {% endif %}
 {% if report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' %}
 <script src="{% static 'reports/js/objetivos_ventas_bo.js' %}?v=202604353"></script>
