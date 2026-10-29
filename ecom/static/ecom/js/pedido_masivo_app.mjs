@@ -75,6 +75,7 @@ function pedidoMasivoCore() {
     qCliente: '',
     panelCli: false,
     busquedaMovilActiva: false,
+    busquedaArtMovilActiva: false,
     _mobileSearchInput: null,
     idxCli: 0,
     cargandoCli: false,
@@ -582,29 +583,27 @@ function pedidoMasivoCore() {
       if (!this.modoSimple || !window.matchMedia('(max-width: 1023px)').matches) return;
       this.busquedaMovilActiva = true;
       this._mobileSearchInput = event.target;
+      this.busquedaArtMovilActiva = event.target.id === 'pm-art-mob';
       const ajustar = () => {
         const input = this._mobileSearchInput;
         if (!input || !input.isConnected || document.activeElement !== input) return;
         const viewport = window.visualViewport;
         const visibleTop = viewport ? viewport.offsetTop : 0;
         const visibleBottom = visibleTop + (viewport ? viewport.height : window.innerHeight);
-        const rect = input.getBoundingClientRect();
         const esArticulo = input.id === 'pm-art-mob';
-        // Artículos abre hacia arriba; clientes y sucursales conservan la lista abajo.
-        const topDeseado = esArticulo
-          ? Math.max(visibleTop + 96, visibleBottom - rect.height - 16)
-          : visibleTop + 120;
+        if (esArticulo) {
+          this.$el.style.setProperty('--pm-visual-top', `${Math.max(0, visibleTop)}px`);
+          this.$el.style.setProperty('--pm-visual-height', `${Math.max(0, viewport ? viewport.height : window.innerHeight)}px`);
+          return;
+        }
+        const rect = input.getBoundingClientRect();
+        const topDeseado = visibleTop + 120;
         const desplazamiento = rect.top - topDeseado;
         if (Math.abs(desplazamiento) > 16) window.scrollBy(0, desplazamiento);
         requestAnimationFrame(() => {
           if (this._mobileSearchInput !== input) return;
           const actual = input.getBoundingClientRect();
-          const contenedor = esArticulo
-            ? input.closest('.pm-art-search-mobile')?.getBoundingClientRect()
-            : null;
-          const espacio = esArticulo
-            ? (contenedor?.top ?? actual.top) - visibleTop - 8
-            : visibleBottom - actual.bottom - 12;
+          const espacio = visibleBottom - actual.bottom - 12;
           this.$el.style.setProperty('--pm-search-space', `${Math.max(56, Math.floor(espacio))}px`);
         });
       };
@@ -619,15 +618,19 @@ function pedidoMasivoCore() {
         window.visualViewport?.addEventListener('resize', this._mobileSearchResize);
       }
       clearTimeout(this._mobileSearchTimer);
+      this.$nextTick(() => requestAnimationFrame(ajustar));
       this._mobileSearchTimer = setTimeout(() => requestAnimationFrame(ajustar), 300);
     },
     cerrarBusquedaMovil(idInput) {
       if (this._mobileSearchInput?.id !== idInput) return;
       this.busquedaMovilActiva = false;
+      this.busquedaArtMovilActiva = false;
       this._mobileSearchInput = null;
       this._mobileSearchAdjust = null;
       clearTimeout(this._mobileSearchTimer);
       this.$el.style.removeProperty('--pm-search-space');
+      this.$el.style.removeProperty('--pm-visual-top');
+      this.$el.style.removeProperty('--pm-visual-height');
       if (this._mobileSearchResize) {
         window.visualViewport?.removeEventListener('resize', this._mobileSearchResize);
         this._mobileSearchResize = null;
@@ -1800,6 +1803,10 @@ function pedidoMasivoCore() {
     },
     async abrirFichaArticulo(articulo) {
       if (!this.modoSimple || !articulo) return;
+      if (this.busquedaArtMovilActiva) {
+        document.activeElement?.blur?.();
+        this.cerrarPanelArt();
+      }
       this.fichaArticulo = this._mapArticuloItem(articulo);
       this.fichaDetalle = null;
       this.fichaFotoError = false;

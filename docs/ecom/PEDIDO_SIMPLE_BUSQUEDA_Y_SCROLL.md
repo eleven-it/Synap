@@ -9,14 +9,15 @@ desplazamiento interno. El buscador de artículos ocupa la primera fila; al
 enfocarlo, la matriz vuelve a esa fila.
 
 En móvil, la búsqueda de cliente, sucursal y artículo usa el teclado nativo.
-La lista de artículos abre hacia arriba; las de cliente y sucursal, hacia
-abajo. En artículos, «Revisar seleccionados» queda al pie de la lista, junto
-al buscador. Tras estabilizarse el teclado, se acomoda una sola vez el campo y se
-limita la lista al espacio disponible según `visualViewport`. No se reacciona
-al evento de desplazamiento del viewport para evitar saltos repetidos. El pie
-de totales se oculta durante la búsqueda y reaparece al cerrarla. El tamaño
-del teclado lo define Android o la aplicación de teclado elegida por la
-persona.
+Las listas de cliente y sucursal abren hacia abajo. En pedido simple, al
+enfocar el artículo se abre una vista de búsqueda que ocupa el área visible
+encima del teclado: campo arriba, resultados desplazables y «Revisar
+seleccionados» al pie. `visualViewport` ajusta la altura cuando aparece o se
+oculta el teclado. Los filtros y el resto del pedido quedan detrás de esta
+vista y reaparecen al cerrarla; el tamaño del teclado lo define Android o la
+aplicación elegida por la persona. La ficha del artículo cierra la búsqueda
+antes de abrirse. No se reacciona al desplazamiento del viewport para evitar
+saltos repetidos en las búsquedas de cliente y sucursal.
 
 El catálogo del pedido muestra artículos Tercero o Terminado, no discontinuados,
 con e-commerce activo y marca asignada al vendedor para el cliente y la sucursal.
@@ -28,5 +29,5 @@ Al escribir se ocultan los resultados anteriores mientras llega la nueva búsque
 
 Verificación funcional sugerida: abrir un borrador simple con artículos, bajar
 por la página en escritorio y buscar/agregar un artículo; en Android, abrir
-cada búsqueda, escribir con el teclado visible, recorrer resultados y elegir
-uno sin que el pie tape la lista.
+cada búsqueda, escribir con el teclado visible, recorrer resultados, abrir una
+ficha y revisar varios artículos sin que el pie tape la lista.
