@@ -56,6 +56,64 @@ class TestParseFiltersPayload(SimpleTestCase):
         self.assertEqual(f["superarts_incluidos"], ["SA1", "SA2"])
 
 
+    def test_excluidos_marcas_y_superarts(self):
+        f = parse_filters_from_payload(
+            {
+                "desde": "2026-10-01",
+                "hasta": "2026-10-31",
+                "marcas_excluidos": ["7", "8"],
+                "superarts_excluidos": ["SAX"],
+            }
+        )
+        self.assertEqual(f["marcas_excluidos"], [7, 8])
+        self.assertEqual(f["superarts_excluidos"], ["SAX"])
+
+
+class TestExcluidosBackend(SimpleTestCase):
+    def test_agrupar_excluye_superart(self):
+        from mpr.services_fabricados_superart import agrupar_fabricados_por_superart, superart_desde_id_manual
+
+        rows = [
+            {"id_articulo": 1, "id_manual": "AAA-01", "ym": "2026-10", "cantidad": 10},
+            {"id_articulo": 2, "id_manual": "BBB-01", "ym": "2026-10", "cantidad": 5},
+        ]
+        cod_a = superart_desde_id_manual("AAA-01")[1]
+        base = agrupar_fabricados_por_superart(rows, ["2026-10"], {})
+        self.assertEqual(len(base["filas_superart"]), 2)
+        res = agrupar_fabricados_por_superart(rows, ["2026-10"], {}, superarts_excluidos=[cod_a])
+        codigos = [r["codigo_superart"] for r in res["filas_superart"]]
+        self.assertNotIn(cod_a, codigos)
+        self.assertEqual(res["total_general"], 5)
+
+    def test_sql_marcas_excluidas_not_in(self):
+        from mpr.reportes_transicion_lote_sql import fetch_fabricado_primera_por_articulo_mes
+
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        fetch_fabricado_primera_por_articulo_mes(cur, ["2026-10"], marcas_excluidos_ids=[3, 4])
+        sql, params = cur.execute.call_args[0]
+        self.assertIn("NOT IN", sql)
+        self.assertEqual(params[-2:], [3, 4])
+
+    @patch("mpr.services_fabricados_superart.reporte_mpr_fabricados_superart")
+    @patch("mpr.reportes_presentacion.preparar_fabricados_superart_presentacion")
+    def test_runner_pasa_excluidos(self, mock_prep, mock_reporte):
+        from reports.models import ReportDefinition
+        from reports.services.fabricados_superart_runner import run_fabricados_superart
+
+        mock_reporte.return_value = {"filas_superart": [], "kpis": {}}
+        mock_prep.return_value = {"filas_superart": [], "kpis": {}, "total_general": 0}
+        report = ReportDefinition(slug=FABRICADOS_SUPERART_SLUG, name="T", category="operational")
+        run_fabricados_superart(
+            report,
+            {"filters": {"base_empresa": "emp1", "marcas_excluidos": ["9"], "superarts_excluidos": ["SAZ"]}},
+            MagicMock(base_empresa="emp1"),
+        )
+        kwargs = mock_reporte.call_args.kwargs
+        self.assertEqual(kwargs["marcas_excluidos"], [9])
+        self.assertEqual(kwargs["superarts_excluidos"], ["SAZ"])
+
+
 class TestRunnerRegistrado(SimpleTestCase):
     def test_query_runner_tiene_slug(self):
         src = inspect.getsource(QueryRunnerService.run)
@@ -99,6 +157,20 @@ class TestMenuYTemplate(SimpleTestCase):
         self.assertIn("filters_fabricados_superart.html", html)
         self.assertIn('id="fsa-section"', html)
         self.assertIn("fabricados_superart.js", html)
+        self.assertNotIn("dashboard.js' %}?v=20261008a", html)
+
+    def test_filtros_estandar(self):
+        inc = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "reports"
+            / "includes"
+            / "filters_fabricados_superart.html"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("fsa-toggle-panel", inc)
+        self.assertNotIn("refresh-interval-buttons", inc)
+        for _id in ("marcas_incluidos", "marcas_excluidos", "superarts_incluidos", "superarts_excluidos"):
+            self.assertIn(f'id="{_id}"', inc)
 
 
 class TestDashboardJs(SimpleTestCase):
@@ -108,6 +180,7 @@ class TestDashboardJs(SimpleTestCase):
         )
         self.assertIn("isFabricadosSuperartSlug", js)
         self.assertIn("fabricados-superart", js)
+        self.assertIn('"fabricados-superart": {', js)  # etiquetas modal de carga
 
 
 class TestReportsPredictivoAPI(SimpleTestCase):
