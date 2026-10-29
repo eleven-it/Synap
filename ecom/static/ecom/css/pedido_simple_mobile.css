@@ -209,13 +209,14 @@
   }
   .dark .pm-simple-mode.pm-art-search-mobile-active .pm-art-search-mobile { background: #0f172a; }
   .pm-simple-mode .pm-art-mobile-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-  .pm-simple-mode .pm-art-mobile-head > div { display: grid; gap: .1rem; min-width: 0; }
+  .pm-simple-mode .pm-art-mobile-head-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .pm-simple-mode .pm-art-mobile-head-actions { display: flex; flex: none; align-items: center; gap: .35rem; }
   .pm-simple-mode .pm-art-mobile-head strong { font-size: 1rem; color: #0f172a; }
-  .pm-simple-mode .pm-art-mobile-head span { font-size: .75rem; color: #475569; }
-  .pm-simple-mode .pm-art-mobile-head button { min-height: 2.5rem; padding: 0 .75rem; border: 1px solid #94a3b8; border-radius: .5rem; color: #075985; font-weight: 700; }
+  .pm-simple-mode .pm-art-mobile-head button { min-height: 2.5rem; padding: 0 .5rem; border: 1px solid #94a3b8; border-radius: .5rem; color: #075985; font-size: .8rem; font-weight: 700; white-space: nowrap; }
+  .pm-simple-mode .pm-art-mobile-head .pm-art-mobile-review { background: #15803d; border-color: #15803d; color: #fff; }
   .dark .pm-simple-mode .pm-art-mobile-head strong { color: #f8fafc; }
-  .dark .pm-simple-mode .pm-art-mobile-head span { color: #cbd5e1; }
   .dark .pm-simple-mode .pm-art-mobile-head button { border-color: #64748b; color: #7dd3fc; }
+  .dark .pm-simple-mode .pm-art-mobile-head .pm-art-mobile-review { background: #16a34a; border-color: #16a34a; color: #fff; }
   .pm-simple-mode.pm-art-search-mobile-active .pm-art-mobile-field { flex: none; }
   .pm-simple-mode.pm-art-search-mobile-active .pm-art-search-mobile .pm-art-dropdown {
     position: static;
