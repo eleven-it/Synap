@@ -31,6 +31,7 @@ from ecom.services.pedido_masivo_matriz import (
     cod_viajante_sesion,
     credito_cliente_masivo,
     eliminar_fila_articulo,
+    vaciar_articulos_borrador,
     guardar_celda,
     guardar_descuento_fila,
     guardar_descuento_pie,
@@ -293,6 +294,7 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
                         "matriz": reverse("ecom:api_pedido_masivo_matriz"),
                         "celda": reverse("ecom:api_pedido_masivo_celda"),
                         "eliminar_fila": reverse("ecom:api_pedido_masivo_eliminar_fila"),
+                        "vaciar_carrito_simple": reverse("ecom:api_pedido_masivo_vaciar_carrito"),
                         "articulos": reverse("ecom:api_pedido_masivo_articulos"),
                         "sucursales": reverse("ecom:api_pedido_masivo_sucursales"),
                         "preview": reverse("ecom:api_pedido_masivo_preview"),
@@ -776,6 +778,23 @@ class PedidoMasivoEliminarFilaAPIView(APIView):
                 "matriz": _serializar_matriz_ui(draft, base),
             }
         )
+
+
+class PedidoMasivoVaciarCarritoAPIView(APIView):
+    permission_classes = [EcomPedidoCapturaPermission]
+
+    def post(self, request: Request) -> Response:
+        base = _session_base_empresa(request)
+        if not base:
+            return _err("Sin base_empresa.", "sin_base_empresa")
+        data = request.data if isinstance(request.data, dict) else {}
+        draft, _ = _draft_usuario(request, to_int_or_none(data.get("draft_id")))
+        if not draft:
+            return _err("Borrador no encontrado.", "no_encontrado", 404)
+        ok, msg = vaciar_articulos_borrador(draft)
+        if not ok:
+            return _err(msg)
+        return Response({"ok": True, "message": msg, "matriz": _serializar_matriz_ui(draft, base)})
 
 
 class PedidoMasivoArticulosAPIView(APIView):
