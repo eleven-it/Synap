@@ -178,6 +178,8 @@
 }
 
 @media (max-width: 1023px) {
+  .pm-simple-mode .pm-simple-help,
+  .pm-simple-mode .pm-simple-mobile-extras { display: none !important; }
   .pm-simple-mode.pm-search-mobile-active .pm-simple-footer { display: none !important; }
   .pm-simple-mode.pm-search-mobile-active #pm-cli + ul,
   .pm-simple-mode.pm-search-mobile-active #pm-sucursal + ul {
