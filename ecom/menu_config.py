@@ -63,6 +63,12 @@ MENU_CONFIG = [
                 "permission": "ecom.clientes.ver",
             },
             {
+                "name": "ecom_cobranzas_cartera",
+                "label": "Cobranzas de cartera",
+                "url": "ecom:mayoristapp_cobranzas_cartera",
+                "permission": "ecom.ctacte.ver",
+            },
+            {
                 "name": "ecom_estado_pedidos",
                 "label": "Preparación de pedidos",
                 "url": "ecom:mayoristapp_estado_pedidos_preparacion",

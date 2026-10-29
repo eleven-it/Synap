@@ -21,6 +21,7 @@ from ecom.services.comprobantes_no_cancelados_relay import (
     listar_no_cancelados_relay,
     listar_no_cancelados_resumen_relay,
 )
+from ecom.services.cliente_relay import cliente_accesible_por_sesion
 from ecom.services.comprobantes_relay import (
     listar_pedidos_relay,
     listar_presupuestos_relay,
@@ -247,6 +248,9 @@ class ComprobantesNoCanceladosRelayAPIView(APIView):
         idc = leer_idcliente_mayoristapp(request)
         if idc is None:
             return Response({"detail": "No hay idcliente en sesión."}, status=400)
+        sess_user = (getattr(request, "session", None) or {}).get("user") or {}
+        if not cliente_accesible_por_sesion(base, idc, sess_user, solo_cartera=True):
+            return Response({"detail": "Cliente no disponible para esta sesión."}, status=403)
         lim = to_int_or_none(request.data.get("limit")) or 1000
         data = listar_no_cancelados_relay(base, dict(request.data), idc, limit=lim)
         filas = data.get("filas", [])
@@ -267,6 +271,9 @@ class ComprobantesNoCanceladosResumenRelayAPIView(APIView):
         idc = leer_idcliente_mayoristapp(request)
         if idc is None:
             return Response({"detail": "No hay idcliente en sesión."}, status=400)
+        sess_user = (getattr(request, "session", None) or {}).get("user") or {}
+        if not cliente_accesible_por_sesion(base, idc, sess_user, solo_cartera=True):
+            return Response({"detail": "Cliente no disponible para esta sesión."}, status=403)
         lim = to_int_or_none(request.data.get("limit")) or 1000
         data = listar_no_cancelados_resumen_relay(base, dict(request.data), idc, limit=lim)
         filas = data.get("filas", [])

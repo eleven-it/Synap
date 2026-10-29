@@ -15,6 +15,7 @@ from ecom.mayoristapp_listado_config import (
     PORTAL_CLIENTE_LISTADOS,
 )
 from ecom.mayoristapp_web_views import MayoristappWebSessionMixin
+from ecom.services.cliente_relay import cliente_accesible_por_sesion
 from ecom.services.viajantes_opciones import opciones_viajantes_para_filtro
 
 
@@ -95,6 +96,9 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 if cfg.get("pedidos_acciones")
                 else "",
                 "es_cliente_portal": bool(cfg.get("portal_cliente")),
+                "detalle_comprobante": bool(
+                    cfg.get("portal_cliente") and self.listado_slug in ("cuenta-corriente", "no-cancelados")
+                ),
             }
         )
         return context
@@ -124,6 +128,15 @@ class PortalClienteListadoView(ListadoMayoristappView):
                 "Seleccione un cliente en el portal para acceder a esta pantalla.",
             )
             return redirect("ecom:mayoristapp_clientes")
+        base = str(sess.get("base_empresa") or "").strip()
+        if base and not cliente_accesible_por_sesion(base, idc, sess, solo_cartera=True):
+            from django.contrib import messages
+            from django.shortcuts import redirect
+            from ecom.services.mayoristapp_session import limpiar_cliente_seleccion_mayoristapp
+
+            limpiar_cliente_seleccion_mayoristapp(request)
+            messages.warning(request, "El cliente ya no pertenece a tu cartera.")
+            return redirect("ecom:mayoristapp_cobranzas_cartera")
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -142,6 +155,17 @@ class ClientesMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 "clientes_seleccionado_api": reverse("ecom:mayoristapp_clientes_seleccionado"),
             }
         )
+        return context
+
+
+class CobranzasCarteraMayoristappView(ClientesMayoristappView):
+    """Selección de un cliente de la cartera para consultar saldos y comprobantes."""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Cobranzas de cartera"
+        context["page_intro"] = "Elegí un cliente de tu cartera para consultar comprobantes a cobrar y cuenta corriente."
+        context["clientes_buscar_api"] = f"{context['clientes_buscar_api']}?cartera=1"
         return context
 
 

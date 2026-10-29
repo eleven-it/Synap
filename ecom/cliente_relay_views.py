@@ -182,6 +182,7 @@ class ClienteBuscarRelayAPIView(APIView):
             codigo_cliente=codigo,
             sess_user=sess_user,
             limit=lim,
+            solo_cartera=str(request.query_params.get("cartera") or "") == "1",
         )
         msg_map = {
             "ingrese_busqueda": ("Debe ingresar una búsqueda.", 400),

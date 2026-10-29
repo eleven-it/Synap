@@ -101,7 +101,7 @@ def _hub_cards():
                 _hub_link("Listado de clientes"),
                 _hub_link("Consumos cliente"),
                 _hub_link("Cuenta corriente"),
-                _hub_link("Comprobantes no cancelados"),
+                _hub_link("Comprobantes a cobrar"),
             ],
         },
         {
