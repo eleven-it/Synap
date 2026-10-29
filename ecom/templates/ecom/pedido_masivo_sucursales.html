@@ -6,11 +6,11 @@
 {% block content %}
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
-<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=6">
+<link rel="stylesheet" href="{% static 'ecom/css/pedido_simple_mobile.css' %}?v=7">
 
 <section class="pm-matrix-viewport pm-matrix-viewport--sin-desc flex min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible {% if pm_embed %}h-full{% else %}h-[calc(100dvh-4.5rem)]{% endif %}"
          x-data="pedidoMasivoApp()"
-         :class="{'pm-simple-mode': modoSimple, 'pm-search-mobile-active': busquedaMovilActiva}"
+         :class="{'pm-simple-mode': modoSimple, 'pm-search-mobile-active': busquedaMovilActiva, 'pm-art-search-mobile-active': busquedaArtMovilActiva}"
          x-init="init()">
   {% if not pm_embed %}
   <template x-teleport="#pm-simple-navbar-cart">
@@ -863,9 +863,17 @@
           <div class="pm-art-search-mobile relative overflow-visible rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800"
                @focusout="onFocusOutBuscadorArt($event)"
                @click.outside="cerrarPanelArt()">
+            <div x-show="busquedaArtMovilActiva" x-cloak class="pm-art-mobile-head">
+              <div>
+                <strong>Buscar artículos</strong>
+                <span x-show="cantidadSeleccionados > 0" x-text="cantidadSeleccionados + ' seleccionados'"></span>
+              </div>
+              <button type="button" @click.stop="$refs.pmArtInputMob.blur(); cerrarPanelArt()"
+                      aria-label="Cerrar búsqueda de artículos">Cerrar</button>
+            </div>
             <label class="sr-only" for="pm-art-mob">Agregar artículo</label>
-            <div class="flex items-center gap-1">
-              <input id="pm-art-mob" type="text" autocomplete="off" role="combobox"
+            <div class="pm-art-mobile-field flex items-center gap-1">
+              <input id="pm-art-mob" x-ref="pmArtInputMob" type="text" autocomplete="off" role="combobox"
                      x-model="qArt"
                      :aria-expanded="panelArt"
                      :disabled="!matrizEditable"
@@ -876,7 +884,7 @@
                      @keydown.arrow-up.prevent="moverSelArt(-1)"
                      @keydown.enter.prevent="elegirResaltadoArt()"
                      @keydown.space.prevent="onSpaceArt()"
-                     @keydown.escape="cerrarPanelArt()"
+                     @keydown.escape="if (busquedaArtMovilActiva) $event.target.blur(); cerrarPanelArt()"
                      :placeholder="modoSimple ? 'Buscar artículo… (↑ todos)' : 'Buscar artículo… (↓ todos)'"
                      class="pm-input-dense min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-sky-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800"/>
               <button type="button"
@@ -949,6 +957,8 @@
                class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
               Sin artículos
             </p>
+            <p x-show="busquedaArtMovilActiva && !cargandoArt && !artBusquedaHecha && !articulosBusqueda.length" x-cloak
+               class="pm-art-mobile-hint">Escribí un nombre o código, o tocá la flecha para ver todos los artículos.</p>
           </div>
 
           <div x-show="modoSimple && vistaCatalogoSimple === 'galeria'" x-cloak class="pm-simple-gallery" aria-label="Galería de artículos">
@@ -1528,5 +1538,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple51"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple52"></script>
 {% endblock %}
