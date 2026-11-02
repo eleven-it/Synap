@@ -57,6 +57,7 @@ def fetch_fabricado_primera_por_articulo_mes(
         f"""
         SELECT t.id_articulo,
                COALESCE(a.id_manual, '') AS id_manual,
+               a.CodigoMarca AS codigo_marca,
                DATE_FORMAT(t.creado_en, '%%Y-%%m') AS ym,
                COALESCE(SUM(t.cantidad), 0) AS cantidad
         FROM mpr_transicion_lote t
@@ -65,7 +66,7 @@ def fetch_fabricado_primera_por_articulo_mes(
           AND t.tipo_destino = %s
           AND DATE_FORMAT(t.creado_en, '%%Y-%%m') IN ({ph_meses})
           {marca_sql}
-        GROUP BY t.id_articulo, COALESCE(a.id_manual, ''), ym
+        GROUP BY t.id_articulo, COALESCE(a.id_manual, ''), a.CodigoMarca, ym
         """,
         params,
     )

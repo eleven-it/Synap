@@ -1012,6 +1012,9 @@
                         </label>
                     </div>
                 </div>
+                {% if report.slug == 'ventas-marca-superart' %}
+                <section id="vmsa-marcas-resumen" hidden class="mt-1 mb-3 rounded-2xl border border-slate-200/90 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-label="Totales por marca"></section>
+                {% endif %}
                 {# Misma envoltura que MPR ventana-pack: card + scroll interno; thead sticky en bloque único #}
                 <section class="mt-1 flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente si no ves todas las columnas.</p>
@@ -5414,7 +5417,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/pedidos_pendientes_produccion.js' %}?v=20261029a"></script>
 {% endif %}
 {% if report.slug == 'fabricados-superart' %}
-<script src="{% static 'reports/js/fabricados_superart.js' %}?v=20261029a"></script>
+<script src="{% static 'reports/js/fabricados_superart.js' %}?v=20261102a"></script>
 {% endif %}
 {% if report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' %}
 <script src="{% static 'reports/js/objetivos_ventas_bo.js' %}?v=202604353"></script>
@@ -5423,7 +5426,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/ventas_por_articulo.js' %}?v=20260903c"></script>
 {% endif %}
 {% if report.slug == 'ventas-marca-superart' %}
-<script src="{% static 'reports/js/ventas_marca_superart.js' %}?v=20260903b"></script>
+<script src="{% static 'reports/js/ventas_marca_superart.js' %}?v=20261102a"></script>
 {% endif %}
 {% if report.slug == 'ventas-bom-docenas' %}
 <script src="{% static 'reports/js/ventas_bom_docenas.js' %}?v=20260901a"></script>

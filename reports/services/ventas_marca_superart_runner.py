@@ -279,6 +279,21 @@ def _sort_arbol_marca_superart(
     )
 
 
+def _resumen_por_marca(arbol: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Totales por marca (todas las marcas del resultado), para el resumen superior."""
+    return [
+        {
+            "codigo_marca": m.get("codigo_marca"),
+            "nombre_marca": m.get("nombre_marca"),
+            "packs": m.get("packs", 0.0),
+            "docenas": m.get("docenas", 0.0),
+            "facturacion": m.get("facturacion", 0.0),
+            "superarts": len(m.get("children") or []),
+        }
+        for m in arbol or []
+    ]
+
+
 def _totales_desde_arbol(arbol: List[Dict[str, Any]]) -> Dict[str, Any]:
     packs = docenas = fact = 0.0
     articulos: Set[int] = set()
@@ -661,6 +676,7 @@ def run_ventas_marca_superart(report: ReportDefinition, payload: Dict, user) -> 
                     "marca_superart_jerarquia": arbol,
                     "marca_superart_filas": planas,
                 },
+                "marcas_resumen": _resumen_por_marca(arbol),
                 "ordenar_por": ordenar_por,
                 "orden_forma": orden_forma,
             },
