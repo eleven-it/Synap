@@ -172,6 +172,48 @@ def _match_superarts_filtro(
     return False
 
 
+def totalizar_fabricados_por_marca(
+    filas_super: Sequence[Dict[str, Any]],
+    meses: Sequence[str],
+    marcas_nombres: Dict[int, str],
+) -> List[Dict[str, Any]]:
+    """Resumen por marca (sobre los superartículos ya filtrados), ordenado por total desc."""
+    idx: Dict[Any, Dict[str, Any]] = {}
+    for sa in filas_super or []:
+        for art in sa.get("articulos") or []:
+            cm = art.get("codigo_marca")
+            if cm not in idx:
+                nombre = marcas_nombres.get(cm) if cm is not None else None
+                idx[cm] = {
+                    "codigo_marca": cm,
+                    "nombre_marca": (nombre or "").strip() or (f"Marca {cm}" if cm is not None else "Sin marca"),
+                    "por_mes": {m: 0.0 for m in meses},
+                    "total": 0.0,
+                }
+            row = idx[cm]
+            for m in meses:
+                row["por_mes"][m] = round(row["por_mes"].get(m, 0) + (art.get("por_mes") or {}).get(m, 0), 4)
+            row["total"] = round(row["total"] + float(art.get("total") or 0), 4)
+    out = [r for r in idx.values() if r["total"] > 0]
+    out.sort(key=lambda r: (-r["total"], r["nombre_marca"].upper()))
+    return out
+
+
+def _marcas_nombres_map(base_empresa: str) -> Dict[int, str]:
+    try:
+        from stock.services.inventario_tabla import listar_marcas_catalogo
+
+        out: Dict[int, str] = {}
+        for m in listar_marcas_catalogo(base_empresa) or []:
+            mid = to_int_or_none(m.get("value"))
+            if mid is not None:
+                out[int(mid)] = str(m.get("label") or "")
+        return out
+    except Exception as exc:  # pragma: no cover - degradación: nombres genéricos
+        logger.warning("_marcas_nombres_map %s: %s", base_empresa, exc)
+        return {}
+
+
 def agrupar_fabricados_por_superart(
     filas_sql: Sequence[Dict[str, Any]],
     meses: Sequence[str],
@@ -180,6 +222,7 @@ def agrupar_fabricados_por_superart(
     superarts_incluidos: Optional[Sequence[str]] = None,
     busqueda_superart: str = "",
     superarts_excluidos: Optional[Sequence[str]] = None,
+    marcas_nombres: Optional[Dict[int, str]] = None,
 ) -> Dict[str, Any]:
     meses_ord = normalizar_meses_yyyy_mm(meses)
     if not meses_ord:
@@ -209,6 +252,7 @@ def agrupar_fabricados_por_superart(
                 "superart_key": sk,
                 "codigo_superart": cod_sa,
                 "descripcion_superart": desc_sa,
+                "codigo_marca": to_int_or_none(row.get("codigo_marca")),
                 "por_mes": {m: 0.0 for m in meses_ord},
                 "total": 0.0,
             }
@@ -274,16 +318,19 @@ def agrupar_fabricados_por_superart(
             mes_pico = m
 
     superarts_con_prod = sum(1 for sa in filas_super if sa["total"] > 0)
+    filas_marca = totalizar_fabricados_por_marca(filas_super, meses_ord, marcas_nombres or {})
 
     return {
         "meses": meses_ord,
         "mes_labels": {m: etiqueta_mes(m) for m in meses_ord},
         "filas_superart": filas_super,
+        "filas_marca": filas_marca,
         "totales_por_mes": totales_por_mes,
         "total_general": total_general,
         "kpis": {
             "total_fabricado_primera": total_general,
             "superarts_con_produccion": superarts_con_prod,
+            "marcas_con_produccion": len(filas_marca),
             "mes_pico": mes_pico,
             "mes_pico_cantidad": mes_pico_cantidad,
             "mes_pico_label": etiqueta_mes(mes_pico) if mes_pico else "—",
@@ -478,4 +525,5 @@ def reporte_mpr_fabricados_superart(
         desc_map,
         superarts_incluidos=superarts,
         superarts_excluidos=superarts_excluidos,
+        marcas_nombres=_marcas_nombres_map(base_empresa) if rows else {},
     )

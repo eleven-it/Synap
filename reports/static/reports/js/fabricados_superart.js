@@ -150,6 +150,34 @@
     });
   }
 
+  /** Resumen de totales por marca (todas las marcas cuando no hay filtro). */
+  function renderMarcasResumen(fab, meses) {
+    const marcas = fab.filas_marca || [];
+    if (!marcas.length) return "";
+    let html = '<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Totales por marca</h3>';
+    html += '<div class="mb-6 overflow-x-auto" data-fsa-marcas-resumen><table class="min-w-full text-sm"><thead class="bg-slate-50 dark:bg-slate-800/50"><tr>';
+    html += '<th class="px-3 py-2 text-left text-xs font-semibold uppercase">Marca</th>';
+    meses.forEach((c) => {
+      html += `<th class="px-3 py-2 text-right text-xs font-semibold uppercase whitespace-nowrap">${escHtml(c.label || c.ym)}</th>`;
+    });
+    html += '<th class="px-3 py-2 text-right text-xs font-semibold uppercase">Total</th></tr></thead><tbody>';
+    marcas.forEach((m) => {
+      html += "<tr class='border-t border-slate-100 dark:border-slate-800'>";
+      html += `<td class="px-3 py-2 font-semibold">${escHtml(m.nombre_marca || "—")}</td>`;
+      (m.columnas_mes || []).forEach((cm) => {
+        html += `<td class="px-3 py-2 text-right tabular-nums">${escHtml(cm.display)}</td>`;
+      });
+      html += `<td class="px-3 py-2 text-right font-medium tabular-nums">${escHtml(m.total_display)}</td></tr>`;
+    });
+    html += "<tr class='border-t bg-slate-100 font-semibold dark:bg-slate-800'><td class='px-3 py-2'>Totales</td>";
+    (fab.totales_columnas || []).forEach((cm) => {
+      html += `<td class="px-3 py-2 text-right tabular-nums">${escHtml(cm.display)}</td>`;
+    });
+    html += `<td class="px-3 py-2 text-right tabular-nums">${escHtml(fab.total_general_display)}</td></tr>`;
+    html += "</tbody></table></div>";
+    return html;
+  }
+
   function renderTable(payload) {
     const wrap = document.getElementById("fsa-table-wrap");
     const kpiTotal = document.getElementById("fsa-kpi-total");
@@ -169,7 +197,9 @@
       return;
     }
     const meses = fab.meses_columnas || [];
-    let html = '<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-slate-50 dark:bg-slate-800/50"><tr>';
+    let html = renderMarcasResumen(fab, meses);
+    html += '<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Detalle por superartículo</h3>';
+    html += '<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-slate-50 dark:bg-slate-800/50"><tr>';
     html += '<th class="px-3 py-2 text-left text-xs font-semibold uppercase">Superartículo</th>';
     meses.forEach((c) => {
       html += `<th class="px-3 py-2 text-right text-xs font-semibold uppercase whitespace-nowrap">${escHtml(c.label || c.ym)}</th>`;

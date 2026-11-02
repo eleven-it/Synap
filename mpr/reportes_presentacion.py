@@ -480,6 +480,12 @@ def preparar_fabricados_superart_presentacion(
             arts.append(ar)
         row["articulos"] = arts
         filas.append(row)
+    filas_marca = []
+    for mk in data.get("filas_marca") or []:
+        rm = dict(mk)
+        rm["columnas_mes"] = _columnas_mes_cantidad(mk.get("por_mes") or {}, meses, modo)
+        rm["total_display"] = formatear_cantidad_reporte(mk.get("total", 0), modo)
+        filas_marca.append(rm)
     totales_por_mes = data.get("totales_por_mes") or {}
     totales_columnas = _columnas_mes_cantidad(totales_por_mes, meses, modo)
     kpis = dict(data.get("kpis") or {})
@@ -493,6 +499,7 @@ def preparar_fabricados_superart_presentacion(
         **data,
         "meses_columnas": meses_columnas,
         "filas_superart": filas,
+        "filas_marca": filas_marca,
         "totales_columnas": totales_columnas,
         "total_general_display": formatear_cantidad_reporte(data.get("total_general", 0), modo),
         "kpis": kpis,
