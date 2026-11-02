@@ -84,7 +84,8 @@
   }
 
   function isMarcaExpanded(st, key) {
-    return Boolean(st?.expandedMarcas?.[String(key || "")]);
+    // Por defecto todas las marcas abiertas (se ven todos los SuperArt); solo false explícito colapsa.
+    return st?.expandedMarcas?.[String(key || "")] !== false;
   }
 
   function isExpanded(st, key) {
@@ -233,6 +234,37 @@
 
   function superartKey(mk, sa) {
     return mk + "-sa-" + String(sa.id_manual ?? "").replace(/[^a-zA-Z0-9_-]/g, "_");
+  }
+
+  /** Resumen superior: totales por marca (todas las marcas cuando no hay filtro). */
+  function renderMarcasResumen(resumen, totals) {
+    const el = document.getElementById("vmsa-marcas-resumen");
+    if (!el) return;
+    const marcas = Array.isArray(resumen) ? resumen : [];
+    if (!marcas.length) {
+      el.innerHTML = "";
+      el.hidden = true;
+      return;
+    }
+    let html =
+      '<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Totales por marca</h3>' +
+      '<div class="overflow-x-auto"><table class="min-w-full text-xs">' +
+      buildThead().replace(">Nombre<", ">Marca<") +
+      '<tbody class="divide-y divide-slate-200 dark:divide-slate-700">';
+    marcas.forEach((m) => {
+      html +=
+        "<tr>" + nombreCell(12, "", marcaNombreHtml(m)) + metricCells(m) + "</tr>";
+    });
+    if (totals && typeof totals === "object") {
+      html +=
+        '<tr class="font-bold bg-slate-200 dark:bg-slate-700">' +
+        nombreCell(12, "", "<span>Totales</span>") +
+        metricCells(totals) +
+        "</tr>";
+    }
+    html += "</tbody></table></div>";
+    el.innerHTML = html;
+    el.hidden = false;
   }
 
   function renderTable(jerarquia, totals) {
@@ -430,7 +462,11 @@
     if (btnCollapse && !btnCollapse.dataset.vmsaWired) {
       btnCollapse.dataset.vmsaWired = "1";
       btnCollapse.addEventListener("click", function () {
-        saveViewState({ expandedMarcas: {}, expandedNodes: {} });
+        const st = { expandedMarcas: {}, expandedNodes: {} };
+        container.querySelectorAll("tr[data-vmsa-marca]").forEach((tr) => {
+          st.expandedMarcas[tr.getAttribute("data-vmsa-marca")] = false;
+        });
+        saveViewState(st);
         if (_lastJerarquia) renderTable(_lastJerarquia, _lastTotals);
       });
     }
@@ -469,6 +505,12 @@
     }
     _lastJerarquia = jerarquia.length ? jerarquia : null;
     _lastTotals = totals;
+    const resumen = Array.isArray(extra.marcas_resumen) ? extra.marcas_resumen.slice() : jerarquia;
+    if (resumen.length) {
+      const cfg = getCurrentSortConfig();
+      resumen.sort((a, b) => compareMetric(a, b, cfg.metricKey, cfg.direction));
+    }
+    renderMarcasResumen(resumen, totals);
     renderTable(jerarquia, totals);
 
     const periodEl = document.getElementById("vo-summary-period");
