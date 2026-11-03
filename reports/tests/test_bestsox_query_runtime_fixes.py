@@ -2,7 +2,7 @@
 """Unit tests: fechas, reglas compras por detalle, consignación dict rows."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase
