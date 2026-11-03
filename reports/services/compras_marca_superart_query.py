@@ -65,6 +65,12 @@ def fetch_compras_standard_filas(
     marca_sql = _marca_sql(marcas_ids, marcas_excluidos_ids, params)
     gasto_sql = sql_excluir_tipo_art_gasto("a")
     finished_sql = _finished_product_sql("a")
+    excl_mov = _movimiento_ids_excluidos_compras_standard()
+    excl_mov_sql = ""
+    if excl_mov:
+        ph_ex = ",".join(["%s"] * len(excl_mov))
+        excl_mov_sql = f" AND s.CodigoMovimiento NOT IN ({ph_ex})"
+        params.extend(excl_mov)
     cursor.execute(
         f"""
         SELECT s.IDArt AS id_articulo,
@@ -93,6 +99,7 @@ def fetch_compras_standard_filas(
                    AND cp.TipoComprobante IN ('FA','FC','FM'))
           AND {finished_sql}
           AND {gasto_sql}
+          {excl_mov_sql}
           {marca_sql}
         GROUP BY s.IDArt, COALESCE(a.id_manual, ''), ym,
                  COALESCE(a.CodigoMarca, 0), COALESCE(m.NombreMarca, ''),
@@ -252,6 +259,27 @@ def _rows_as_dicts(cursor) -> List[Dict[str, Any]]:
     return list(rows)
 
 
+def _dedupe_compras_filas(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Evita doble conteo si un movimiento cae en compra estándar y regla extra."""
+    merged: Dict[tuple, Dict[str, Any]] = {}
+    for row in filas or []:
+        key = (row.get("id_articulo"), str(row.get("ym") or ""))
+        if key not in merged:
+            merged[key] = dict(row)
+            continue
+        acc = merged[key]
+        for field in ("packs", "prendas", "docenas", "cantidad"):
+            acc[field] = round(float(acc.get(field) or 0) + float(row.get(field) or 0), 4)
+    return list(merged.values())
+
+
+def _movimiento_ids_excluidos_compras_standard() -> List[int]:
+    ids: List[int] = []
+    for regla in get_compras_terceros_reglas():
+        ids.extend(int(x) for x in (regla.get("movimiento_ids") or []) if x is not None)
+    return sorted(set(ids))
+
+
 def consultar_compras_marca_superart(
     base_empresa: str,
     *,
@@ -288,7 +316,7 @@ def consultar_compras_marca_superart(
         return []
     # Filtrar filas fuera de meses pedidos si aplica
     meses_set = set(normalizar_meses_yyyy_mm(meses))
-    combined = std + extra
+    combined = _dedupe_compras_filas(std + extra)
     if meses_set:
         combined = [r for r in combined if str(r.get("ym") or "") in meses_set]
     return combined
