@@ -6,7 +6,7 @@ import logging
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from core.utils.administranet_types import to_date_or_none
+from reports.services.bestsox_query_dates import parse_filter_date
 
 from mpr.reportes_transicion_lote_sql import normalizar_meses_yyyy_mm
 from mpr.services import mysql_cursor
@@ -163,8 +163,8 @@ def consultar_compras_marca_superart(
 ) -> List[Dict[str, Any]]:
     if not (base_empresa or "").strip():
         return []
-    desde = to_date_or_none(desde_iso)
-    hasta = to_date_or_none(hasta_iso)
+    desde = parse_filter_date(desde_iso)
+    hasta = parse_filter_date(hasta_iso)
     if not desde or not hasta:
         return []
     with mysql_cursor(base_empresa, dict_cursor=True) as cursor:

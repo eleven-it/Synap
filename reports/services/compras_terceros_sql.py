@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Sequence
 
 from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
-from reports.services.compras_terceros_config import TIPO_COMP_MOV_INTERNO_ENTRADA, get_compras_terceros_reglas
+from reports.services.compras_terceros_config import get_compras_terceros_reglas
 
 
 def sql_marca_join() -> str:
@@ -48,9 +48,8 @@ def _append_regla_predicates(
     *,
     ms_alias: str = "ms",
     s_alias: str = "s",
-    cp_alias: Optional[str] = "cp",
 ) -> str:
-    """Fragmento AND … para una regla (sin fecha ni marca)."""
+    """Fragmento AND … para una regla (sin fecha ni marca). Solo detalle + depósito + TipoComp opcional."""
     match = regla.get("match") or {}
     sql_parts: List[str] = []
     deposito = regla.get("deposito_id")
@@ -65,12 +64,12 @@ def _append_regla_predicates(
     if detalle_kw:
         sql_parts.append(f" AND UPPER(COALESCE({ms_alias}.detalle, '')) LIKE %s")
         params.append(f"%{detalle_kw.upper()}%")
-    cod_prov = match.get("codigo_proveedor")
-    if cod_prov is not None and cp_alias:
-        sql_parts.append(f" AND {cp_alias}.Codigo = %s")
-        params.append(int(cod_prov))
-        sql_parts.append(f" AND IFNULL({cp_alias}.Anulado, 'No') = 'No'")
     return "".join(sql_parts)
+
+
+def regla_has_match_criteria(regla: Dict[str, Any]) -> bool:
+    match = regla.get("match") or {}
+    return bool((match.get("detalle_contains") or "").strip())
 
 
 def fetch_compras_regla_filas(
@@ -83,18 +82,14 @@ def fetch_compras_regla_filas(
     marcas_excluidos_ids: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     """Líneas stock (id_stock) que cumplen una regla de terceros en el rango de fechas."""
-    match = regla.get("match") or {}
-    cod_prov = match.get("codigo_proveedor")
-    detalle_kw = (match.get("detalle_contains") or "").strip()
-    if cod_prov is None and not detalle_kw:
+    if not regla_has_match_criteria(regla):
         return []
 
     hasta_excl = hasta + timedelta(days=1)
     params: List[Any] = [desde.isoformat(), hasta_excl.isoformat()]
-    join_cp = ""
-    if cod_prov is not None:
-        join_cp = "INNER JOIN cuentaproveedor cp ON cp.CodigoMovimiento = s.CodigoMovimiento"
-    regla_sql = _append_regla_predicates(regla, params, cp_alias="cp" if cod_prov is not None else None)
+    regla_sql = _append_regla_predicates(regla, params)
+    if not regla_sql.strip():
+        return []
     marca_sql = _marca_filter_sql(marcas_ids, marcas_excluidos_ids, params)
     gasto_sql = sql_excluir_tipo_art_gasto("a")
     finished_sql = _finished_product_sql("a")
@@ -114,7 +109,6 @@ def fetch_compras_regla_filas(
                %s AS regla_id
         FROM stock s
         INNER JOIN movimiento_stock ms ON ms.codigo_movimiento = s.CodigoMovimiento
-        {join_cp}
         INNER JOIN articulo a ON a.IDArt = s.IDArt
         {sql_marca_join()}
         LEFT JOIN unidmed um ON um.id_unimed = a.id_unimed
@@ -164,30 +158,22 @@ def sql_exclude_stock_matching_terceros_reglas(params: List[Any]) -> str:
     """
     clauses: List[str] = []
     for regla in get_compras_terceros_reglas():
-        match = regla.get("match") or {}
-        if match.get("codigo_proveedor") is None and not (match.get("detalle_contains") or "").strip():
+        if not regla_has_match_criteria(regla):
             continue
-        inner_params_start = len(params)
         regla_sql = _append_regla_predicates(
             regla,
             params,
             ms_alias="ms_ex",
             s_alias="s_ex",
-            cp_alias="cp_ex",
         )
-        join_cp = ""
-        if match.get("codigo_proveedor") is not None:
-            join_cp = (
-                "INNER JOIN cuentaproveedor cp_ex "
-                "ON cp_ex.CodigoMovimiento = s_ex.CodigoMovimiento"
-            )
+        if not regla_sql.strip():
+            continue
         clauses.append(
             f"""
             NOT EXISTS (
                 SELECT 1
                 FROM movimiento_stock ms_ex
                 INNER JOIN stock s_ex ON s_ex.CodigoMovimiento = ms_ex.codigo_movimiento
-                {join_cp}
                 WHERE s_ex.id_stock = s.id_stock
                   AND IFNULL(s_ex.Anulado, 'No') = 'No'
                   AND IFNULL(ms_ex.anulado, 'No') = 'No'
@@ -195,7 +181,6 @@ def sql_exclude_stock_matching_terceros_reglas(params: List[Any]) -> str:
             )
             """
         )
-        _ = inner_params_start
     if not clauses:
         return ""
     return " AND " + " AND ".join(clauses)

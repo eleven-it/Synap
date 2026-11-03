@@ -6,7 +6,7 @@ import logging
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
-from core.utils.administranet_types import to_date_or_none
+from reports.services.bestsox_query_dates import parse_filter_date
 
 from mpr.services import mysql_cursor
 from reports.services.articulo_pack_unidades import (
@@ -194,7 +194,7 @@ def fetch_remitos_consignacion_resumen(
             rem, dev, reng = float(rem_row[0] or 0), float(rem_row[1] or 0), int(rem_row[2] or 0)
         cursor.execute(
             """
-            SELECT COALESCE(SUM(stf.Cantidad), 0)
+            SELECT COALESCE(SUM(stf.Cantidad), 0) AS fac
             FROM stock srem
             INNER JOIN stock stf ON stf.id_stock_remito_origen = srem.id_stock
             INNER JOIN cuentacliente fa ON fa.CodigoMovimiento = stf.CodigoMovimiento
@@ -209,7 +209,10 @@ def fetch_remitos_consignacion_resumen(
             [codmov, codmov, corte_excl.isoformat()],
         )
         fac_row = cursor.fetchone()
-        fac = float((fac_row[0] if fac_row else 0) or 0)
+        if isinstance(fac_row, dict):
+            fac = float(fac_row.get("fac") or 0)
+        else:
+            fac = float((fac_row[0] if fac_row else 0) or 0)
         saldo = round(rem - fac - dev, 4)
         out.append(
             {
@@ -231,9 +234,9 @@ def consultar_consignacion_stock(
     remito_hasta_iso: str,
     corte_facturas_iso: Optional[str] = None,
 ) -> Dict[str, Any]:
-    rem_desde = to_date_or_none(remito_desde_iso)
-    rem_hasta = to_date_or_none(remito_hasta_iso)
-    corte = to_date_or_none(corte_facturas_iso) or rem_hasta
+    rem_desde = parse_filter_date(remito_desde_iso)
+    rem_hasta = parse_filter_date(remito_hasta_iso)
+    corte = parse_filter_date(corte_facturas_iso) or rem_hasta
     if not rem_desde or not rem_hasta or not (base_empresa or "").strip():
         return {"filas_articulo": [], "remitos": [], "totales": {}}
     with mysql_cursor(base_empresa, dict_cursor=True) as cursor:

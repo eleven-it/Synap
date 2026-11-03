@@ -29,11 +29,11 @@ REPORTS_COMPRAS_TERCEROS_REGLAS = [
 | Campo | Uso |
 | --- | --- |
 | `match.detalle_contains` | Subcadena en `movimiento_stock.detalle` (parametrizada) |
-| `match.codigo_proveedor` | Proveedor en `cuentaproveedor` (incluye ajustes sin filtrar motivo) |
-| `require_tipo_comp` | Opcional; ex. Selene exige `stock.TipoComp = 'Mov. Interno Entrada'` |
+| `require_tipo_comp` | Opcional; Selene exige `stock.TipoComp = 'Mov. Interno Entrada'`; MYS/JIMMY no |
 | `deposito_id` | Restringe `stock.CodDeposito` |
 
-No se usan listas fijas de `codigo_movimiento` / `ID_movimiento_stock`: nuevos ingresos del mismo proveedor o detalle entran solos.
+Ejemplos default: Selene `INGRESO EXPORTACION SELENE`; MYS `MYS UNDERWEAR`; Jimmy `INGRESO DE JIMMY`.
+Los movimientos internos **no** tienen fila en `cuentaproveedor`; el match es solo por detalle + depósito + fechas.
 
 ## Dedupe
 
