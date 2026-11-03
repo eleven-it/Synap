@@ -87,9 +87,9 @@ Para validación contra administraNET real: exportar `BESTSOX_BASE_EMPRESA` y co
 
 ### Por marca
 
-| Marca | Packs | Prendas | Docenas |
-|-------|------:|--------:|--------:|
-| PUM | 696 | 1782 | 148.5 | ref = inf |
+| Marca | Packs ref | Packs inf | Prendas ref | Prendas inf | Docenas ref | Docenas inf |
+|-------|----------:|----------:|------------:|------------:|------------:|------------:|
+| PUM | 696 | 696 | 1782 | 1782 | 148.5 | 148.5 |
 
 ## Cambios de consulta en el PR
 
