@@ -526,6 +526,13 @@ class ExportService:
         if report.slug == "fabricados-superart":
             self._generate_excel_fabricados_superart(file_path, report, query_result, payload)
             return
+        if report.slug in (
+            "produccion-marca-superart",
+            "compras-marca-superart",
+            "consignacion-stock",
+        ):
+            self._generate_excel_bestsox_marca_informe(file_path, report, query_result, payload)
+            return
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
@@ -1854,6 +1861,90 @@ class ExportService:
         with open(file_path, "wb") as fh:
             fh.write(resp.content)
         logger.info("Excel fabricados-superart: %s", file_path)
+
+    def _generate_excel_bestsox_marca_informe(
+        self,
+        file_path,
+        report,
+        query_result,
+        payload,
+    ) -> None:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+
+        extra = (query_result.meta or {}).get("extra") or {}
+        tabs = extra.get("tabs") or {}
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Detalle"[:31]
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        ws.append(["Informe", report.name])
+        ws.append(["Totales", str(query_result.totals or {})])
+        ws.append([])
+        if report.slug == "consignacion-stock":
+            headers = [
+                "Número",
+                "Fecha",
+                "Cliente",
+                "Criterio",
+                "Remitido",
+                "Facturado",
+                "Devuelto",
+                "Saldo",
+            ]
+            ws.append(headers)
+            for col in range(1, len(headers) + 1):
+                c = ws.cell(row=ws.max_row, column=col)
+                c.fill = header_fill
+                c.font = header_font
+            for row in tabs.get("remitos") or []:
+                ws.append(
+                    [
+                        row.get("NroComprobante"),
+                        row.get("Fecha"),
+                        row.get("nombre_cliente"),
+                        row.get("criterio_origen"),
+                        row.get("packs_remitidos"),
+                        row.get("packs_facturados"),
+                        row.get("packs_devueltos"),
+                        row.get("packs_saldo"),
+                    ]
+                )
+        else:
+            headers = ["Tipo", "Marca", "SuperArt", "Artículo", "Métrica", "Valor"]
+            ws.append(headers)
+            for col in range(1, len(headers) + 1):
+                c = ws.cell(row=ws.max_row, column=col)
+                c.fill = header_fill
+                c.font = header_font
+
+            def walk(nodes, marca="", sa=""):
+                for n in nodes or []:
+                    if n.get("tipo") == "marca":
+                        walk(n.get("children") or [], n.get("nombre_marca") or "", sa)
+                    elif n.get("tipo") == "superart":
+                        walk(
+                            n.get("children") or [],
+                            marca,
+                            n.get("nombre_superart") or "",
+                        )
+                    elif n.get("tipo") == "articulo":
+                        for mk, mv in (n.get("metrics") or {}).items():
+                            ws.append(
+                                [
+                                    "Artículo",
+                                    marca,
+                                    sa,
+                                    n.get("nombre_articulo"),
+                                    mk,
+                                    mv,
+                                ]
+                            )
+
+            walk(tabs.get("marca_superart_jerarquia") or [])
+        wb.save(file_path)
+        logger.info("Excel %s: %s", report.slug, file_path)
 
     def get_file_response(self, export_result: ExportResult) -> HttpResponse:
         """

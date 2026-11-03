@@ -19,7 +19,13 @@ from .permissions import (
     PEDIDOS_PENDIENTES_PRODUCCION_SLUG,
     user_can_access_inventario_deposito,
     FABRICADOS_SUPERART_SLUG,
+    PRODUCCION_MARCA_SUPERART_SLUG,
+    COMPRAS_MARCA_SUPERART_SLUG,
+    CONSIGNACION_STOCK_SLUG,
     user_can_access_fabricados_superart,
+    user_can_access_produccion_marca_superart,
+    user_can_access_compras_marca_superart,
+    user_can_access_consignacion_stock,
     user_can_access_pedidos_pendientes_produccion,
 )
 from .services.semantic_service import SemanticService
@@ -115,6 +121,24 @@ class ReportQueryAPIView(APIView):
             if not user_can_access_fabricados_superart(request.user):
                 return Response(
                     {"detail": "Fabricados por superartículo no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.slug == PRODUCCION_MARCA_SUPERART_SLUG:
+            if not user_can_access_produccion_marca_superart(request.user):
+                return Response(
+                    {"detail": "Producción por marca no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.slug == COMPRAS_MARCA_SUPERART_SLUG:
+            if not user_can_access_compras_marca_superart(request.user):
+                return Response(
+                    {"detail": "Compras por marca no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.slug == CONSIGNACION_STOCK_SLUG:
+            if not user_can_access_consignacion_stock(request.user):
+                return Response(
+                    {"detail": "Stock en consignación no permitido."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif report.is_operational() and not OperationalReportsPermission().has_permission(request, self):
@@ -459,6 +483,24 @@ class ReportExportAPIView(APIView):
             if not user_can_access_fabricados_superart(request.user):
                 return Response(
                     {"detail": "Fabricados por superartículo no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.slug == PRODUCCION_MARCA_SUPERART_SLUG:
+            if not user_can_access_produccion_marca_superart(request.user):
+                return Response(
+                    {"detail": "Producción por marca no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.slug == COMPRAS_MARCA_SUPERART_SLUG:
+            if not user_can_access_compras_marca_superart(request.user):
+                return Response(
+                    {"detail": "Compras por marca no permitido."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif report.slug == CONSIGNACION_STOCK_SLUG:
+            if not user_can_access_consignacion_stock(request.user):
+                return Response(
+                    {"detail": "Stock en consignación no permitido."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif report.is_operational() and not OperationalReportsPermission().has_permission(request, self):

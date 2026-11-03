@@ -6,7 +6,10 @@
 
   const dashboardRoot = document.querySelector("#dashboard-root");
   const reportSlug = dashboardRoot?.dataset?.reportSlug || "";
-  if (reportSlug !== "fabricados-superart") return;
+  if (reportSlug !== "fabricados-superart" &&
+      reportSlug !== "produccion-marca-superart" &&
+      reportSlug !== "compras-marca-superart" &&
+      reportSlug !== "consignacion-stock") return;
 
   const root = document.getElementById("fsa-filtros-root");
   const marcasUrl = root?.dataset?.fsaMarcasUrl || "";

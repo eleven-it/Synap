@@ -120,7 +120,20 @@ function isPedidosPendientesProduccionSlug(slug) {
 }
 
 function isFabricadosSuperartSlug(slug) {
-  return slug === "fabricados-superart";
+  return (
+    slug === "fabricados-superart" ||
+    slug === "produccion-marca-superart" ||
+    slug === "compras-marca-superart" ||
+    slug === "consignacion-stock"
+  );
+}
+
+function isBestsoxMarcaInformeSlug(slug) {
+  return slug === "produccion-marca-superart" || slug === "compras-marca-superart";
+}
+
+function isConsignacionStockSlug(slug) {
+  return slug === "consignacion-stock";
 }
 
 /** Informes con doble período (facturación/remitos + backorder), mismos filtros que BO. */
@@ -10176,6 +10189,10 @@ if (dashboardRoot) {
       appendTagMultiFilter("marcas_excluidos", filters, "marcas_excluidos");
       appendTagMultiFilter("superarts_incluidos", filters, "q_superart");
       appendTagMultiFilter("superarts_excluidos", filters, "superarts_excluidos");
+      if (isConsignacionStockSlug(currentReportSlug)) {
+        const corte = document.getElementById("corte_facturas")?.value;
+        if (corte) filters.corte_facturas = corte;
+      }
     } else if (isInventarioDepositoSlug(currentReportSlug)) {
       const fechaCorte = document.getElementById("fecha_corte")?.value;
       if (fechaCorte) filters.fecha_corte = fechaCorte;
@@ -10776,7 +10793,37 @@ if (dashboardRoot) {
               });
             });
           }
-        } else if (isFabricadosSuperartSlug(currentReportSlug)) {
+        } else if (isBestsoxMarcaInformeSlug(currentReportSlug)) {
+          try {
+            window.bestsoxMarcaInformeHandler?.processData?.({
+              data: payload.data || [],
+              totals: payload.totals || {},
+              meta: payload.meta || {},
+              notes: payload.notes || [],
+            });
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
+        } else if (isConsignacionStockSlug(currentReportSlug)) {
+          try {
+            window.consignacionStockHandler?.processData?.({
+              data: payload.data || [],
+              totals: payload.totals || {},
+              meta: payload.meta || {},
+              notes: payload.notes || [],
+            });
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
+        } else if (currentReportSlug === "fabricados-superart") {
           try {
             const fsaResponse = {
               data: payload.data || [],

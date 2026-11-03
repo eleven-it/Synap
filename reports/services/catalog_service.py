@@ -7,6 +7,7 @@ from django.db.models import Q
 
 from core.utils.permissions import user_has_full_access
 from ..models import ReportDefinition, ReportCategory
+from ..permissions import MPR_CATALOG_OR_PERMISSION_SLUGS, user_has_mpr_reportes
 
 # Slugs con metadata inferida «comprobantes» / «listados» (orden + etiqueta «Informe legacy» en tarjetas).
 _LEGACY_COMPROBANTES_SLUGS = frozenset(
@@ -42,6 +43,10 @@ _LEGACY_LISTADOS_SLUGS = frozenset(
         "stock-existencias",
         "inventario-deposito-articulo",
         "pedidos-pendientes-produccion",
+        "fabricados-superart",
+        "produccion-marca-superart",
+        "compras-marca-superart",
+        "consignacion-stock",
         "resumen-ejecutivo-ventas",
         "command-center-gerencial",
     }
@@ -209,6 +214,7 @@ class CatalogService:
 
         can_operational = self.user_has_permission("reports.view_operational")
         can_managerial = self.user_has_permission("reports.view_managerial")
+        can_mpr_catalog = user_has_mpr_reportes(self.user)
 
         for definition in queryset:
             if definition.slug == "command-center-gerencial":
@@ -219,7 +225,10 @@ class CatalogService:
             elif definition.category == ReportCategory.MANAGERIAL and not can_managerial:
                 continue
             if definition.category == ReportCategory.OPERATIONAL and not can_operational:
-                continue
+                if not (
+                    definition.slug in MPR_CATALOG_OR_PERMISSION_SLUGS and can_mpr_catalog
+                ):
+                    continue
 
             config = definition.config or {}
             metadata = definition.metadata or {}
