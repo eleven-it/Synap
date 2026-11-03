@@ -11,32 +11,12 @@ from core.utils.administranet_types import to_date_or_none
 from mpr.reportes_transicion_lote_sql import normalizar_meses_yyyy_mm
 from mpr.services import TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO, mysql_cursor
 from reports.services.articulo_venta_sql import sql_excluir_tipo_art_gasto
+from reports.services.compras_terceros_config import TIPO_COMP_MOV_INTERNO_ENTRADA
+from reports.services.compras_terceros_sql import sql_marca_join, _marca_filter_sql
 
 logger = logging.getLogger(__name__)
 
 FASON_DEPOSITO_SEMI = 3
-FASON_TIPO_MOV = "Mov. Interno Entrada"
-
-
-def _marca_sql(
-    marcas_ids: Optional[Sequence[int]],
-    marcas_excluidos_ids: Optional[Sequence[int]],
-    params: List[Any],
-) -> str:
-    sql = ""
-    if marcas_ids:
-        ids = [int(m) for m in marcas_ids if m is not None]
-        if ids:
-            ph = ",".join(["%s"] * len(ids))
-            sql += f" AND a.CodigoMarca IN ({ph})"
-            params.extend(ids)
-    if marcas_excluidos_ids:
-        ids_ex = [int(m) for m in marcas_excluidos_ids if m is not None]
-        if ids_ex:
-            ph_ex = ",".join(["%s"] * len(ids_ex))
-            sql += f" AND (a.CodigoMarca IS NULL OR a.CodigoMarca NOT IN ({ph_ex}))"
-            params.extend(ids_ex)
-    return sql
 
 
 def fetch_produccion_mpr_filas(
@@ -51,7 +31,7 @@ def fetch_produccion_mpr_filas(
         return []
     ph_meses = ",".join(["%s"] * len(meses))
     params: List[Any] = [TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO, *meses]
-    marca_sql = _marca_sql(marcas_ids, marcas_excluidos_ids, params)
+    marca_sql = _marca_filter_sql(marcas_ids, marcas_excluidos_ids, params)
     gasto_sql = sql_excluir_tipo_art_gasto("a")
     cursor.execute(
         f"""
@@ -66,7 +46,7 @@ def fetch_produccion_mpr_filas(
                'produccion' AS fuente
         FROM mpr_transicion_lote t
         INNER JOIN articulo a ON a.IDArt = t.id_articulo
-        LEFT JOIN marca m ON m.CodigoMarca = a.CodigoMarca
+        {sql_marca_join()}
         WHERE t.tipo_origen = %s
           AND t.tipo_destino = %s
           AND DATE_FORMAT(t.creado_en, '%%Y-%%m') IN ({ph_meses})
@@ -89,8 +69,13 @@ def fetch_produccion_fason_filas(
     marcas_ids: Optional[Sequence[int]] = None,
     marcas_excluidos_ids: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
-    params: List[Any] = [FASON_TIPO_MOV, FASON_DEPOSITO_SEMI, desde.isoformat(), hasta.isoformat()]
-    marca_sql = _marca_sql(marcas_ids, marcas_excluidos_ids, params)
+    params: List[Any] = [
+        TIPO_COMP_MOV_INTERNO_ENTRADA,
+        FASON_DEPOSITO_SEMI,
+        desde.isoformat(),
+        hasta.isoformat(),
+    ]
+    marca_sql = _marca_filter_sql(marcas_ids, marcas_excluidos_ids, params)
     gasto_sql = sql_excluir_tipo_art_gasto("a")
     cursor.execute(
         f"""
@@ -106,8 +91,8 @@ def fetch_produccion_fason_filas(
         FROM stock s
         INNER JOIN movimiento_stock ms ON ms.codigo_movimiento = s.CodigoMovimiento
         INNER JOIN articulo a ON a.IDArt = s.IDArt
-        LEFT JOIN marca m ON m.CodigoMarca = a.CodigoMarca
-        WHERE ms.tipo_mov = %s
+        {sql_marca_join()}
+        WHERE s.TipoComp = %s
           AND s.CodDeposito = %s
           AND IFNULL(s.Anulado, 'No') = 'No'
           AND IFNULL(ms.anulado, 'No') = 'No'
@@ -117,6 +102,7 @@ def fetch_produccion_fason_filas(
              OR UPPER(COALESCE(ms.detalle, '')) LIKE '%%TEJEDURIA M%%'
              OR UPPER(COALESCE(ms.detalle, '')) LIKE '%%TEJEDURÍA S%%'
              OR UPPER(COALESCE(ms.detalle, '')) LIKE '%%TEJEDURÍA M%%'
+             OR UPPER(COALESCE(ms.detalle, '')) LIKE '%%FABRICA S Y M%%'
           )
           AND {gasto_sql}
           {marca_sql}
@@ -151,24 +137,20 @@ def consultar_produccion_marca_superart(
     meses_norm = normalizar_meses_yyyy_mm(meses)
     desde = to_date_or_none(desde_iso)
     hasta = to_date_or_none(hasta_iso)
-    try:
-        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
-            mpr = fetch_produccion_mpr_filas(
+    with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+        mpr = fetch_produccion_mpr_filas(
+            cursor,
+            meses_norm,
+            marcas_ids=marcas_incluidos,
+            marcas_excluidos_ids=marcas_excluidos,
+        )
+        fason: List[Dict[str, Any]] = []
+        if desde and hasta:
+            fason = fetch_produccion_fason_filas(
                 cursor,
-                meses_norm,
+                desde=desde,
+                hasta=hasta,
                 marcas_ids=marcas_incluidos,
                 marcas_excluidos_ids=marcas_excluidos,
             )
-            fason: List[Dict[str, Any]] = []
-            if desde and hasta:
-                fason = fetch_produccion_fason_filas(
-                    cursor,
-                    desde=desde,
-                    hasta=hasta,
-                    marcas_ids=marcas_incluidos,
-                    marcas_excluidos_ids=marcas_excluidos,
-                )
-    except Exception as exc:
-        logger.warning("consultar_produccion_marca_superart %s: %s", base_empresa, exc, exc_info=True)
-        return []
     return mpr + fason

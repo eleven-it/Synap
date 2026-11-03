@@ -8,10 +8,9 @@ administraNET BestSox; ver docs/reports/BESTSOX_MARCA_VALIDATION_AGO_OCT_2026.md
 """
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase, TestCase, tag
+from django.test import SimpleTestCase, TestCase
 
 from reports.services.bestsox_marca_reports_seed import (
     COMPRAS_MARCA_SUPERART_SLUG,
@@ -161,31 +160,3 @@ class BestsoxMarcaReportsReferenceRunnersTest(TestCase):
             self.assertEqual(int(got["packs_saldo"]), int(marca["packs"]))
             self.assertEqual(int(got["prendas_saldo"]), int(marca["prendas"]))
             self.assertAlmostEqual(float(got["docenas_saldo"]), float(marca["docenas"]), places=2)
-
-
-@tag("bestsox_mysql")
-class BestsoxMarcaReportsLiveMysqlTest(TestCase):
-    """
-    Opcional: `BESTSOX_BASE_EMPRESA=...` + pool MySQL Synap.
-    SET SESSION TRANSACTION READ ONLY en la conexión del pool (si está configurado).
-    """
-
-    def _base(self):
-        return (os.environ.get("BESTSOX_BASE_EMPRESA") or "").strip()
-
-    def setUp(self):
-        if not self._base():
-            self.skipTest("BESTSOX_BASE_EMPRESA no configurada")
-
-    def test_live_produccion_grand_total(self):
-        from reports.services.produccion_marca_superart_query import consultar_produccion_marca_superart
-
-        filas = consultar_produccion_marca_superart(
-            self._base(),
-            meses=meses_periodo(),
-            desde_iso=periodo_filtros()["desde"],
-            hasta_iso=periodo_filtros()["hasta"],
-        )
-        ref = load_reference()["produccion"]["total"]
-        total_pares = sum(float(r.get("cantidad") or 0) for r in filas)
-        self.assertEqual(int(round(total_pares)), int(ref["pares"]["total"]))

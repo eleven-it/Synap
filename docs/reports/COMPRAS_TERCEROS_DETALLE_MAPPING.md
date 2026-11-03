@@ -4,42 +4,41 @@ El informe **Compras por marca y SuperArtículo** (`compras-marca-superart`) inc
 
 1. **Compras estándar**: líneas `stock` con `TipoComp` Compra o Remito Entrada, `Tipo='Proveedor'`, comprobantes no anulados, artículos terminados (no insumos ni Gasto).
 2. **Exclusiones**: facturas a artículo genérico `1805` Mercaderías Terminadas con cantidad 1; anticipos; artículos tipo Gasto.
-3. **Ingresos agregados por regla**: movimientos internos/ajustes en depósito terminado identificados por proveedor o texto en `movimiento_stock.Detalle` / `comp_ped.Detalle`.
+3. **Ingresos agregados por regla**: movimientos en depósito terminado identificados por **proveedor** (`cuentaproveedor.Codigo`) o **texto en `movimiento_stock.detalle`**, con rango de fechas en `movimiento_stock.Fecha`.
 
 ## Configuración
 
-Lista de reglas en código (`reports/services/compras_terceros_config.py`) con override opcional:
+Reglas en `reports/services/compras_terceros_config.py`, override opcional:
 
 ```python
-# settings.py
 REPORTS_COMPRAS_TERCEROS_REGLAS = [
     {
         "id": "selene_import",
         "match": {"detalle_contains": "INGRESO EXPORTACION SELENE"},
         "deposito_id": 6,
-        "tipo_movimiento": "Mov. Interno Entrada",
+        "require_tipo_comp": "Mov. Interno Entrada",
     },
     {
         "id": "mys_underwear",
         "match": {"codigo_proveedor": 640},
-        "movimiento_ids": [17219, 17221, 17222, 18677],
         "deposito_id": 6,
     },
 ]
 ```
 
-Campos soportados por regla:
-
 | Campo | Uso |
 | --- | --- |
-| `match.detalle_contains` | Subcadena case-insensitive en detalle del movimiento |
-| `match.codigo_proveedor` | Código proveedor en cabecera cuando exista |
-| `movimiento_ids` | Lista explícita de `movimiento_stock.codigo_movimiento` |
-| `deposito_id` | Restringe líneas al depósito indicado |
-| `tipo_movimiento` | Ej. `Mov. Interno Entrada`, `Ajuste` |
+| `match.detalle_contains` | Subcadena en `movimiento_stock.detalle` (parametrizada) |
+| `match.codigo_proveedor` | Proveedor en `cuentaproveedor` (incluye ajustes sin filtrar motivo) |
+| `require_tipo_comp` | Opcional; ex. Selene exige `stock.TipoComp = 'Mov. Interno Entrada'` |
+| `deposito_id` | Restringe `stock.CodDeposito` |
 
-Las reglas son **solo lectura** en runtime; cambios requieren despliegue o override en settings.
+No se usan listas fijas de `codigo_movimiento` / `ID_movimiento_stock`: nuevos ingresos del mismo proveedor o detalle entran solos.
+
+## Dedupe
+
+Cada línea se trae con `stock.id_stock`. Al combinar estándar + reglas se **deduplica por id_stock** (no suma). La compra estándar además excluye líneas que ya cumplen alguna regla (`NOT EXISTS`).
 
 ## Validación BestSox Ago–Oct 2026
 
-Totales de referencia: **30.182 packs / 34.005 prendas / 2.833,75 docenas** (Excel adjunto).
+Totales de referencia: **30.182 packs / 34.005 prendas / 2.833,75 docenas**.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from core.utils.administranet_types import to_date_or_none
 
@@ -16,40 +16,17 @@ from reports.services.articulo_pack_unidades import (
     prendas_desde_packs,
     unidades_por_pack_compras,
 )
-from reports.services.compras_terceros_config import get_compras_terceros_reglas
+from reports.services.compras_terceros_sql import (
+    fetch_all_compras_reglas_extra_filas,
+    sql_exclude_stock_matching_terceros_reglas,
+    sql_marca_join,
+    _finished_product_sql,
+    _marca_filter_sql,
+)
 
 logger = logging.getLogger(__name__)
 
 ARTICULO_MERCADERIAS_GENERICO = 1805
-
-
-def _marca_sql(
-    marcas_ids: Optional[Sequence[int]],
-    marcas_excluidos_ids: Optional[Sequence[int]],
-    params: List[Any],
-) -> str:
-    sql = ""
-    if marcas_ids:
-        ids = [int(m) for m in marcas_ids if m is not None]
-        if ids:
-            ph = ",".join(["%s"] * len(ids))
-            sql += f" AND a.CodigoMarca IN ({ph})"
-            params.extend(ids)
-    if marcas_excluidos_ids:
-        ids_ex = [int(m) for m in marcas_excluidos_ids if m is not None]
-        if ids_ex:
-            ph_ex = ",".join(["%s"] * len(ids_ex))
-            sql += f" AND (a.CodigoMarca IS NULL OR a.CodigoMarca NOT IN ({ph_ex}))"
-            params.extend(ids_ex)
-    return sql
-
-
-def _finished_product_sql(alias: str = "a") -> str:
-    a = alias.strip() or "a"
-    return (
-        f"({a}.tipo_art_fab IS NULL OR TRIM({a}.tipo_art_fab) = '' "
-        f"OR {a}.tipo_art_fab IN ('Terminado', 'Tercero'))"
-    )
 
 
 def fetch_compras_standard_filas(
@@ -62,18 +39,14 @@ def fetch_compras_standard_filas(
 ) -> List[Dict[str, Any]]:
     hasta_excl = hasta + timedelta(days=1)
     params: List[Any] = [desde.isoformat(), hasta_excl.isoformat(), ARTICULO_MERCADERIAS_GENERICO]
-    marca_sql = _marca_sql(marcas_ids, marcas_excluidos_ids, params)
+    marca_sql = _marca_filter_sql(marcas_ids, marcas_excluidos_ids, params)
     gasto_sql = sql_excluir_tipo_art_gasto("a")
     finished_sql = _finished_product_sql("a")
-    excl_mov = _movimiento_ids_excluidos_compras_standard()
-    excl_mov_sql = ""
-    if excl_mov:
-        ph_ex = ",".join(["%s"] * len(excl_mov))
-        excl_mov_sql = f" AND s.CodigoMovimiento NOT IN ({ph_ex})"
-        params.extend(excl_mov)
+    exclude_reglas_sql = sql_exclude_stock_matching_terceros_reglas(params)
     cursor.execute(
         f"""
-        SELECT s.IDArt AS id_articulo,
+        SELECT s.id_stock,
+               s.IDArt AS id_articulo,
                COALESCE(a.id_manual, '') AS id_manual,
                COALESCE(a.CodigoMarca, 0) AS codigo_marca,
                COALESCE(m.NombreMarca, '') AS nombre_marca,
@@ -81,11 +54,11 @@ def fetch_compras_standard_filas(
                COALESCE(a.NombreArticulo, '') AS nombre_articulo,
                COALESCE(um.nombre_unimed, '') AS nombre_unimed,
                DATE_FORMAT(cp.Fecha, '%%Y-%%m') AS ym,
-               COALESCE(SUM(s.Cantidad), 0) AS packs
+               COALESCE(s.Cantidad, 0) AS packs
         FROM stock s
         INNER JOIN cuentaproveedor cp ON cp.CodigoMovimiento = s.CodigoMovimiento
         INNER JOIN articulo a ON a.IDArt = s.IDArt
-        LEFT JOIN marca m ON m.CodigoMarca = a.CodigoMarca
+        {sql_marca_join()}
         LEFT JOIN unidmed um ON um.id_unimed = a.id_unimed
         WHERE IFNULL(s.Anulado, 'No') = 'No'
           AND IFNULL(cp.Anulado, 'No') = 'No'
@@ -99,137 +72,17 @@ def fetch_compras_standard_filas(
                    AND cp.TipoComprobante IN ('FA','FC','FM'))
           AND {finished_sql}
           AND {gasto_sql}
-          {excl_mov_sql}
+          {exclude_reglas_sql}
           {marca_sql}
-        GROUP BY s.IDArt, COALESCE(a.id_manual, ''), ym,
-                 COALESCE(a.CodigoMarca, 0), COALESCE(m.NombreMarca, ''),
-                 COALESCE(a.NombreArticulo, ''), COALESCE(um.nombre_unimed, '')
         """,
         params,
     )
-    return _expand_packs_rows(cursor)
+    return _rows_as_dicts(cursor)
 
 
-def fetch_compras_reglas_extra(
-    cursor,
-    *,
-    desde: date,
-    hasta: date,
-    marcas_ids: Optional[Sequence[int]] = None,
-    marcas_excluidos_ids: Optional[Sequence[int]] = None,
-) -> List[Dict[str, Any]]:
+def _expand_stock_lines(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-    hasta_excl = hasta + timedelta(days=1)
-    for regla in get_compras_terceros_reglas():
-        mov_ids = regla.get("movimiento_ids") or []
-        match = regla.get("match") or {}
-        detalle_kw = (match.get("detalle_contains") or "").strip()
-        cod_prov = match.get("codigo_proveedor")
-        deposito = regla.get("deposito_id")
-        tipo_mov = (regla.get("tipo_movimiento") or "").strip()
-
-        if mov_ids:
-            ph = ",".join(["%s"] * len(mov_ids))
-            params: List[Any] = list(mov_ids)
-            extra = ""
-            if deposito is not None:
-                extra += " AND s.CodDeposito = %s"
-                params.append(int(deposito))
-            marca_sql = _marca_sql(marcas_ids, marcas_excluidos_ids, params)
-            gasto_sql = sql_excluir_tipo_art_gasto("a")
-            finished_sql = _finished_product_sql("a")
-            cursor.execute(
-                f"""
-                SELECT s.IDArt AS id_articulo,
-                       COALESCE(a.id_manual, '') AS id_manual,
-                       COALESCE(a.CodigoMarca, 0) AS codigo_marca,
-                       COALESCE(m.NombreMarca, '') AS nombre_marca,
-                       COALESCE(a.IDArt, s.IDArt) AS codigo_articulo,
-                       COALESCE(a.NombreArticulo, '') AS nombre_articulo,
-                       COALESCE(um.nombre_unimed, '') AS nombre_unimed,
-                       DATE_FORMAT(ms.Fecha, '%%Y-%%m') AS ym,
-                       COALESCE(SUM(s.Cantidad), 0) AS packs
-                FROM stock s
-                INNER JOIN movimiento_stock ms ON ms.codigo_movimiento = s.CodigoMovimiento
-                INNER JOIN articulo a ON a.IDArt = s.IDArt
-                LEFT JOIN marca m ON m.CodigoMarca = a.CodigoMarca
-                LEFT JOIN unidmed um ON um.id_unimed = a.id_unimed
-                WHERE ms.codigo_movimiento IN ({ph})
-                  AND IFNULL(s.Anulado, 'No') = 'No'
-                  AND IFNULL(ms.anulado, 'No') = 'No'
-                  {extra}
-                  AND {finished_sql}
-                  AND {gasto_sql}
-                  {marca_sql}
-                GROUP BY s.IDArt, ym, COALESCE(a.id_manual, ''),
-                         COALESCE(a.CodigoMarca, 0), COALESCE(m.NombreMarca, ''),
-                         COALESCE(a.NombreArticulo, ''), COALESCE(um.nombre_unimed, '')
-                """,
-                params,
-            )
-            out.extend(_expand_packs_rows(cursor))
-            continue
-
-        if detalle_kw:
-            params = [f"%{detalle_kw.upper()}%", desde.isoformat(), hasta_excl.isoformat()]
-            extra = ""
-            if deposito is not None:
-                extra += " AND s.CodDeposito = %s"
-                params.append(int(deposito))
-            if tipo_mov:
-                extra += " AND ms.tipo_mov = %s"
-                params.append(tipo_mov)
-            if cod_prov is not None:
-                extra += " AND cp.Codigo = %s"
-                params.append(int(cod_prov))
-            marca_sql = _marca_sql(marcas_ids, marcas_excluidos_ids, params)
-            gasto_sql = sql_excluir_tipo_art_gasto("a")
-            finished_sql = _finished_product_sql("a")
-            join_cp = ""
-            if cod_prov is not None:
-                join_cp = "LEFT JOIN cuentaproveedor cp ON cp.CodigoMovimiento = s.CodigoMovimiento"
-            cursor.execute(
-                f"""
-                SELECT s.IDArt AS id_articulo,
-                       COALESCE(a.id_manual, '') AS id_manual,
-                       COALESCE(a.CodigoMarca, 0) AS codigo_marca,
-                       COALESCE(m.NombreMarca, '') AS nombre_marca,
-                       COALESCE(a.IDArt, s.IDArt) AS codigo_articulo,
-                       COALESCE(a.NombreArticulo, '') AS nombre_articulo,
-                       COALESCE(um.nombre_unimed, '') AS nombre_unimed,
-                       DATE_FORMAT(ms.Fecha, '%%Y-%%m') AS ym,
-                       COALESCE(SUM(s.Cantidad), 0) AS packs
-                FROM stock s
-                INNER JOIN movimiento_stock ms ON ms.codigo_movimiento = s.CodigoMovimiento
-                {join_cp}
-                INNER JOIN articulo a ON a.IDArt = s.IDArt
-                LEFT JOIN marca m ON m.CodigoMarca = a.CodigoMarca
-                LEFT JOIN unidmed um ON um.id_unimed = a.id_unimed
-                WHERE UPPER(COALESCE(ms.detalle, '')) LIKE %s
-                  AND ms.Fecha >= %s AND ms.Fecha < %s
-                  AND IFNULL(s.Anulado, 'No') = 'No'
-                  AND IFNULL(ms.anulado, 'No') = 'No'
-                  {extra}
-                  AND {finished_sql}
-                  AND {gasto_sql}
-                  {marca_sql}
-                GROUP BY s.IDArt, ym, COALESCE(a.id_manual, ''),
-                         COALESCE(a.CodigoMarca, 0), COALESCE(m.NombreMarca, ''),
-                         COALESCE(a.NombreArticulo, ''), COALESCE(um.nombre_unimed, '')
-                """,
-                params,
-            )
-            out.extend(_expand_packs_rows(cursor))
-    return out
-
-
-def _expand_packs_rows(cursor) -> List[Dict[str, Any]]:
-    rows = cursor.fetchall() or []
-    if rows and not isinstance(rows[0], dict):
-        cols = [d[0] for d in cursor.description] if cursor.description else []
-        rows = [dict(zip(cols, r)) for r in rows]
-    out: List[Dict[str, Any]] = []
-    for row in rows:
+    for row in rows or []:
         packs = float(row.get("packs") or 0)
         if abs(packs) < 1e-9:
             continue
@@ -251,33 +104,52 @@ def _expand_packs_rows(cursor) -> List[Dict[str, Any]]:
     return out
 
 
+def _dedupe_compras_filas(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Una sola línea por id_stock (primera fuente gana; estándar va antes que reglas extra)."""
+    seen: Dict[Any, Dict[str, Any]] = {}
+    orden: List[Any] = []
+    for row in filas or []:
+        sid = row.get("id_stock")
+        key = sid if sid is not None else (
+            row.get("regla_id"),
+            row.get("id_articulo"),
+            row.get("ym"),
+            row.get("packs"),
+        )
+        if key in seen:
+            continue
+        seen[key] = row
+        orden.append(key)
+    return [seen[k] for k in orden]
+
+
+def _aggregate_compras_por_articulo_mes(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    buckets: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+    for row in filas or []:
+        key = (
+            row.get("id_articulo"),
+            str(row.get("ym") or ""),
+            row.get("id_manual"),
+            row.get("codigo_marca"),
+            row.get("nombre_marca"),
+            row.get("nombre_articulo"),
+            row.get("nombre_unimed"),
+        )
+        if key not in buckets:
+            buckets[key] = {**row, "packs": 0.0, "prendas": 0.0, "docenas": 0.0, "cantidad": 0.0}
+            buckets[key].pop("id_stock", None)
+        acc = buckets[key]
+        for field in ("packs", "prendas", "docenas", "cantidad"):
+            acc[field] = round(float(acc.get(field) or 0) + float(row.get(field) or 0), 4)
+    return list(buckets.values())
+
+
 def _rows_as_dicts(cursor) -> List[Dict[str, Any]]:
     rows = cursor.fetchall() or []
     if rows and not isinstance(rows[0], dict):
         cols = [d[0] for d in cursor.description] if cursor.description else []
         return [dict(zip(cols, r)) for r in rows]
     return list(rows)
-
-
-def _dedupe_compras_filas(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Evita doble conteo si un movimiento cae en compra estándar y regla extra."""
-    merged: Dict[tuple, Dict[str, Any]] = {}
-    for row in filas or []:
-        key = (row.get("id_articulo"), str(row.get("ym") or ""))
-        if key not in merged:
-            merged[key] = dict(row)
-            continue
-        acc = merged[key]
-        for field in ("packs", "prendas", "docenas", "cantidad"):
-            acc[field] = round(float(acc.get(field) or 0) + float(row.get(field) or 0), 4)
-    return list(merged.values())
-
-
-def _movimiento_ids_excluidos_compras_standard() -> List[int]:
-    ids: List[int] = []
-    for regla in get_compras_terceros_reglas():
-        ids.extend(int(x) for x in (regla.get("movimiento_ids") or []) if x is not None)
-    return sorted(set(ids))
 
 
 def consultar_compras_marca_superart(
@@ -295,28 +167,24 @@ def consultar_compras_marca_superart(
     hasta = to_date_or_none(hasta_iso)
     if not desde or not hasta:
         return []
-    try:
-        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
-            std = fetch_compras_standard_filas(
-                cursor,
-                desde=desde,
-                hasta=hasta,
-                marcas_ids=marcas_incluidos,
-                marcas_excluidos_ids=marcas_excluidos,
-            )
-            extra = fetch_compras_reglas_extra(
-                cursor,
-                desde=desde,
-                hasta=hasta,
-                marcas_ids=marcas_incluidos,
-                marcas_excluidos_ids=marcas_excluidos,
-            )
-    except Exception as exc:
-        logger.warning("consultar_compras_marca_superart %s: %s", base_empresa, exc, exc_info=True)
-        return []
-    # Filtrar filas fuera de meses pedidos si aplica
+    with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+        std = fetch_compras_standard_filas(
+            cursor,
+            desde=desde,
+            hasta=hasta,
+            marcas_ids=marcas_incluidos,
+            marcas_excluidos_ids=marcas_excluidos,
+        )
+        extra = fetch_all_compras_reglas_extra_filas(
+            cursor,
+            desde=desde,
+            hasta=hasta,
+            marcas_ids=marcas_incluidos,
+            marcas_excluidos_ids=marcas_excluidos,
+        )
+    expanded = _expand_stock_lines(_dedupe_compras_filas(std + extra))
+    combined = _aggregate_compras_por_articulo_mes(expanded)
     meses_set = set(normalizar_meses_yyyy_mm(meses))
-    combined = _dedupe_compras_filas(std + extra)
     if meses_set:
         combined = [r for r in combined if str(r.get("ym") or "") in meses_set]
     return combined

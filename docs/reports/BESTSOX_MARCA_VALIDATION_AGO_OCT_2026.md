@@ -93,6 +93,10 @@ Para validación contra administraNET real: exportar `BESTSOX_BASE_EMPRESA` y co
 
 ## Cambios de consulta en el PR
 
-- **Compras:** exclusión de `movimiento_ids` de reglas extra en compra estándar + deduplicación por `(id_articulo, ym)` al combinar fuentes.
+- Join marca: `m.CodMarca = a.CodigoMarca` (tabla `marca`).
+- Fasón / Selene: filtro por `stock.TipoComp = 'Mov. Interno Entrada'`; fasón incluye detalle `FABRICA S Y M`.
+- Compras terceros: reglas por proveedor/detalle + rango de fechas (sin IDs fijos); dedupe por `id_stock`.
+- Consignación: `cliente.nombre_cliente`, LIKE parametrizado, subquery `rem_fact` correlacionada en WHERE.
+- Errores SQL: ya no se tragan en `consultar_*` (propagan al runner con log `error`).
 
-- **Consignación / Producción:** sin ajuste numérico en esta validación (pendiente corrida live MySQL).
+Para revalidar en BestSox: `BESTSOX_BASE_EMPRESA=<base> python manage.py test reports.tests.test_bestsox_marca_sql_contract --tag=bestsox_mysql`.

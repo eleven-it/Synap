@@ -49,7 +49,12 @@ def run_produccion_marca_superart(report, payload: Dict, user) -> QueryResult:
             hasta_iso=filtros.get("hasta_iso"),
         )
     except Exception as exc:
-        logger.warning("run_produccion_marca_superart %s: %s", base_empresa, exc, exc_info=True)
+        logger.error(
+            "run_produccion_marca_superart %s: %s",
+            base_empresa,
+            exc,
+            exc_info=True,
+        )
         return QueryResult(
             meta=meta_base,
             data=[],

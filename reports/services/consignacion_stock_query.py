@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 from core.utils.administranet_types import to_date_or_none
 
@@ -14,17 +14,20 @@ from reports.services.articulo_pack_unidades import (
     prendas_desde_packs,
     unidades_por_pack_compras,
 )
+from reports.services.compras_terceros_sql import sql_marca_join
 
 logger = logging.getLogger(__name__)
 
 CONSIGNACION_DETALLE_KEYWORD = "EN CONSIGNACION"
 
 
-def _remito_es_consignacion_sql(alias: str = "h") -> str:
+def _remito_es_consignacion_sql(alias: str, params: List[Any]) -> str:
+    """Predicado REM consignación; el LIKE va parametrizado (evita % en f-string MySQL)."""
+    params.append(f"%{CONSIGNACION_DETALLE_KEYWORD}%")
     h = alias.strip() or "h"
     return f"""(
         TRIM(COALESCE({h}.modalidad_remit, '')) IN ('Consignacion', 'Consignación')
-        OR UPPER(COALESCE({h}.Detalle, '')) LIKE '%{CONSIGNACION_DETALLE_KEYWORD}%'
+        OR UPPER(COALESCE({h}.Detalle, '')) LIKE %s
     )"""
 
 
@@ -35,14 +38,15 @@ def fetch_remitos_consignacion_cabeceras(
     remito_hasta: date,
 ) -> List[Dict[str, Any]]:
     hasta_excl = remito_hasta + timedelta(days=1)
-    cons = _remito_es_consignacion_sql("h")
+    params: List[Any] = [remito_desde.isoformat(), hasta_excl.isoformat()]
+    cons = _remito_es_consignacion_sql("h", params)
     cursor.execute(
         f"""
         SELECT h.CodigoMovimiento,
                h.NroComprobante,
                h.Fecha,
                h.Codigo AS codigo_cliente,
-               COALESCE(c.NombreCliente, '') AS nombre_cliente,
+               COALESCE(c.nombre_cliente, '') AS nombre_cliente,
                TRIM(COALESCE(h.modalidad_remit, '')) AS modalidad_remit,
                COALESCE(h.Detalle, '') AS detalle,
                CASE
@@ -58,7 +62,7 @@ def fetch_remitos_consignacion_cabeceras(
           AND {cons}
         ORDER BY h.Fecha, h.CodigoMovimiento
         """,
-        [remito_desde.isoformat(), hasta_excl.isoformat()],
+        params,
     )
     rows = cursor.fetchall() or []
     if rows and not isinstance(rows[0], dict):
@@ -74,16 +78,18 @@ def fetch_saldo_consignacion_por_articulo(
     remito_hasta: date,
     corte_facturas: date,
 ) -> List[Dict[str, Any]]:
-    """
-    Agrega remitido / facturado / devuelto / saldo por cliente × artículo.
-    """
     hasta_remito = remito_hasta + timedelta(days=1)
     corte_excl = corte_facturas + timedelta(days=1)
-    cons = _remito_es_consignacion_sql("h")
+    params: List[Any] = [
+        corte_excl.isoformat(),
+        remito_desde.isoformat(),
+        hasta_remito.isoformat(),
+    ]
+    cons = _remito_es_consignacion_sql("h", params)
     cursor.execute(
         f"""
         SELECT h.Codigo AS codigo_cliente,
-               COALESCE(c.NombreCliente, '') AS nombre_cliente,
+               COALESCE(c.nombre_cliente, '') AS nombre_cliente,
                COALESCE(a.CodigoMarca, 0) AS codigo_marca,
                COALESCE(m.NombreMarca, '') AS nombre_marca,
                s.IDArt AS id_articulo,
@@ -97,9 +103,9 @@ def fetch_saldo_consignacion_por_articulo(
                        FROM stock stf
                        INNER JOIN cuentacliente fa ON fa.CodigoMovimiento = stf.CodigoMovimiento
                        INNER JOIN rem_fact rf ON rf.CodigoMovimientoF = fa.CodigoMovimiento
-                           AND rf.CodigoMovimientoR = h.CodigoMovimiento
                            AND IFNULL(rf.Anulado, 'No') = 'No'
                        WHERE stf.id_stock_remito_origen = s.id_stock
+                         AND rf.CodigoMovimientoR = h.CodigoMovimiento
                          AND IFNULL(stf.Anulado, 'No') = 'No'
                          AND IFNULL(fa.Anulado, 'No') = 'No'
                          AND fa.Fecha < %s
@@ -110,19 +116,19 @@ def fetch_saldo_consignacion_por_articulo(
         INNER JOIN stock s ON s.CodigoMovimiento = h.CodigoMovimiento
         INNER JOIN articulo a ON a.IDArt = s.IDArt
         LEFT JOIN cliente c ON c.Codigo = h.Codigo
-        LEFT JOIN marca m ON m.CodigoMarca = a.CodigoMarca
+        {sql_marca_join()}
         LEFT JOIN unidmed um ON um.id_unimed = a.id_unimed
         WHERE h.TipoComprobante = 'REM'
           AND IFNULL(h.Anulado, 'No') = 'No'
           AND IFNULL(s.Anulado, 'No') = 'No'
           AND h.Fecha >= %s AND h.Fecha < %s
           AND {cons}
-        GROUP BY h.Codigo, COALESCE(c.NombreCliente, ''), s.IDArt,
+        GROUP BY h.Codigo, COALESCE(c.nombre_cliente, ''), s.IDArt,
                  COALESCE(a.id_manual, ''), COALESCE(a.NombreArticulo, ''),
                  COALESCE(a.CodigoMarca, 0), COALESCE(m.NombreMarca, ''),
                  COALESCE(um.nombre_unimed, '')
         """,
-        [corte_excl.isoformat(), remito_desde.isoformat(), hasta_remito.isoformat()],
+        params,
     )
     rows = cursor.fetchall() or []
     if rows and not isinstance(rows[0], dict):
@@ -193,9 +199,9 @@ def fetch_remitos_consignacion_resumen(
             INNER JOIN stock stf ON stf.id_stock_remito_origen = srem.id_stock
             INNER JOIN cuentacliente fa ON fa.CodigoMovimiento = stf.CodigoMovimiento
             INNER JOIN rem_fact rf ON rf.CodigoMovimientoF = fa.CodigoMovimiento
-                AND rf.CodigoMovimientoR = %s
                 AND IFNULL(rf.Anulado, 'No') = 'No'
             WHERE srem.CodigoMovimiento = %s
+              AND rf.CodigoMovimientoR = %s
               AND IFNULL(stf.Anulado, 'No') = 'No'
               AND IFNULL(fa.Anulado, 'No') = 'No'
               AND fa.Fecha < %s
@@ -230,23 +236,19 @@ def consultar_consignacion_stock(
     corte = to_date_or_none(corte_facturas_iso) or rem_hasta
     if not rem_desde or not rem_hasta or not (base_empresa or "").strip():
         return {"filas_articulo": [], "remitos": [], "totales": {}}
-    try:
-        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
-            filas = fetch_saldo_consignacion_por_articulo(
-                cursor,
-                remito_desde=rem_desde,
-                remito_hasta=rem_hasta,
-                corte_facturas=corte,
-            )
-            remitos = fetch_remitos_consignacion_resumen(
-                cursor,
-                remito_desde=rem_desde,
-                remito_hasta=rem_hasta,
-                corte_facturas=corte,
-            )
-    except Exception as exc:
-        logger.warning("consultar_consignacion_stock %s: %s", base_empresa, exc, exc_info=True)
-        return {"filas_articulo": [], "remitos": [], "totales": {}}
+    with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+        filas = fetch_saldo_consignacion_por_articulo(
+            cursor,
+            remito_desde=rem_desde,
+            remito_hasta=rem_hasta,
+            corte_facturas=corte,
+        )
+        remitos = fetch_remitos_consignacion_resumen(
+            cursor,
+            remito_desde=rem_desde,
+            remito_hasta=rem_hasta,
+            corte_facturas=corte,
+        )
 
     packs = round(sum(float(r.get("packs_saldo") or 0) for r in filas), 4)
     prendas = round(sum(float(r.get("prendas_saldo") or 0) for r in filas), 4)

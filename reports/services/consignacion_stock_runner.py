@@ -51,7 +51,12 @@ def run_consignacion_stock(report, payload: Dict, user) -> QueryResult:
             corte_facturas_iso=corte,
         )
     except Exception as exc:
-        logger.warning("run_consignacion_stock %s: %s", base_empresa, exc, exc_info=True)
+        logger.error(
+            "run_consignacion_stock %s: %s",
+            base_empresa,
+            exc,
+            exc_info=True,
+        )
         return QueryResult(
             meta=meta_base,
             data=[],
