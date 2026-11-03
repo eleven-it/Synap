@@ -2,8 +2,8 @@
 """Contrato SQL informes BestSox (marca, consignación, compras reglas)."""
 from __future__ import annotations
 
-import inspect
 import os
+from datetime import date
 from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase, TestCase, tag
@@ -17,40 +17,75 @@ from reports.services.compras_terceros_sql import sql_marca_join
 from reports.tests.reference_bestsox_ago_oct_2026 import load_reference, meses_periodo, periodo_filtros
 
 
+def _mock_query_cursor():
+    cursor = MagicMock()
+    cursor.fetchall.return_value = []
+    cursor.description = []
+    return cursor
+
+
+def _executed_sql(cursor) -> str:
+    return cursor.execute.call_args[0][0]
+
+
 class BestsoxMarcaSqlContractTest(SimpleTestCase):
     def test_marca_join_uses_cod_marca(self):
         self.assertIn("m.CodMarca = a.CodigoMarca", sql_marca_join())
         self.assertNotIn("m.CodigoMarca", sql_marca_join())
 
     def test_produccion_queries_use_cod_marca(self):
-        for fn in (
-            produccion_marca_superart_query.fetch_produccion_mpr_filas,
-            produccion_marca_superart_query.fetch_produccion_fason_filas,
-        ):
-            src = inspect.getsource(fn)
-            with self.subTest(fn=fn.__name__):
-                self.assertIn("m.CodMarca = a.CodigoMarca", src)
-                self.assertIn("s.TipoComp", src if fn.__name__ == "fetch_produccion_fason_filas" else "CodMarca")
-        fason_src = inspect.getsource(produccion_marca_superart_query.fetch_produccion_fason_filas)
-        self.assertIn("FABRICA S Y M", fason_src)
-        self.assertNotIn("ms.tipo_mov = %s", fason_src)
+        cursor = _mock_query_cursor()
+        produccion_marca_superart_query.fetch_produccion_mpr_filas(cursor, ["2026-08"])
+        sql_mpr = _executed_sql(cursor)
+        self.assertIn("m.CodMarca = a.CodigoMarca", sql_mpr)
+        self.assertNotIn("m.CodigoMarca", sql_mpr)
+
+        cursor = _mock_query_cursor()
+        produccion_marca_superart_query.fetch_produccion_fason_filas(
+            cursor,
+            desde=date(2026, 8, 1),
+            hasta=date(2026, 10, 31),
+        )
+        sql_fason = _executed_sql(cursor)
+        self.assertIn("m.CodMarca = a.CodigoMarca", sql_fason)
+        self.assertIn("s.TipoComp", sql_fason)
+        self.assertIn("FABRICA S Y M", sql_fason)
+        self.assertNotIn("ms.tipo_mov = %s", sql_fason)
 
     def test_compras_standard_uses_cod_marca_and_id_stock(self):
-        src = inspect.getsource(compras_marca_superart_query.fetch_compras_standard_filas)
-        self.assertIn("m.CodMarca = a.CodigoMarca", src)
-        self.assertIn("s.id_stock", src)
-        self.assertNotIn("movimiento_ids", src.lower())
+        cursor = _mock_query_cursor()
+        compras_marca_superart_query.fetch_compras_standard_filas(
+            cursor,
+            desde=date(2026, 8, 1),
+            hasta=date(2026, 10, 31),
+        )
+        sql = _executed_sql(cursor)
+        self.assertIn("m.CodMarca = a.CodigoMarca", sql)
+        self.assertIn("s.id_stock", sql)
+        self.assertNotIn("movimiento_ids", sql.lower())
 
     def test_consignacion_cliente_column_and_like_param(self):
-        src = inspect.getsource(consignacion_stock_query.fetch_saldo_consignacion_por_articulo)
-        self.assertIn("c.nombre_cliente", src)
-        self.assertNotIn("NombreCliente", src)
-        self.assertIn("LIKE %s", src)
-        self.assertNotIn("LIKE '%EN CONSIGNACION%'", src)
-        self.assertIn("rf.CodigoMovimientoR = h.CodigoMovimiento", src)
+        params: list = []
+        cons_fragment = consignacion_stock_query._remito_es_consignacion_sql("h", params)
+        self.assertIn("LIKE %s", cons_fragment)
+        self.assertNotIn("LIKE '%EN CONSIGNACION%'", cons_fragment)
+        self.assertTrue(any("EN CONSIGNACION" in str(p) for p in params))
+
+        cursor = _mock_query_cursor()
+        consignacion_stock_query.fetch_saldo_consignacion_por_articulo(
+            cursor,
+            remito_desde=date(2026, 8, 1),
+            remito_hasta=date(2026, 10, 31),
+            corte_facturas=date(2026, 11, 3),
+        )
+        sql = _executed_sql(cursor)
+        self.assertIn("c.nombre_cliente", sql)
+        self.assertNotIn("NombreCliente", sql)
+        self.assertIn("LIKE %s", sql)
+        self.assertIn("rf.CodigoMovimientoR = h.CodigoMovimiento", sql)
         self.assertNotIn(
-            "rf.CodigoMovimientoR = h.CodigoMovimiento\n                           AND IFNULL",
-            src,
+            "rf.CodigoMovimientoR = h.CodigoMovimiento\n                           AND IFNULL(rf.Anulado",
+            sql,
         )
 
     def test_dedupe_keeps_single_id_stock(self):
