@@ -78,6 +78,22 @@ def run_fabricados_superart(report, payload: Dict, user) -> QueryResult:
             f"de entrada al depósito semi elaborado ({pares_txt} pares en el período)."
         )
 
+    def _scalar_total(key: str, default: float = 0.0) -> float:
+        try:
+            return float(kpis.get(key, default) or default)
+        except (TypeError, ValueError):
+            return default
+
+    totals = {
+        "total_general": float(fab_ctx.get("total_general") or 0),
+        "total_fabricado_primera": _scalar_total("total_fabricado_primera"),
+        "superarts_con_produccion": _scalar_total("superarts_con_produccion"),
+        "mes_pico_cantidad": _scalar_total("mes_pico_cantidad"),
+    }
+    pares_fason_kpi = kpis.get("pares_fason_tejeduria")
+    if pares_fason_kpi is not None:
+        totals["pares_fason_tejeduria"] = _scalar_total("pares_fason_tejeduria")
+
     return QueryResult(
         meta={
             **meta_base,
@@ -97,9 +113,6 @@ def run_fabricados_superart(report, payload: Dict, user) -> QueryResult:
             },
         },
         data=filas,
-        totals={
-            "total_general": fab_ctx.get("total_general", 0),
-            "kpis": kpis,
-        },
+        totals=totals,
         notes=notes,
     )

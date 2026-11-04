@@ -136,6 +136,52 @@ class TestRunnerRegistrado(SimpleTestCase):
         self.assertIn("fabricados", result.meta.get("extra", {}))
 
 
+class TestRunnerTotalsSerializables(SimpleTestCase):
+    """Regresión: totals planos compatibles con ReportQueryResponseSerializer."""
+
+    @patch("mpr.services_fabricados_superart.reporte_mpr_fabricados_superart")
+    @patch("mpr.reportes_presentacion.preparar_fabricados_superart_presentacion")
+    def test_totals_sin_dicts_anidados(self, mock_prep, mock_reporte):
+        from reports.models import ReportDefinition
+        from reports.serializers import ReportQueryResponseSerializer
+        from reports.services.fabricados_superart_runner import run_fabricados_superart
+
+        mock_reporte.return_value = {"filas_superart": [], "kpis": {}}
+        mock_prep.return_value = {
+            "filas_superart": [{"codigo_superart": "SA1", "total": 100}],
+            "kpis": {
+                "total_fabricado_primera": 51255.0,
+                "superarts_con_produccion": 2,
+                "mes_pico_cantidad": 30000.0,
+                "mes_pico_label": "Nov 2026",
+                "pares_fason_tejeduria": 120.0,
+            },
+            "total_general": 51255.0,
+        }
+        report = ReportDefinition(slug=FABRICADOS_SUPERART_SLUG, name="T", category="operational")
+        user = MagicMock(base_empresa="emp1")
+        result = run_fabricados_superart(
+            report,
+            {"filters": {"desde": "2026-11-01", "hasta": "2026-11-30", "base_empresa": "emp1"}},
+            user,
+        )
+        for value in result.totals.values():
+            self.assertIsInstance(value, (int, float), msg=f"total no escalar: {value!r}")
+
+        serialized = ReportQueryResponseSerializer(
+            {
+                "meta": result.meta,
+                "data": result.data,
+                "totals": result.totals,
+                "notes": result.notes,
+            }
+        )
+        out = serialized.data
+        self.assertNotIn("kpis", out["totals"])
+        self.assertEqual(out["totals"]["total_general"], 51255.0)
+        self.assertEqual(out["totals"]["superarts_con_produccion"], 2.0)
+
+
 class TestMenuYTemplate(SimpleTestCase):
     def test_menu_mpr_tiene_entrada(self):
         from core.utils.utils import APPS_MENU
