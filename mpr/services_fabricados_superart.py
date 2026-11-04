@@ -13,6 +13,7 @@ from mpr.reportes_transicion_lote_sql import (
     fetch_fabricado_primera_por_articulo_mes,
     normalizar_meses_yyyy_mm,
 )
+from mpr.services import TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO
 from mpr.services import _fetch_descripciones_articulo, mysql_cursor
 
 logger = logging.getLogger(__name__)
@@ -455,7 +456,11 @@ def buscar_superart_predictivo(
     *,
     limit: int = 25,
 ) -> List[Dict[str, str]]:
-    """Superartículos distintos (id_manual o derivados del nombre) para autocompletar."""
+    """
+    Superartículos distintos del universo del informe (artículos con transición
+    Produccion → SemiElaborado en mpr_transicion_lote), calculados con la misma
+    regla que la agrupación del reporte.
+    """
     texto = (q or "").strip()
     if len(texto) < 1 or not (base_empresa or "").strip():
         return []
@@ -470,14 +475,19 @@ def buscar_superart_predictivo(
                 FROM (
                   SELECT {superart_expr} AS superart_calc
                   FROM articulo a
-                  WHERE a.tipo_art_fab = 'Fabricado'
+                  INNER JOIN (
+                    SELECT DISTINCT t.id_articulo
+                    FROM mpr_transicion_lote t
+                    WHERE t.tipo_origen = %s
+                      AND t.tipo_destino = %s
+                  ) AS arts_mpr ON arts_mpr.id_articulo = a.IDArt
                 ) AS derived
                 WHERE superart_calc IS NOT NULL
                   AND superart_calc LIKE %s
                 ORDER BY codigo
                 LIMIT %s
                 """,
-                (like, lim),
+                (TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO, like, lim),
             )
             rows = cursor.fetchall() or []
     except Exception as exc:
