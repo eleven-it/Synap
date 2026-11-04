@@ -11,8 +11,10 @@ from core.utils.administranet_types import to_date_or_none, to_int_or_none
 
 from mpr.reportes_transicion_lote_sql import (
     fetch_fabricado_primera_por_articulo_mes,
+    fetch_fason_tejeduria_por_articulo_mes,
     normalizar_meses_yyyy_mm,
 )
+from mpr.services import TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO
 from mpr.services import _fetch_descripciones_articulo, mysql_cursor
 
 logger = logging.getLogger(__name__)
@@ -103,15 +105,77 @@ def etiqueta_mes(ym: str) -> str:
         return ym
 
 
-def superart_desde_id_manual(id_manual: Any) -> Tuple[str, str, str]:
+def _id_manual_superart_efectivo(id_manual: Any) -> str:
+    """id_manual usable como superartículo; '-' es placeholder de vacío."""
+    manual = str(id_manual or "").strip()
+    if manual == "-":
+        return ""
+    return manual
+
+
+def superart_desde_nombre_articulo(nombre_articulo: Any) -> str:
+    """
+    Deriva superartículo del nombre cuando id_manual está vacío:
+    primer token (hasta el primer espacio), cortado en el primer '-' o '/'.
+    """
+    nombre = str(nombre_articulo or "").strip()
+    if not nombre:
+        return ""
+    sp = nombre.find(" ")
+    token = nombre[:sp] if sp >= 0 else nombre
+    cut = len(token)
+    for sep in ("-", "/"):
+        idx = token.find(sep)
+        if idx >= 0:
+            cut = min(cut, idx)
+    return token[:cut].strip()
+
+
+def superart_desde_articulo(
+    id_manual: Any,
+    nombre_articulo: Any = "",
+) -> Tuple[str, str, str]:
     """
     Retorna (clave_agrupación, código_display, descripción_display).
-    Paridad con ventas_marca_superart: id_manual = SuperArt.
+    Informe fabricados-superart: prioriza id_manual; si falta, deriva del nombre.
     """
-    manual = str(id_manual or "").strip()
-    if not manual:
-        return "__sin_superart__", SIN_SUPERART_CODIGO, SIN_SUPERART_LABEL
-    return manual.upper(), manual, manual
+    manual = _id_manual_superart_efectivo(id_manual)
+    if manual:
+        return manual.upper(), manual, manual
+    derivado = superart_desde_nombre_articulo(nombre_articulo)
+    if derivado:
+        return derivado.upper(), derivado, derivado
+    return "__sin_superart__", SIN_SUPERART_CODIGO, SIN_SUPERART_LABEL
+
+
+def superart_desde_id_manual(id_manual: Any) -> Tuple[str, str, str]:
+    """Compat tests: solo id_manual, sin derivación por nombre."""
+    return superart_desde_articulo(id_manual, "")
+
+
+def _sql_expresion_superart_fabricados(alias: str = "a") -> str:
+    """Expresión SQL alineada con superart_desde_articulo (MySQL)."""
+    a = alias
+    return f"""
+        CASE
+          WHEN TRIM(COALESCE({a}.id_manual, '')) NOT IN ('', '-')
+          THEN TRIM({a}.id_manual)
+          ELSE NULLIF(
+            TRIM(
+              SUBSTRING_INDEX(
+                REPLACE(
+                  SUBSTRING_INDEX(TRIM(COALESCE({a}.NombreArticulo, '')), ' ', 1),
+                  '/',
+                  '-'
+                ),
+                '-',
+                1
+              )
+            ),
+            ''
+          )
+        END
+    """.strip()
 
 
 def _normalizar_superarts_incluidos(raw: Sequence[str]) -> List[str]:
@@ -172,6 +236,48 @@ def _match_superarts_filtro(
     return False
 
 
+def _total_cantidad_filas(filas: Sequence[Dict[str, Any]]) -> float:
+    total = 0.0
+    for row in filas or []:
+        try:
+            total += float(row.get("cantidad") or 0)
+        except (TypeError, ValueError):
+            continue
+    return round(total, 4)
+
+
+def merge_filas_fabricado_y_fason(
+    filas_mpr: Sequence[Dict[str, Any]],
+    filas_fason: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Suma cantidades por (id_articulo, ym); conserva id_manual si alguna fila lo trae."""
+    merged: Dict[Tuple[int, str], Dict[str, Any]] = {}
+    for row in list(filas_mpr or []) + list(filas_fason or []):
+        aid = to_int_or_none(row.get("id_articulo"))
+        if aid is None:
+            continue
+        ym = str(row.get("ym") or "").strip()
+        if not ym:
+            continue
+        try:
+            qty = float(row.get("cantidad") or 0)
+        except (TypeError, ValueError):
+            qty = 0.0
+        manual = str(row.get("id_manual") or "")
+        key = (int(aid), ym)
+        if key not in merged:
+            merged[key] = {
+                "id_articulo": int(aid),
+                "id_manual": manual,
+                "ym": ym,
+                "cantidad": 0.0,
+            }
+        elif manual and not merged[key]["id_manual"]:
+            merged[key]["id_manual"] = manual
+        merged[key]["cantidad"] = round(merged[key]["cantidad"] + qty, 4)
+    return list(merged.values())
+
+
 def agrupar_fabricados_por_superart(
     filas_sql: Sequence[Dict[str, Any]],
     meses: Sequence[str],
@@ -199,8 +305,8 @@ def agrupar_fabricados_por_superart(
             qty = 0.0
         if qty <= 0:
             continue
-        sk, cod_sa, desc_sa = superart_desde_id_manual(row.get("id_manual"))
         cod_art, nom_art = desc_map.get(aid, ("-", "-"))
+        sk, cod_sa, desc_sa = superart_desde_articulo(row.get("id_manual"), nom_art)
         if aid not in por_art:
             por_art[aid] = {
                 "id_articulo": aid,
@@ -393,24 +499,38 @@ def buscar_superart_predictivo(
     *,
     limit: int = 25,
 ) -> List[Dict[str, str]]:
-    """Superartículos distintos (id_manual) para autocompletar."""
+    """
+    Superartículos distintos del universo del informe (artículos con transición
+    Produccion → SemiElaborado en mpr_transicion_lote), calculados con la misma
+    regla que la agrupación del reporte.
+    """
     texto = (q or "").strip()
     if len(texto) < 1 or not (base_empresa or "").strip():
         return []
     lim = max(1, min(int(limit or 25), 50))
     like = f"%{texto}%"
+    superart_expr = _sql_expresion_superart_fabricados("a")
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(
-                """
-                SELECT DISTINCT TRIM(a.id_manual) AS codigo
-                FROM articulo a
-                WHERE TRIM(COALESCE(a.id_manual, '')) <> ''
-                  AND a.id_manual LIKE %s
+                f"""
+                SELECT DISTINCT superart_calc AS codigo
+                FROM (
+                  SELECT {superart_expr} AS superart_calc
+                  FROM articulo a
+                  INNER JOIN (
+                    SELECT DISTINCT t.id_articulo
+                    FROM mpr_transicion_lote t
+                    WHERE t.tipo_origen = %s
+                      AND t.tipo_destino = %s
+                  ) AS arts_mpr ON arts_mpr.id_articulo = a.IDArt
+                ) AS derived
+                WHERE superart_calc IS NOT NULL
+                  AND superart_calc LIKE %s
                 ORDER BY codigo
                 LIMIT %s
                 """,
-                (like, lim),
+                (TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO, like, lim),
             )
             rows = cursor.fetchall() or []
     except Exception as exc:
@@ -454,6 +574,7 @@ def reporte_mpr_fabricados_superart(
     meses_norm = normalizar_meses_yyyy_mm(meses) or [mes_actual_yyyy_mm()]
     vacio["meses"] = meses_norm
     vacio["mes_labels"] = {m: etiqueta_mes(m) for m in meses_norm}
+    pares_fason = 0.0
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             rows = fetch_fabricado_primera_por_articulo_mes(
@@ -462,6 +583,23 @@ def reporte_mpr_fabricados_superart(
                 marcas_ids=marcas_incluidos or None,
                 marcas_excluidos_ids=marcas_excluidos or None,
             )
+            filas_fason: List[Dict[str, Any]] = []
+            try:
+                filas_fason = fetch_fason_tejeduria_por_articulo_mes(
+                    cursor,
+                    meses_norm,
+                    marcas_ids=marcas_incluidos or None,
+                    marcas_excluidos_ids=marcas_excluidos or None,
+                )
+            except Exception as exc_fason:
+                logger.warning(
+                    "reporte_mpr_fabricados_superart fason %s: %s",
+                    base_empresa,
+                    exc_fason,
+                    exc_info=True,
+                )
+            pares_fason = _total_cantidad_filas(filas_fason)
+            rows = merge_filas_fabricado_y_fason(rows, filas_fason)
     except Exception as exc:
         logger.warning("reporte_mpr_fabricados_superart %s: %s", base_empresa, exc, exc_info=True)
         return vacio
@@ -472,10 +610,14 @@ def reporte_mpr_fabricados_superart(
     superarts = _normalizar_superarts_incluidos(list(superarts_incluidos or []))
     if not superarts and (busqueda_superart or "").strip():
         superarts = _normalizar_superarts_incluidos([busqueda_superart])
-    return agrupar_fabricados_por_superart(
+    resultado = agrupar_fabricados_por_superart(
         rows,
         meses_norm,
         desc_map,
         superarts_incluidos=superarts,
         superarts_excluidos=superarts_excluidos,
     )
+    if pares_fason > 0:
+        resultado.setdefault("kpis", {})
+        resultado["kpis"]["pares_fason_tejeduria"] = pares_fason
+    return resultado
