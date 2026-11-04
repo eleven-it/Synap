@@ -6,17 +6,67 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 
 from mpr.reportes_transicion_lote_sql import (
+    FASON_DEPOSITO_DESTINO_SEMI_ELABORADO,
+    FASON_DETALLE_LIKE_PREFIX,
+    FASON_MOTIVO_MOVIMIENTO,
+    FASON_MOVIMIENTO_ANULADO_NO,
+    FASON_STOCK_TIPO_COMP,
     fetch_fabricado_primera_por_articulo_mes,
+    fetch_fason_tejeduria_por_articulo_mes,
     normalizar_meses_yyyy_mm,
 )
 from mpr.services_fabricados_superart import (
     SIN_SUPERART_LABEL,
     agrupar_fabricados_por_superart,
+    merge_filas_fabricado_y_fason,
     parse_filtros_fabricados_superart,
     parse_superarts_incluidos_desde_get,
     reporte_mpr_fabricados_superart,
     superart_desde_id_manual,
 )
+
+
+class TestMergeFabricadoFason(SimpleTestCase):
+    def test_suma_mismo_articulo_mes(self):
+        mpr = [{"id_articulo": 1, "id_manual": "SA", "ym": "2026-10", "cantidad": 10}]
+        fason = [{"id_articulo": 1, "id_manual": "SA", "ym": "2026-10", "cantidad": 5}]
+        out = merge_filas_fabricado_y_fason(mpr, fason)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["cantidad"], 15.0)
+
+    def test_articulo_solo_fason(self):
+        fason = [{"id_articulo": 99, "id_manual": "", "ym": "2026-10", "cantidad": 3}]
+        out = merge_filas_fabricado_y_fason([], fason)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["id_articulo"], 99)
+
+    def test_articulo_solo_mpr_sin_cambios(self):
+        mpr = [{"id_articulo": 2, "id_manual": "X", "ym": "2026-09", "cantidad": 7}]
+        out = merge_filas_fabricado_y_fason(mpr, [])
+        self.assertEqual(out, mpr)
+
+
+class TestFetchFasonSql(SimpleTestCase):
+    def test_sql_predicados_fason(self):
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        fetch_fason_tejeduria_por_articulo_mes(mock_cursor, ["2026-08", "2026-10"], marcas_ids=[1])
+        sql = mock_cursor.execute.call_args[0][0]
+        params = list(mock_cursor.execute.call_args[0][1])
+        self.assertIn("movimiento_stock", sql)
+        self.assertIn("deposito_destino", sql)
+        self.assertIn("detalle LIKE", sql)
+        self.assertIn("ms.fecha >=", sql)
+        self.assertIn("ms.fecha <", sql)
+        self.assertNotIn("detalle = ''", sql)
+        self.assertIn(FASON_STOCK_TIPO_COMP, params)
+        self.assertIn(FASON_MOTIVO_MOVIMIENTO, params)
+        self.assertIn(FASON_DEPOSITO_DESTINO_SEMI_ELABORADO, params)
+        self.assertIn(FASON_MOVIMIENTO_ANULADO_NO, params)
+        self.assertIn(FASON_DETALLE_LIKE_PREFIX, params)
+        self.assertIn("2026-08", params)
+        self.assertIn("2026-10", params)
+        self.assertIn(1, params)
 
 
 class TestNormalizarMeses(SimpleTestCase):
@@ -32,7 +82,7 @@ class TestAgrupacionFabricados(SimpleTestCase):
         desc = {
             1: ("ART-1", "Artículo uno"),
             2: ("ART-2", "Artículo dos"),
-            3: ("ART-3", "Sin manual"),
+            3: ("ART-3", ""),
         }
         kwargs = {}
         if superarts is not None:
@@ -178,19 +228,22 @@ class TestParseFiltros(SimpleTestCase):
 
 
 class TestReporteIntegracion(SimpleTestCase):
+    @patch("mpr.services_fabricados_superart.fetch_fason_tejeduria_por_articulo_mes")
+    @patch("mpr.services_fabricados_superart.fetch_fabricado_primera_por_articulo_mes")
     @patch("mpr.services_fabricados_superart._fetch_descripciones_articulo")
     @patch("mpr.services_fabricados_superart.mysql_cursor")
-    def test_reporte_llama_fetch_primera(self, mock_ctx, mock_desc):
+    def test_reporte_llama_fetch_primera(self, mock_ctx, mock_desc, mock_mpr, mock_fason):
+        mock_fason.return_value = []
         mock_desc.return_value = {10: ("C10", "Desc")}
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [
+        mock_mpr.return_value = [
             {"id_articulo": 10, "id_manual": "SA1", "ym": "2026-01", "cantidad": 7},
         ]
-        mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_ctx.return_value.__enter__ = MagicMock(return_value=MagicMock())
         mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
         r = reporte_mpr_fabricados_superart("emp", meses=["2026-01"])
         self.assertEqual(r["total_general"], 7.0)
         self.assertEqual(len(r["filas_superart"]), 1)
+        mock_fason.assert_called_once()
 
 
 class TestSuperartDesdeIdManual(SimpleTestCase):
