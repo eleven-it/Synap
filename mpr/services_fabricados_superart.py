@@ -11,6 +11,7 @@ from core.utils.administranet_types import to_date_or_none, to_int_or_none
 
 from mpr.reportes_transicion_lote_sql import (
     fetch_fabricado_primera_por_articulo_mes,
+    fetch_fason_tejeduria_por_articulo_mes,
     normalizar_meses_yyyy_mm,
 )
 from mpr.services import TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO
@@ -233,6 +234,48 @@ def _match_superarts_filtro(
         if t in cod_l or t in desc_l:
             return True
     return False
+
+
+def _total_cantidad_filas(filas: Sequence[Dict[str, Any]]) -> float:
+    total = 0.0
+    for row in filas or []:
+        try:
+            total += float(row.get("cantidad") or 0)
+        except (TypeError, ValueError):
+            continue
+    return round(total, 4)
+
+
+def merge_filas_fabricado_y_fason(
+    filas_mpr: Sequence[Dict[str, Any]],
+    filas_fason: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Suma cantidades por (id_articulo, ym); conserva id_manual si alguna fila lo trae."""
+    merged: Dict[Tuple[int, str], Dict[str, Any]] = {}
+    for row in list(filas_mpr or []) + list(filas_fason or []):
+        aid = to_int_or_none(row.get("id_articulo"))
+        if aid is None:
+            continue
+        ym = str(row.get("ym") or "").strip()
+        if not ym:
+            continue
+        try:
+            qty = float(row.get("cantidad") or 0)
+        except (TypeError, ValueError):
+            qty = 0.0
+        manual = str(row.get("id_manual") or "")
+        key = (int(aid), ym)
+        if key not in merged:
+            merged[key] = {
+                "id_articulo": int(aid),
+                "id_manual": manual,
+                "ym": ym,
+                "cantidad": 0.0,
+            }
+        elif manual and not merged[key]["id_manual"]:
+            merged[key]["id_manual"] = manual
+        merged[key]["cantidad"] = round(merged[key]["cantidad"] + qty, 4)
+    return list(merged.values())
 
 
 def agrupar_fabricados_por_superart(
@@ -531,6 +574,7 @@ def reporte_mpr_fabricados_superart(
     meses_norm = normalizar_meses_yyyy_mm(meses) or [mes_actual_yyyy_mm()]
     vacio["meses"] = meses_norm
     vacio["mes_labels"] = {m: etiqueta_mes(m) for m in meses_norm}
+    pares_fason = 0.0
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             rows = fetch_fabricado_primera_por_articulo_mes(
@@ -539,6 +583,23 @@ def reporte_mpr_fabricados_superart(
                 marcas_ids=marcas_incluidos or None,
                 marcas_excluidos_ids=marcas_excluidos or None,
             )
+            filas_fason: List[Dict[str, Any]] = []
+            try:
+                filas_fason = fetch_fason_tejeduria_por_articulo_mes(
+                    cursor,
+                    meses_norm,
+                    marcas_ids=marcas_incluidos or None,
+                    marcas_excluidos_ids=marcas_excluidos or None,
+                )
+            except Exception as exc_fason:
+                logger.warning(
+                    "reporte_mpr_fabricados_superart fason %s: %s",
+                    base_empresa,
+                    exc_fason,
+                    exc_info=True,
+                )
+            pares_fason = _total_cantidad_filas(filas_fason)
+            rows = merge_filas_fabricado_y_fason(rows, filas_fason)
     except Exception as exc:
         logger.warning("reporte_mpr_fabricados_superart %s: %s", base_empresa, exc, exc_info=True)
         return vacio
@@ -549,10 +610,14 @@ def reporte_mpr_fabricados_superart(
     superarts = _normalizar_superarts_incluidos(list(superarts_incluidos or []))
     if not superarts and (busqueda_superart or "").strip():
         superarts = _normalizar_superarts_incluidos([busqueda_superart])
-    return agrupar_fabricados_por_superart(
+    resultado = agrupar_fabricados_por_superart(
         rows,
         meses_norm,
         desc_map,
         superarts_incluidos=superarts,
         superarts_excluidos=superarts_excluidos,
     )
+    if pares_fason > 0:
+        resultado.setdefault("kpis", {})
+        resultado["kpis"]["pares_fason_tejeduria"] = pares_fason
+    return resultado

@@ -62,6 +62,22 @@ def run_fabricados_superart(report, payload: Dict, user) -> QueryResult:
     kpis = fab_ctx.get("kpis") or {}
     filas = fab_ctx.get("filas_superart") or []
 
+    notes = [
+        "Fabricado de 1ra selección: transición Producción → Semi elaborado.",
+        f"Período: {filtros.get('desde_iso')} — {filtros.get('hasta_iso')}.",
+        f"Meses en columnas: {', '.join(filtros.get('meses') or [])}.",
+    ]
+    try:
+        pares_fason = float(kpis.get("pares_fason_tejeduria") or 0)
+    except (TypeError, ValueError):
+        pares_fason = 0.0
+    if pares_fason > 0:
+        pares_txt = int(pares_fason) if pares_fason == int(pares_fason) else pares_fason
+        notes.append(
+            "Incluye fasón de Tejeduría S y M registrado como movimiento interno "
+            f"de entrada al depósito semi elaborado ({pares_txt} pares en el período)."
+        )
+
     return QueryResult(
         meta={
             **meta_base,
@@ -85,9 +101,5 @@ def run_fabricados_superart(report, payload: Dict, user) -> QueryResult:
             "total_general": fab_ctx.get("total_general", 0),
             "kpis": kpis,
         },
-        notes=[
-            "Fabricado de 1ra selección: transición Producción → Semi elaborado.",
-            f"Período: {filtros.get('desde_iso')} — {filtros.get('hasta_iso')}.",
-            f"Meses en columnas: {', '.join(filtros.get('meses') or [])}.",
-        ],
+        notes=notes,
     )
