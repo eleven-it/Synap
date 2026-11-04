@@ -32,7 +32,7 @@ class TestAgrupacionFabricados(SimpleTestCase):
         desc = {
             1: ("ART-1", "Artículo uno"),
             2: ("ART-2", "Artículo dos"),
-            3: ("ART-3", "Sin manual"),
+            3: ("ART-3", ""),
         }
         kwargs = {}
         if superarts is not None:

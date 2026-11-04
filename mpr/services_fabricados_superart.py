@@ -103,15 +103,77 @@ def etiqueta_mes(ym: str) -> str:
         return ym
 
 
-def superart_desde_id_manual(id_manual: Any) -> Tuple[str, str, str]:
+def _id_manual_superart_efectivo(id_manual: Any) -> str:
+    """id_manual usable como superartículo; '-' es placeholder de vacío."""
+    manual = str(id_manual or "").strip()
+    if manual == "-":
+        return ""
+    return manual
+
+
+def superart_desde_nombre_articulo(nombre_articulo: Any) -> str:
+    """
+    Deriva superartículo del nombre cuando id_manual está vacío:
+    primer token (hasta el primer espacio), cortado en el primer '-' o '/'.
+    """
+    nombre = str(nombre_articulo or "").strip()
+    if not nombre:
+        return ""
+    sp = nombre.find(" ")
+    token = nombre[:sp] if sp >= 0 else nombre
+    cut = len(token)
+    for sep in ("-", "/"):
+        idx = token.find(sep)
+        if idx >= 0:
+            cut = min(cut, idx)
+    return token[:cut].strip()
+
+
+def superart_desde_articulo(
+    id_manual: Any,
+    nombre_articulo: Any = "",
+) -> Tuple[str, str, str]:
     """
     Retorna (clave_agrupación, código_display, descripción_display).
-    Paridad con ventas_marca_superart: id_manual = SuperArt.
+    Informe fabricados-superart: prioriza id_manual; si falta, deriva del nombre.
     """
-    manual = str(id_manual or "").strip()
-    if not manual:
-        return "__sin_superart__", SIN_SUPERART_CODIGO, SIN_SUPERART_LABEL
-    return manual.upper(), manual, manual
+    manual = _id_manual_superart_efectivo(id_manual)
+    if manual:
+        return manual.upper(), manual, manual
+    derivado = superart_desde_nombre_articulo(nombre_articulo)
+    if derivado:
+        return derivado.upper(), derivado, derivado
+    return "__sin_superart__", SIN_SUPERART_CODIGO, SIN_SUPERART_LABEL
+
+
+def superart_desde_id_manual(id_manual: Any) -> Tuple[str, str, str]:
+    """Compat tests: solo id_manual, sin derivación por nombre."""
+    return superart_desde_articulo(id_manual, "")
+
+
+def _sql_expresion_superart_fabricados(alias: str = "a") -> str:
+    """Expresión SQL alineada con superart_desde_articulo (MySQL)."""
+    a = alias
+    return f"""
+        CASE
+          WHEN TRIM(COALESCE({a}.id_manual, '')) NOT IN ('', '-')
+          THEN TRIM({a}.id_manual)
+          ELSE NULLIF(
+            TRIM(
+              SUBSTRING_INDEX(
+                REPLACE(
+                  SUBSTRING_INDEX(TRIM(COALESCE({a}.NombreArticulo, '')), ' ', 1),
+                  '/',
+                  '-'
+                ),
+                '-',
+                1
+              )
+            ),
+            ''
+          )
+        END
+    """.strip()
 
 
 def _normalizar_superarts_incluidos(raw: Sequence[str]) -> List[str]:
@@ -199,8 +261,8 @@ def agrupar_fabricados_por_superart(
             qty = 0.0
         if qty <= 0:
             continue
-        sk, cod_sa, desc_sa = superart_desde_id_manual(row.get("id_manual"))
         cod_art, nom_art = desc_map.get(aid, ("-", "-"))
+        sk, cod_sa, desc_sa = superart_desde_articulo(row.get("id_manual"), nom_art)
         if aid not in por_art:
             por_art[aid] = {
                 "id_articulo": aid,
@@ -393,20 +455,25 @@ def buscar_superart_predictivo(
     *,
     limit: int = 25,
 ) -> List[Dict[str, str]]:
-    """Superartículos distintos (id_manual) para autocompletar."""
+    """Superartículos distintos (id_manual o derivados del nombre) para autocompletar."""
     texto = (q or "").strip()
     if len(texto) < 1 or not (base_empresa or "").strip():
         return []
     lim = max(1, min(int(limit or 25), 50))
     like = f"%{texto}%"
+    superart_expr = _sql_expresion_superart_fabricados("a")
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(
-                """
-                SELECT DISTINCT TRIM(a.id_manual) AS codigo
-                FROM articulo a
-                WHERE TRIM(COALESCE(a.id_manual, '')) <> ''
-                  AND a.id_manual LIKE %s
+                f"""
+                SELECT DISTINCT superart_calc AS codigo
+                FROM (
+                  SELECT {superart_expr} AS superart_calc
+                  FROM articulo a
+                  WHERE a.tipo_art_fab = 'Fabricado'
+                ) AS derived
+                WHERE superart_calc IS NOT NULL
+                  AND superart_calc LIKE %s
                 ORDER BY codigo
                 LIMIT %s
                 """,
