@@ -13,6 +13,7 @@ from mpr.services_fabricados_superart import (
     parse_filtros_fabricados_superart,
     primer_dia_mes_calendario,
 )
+from mpr.services import TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO
 
 
 class MesesEnRangoTest(SimpleTestCase):
@@ -71,4 +72,25 @@ class BuscarPredictivoTest(SimpleTestCase):
         out = buscar_superart_predictivo("emp", "SA")
         self.assertEqual(out[0]["codigo"], "SA-01")
         mock_cursor.execute.assert_called_once()
+        sql, params = mock_cursor.execute.call_args[0]
+        self.assertIn("mpr_transicion_lote", sql)
+        self.assertNotIn("tipo_art_fab", sql)
+        self.assertEqual(params[0], TIPO_MPR_PRODUCCION)
+        self.assertEqual(params[1], TIPO_MPR_SEMI_ELABORADO)
+        self.assertEqual(params[2], "%SA%")
 
+    @patch("mpr.services_fabricados_superart.mysql_cursor")
+    def test_predictivo_superart_terminado_con_transicion_mpr(self, mock_ctx):
+        """Terminado (u otro tipo_art_fab) con movimiento 1ra selección debe sugerirse."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = [{"codigo": "883765"}]
+        mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        out = buscar_superart_predictivo("emp", "8837")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["codigo"], "883765")
+        sql, params = mock_cursor.execute.call_args[0]
+        self.assertIn("tipo_origen = %s", sql)
+        self.assertIn("tipo_destino = %s", sql)
+        self.assertEqual(list(params[:2]), [TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO])
+        self.assertNotIn("Fabricado", sql)
