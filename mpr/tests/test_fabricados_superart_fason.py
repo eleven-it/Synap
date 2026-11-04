@@ -9,6 +9,8 @@ from django.test import SimpleTestCase
 from mpr.services_fabricados_superart import agrupar_fabricados_por_superart, merge_filas_fabricado_y_fason
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+# referencia_produccion_415.csv: pares Ago/Sep/Oct/Total del Excel Producción (415 filas);
+# superart_esperado alineado a referencia_superart_415.csv (regla id_manual/nombre).
 MESES_REF = ["2026-08", "2026-09", "2026-10"]
 FASON_OCT_2026 = {
     1419: 4871,
