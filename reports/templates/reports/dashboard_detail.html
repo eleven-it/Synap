@@ -379,7 +379,7 @@
                         {% endif %}
                         
                         {% if is_declarative %}
-                        {% if report.slug != 'fabricados-superart' %}
+                        {% if report.slug != 'fabricados-superart' and report.slug != 'produccion-marca-superart' and report.slug != 'compras-marca-superart' and report.slug != 'consignacion-stock' %}
                         {% include "reports/includes/filters_interval.html" %}
                         {% endif %}
                         {% endif %}
@@ -391,9 +391,15 @@
                         {% include "reports/includes/filters_inventario_deposito.html" %}
                         {% elif report.slug == 'pedidos-pendientes-produccion' %}
                         {% include "reports/includes/filters_pedidos_pendientes_produccion.html" %}
-                        {% elif report.slug == 'fabricados-superart' %}
+                        {% elif report.slug == 'fabricados-superart' or report.slug == 'produccion-marca-superart' or report.slug == 'compras-marca-superart' or report.slug == 'consignacion-stock' %}
                         {% include "reports/includes/filters_period.html" %}
                         {% include "reports/includes/filters_fabricados_superart.html" %}
+                        {% if report.slug == 'consignacion-stock' %}
+                        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300" for="corte_facturas">Corte facturas / devoluciones</label>
+                            <input type="date" id="corte_facturas" name="corte_facturas" class="h-9 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-sm" />
+                        </div>
+                        {% endif %}
                         {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marca-superart' or report.slug == 'ventas-bom-docenas' or report.slug == 'ventas-marcas-mensual' %}
                         {% include "reports/includes/filters_period_bo_dual.html" %}
                         {% elif report.slug == 'ventas-mensuales-licenciatarios' %}
@@ -415,7 +421,7 @@
                         {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
                         {% include "reports/includes/filters_sucursal_punto_venta.html" %}
                         {% endif %}
-                        {% if report.slug != 'fabricados-superart' %}
+                        {% if report.slug != 'fabricados-superart' and report.slug != 'produccion-marca-superart' and report.slug != 'compras-marca-superart' and report.slug != 'consignacion-stock' %}
                         {% include "reports/includes/filters_interval.html" %}
                         {% endif %}
                         {% if report.slug == 'comprobantes-rutas' %}
@@ -443,7 +449,7 @@
                 <p id="ventas-bom-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-2"></p>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Packs facturados explosionados por BOM · cantidades en docenas (pares ÷ 12)</p>
                 {% endif %}
-                {% if report.slug != 'bo-stock-facturacion' and report.slug != 'pedidos-pendientes-produccion' and report.slug != 'fabricados-superart' and report.slug != 'ventas-objetivos-vs-bo' and report.slug != 'ventas-por-vendedor' and report.slug != 'ventas-por-articulo' and report.slug != 'ventas-marca-superart' and report.slug != 'ventas-marcas-mensual' and report.slug != 'ventas-mensuales-licenciatarios' and report.slug != 'stock-existencias' and report.slug != 'inventario-deposito-articulo' and report.slug != 'cash_flow_detailed_movements' %}
+                {% if report.slug != 'bo-stock-facturacion' and report.slug != 'pedidos-pendientes-produccion' and report.slug != 'fabricados-superart' and report.slug != 'produccion-marca-superart' and report.slug != 'compras-marca-superart' and report.slug != 'consignacion-stock' and report.slug != 'ventas-objetivos-vs-bo' and report.slug != 'ventas-por-vendedor' and report.slug != 'ventas-por-articulo' and report.slug != 'ventas-marca-superart' and report.slug != 'ventas-marcas-mensual' and report.slug != 'ventas-mensuales-licenciatarios' and report.slug != 'stock-existencias' and report.slug != 'inventario-deposito-articulo' and report.slug != 'cash_flow_detailed_movements' %}
                 {% with widget=widgets|first %}
                 {% if widget %}
                 {% with widget_id=widget.id|stringformat:"s" %}
@@ -621,6 +627,48 @@
                     <div id="fsa-table-wrap" class="min-h-[120px] min-w-0 max-w-full overflow-hidden p-4 sm:p-6">
                         <p class="text-xs text-slate-500 dark:text-slate-400">Cargando fabricados por superartículo…</p>
                     </div>
+                </section>
+                {% endif %}
+
+                {% if report.slug == 'produccion-marca-superart' or report.slug == 'compras-marca-superart' %}
+                <section id="bmx-section" class="relative mt-4 max-w-full min-w-0 overflow-x-hidden rounded-2xl border border-slate-100 bg-white shadow-lg shadow-slate-900/5 dark:border-slate-800 dark:bg-slate-950">
+                    <header class="px-4 sm:px-6 py-3 border-b border-slate-100 dark:border-slate-800">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">{{ report.name }}</h2>
+                        <p id="bmx-filters-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1" aria-live="polite"></p>
+                    </header>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
+                        <div class="rounded-xl bg-slate-50 dark:bg-slate-900/40 p-4">
+                            <p class="text-[10px] uppercase tracking-wide text-slate-500">Total principal</p>
+                            <p id="bmx-kpi-primary" class="text-xl font-bold text-emerald-600 dark:text-emerald-400">—</p>
+                        </div>
+                        <div class="rounded-xl bg-slate-50 dark:bg-slate-900/40 p-4">
+                            <p class="text-[10px] uppercase tracking-wide text-slate-500">Docenas total</p>
+                            <p id="bmx-kpi-secondary" class="text-xl font-bold text-violet-600 dark:text-violet-400">—</p>
+                        </div>
+                    </div>
+                    <div id="bmx-table-wrap" class="min-h-[120px] min-w-0 max-w-full overflow-hidden p-4 sm:p-6">
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Pulse «Actualizar» para cargar el informe.</p>
+                    </div>
+                </section>
+                {% endif %}
+
+                {% if report.slug == 'consignacion-stock' %}
+                <section id="csg-section" class="relative mt-4 max-w-full min-w-0 overflow-x-hidden rounded-2xl border border-slate-100 bg-white shadow-lg shadow-slate-900/5 dark:border-slate-800 dark:bg-slate-950">
+                    <header class="px-4 sm:px-6 py-3 border-b border-slate-100 dark:border-slate-800">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Saldo en consignación</h2>
+                        <p id="csg-filters-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1" aria-live="polite"></p>
+                    </header>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
+                        <div class="rounded-xl bg-slate-50 dark:bg-slate-900/40 p-4 sm:col-span-1">
+                            <p class="text-[10px] uppercase tracking-wide text-slate-500">Packs saldo</p>
+                            <p id="csg-kpi-packs" class="text-xl font-bold text-sky-600 dark:text-sky-400">—</p>
+                        </div>
+                    </div>
+                    <div id="csg-table-wrap" class="min-h-[120px] p-4 sm:p-6 overflow-x-auto"></div>
+                    <header class="px-4 sm:px-6 py-3 border-t border-slate-100 dark:border-slate-800">
+                        <h3 class="text-xs font-semibold text-slate-800 dark:text-slate-200">Remitos</h3>
+                    </header>
+                    <div id="csg-remitos-wrap" class="min-h-[80px] p-4 sm:p-6 overflow-x-auto"></div>
                 </section>
                 {% endif %}
 
@@ -5413,8 +5461,14 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/reports_nested_grouping.js' %}?v=20261029a"></script>
 <script src="{% static 'reports/js/pedidos_pendientes_produccion.js' %}?v=20261029a"></script>
 {% endif %}
-{% if report.slug == 'fabricados-superart' %}
-<script src="{% static 'reports/js/fabricados_superart.js' %}?v=20261029a"></script>
+{% if report.slug == 'fabricados-superart' or report.slug == 'produccion-marca-superart' or report.slug == 'compras-marca-superart' or report.slug == 'consignacion-stock' %}
+<script src="{% static 'reports/js/fabricados_superart.js' %}?v=20261103a"></script>
+{% endif %}
+{% if report.slug == 'produccion-marca-superart' or report.slug == 'compras-marca-superart' %}
+<script src="{% static 'reports/js/bestsox_marca_informe.js' %}?v=20261103a"></script>
+{% endif %}
+{% if report.slug == 'consignacion-stock' %}
+<script src="{% static 'reports/js/consignacion_stock.js' %}?v=20261103a"></script>
 {% endif %}
 {% if report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' %}
 <script src="{% static 'reports/js/objetivos_ventas_bo.js' %}?v=202604353"></script>

@@ -215,6 +215,9 @@ class QueryRunnerService:
             'bo-stock-facturacion',
             'pedidos-pendientes-produccion',
             'fabricados-superart',
+            'produccion-marca-superart',
+            'compras-marca-superart',
+            'consignacion-stock',
             'ventas-objetivos-vs-bo',
             'ventas-por-vendedor',
             'ventas-por-articulo',
@@ -340,6 +343,18 @@ class QueryRunnerService:
             from .fabricados_superart_runner import run_fabricados_superart
 
             result = run_fabricados_superart(report, payload, self.user)
+        elif report.slug == "produccion-marca-superart":
+            from .produccion_marca_superart_runner import run_produccion_marca_superart
+
+            result = run_produccion_marca_superart(report, payload, self.user)
+        elif report.slug == "compras-marca-superart":
+            from .compras_marca_superart_runner import run_compras_marca_superart
+
+            result = run_compras_marca_superart(report, payload, self.user)
+        elif report.slug == "consignacion-stock":
+            from .consignacion_stock_runner import run_consignacion_stock
+
+            result = run_consignacion_stock(report, payload, self.user)
         elif report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
             from .ventas_objetivos_bo_runner import run_ventas_objetivos_vs_bo
 

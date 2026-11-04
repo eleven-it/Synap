@@ -3,12 +3,18 @@ from rest_framework.permissions import BasePermission
 INVENTARIO_DEPOSITO_SLUG = "inventario-deposito-articulo"
 PEDIDOS_PENDIENTES_PRODUCCION_SLUG = "pedidos-pendientes-produccion"
 FABRICADOS_SUPERART_SLUG = "fabricados-superart"
+PRODUCCION_MARCA_SUPERART_SLUG = "produccion-marca-superart"
+COMPRAS_MARCA_SUPERART_SLUG = "compras-marca-superart"
+CONSIGNACION_STOCK_SLUG = "consignacion-stock"
 # Slugs MPR en catálogo Reportes con acceso OR mpr.reportes / mpr.ver.
 MPR_CATALOG_OR_PERMISSION_SLUGS = frozenset(
     {
         INVENTARIO_DEPOSITO_SLUG,
         PEDIDOS_PENDIENTES_PRODUCCION_SLUG,
         FABRICADOS_SUPERART_SLUG,
+        PRODUCCION_MARCA_SUPERART_SLUG,
+        COMPRAS_MARCA_SUPERART_SLUG,
+        CONSIGNACION_STOCK_SLUG,
     }
 )
 
@@ -53,6 +59,22 @@ def user_can_access_pedidos_pendientes_produccion(user) -> bool:
 
 def user_can_access_fabricados_superart(user) -> bool:
     """Fabricados por superartículo: operativo Reportes o permisos MPR de reportes."""
+    if _user_has_permission_code(user, "reports.view_operational"):
+        return True
+    return user_has_mpr_reportes(user)
+
+
+def user_can_access_produccion_marca_superart(user) -> bool:
+    return user_can_access_fabricados_superart(user)
+
+
+def user_can_access_compras_marca_superart(user) -> bool:
+    if _user_has_permission_code(user, "reports.view_operational"):
+        return True
+    return user_has_mpr_reportes(user)
+
+
+def user_can_access_consignacion_stock(user) -> bool:
     if _user_has_permission_code(user, "reports.view_operational"):
         return True
     return user_has_mpr_reportes(user)

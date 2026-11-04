@@ -324,6 +324,30 @@ APPS_MENU = [
                         "permission": ["reports.view_operational", "mpr.reportes", "mpr.ver"],
                         "menu_item_id": "mpr_rep_fabricados_superart",
                     },
+                    {
+                        "label": _("Producción por marca y SuperArtículo"),
+                        "url": "reports:dashboard_detail",
+                        "url_kwargs": {"slug": "produccion-marca-superart"},
+                        "icon": "precision_manufacturing",
+                        "permission": ["reports.view_operational", "mpr.reportes", "mpr.ver"],
+                        "menu_item_id": "mpr_rep_produccion_marca_superart",
+                    },
+                    {
+                        "label": _("Compras por marca y SuperArtículo"),
+                        "url": "reports:dashboard_detail",
+                        "url_kwargs": {"slug": "compras-marca-superart"},
+                        "icon": "shopping_cart",
+                        "permission": ["reports.view_operational", "mpr.reportes", "mpr.ver"],
+                        "menu_item_id": "mpr_rep_compras_marca_superart",
+                    },
+                    {
+                        "label": _("Stock en consignación"),
+                        "url": "reports:dashboard_detail",
+                        "url_kwargs": {"slug": "consignacion-stock"},
+                        "icon": "inventory_2",
+                        "permission": ["reports.view_operational", "mpr.reportes", "mpr.ver"],
+                        "menu_item_id": "mpr_rep_consignacion_stock",
+                    },
                 ]
             },
             {
