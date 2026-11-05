@@ -159,7 +159,7 @@
     const extra = payload?.meta?.extra || {};
     const fab = extra.fabricados || {};
     const filas = fab.filas_superart || payload.data || [];
-    const kpis = fab.kpis || payload.totals?.kpis || {};
+    const kpis = fab.kpis || {};
     if (kpiTotal) kpiTotal.textContent = fab.total_general_display || kpis.total_fabricado_primera_display || "—";
     if (kpiCount) kpiCount.textContent = kpis.superarts_con_produccion ?? "—";
     if (kpiPico) kpiPico.textContent = kpis.mes_pico_label || "—";
