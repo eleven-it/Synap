@@ -39,6 +39,10 @@ from .compras_marca_superart_api_views import (
     ComprasMarcaSuperartMarcasBuscarAPIView,
     ComprasMarcaSuperartSuperartBuscarAPIView,
 )
+from .salidas_marca_superart_api_views import (
+    SalidasMarcaSuperartMarcasBuscarAPIView,
+    SalidasMarcaSuperartSuperartBuscarAPIView,
+)
 from .ventas_marcas_mensual_api_views import VentasMarcasMensualPresetAPIView
 from .ventas_mensuales_licenciatarios_api_views import (
     LicenciatariosAnetClientsAPIView,
@@ -474,6 +478,16 @@ urlpatterns = [
         "compras-marca-superart/superart/buscar/",
         ComprasMarcaSuperartSuperartBuscarAPIView.as_view(),
         name="compras-marca-superart-superart-buscar",
+    ),
+    path(
+        "salidas-marca-superart/marcas/buscar/",
+        SalidasMarcaSuperartMarcasBuscarAPIView.as_view(),
+        name="salidas-marca-superart-marcas-buscar",
+    ),
+    path(
+        "salidas-marca-superart/superart/buscar/",
+        SalidasMarcaSuperartSuperartBuscarAPIView.as_view(),
+        name="salidas-marca-superart-superart-buscar",
     ),
 ]
 
