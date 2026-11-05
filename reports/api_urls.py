@@ -35,6 +35,10 @@ from .fabricados_superart_api_views import (
     FabricadosSuperartMarcasBuscarAPIView,
     FabricadosSuperartSuperartBuscarAPIView,
 )
+from .compras_marca_superart_api_views import (
+    ComprasMarcaSuperartMarcasBuscarAPIView,
+    ComprasMarcaSuperartSuperartBuscarAPIView,
+)
 from .ventas_marcas_mensual_api_views import VentasMarcasMensualPresetAPIView
 from .ventas_mensuales_licenciatarios_api_views import (
     LicenciatariosAnetClientsAPIView,
@@ -460,6 +464,16 @@ urlpatterns = [
         "fabricados-superart/superart/buscar/",
         FabricadosSuperartSuperartBuscarAPIView.as_view(),
         name="fabricados-superart-superart-buscar",
+    ),
+    path(
+        "compras-marca-superart/marcas/buscar/",
+        ComprasMarcaSuperartMarcasBuscarAPIView.as_view(),
+        name="compras-marca-superart-marcas-buscar",
+    ),
+    path(
+        "compras-marca-superart/superart/buscar/",
+        ComprasMarcaSuperartSuperartBuscarAPIView.as_view(),
+        name="compras-marca-superart-superart-buscar",
     ),
 ]
 

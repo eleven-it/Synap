@@ -526,6 +526,9 @@ class ExportService:
         if report.slug == "fabricados-superart":
             self._generate_excel_fabricados_superart(file_path, report, query_result, payload)
             return
+        if report.slug == "compras-marca-superart":
+            self._generate_excel_compras_marca_superart(file_path, report, query_result, payload)
+            return
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
@@ -1854,6 +1857,40 @@ class ExportService:
         with open(file_path, "wb") as fh:
             fh.write(resp.content)
         logger.info("Excel fabricados-superart: %s", file_path)
+
+    def _generate_excel_compras_marca_superart(
+        self,
+        file_path,
+        report,
+        query_result,
+        payload,
+    ) -> None:
+        import openpyxl
+        from openpyxl.styles import Font
+
+        extra = (query_result.meta or {}).get("extra") or {}
+        ctx = extra.get("compras_marca_superart") or {}
+        meses = [c.get("ym") for c in (ctx.get("meses_columnas") or []) if c.get("ym")]
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = (report.name or "Compras")[:31]
+        headers = ["Marca", "Superartículo"] + meses + ["Total packs", "Total prendas"]
+        ws.append(headers)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+        for marca in ctx.get("filas_marca") or []:
+            mc = marca.get("marca_codigo") or ""
+            for sa in marca.get("filas_superart") or []:
+                row = [mc, sa.get("codigo_superart") or ""]
+                por_mes = sa.get("por_mes") or {}
+                for ym in meses:
+                    cell = por_mes.get(ym) or {}
+                    row.append(float(cell.get("packs") or 0))
+                row.append(float(sa.get("total_packs") or 0))
+                row.append(float(sa.get("total_prendas") or 0))
+                ws.append(row)
+        wb.save(file_path)
+        logger.info("Excel compras-marca-superart: %s", file_path)
 
     def get_file_response(self, export_result: ExportResult) -> HttpResponse:
         """
