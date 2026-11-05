@@ -19,7 +19,9 @@ from .permissions import (
     DabraConsolidadoRemitosPermission,
     INVENTARIO_DEPOSITO_SLUG,
     FABRICADOS_SUPERART_SLUG,
+    COMPRAS_MARCA_SUPERART_SLUG,
     PEDIDOS_PENDIENTES_PRODUCCION_SLUG,
+    user_can_access_compras_marca_superart,
     user_can_access_fabricados_superart,
     user_can_access_inventario_deposito,
     user_can_access_pedidos_pendientes_produccion,
@@ -38,6 +40,7 @@ BUILDER_HYBRID_SLUGS = frozenset(
         "bo-stock-facturacion",
         "pedidos-pendientes-produccion",
         "fabricados-superart",
+        "compras-marca-superart",
         "stock-existencias",
     }
 )
@@ -231,6 +234,11 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
 
             ensure_fabricados_superart_report()
             report = ReportDefinition.objects.filter(filters).first()
+        if not report and slug == COMPRAS_MARCA_SUPERART_SLUG:
+            from reports.services.compras_marca_superart_seed import ensure_compras_marca_superart_report
+
+            ensure_compras_marca_superart_report()
+            report = ReportDefinition.objects.filter(filters).first()
         if not report:
             raise Http404("Report not found")
         if report.slug == self.DABRA_CONSOLIDADO_REMITOS_SLUG:
@@ -245,6 +253,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
         elif report.slug == FABRICADOS_SUPERART_SLUG:
             if not user_can_access_fabricados_superart(self.request.user):
                 raise Http404("Not authorized for fabricados por superartículo")
+        elif report.slug == COMPRAS_MARCA_SUPERART_SLUG:
+            if not user_can_access_compras_marca_superart(self.request.user):
+                raise Http404("Not authorized for compras por marca y SuperArtículo")
         elif report.slug == self.COMMAND_CENTER_SLUG:
             from reports.services.report_visibility import command_center_visible_for_user
 
