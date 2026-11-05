@@ -79,6 +79,7 @@ function detectReportType() {
     "bo-stock-facturacion",
     "pedidos-pendientes-produccion",
     "fabricados-superart",
+    "compras-marca-superart",
     "ventas-objetivos-vs-bo",
     "ventas-por-vendedor",
     "ventas-por-articulo",
@@ -121,6 +122,10 @@ function isPedidosPendientesProduccionSlug(slug) {
 
 function isFabricadosSuperartSlug(slug) {
   return slug === "fabricados-superart";
+}
+
+function isComprasMarcaSuperartSlug(slug) {
+  return slug === "compras-marca-superart";
 }
 
 /** Informes con doble período (facturación/remitos + backorder), mismos filtros que BO. */
@@ -4307,6 +4312,13 @@ const renderSummary = (meta, totals) => {
   }
 
   if (isFabricadosSuperartSlug(reportSlug)) {
+    summaryGrid.innerHTML = "";
+    if (summaryContainer) summaryContainer.classList.add("hidden");
+    updateLastUpdateTime();
+    return;
+  }
+
+  if (isComprasMarcaSuperartSlug(reportSlug)) {
     summaryGrid.innerHTML = "";
     if (summaryContainer) summaryContainer.classList.add("hidden");
     updateLastUpdateTime();
@@ -10176,6 +10188,17 @@ if (dashboardRoot) {
       appendTagMultiFilter("marcas_excluidos", filters, "marcas_excluidos");
       appendTagMultiFilter("superarts_incluidos", filters, "q_superart");
       appendTagMultiFilter("superarts_excluidos", filters, "superarts_excluidos");
+    } else if (isComprasMarcaSuperartSlug(currentReportSlug)) {
+      const periodoTipo = document.getElementById("periodo_tipo")?.value;
+      if (periodoTipo) filters.periodo_tipo = periodoTipo;
+      const desde = document.getElementById("fecha_inicio")?.value;
+      const hasta = document.getElementById("fecha_fin")?.value;
+      if (desde) filters.desde = filters.fecha_inicio = desde;
+      if (hasta) filters.hasta = filters.fecha_fin = hasta;
+      appendTagMultiFilter("marcas_incluidos", filters, "marcas_incluidos");
+      appendTagMultiFilter("marcas_excluidos", filters, "marcas_excluidos");
+      appendTagMultiFilter("superarts_incluidos", filters, "q_superart");
+      appendTagMultiFilter("superarts_excluidos", filters, "superarts_excluidos");
     } else if (isInventarioDepositoSlug(currentReportSlug)) {
       const fechaCorte = document.getElementById("fecha_corte")?.value;
       if (fechaCorte) filters.fecha_corte = fechaCorte;
@@ -10312,7 +10335,8 @@ if (dashboardRoot) {
       slug === "ventas-bom-docenas" ||
       slug === "ventas-marcas-mensual" ||
       slug === "ventas-mensuales-licenciatarios" ||
-      isFabricadosSuperartSlug(slug)
+      isFabricadosSuperartSlug(slug) ||
+      isComprasMarcaSuperartSlug(slug)
     ) {
       return true;
     }
@@ -10349,6 +10373,10 @@ if (dashboardRoot) {
     "fabricados-superart": {
       title: "Cargando fabricados por superartículo",
       subtitle: "Consultando fabricado de 1ra (Producción → Semi elaborado) por mes…",
+    },
+    "compras-marca-superart": {
+      title: "Cargando compras por marca y SuperArtículo",
+      subtitle: "Consultando compras de proveedor y ajustes MSTOCK en Terminado…",
     },
     "ventas-marca-superart": {
       title: "Cargando ventas por marca y SuperArt",
@@ -10790,6 +10818,29 @@ if (dashboardRoot) {
             document.dispatchEvent(
               new CustomEvent("reportDataLoaded", {
                 detail: { slug: "fabricados-superart", response: fsaResponse },
+              })
+            );
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
+        } else if (isComprasMarcaSuperartSlug(currentReportSlug)) {
+          try {
+            const cmsaResponse = {
+              data: payload.data || [],
+              totals: payload.totals || {},
+              meta: payload.meta || {},
+              notes: payload.notes || [],
+            };
+            if (window.comprasMarcaSuperartHandler?.renderTable) {
+              window.comprasMarcaSuperartHandler.renderTable(cmsaResponse);
+            }
+            document.dispatchEvent(
+              new CustomEvent("reportDataLoaded", {
+                detail: { slug: "compras-marca-superart", response: cmsaResponse },
               })
             );
           } finally {
