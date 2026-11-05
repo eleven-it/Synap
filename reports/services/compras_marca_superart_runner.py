@@ -68,7 +68,8 @@ def run_compras_marca_superart(report, payload: Dict, user) -> QueryResult:
         "Compras: facturas FA/FC/FM y remitos de proveedor con entrada a stock, más ajustes MSTOCK en Terminado.",
         f"Período: {filtros.get('desde_iso')} — {filtros.get('hasta_iso')}.",
         f"Meses en columnas: {', '.join(filtros.get('meses') or [])}.",
-        "Marcas: LB, PUS, PUW, RW (por CodigoMarca del artículo). Prendas = packs × unidades nU del nombre.",
+        "Marcas: LB, PUS, PUW, RW (por NombreMarca del artículo, vía tabla marca). "
+        "Prendas = packs × unidades nU del nombre.",
     ]
 
     return QueryResult(

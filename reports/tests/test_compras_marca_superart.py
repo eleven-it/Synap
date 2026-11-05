@@ -122,6 +122,14 @@ class TestValidacionAgoOct2026(SimpleTestCase):
 
 
 class TestSqlCompras(SimpleTestCase):
+    def _assert_sql_params_format_ok(self, cur):
+        sql, params = cur.execute.call_args[0]
+        self.assertIn("%%Y-%%m", sql)
+        try:
+            sql % tuple(params)
+        except (TypeError, ValueError) as exc:
+            self.fail(f"SQL % params falló (%% sin escapar?): {exc}")
+
     def test_via_proveedor_sql_clausulas(self):
         cur = MagicMock()
         cur.fetchall.return_value = []
@@ -131,6 +139,13 @@ class TestSqlCompras(SimpleTestCase):
         self.assertIn("TipoComprobante IN ('FA', 'FC', 'FM')", sql)
         self.assertIn("COALESCE(st.Entrada, 0) > 0", sql)
         self.assertIn("tipo_art_fab", sql)
+        self._assert_sql_params_format_ok(cur)
+
+    def test_via_proveedor_sql_percent_format(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        _fetch_via_proveedor(cur, "2026-08-01", "2026-10-31", None, None)
+        self._assert_sql_params_format_ok(cur)
 
     def test_via_mstock_excluye_cutover_y_motivos(self):
         cur = MagicMock()
@@ -142,6 +157,14 @@ class TestSqlCompras(SimpleTestCase):
         self.assertIn("Ajuste de saldo", sql)
         self.assertIn("Stock Inicial", sql)
         self.assertIn("deposito_origen", sql)
+        self.assertNotIn("tipo_art_fab", sql)
+        self._assert_sql_params_format_ok(cur)
+
+    def test_via_mstock_sql_percent_format(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        _fetch_via_mstock(cur, "2026-08-01", "2026-10-31", None, None)
+        self._assert_sql_params_format_ok(cur)
 
 
 class TestRunnerRegistrado(SimpleTestCase):

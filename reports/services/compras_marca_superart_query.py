@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 def _ym_expr(fecha_col: str) -> str:
-    return f"DATE_FORMAT({fecha_col}, '%Y-%m')"
+    # Literal % for DATE_FORMAT must be doubled for drivers that use Python % formatting.
+    return f"DATE_FORMAT({fecha_col}, '%%Y-%%m')"
 
 
 def _fetch_via_proveedor(
@@ -114,12 +115,11 @@ def _fetch_via_mstock(
         """NOT (
             COALESCE(ms.motivo_movimiento, st.TipoComp) = 'Ajuste'
             AND (
-                LOWER(COALESCE(ms.detalle, '')) LIKE '%cutover%'
-                OR COALESCE(ms.detalle, '') LIKE '%Ajuste de saldo%'
+                LOWER(COALESCE(ms.detalle, '')) LIKE '%%cutover%%'
+                OR COALESCE(ms.detalle, '') LIKE '%%Ajuste de saldo%%'
             )
         )""",
         sql_excluir_tipo_art_gasto("a"),
-        sql_solo_terminados_terceros("a"),
         sql_marcas_compras_universo("m"),
     ]
     params: List[Any] = [desde, hasta]

@@ -158,12 +158,15 @@ def sql_solo_terminados_terceros(alias: str = "a") -> str:
     )
 
 
-def _packs_prendas(packs: float, nombre_articulo: str) -> Tuple[float, float, float]:
+def _packs_prendas(packs: float, nombre_articulo: str) -> Tuple[float, float]:
     p = float(packs or 0)
     nu = unidades_nu_desde_nombre(nombre_articulo)
     prendas = p * nu
-    docenas = prendas / 12.0
-    return round(p, 4), round(prendas, 4), round(docenas, 4)
+    return round(p, 4), round(prendas, 4)
+
+
+def _docenas_desde_prendas(prendas: float) -> float:
+    return round(float(prendas or 0) / 12.0, 4)
 
 
 def _resolve_marca_codigo_fila(row: Dict[str, Any]) -> str:
@@ -230,7 +233,7 @@ def agrupar_compras_marca_superart(
         if terminos_sa_ex and _match_superarts_filtro(cod_sa, desc_sa, sk, terminos_sa_ex):
             continue
 
-        packs, prendas, docenas = _packs_prendas(packs_raw, nom_art)
+        packs, prendas = _packs_prendas(packs_raw, nom_art)
         key = (marca_cod, int(aid))
         if key not in por_art:
             por_art[key] = {
@@ -252,10 +255,10 @@ def agrupar_compras_marca_superart(
         cell = art["por_mes"][ym]
         cell["packs"] = round(cell["packs"] + packs, 4)
         cell["prendas"] = round(cell["prendas"] + prendas, 4)
-        cell["docenas"] = round(cell["docenas"] + docenas, 4)
+        cell["docenas"] = _docenas_desde_prendas(cell["prendas"])
         art["total_packs"] = round(art["total_packs"] + packs, 4)
         art["total_prendas"] = round(art["total_prendas"] + prendas, 4)
-        art["total_docenas"] = round(art["total_docenas"] + docenas, 4)
+        art["total_docenas"] = _docenas_desde_prendas(art["total_prendas"])
         articulos_vistos.add(int(aid))
 
     # Marca → superart → artículos
@@ -308,18 +311,28 @@ def agrupar_compras_marca_superart(
                 sa["por_mes"][m] = {"packs": 0.0, "prendas": 0.0, "docenas": 0.0}
             for art in sa["articulos"]:
                 for m in meses_ord:
-                    for k in ("packs", "prendas", "docenas"):
-                        sa["por_mes"][m][k] = round(sa["por_mes"][m][k] + art["por_mes"][m][k], 4)
+                    sa["por_mes"][m]["packs"] = round(
+                        sa["por_mes"][m]["packs"] + art["por_mes"][m]["packs"], 4
+                    )
+                    sa["por_mes"][m]["prendas"] = round(
+                        sa["por_mes"][m]["prendas"] + art["por_mes"][m]["prendas"], 4
+                    )
+                    sa["por_mes"][m]["docenas"] = _docenas_desde_prendas(sa["por_mes"][m]["prendas"])
                 sa["total_packs"] = round(sa["total_packs"] + art["total_packs"], 4)
                 sa["total_prendas"] = round(sa["total_prendas"] + art["total_prendas"], 4)
-                sa["total_docenas"] = round(sa["total_docenas"] + art["total_docenas"], 4)
+                sa["total_docenas"] = _docenas_desde_prendas(sa["total_prendas"])
             sa["articulos"].sort(key=lambda a: (-a["total_packs"], a["codigo_articulo"]))
             for m in meses_ord:
-                for k in ("packs", "prendas", "docenas"):
-                    marca["por_mes"][m][k] = round(marca["por_mes"][m][k] + sa["por_mes"][m][k], 4)
+                marca["por_mes"][m]["packs"] = round(
+                    marca["por_mes"][m]["packs"] + sa["por_mes"][m]["packs"], 4
+                )
+                marca["por_mes"][m]["prendas"] = round(
+                    marca["por_mes"][m]["prendas"] + sa["por_mes"][m]["prendas"], 4
+                )
+                marca["por_mes"][m]["docenas"] = _docenas_desde_prendas(marca["por_mes"][m]["prendas"])
             marca["total_packs"] = round(marca["total_packs"] + sa["total_packs"], 4)
             marca["total_prendas"] = round(marca["total_prendas"] + sa["total_prendas"], 4)
-            marca["total_docenas"] = round(marca["total_docenas"] + sa["total_docenas"], 4)
+            marca["total_docenas"] = _docenas_desde_prendas(marca["total_prendas"])
         marca["filas_superart"].sort(key=lambda s: (-s["total_packs"], (s["descripcion_superart"] or "").upper()))
 
     filas_marca = sorted(
@@ -341,16 +354,15 @@ def agrupar_compras_marca_superart(
             totales_por_mes[m]["prendas"] = round(
                 totales_por_mes[m]["prendas"] + marca["por_mes"][m]["prendas"], 4
             )
-            totales_por_mes[m]["docenas"] = round(
-                totales_por_mes[m]["docenas"] + marca["por_mes"][m]["docenas"], 4
-            )
+            totales_por_mes[m]["docenas"] = _docenas_desde_prendas(totales_por_mes[m]["prendas"])
             if mc in packs_por_marca_mes:
                 packs_por_marca_mes[mc][m] = round(packs_por_marca_mes[mc].get(m, 0) + p, 4)
         total_packs = round(total_packs + marca["total_packs"], 4)
         total_prendas = round(total_prendas + marca["total_prendas"], 4)
-        total_docenas = round(total_docenas + marca["total_docenas"], 4)
         if mc in packs_por_marca:
             packs_por_marca[mc] = round(packs_por_marca[mc] + marca["total_packs"], 4)
+
+    total_docenas = _docenas_desde_prendas(total_prendas)
 
     return {
         "meses": meses_ord,
@@ -391,7 +403,7 @@ def build_totals_planos(agrupado: Dict[str, Any]) -> Dict[str, float]:
     totals: Dict[str, float] = {
         "packs": float(agrupado.get("total_packs") or 0),
         "prendas": float(agrupado.get("total_prendas") or 0),
-        "docenas": float(agrupado.get("total_docenas") or 0),
+        "docenas": _docenas_desde_prendas(float(agrupado.get("total_prendas") or 0)),
         "articulos": float(agrupado.get("articulos_con_compra") or 0),
     }
     for mc, val in (agrupado.get("packs_por_marca") or {}).items():
