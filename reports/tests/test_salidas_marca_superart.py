@@ -31,6 +31,7 @@ from reports.services.salidas_marca_superart_query import (
     _fetch_salidas_cliente_terminado,
 )
 from reports.services.salidas_marca_superart_seed import SALIDAS_MARCA_SUPERART_SLUG as SEED_SLUG
+from reports.services.salidas_marca_superart_runner import _fmt_mstock_kpi_es
 
 
 def _mock_user_reportes(*permisos: str):
@@ -69,6 +70,14 @@ VALIDACION_AGO_OCT_2026 = {
     "totales_por_mes": {},
     "mes_labels": {},
 }
+
+
+class TestFmtMstockKpi(SimpleTestCase):
+    def test_separador_miles_es_negativo(self):
+        self.assertEqual(_fmt_mstock_kpi_es(-88529.0), "-88.529,0000")
+
+    def test_separador_miles_es_positivo(self):
+        self.assertEqual(_fmt_mstock_kpi_es(1234.5678), "1.234,5678")
 
 
 class TestSlugYPermisos(SimpleTestCase):
@@ -128,7 +137,6 @@ class TestValidacionAgoOct2026(SimpleTestCase):
 class TestSqlSalidas(SimpleTestCase):
     def _assert_sql_params_format_ok(self, cur):
         sql, params = cur.execute.call_args[0]
-        self.assertIn("%%Y-%%m", sql)
         try:
             sql % tuple(params)
         except (TypeError, ValueError) as exc:
@@ -139,6 +147,7 @@ class TestSqlSalidas(SimpleTestCase):
         cur.fetchall.return_value = []
         _fetch_salidas_cliente_terminado(cur, "2026-08-01", "2026-10-31", None, None)
         sql = cur.execute.call_args[0][0]
+        self.assertIn("%%Y-%%m", sql)
         self.assertIn("Remito Salida", sql)
         self.assertIn("Devol - Cliente", sql)
         self.assertIn("codmov_remito", sql)
@@ -153,6 +162,8 @@ class TestSqlSalidas(SimpleTestCase):
         cur = MagicMock()
         cur.fetchall.return_value = []
         _fetch_salidas_cliente_terminado(cur, "2026-08-01", "2026-10-31", None, None)
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("%%Y-%%m", sql)
         self._assert_sql_params_format_ok(cur)
 
     def test_mstock_kpi_mismas_marcas_y_sin_gasto(self):

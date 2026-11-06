@@ -20,6 +20,19 @@ from reports.services.salidas_marca_superart_query import reporte_salidas_marca_
 logger = logging.getLogger(__name__)
 
 
+def _fmt_mstock_kpi_es(val: float) -> str:
+    """Número con miles `.` y decimales `,` (ej. -88.529,0000)."""
+    s = f"{val:.4f}"
+    neg = s.startswith("-")
+    if neg:
+        s = s[1:]
+    whole_s, frac = s.split(".")
+    whole_int = int(whole_s)
+    whole_fmt = f"{whole_int:,}".replace(",", ".")
+    out = f"{whole_fmt},{frac}"
+    return f"-{out}" if neg else out
+
+
 def run_salidas_marca_superart(report, payload: Dict, user) -> QueryResult:
     meta_base = {
         "slug": report.slug,
@@ -77,7 +90,7 @@ def run_salidas_marca_superart(report, payload: Dict, user) -> QueryResult:
         + ".",
     ]
     if abs(mstock) > 0.0001:
-        mstock_txt = f"{mstock:.4f}".replace(".", ",")
+        mstock_txt = _fmt_mstock_kpi_es(mstock)
         notes.append(
             "Nota: movimientos internos MSTOCK en Terminado en el período (no incluidos en salidas): "
             f"{mstock_txt} packs netos."
