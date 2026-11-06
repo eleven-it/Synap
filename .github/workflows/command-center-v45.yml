@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - "codex/command-center-v45"
+      - "codex/command-center-v45-panel-integrado"
     paths:
       - ".github/workflows/command-center-v45.yml"
       - "reports/**"
