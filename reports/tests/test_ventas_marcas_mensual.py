@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 """Tests informe ventas-marcas-mensual (factor U.M., matriz, export)."""
 
+import tempfile
+from datetime import date, datetime
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
+
+import openpyxl
 
 from django.test import SimpleTestCase, TestCase
 
 from reports.models import ReportDefinition
-from reports.services.export_service import ExportService
+from reports.services.export_service import EXCEL_ARGENTINA_DATE_FORMAT, ExportService
+from reports.services.query_runner import QueryResult
 from reports.services.ventas_marcas_mensual_runner import (
     _compute_kpis_licencia,
     _delta_pct_facturacion,
@@ -350,7 +356,7 @@ class VentasMarcasMensualRunnerResilienceTest(SimpleTestCase):
         )
 
         sql, params = cursor.execute.call_args.args
-        self.assertIn("DATE_FORMAT(cc.Fecha, '%Y-%m-%d')", sql % tuple(params))
+        self.assertIn("cc.Fecha AS fecha", sql % tuple(params))
         self.assertIn("DATE_FORMAT(cc.Fecha, '%Y%m')", sql % tuple(params))
         self.assertIn("m.CodMarca = art.CodigoMarca", sql)
         self.assertNotIn("art.CodMarca", sql)
@@ -671,6 +677,113 @@ class VentasMarcasMensualExportDetalleTest(SimpleTestCase):
     def test_headers_detalle_con_proyeccion(self):
         h = resolve_detalle_headers({"unidades_proy": 1, "facturacion_proy": 1})
         self.assertIn("unidades_proy", h)
+
+    def test_fetch_detalle_devuelve_fecha_como_date(self):
+        cursor = Mock()
+        cursor.description = [
+            ("fecha",),
+            ("tipo_comprobante",),
+            ("nro_comprobante",),
+            ("ven",),
+            ("vend_nombre",),
+            ("codigo_cliente",),
+            ("nombre_cliente",),
+            ("id_manual",),
+            ("nombre_articulo",),
+            ("nombre_marca",),
+            ("anio_mes",),
+            ("packs",),
+            ("docenas",),
+            ("facturacion",),
+        ]
+        cursor.fetchall.return_value = [
+            (
+                date(2026, 7, 15),
+                "FA",
+                "1",
+                1,
+                "V",
+                "C1",
+                "Cliente",
+                "SA1",
+                "Art",
+                "M",
+                "202607",
+                2.0,
+                2.0,
+                100.0,
+            )
+        ]
+        rows = fetch_detalle_renglones(
+            cursor,
+            where_s="1=1",
+            params=[],
+            cat_sql="",
+            cat_params=[],
+            modo_unidades="packs",
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertIsInstance(rows[0]["fecha"], date)
+        self.assertEqual(rows[0]["fecha"], date(2026, 7, 15))
+
+
+class VentasMarcasMensualExcelDetalleFechaTest(SimpleTestCase):
+    """Regresión: Detalle no debe escribir fecha como texto ISO ni sin number_format AR."""
+
+    def test_detalle_columna_fecha_excel_tipo_y_formato(self):
+        svc = ExportService(Mock())
+        report = ReportDefinition(slug="ventas-marcas-mensual", config={})
+        detalle_row = {
+            "fecha": date(2026, 8, 3),
+            "tipo_comprobante": "FA",
+            "nro_comprobante": "1",
+            "nombre_vendedor": "V",
+            "nombre_cliente": "C",
+            "id_manual": "SA",
+            "nombre_articulo": "A",
+            "nombre_marca": "M",
+            "anio_mes": "202608",
+            "unidades": 1.0,
+            "facturacion": 10.0,
+        }
+        matriz_row = {
+            "nombre_vendedor": "V",
+            "nombre_cliente": "C",
+            "anio_mes": "202608",
+            "unidades": 1.0,
+            "facturacion": 10.0,
+        }
+        qr = QueryResult(
+            meta={"extra": {"detalle_rows": [detalle_row]}},
+            data=[matriz_row],
+            totals={},
+            notes=[],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "vmm.xlsx"
+            svc._generate_excel_ventas_marcas_mensual(path, report, qr, {"filters": {}})
+            wb = openpyxl.load_workbook(path)
+        ws = wb["Detalle"]
+        header_row = fecha_col = None
+        for r in range(1, min(40, ws.max_row + 1)):
+            for c in range(1, min(20, ws.max_column + 1)):
+                v = ws.cell(row=r, column=c).value
+                if v == "FECHA":
+                    header_row = r
+                    fecha_col = c
+                    break
+            if header_row:
+                break
+        self.assertIsNotNone(header_row)
+        self.assertIsNotNone(fecha_col)
+        data_cell = ws.cell(row=header_row + 1, column=fecha_col)
+        raw_val = data_cell.value
+        if isinstance(raw_val, datetime):
+            raw_val = raw_val.date()
+        self.assertIsInstance(raw_val, date)
+        self.assertEqual(raw_val, date(2026, 8, 3))
+        self.assertNotIsInstance(data_cell.value, str)
+        self.assertEqual((data_cell.number_format or "").lower(), EXCEL_ARGENTINA_DATE_FORMAT.lower())
 
 
 class VentasMarcasMensualExportCompareHeadersTest(SimpleTestCase):

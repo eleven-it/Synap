@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Sequence
 
 from django.http import HttpResponse
 
+from reports.services.export_service import EXCEL_ARGENTINA_DATE_FORMAT
+
 # Headers exactos del sample DABRA 052026.xlsx (incl. espacios trailing en P904/P908/…)
 REPORTE_HEADERS: List[str] = [
     "NroCUIT",
@@ -70,6 +72,10 @@ TOTAL_FACTURAS_HEADERS = ["Fecha", "Comprobante", "Nro. Remito", "Imp Neto", "Im
 # Columnas Y–AW (índices 1-based 25–49) deben ser 0
 _COL_Y_INDEX = 25
 _COL_AW_INDEX = 49
+
+# Índices 1-based en hoja REPORTE (columnas Fecha y VtoCAE)
+_COL_FECHA_REPORTE = 2
+_COL_VTO_CAE_REPORTE = 22
 
 
 def _nombre_archivo(mes: int, anio: int) -> str:
@@ -160,6 +166,34 @@ def exportar_dabra_xlsx(
     for fila in payload.get("filas") or []:
         ws_reporte.append(_fila_reporte_excel(fila))
 
+    date_nf = EXCEL_ARGENTINA_DATE_FORMAT
+    for row in ws_reporte.iter_rows(
+        min_row=2,
+        max_row=ws_reporte.max_row,
+        min_col=_COL_FECHA_REPORTE,
+        max_col=_COL_FECHA_REPORTE,
+    ):
+        for cell in row:
+            v = cell.value
+            if isinstance(v, datetime):
+                cell.value = v.date()
+                v = cell.value
+            if isinstance(v, date):
+                cell.number_format = date_nf
+    for row in ws_reporte.iter_rows(
+        min_row=2,
+        max_row=ws_reporte.max_row,
+        min_col=_COL_VTO_CAE_REPORTE,
+        max_col=_COL_VTO_CAE_REPORTE,
+    ):
+        for cell in row:
+            v = cell.value
+            if isinstance(v, datetime):
+                cell.value = v.date()
+                v = cell.value
+            if isinstance(v, date):
+                cell.number_format = date_nf
+
     ws_total = wb.create_sheet("TOTAL FACTURAS")
     ws_total.append(TOTAL_FACTURAS_HEADERS)
     for tf in payload.get("totales_facturas") or []:
@@ -172,6 +206,15 @@ def exportar_dabra_xlsx(
                 tf.get("imp_bruto", 0),
             ]
         )
+
+    for row in ws_total.iter_rows(min_row=2, max_row=ws_total.max_row, min_col=1, max_col=1):
+        for cell in row:
+            v = cell.value
+            if isinstance(v, datetime):
+                cell.value = v.date()
+                v = cell.value
+            if isinstance(v, date):
+                cell.number_format = date_nf
 
     buffer = io.BytesIO()
     wb.save(buffer)
