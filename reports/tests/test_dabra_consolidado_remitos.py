@@ -42,6 +42,7 @@ from reports.services.dabra_consolidado_remitos_export import (
     exportar_dabra_xlsx,
     inspeccionar_workbook,
 )
+from reports.services.export_service import EXCEL_ARGENTINA_DATE_FORMAT
 
 
 class TestParseNroComprobante(unittest.TestCase):
@@ -1000,3 +1001,21 @@ class TestDabraExporter(unittest.TestCase):
         resp = exportar_dabra_xlsx(payload, mes=5, anio=2026)
         info = inspeccionar_workbook(resp.content)
         self.assertIsNone(info["rows"]["REPORTE"][0][20])
+
+    def test_fechas_excel_tienen_number_format_argentina(self):
+        import io
+
+        import openpyxl
+
+        resp = exportar_dabra_xlsx(self._payload_minimo(), mes=5, anio=2026)
+        wb = openpyxl.load_workbook(io.BytesIO(resp.content))
+        ws = wb["REPORTE"]
+        fecha_cell = ws.cell(row=2, column=2)
+        vto_cell = ws.cell(row=2, column=22)
+        self.assertEqual((fecha_cell.number_format or "").lower(), EXCEL_ARGENTINA_DATE_FORMAT.lower())
+        self.assertEqual((vto_cell.number_format or "").lower(), EXCEL_ARGENTINA_DATE_FORMAT.lower())
+        ws_tot = wb["TOTAL FACTURAS"]
+        self.assertEqual(
+            (ws_tot.cell(row=2, column=1).number_format or "").lower(),
+            EXCEL_ARGENTINA_DATE_FORMAT.lower(),
+        )
