@@ -19,6 +19,28 @@ from ..models import ReportDefinition
 
 logger = logging.getLogger(__name__)
 
+# Formato de fecha en celdas Excel: fija día/mes/año independiente del locale de Windows.
+EXCEL_ARGENTINA_DATE_FORMAT = "dd/mm/yyyy"
+
+
+def _parse_to_excel_date(val: Any) -> Optional[date]:
+    """Convierte un valor de reporte a date nativo para Excel, o None si no aplica."""
+    if val is None or val == "":
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
+    s = str(val).strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(s[:10], fmt).date()
+        except (ValueError, TypeError):
+            continue
+    return None
+
 
 def _vo_objetivos_vs_bo_sort_export_rows(
     filas: List[Dict[str, Any]],
@@ -1267,6 +1289,9 @@ class ExportService:
             for data_row in data:
                 for col_num, h in enumerate(headers, 1):
                     raw = data_row.get(h, "")
+                    fecha_excel: Optional[date] = None
+                    if h == "fecha":
+                        fecha_excel = _parse_to_excel_date(raw)
                     if h in currency_headers:
                         try:
                             val = float(raw) if raw not in ("", None) else ""
@@ -1277,11 +1302,16 @@ class ExportService:
                             val = float(raw) if raw not in ("", None) else 0.0
                         except (TypeError, ValueError):
                             val = 0.0
+                    elif fecha_excel is not None:
+                        val = fecha_excel
                     else:
                         val = raw
                     c = ws.cell(row=row, column=col_num, value=val)
                     c.border = border
-                    if h in currency_headers and isinstance(val, (int, float)):
+                    if fecha_excel is not None:
+                        c.number_format = EXCEL_ARGENTINA_DATE_FORMAT
+                        c.alignment = Alignment(horizontal="left", vertical="center")
+                    elif h in currency_headers and isinstance(val, (int, float)):
                         c.number_format = '"$"#,##0.00'
                         c.alignment = Alignment(horizontal="right", vertical="center")
                     elif (h == "unidades" or h.startswith("unidades")) and isinstance(val, (int, float)):
