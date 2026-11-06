@@ -4,6 +4,7 @@ INVENTARIO_DEPOSITO_SLUG = "inventario-deposito-articulo"
 PEDIDOS_PENDIENTES_PRODUCCION_SLUG = "pedidos-pendientes-produccion"
 FABRICADOS_SUPERART_SLUG = "fabricados-superart"
 COMPRAS_MARCA_SUPERART_SLUG = "compras-marca-superart"
+SALIDAS_MARCA_SUPERART_SLUG = "salidas-marca-superart"
 # Slugs MPR en catálogo Reportes con acceso OR mpr.reportes / mpr.ver.
 MPR_CATALOG_OR_PERMISSION_SLUGS = frozenset(
     {
@@ -66,6 +67,17 @@ def user_can_access_compras_marca_superart(user) -> bool:
         return True
     if _user_has_permission_code(user, "compras.reportes") or _user_has_permission_code(
         user, "purchases.ver_report"
+    ):
+        return True
+    return user_has_mpr_reportes(user)
+
+
+def user_can_access_salidas_marca_superart(user) -> bool:
+    """Salidas por marca y SuperArtículo: operativo Reportes o permisos ventas/comercial."""
+    if _user_has_permission_code(user, "reports.view_operational"):
+        return True
+    if _user_has_permission_code(user, "ventas.reportes") or _user_has_permission_code(
+        user, "sales.ver_report"
     ):
         return True
     return user_has_mpr_reportes(user)

@@ -42,6 +42,8 @@ _LEGACY_LISTADOS_SLUGS = frozenset(
         "stock-existencias",
         "inventario-deposito-articulo",
         "pedidos-pendientes-produccion",
+        "compras-marca-superart",
+        "salidas-marca-superart",
         "resumen-ejecutivo-ventas",
         "command-center-gerencial",
     }
