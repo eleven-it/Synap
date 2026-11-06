@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.utils.administranet_types import str_or_default, to_int_or_none
@@ -86,7 +87,7 @@ def fetch_detalle_renglones(
 
     sql = f"""
         SELECT
-            DATE_FORMAT(cc.Fecha, '%%Y-%%m-%%d') AS fecha,
+            cc.Fecha AS fecha,
             cc.TipoComprobante AS tipo_comprobante,
             COALESCE(cc.NroComprobante, '') AS nro_comprobante,
             cc.CodViajante AS ven,
@@ -122,8 +123,26 @@ def fetch_detalle_renglones(
         u = docenas if use_docenas else packs
         if abs(u) < 1e-9 and abs(fact) < 0.01:
             continue
+        raw_fecha = row.get("fecha")
+        fecha_val: Optional[date]
+        if isinstance(raw_fecha, datetime):
+            fecha_val = raw_fecha.date()
+        elif isinstance(raw_fecha, date):
+            fecha_val = raw_fecha
+        else:
+            s = str_or_default(raw_fecha, "").strip()
+            parsed: Optional[date] = None
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+                try:
+                    parsed = datetime.strptime(s[:10], fmt).date()
+                    break
+                except (ValueError, TypeError):
+                    continue
+            if parsed is None:
+                raise ValueError(f"fecha inválida en detalle VMM: {raw_fecha!r}")
+            fecha_val = parsed
         plana: Dict[str, Any] = {
-            "fecha": str_or_default(row.get("fecha"), ""),
+            "fecha": fecha_val,
             "tipo_comprobante": str_or_default(row.get("tipo_comprobante"), ""),
             "nro_comprobante": str_or_default(row.get("nro_comprobante"), ""),
             "cod_viajante": to_int_or_none(row.get("ven")) or 0,
