@@ -26,7 +26,10 @@ from reports.services.salidas_marca_superart_calcs import (
     sql_packs_netos_salidas,
     sql_via_trazabilidad_salidas,
 )
-from reports.services.salidas_marca_superart_query import _fetch_salidas_cliente_terminado
+from reports.services.salidas_marca_superart_query import (
+    _fetch_mstock_kpi_informativo,
+    _fetch_salidas_cliente_terminado,
+)
 from reports.services.salidas_marca_superart_seed import SALIDAS_MARCA_SUPERART_SLUG as SEED_SLUG
 
 
@@ -151,6 +154,26 @@ class TestSqlSalidas(SimpleTestCase):
         cur.fetchall.return_value = []
         _fetch_salidas_cliente_terminado(cur, "2026-08-01", "2026-10-31", None, None)
         self._assert_sql_params_format_ok(cur)
+
+    def test_mstock_kpi_mismas_marcas_y_sin_gasto(self):
+        cur = MagicMock()
+        cur.fetchone.return_value = (0.0,)
+        _fetch_mstock_kpi_informativo(cur, "2026-08-01", "2026-10-31", None, None)
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("MSTOCK", sql)
+        self.assertIn("tipo_art", sql)
+        self.assertIn("NombreMarca", sql)
+        self._assert_sql_params_format_ok(cur)
+
+    def test_mstock_kpi_filtros_marca_en_params(self):
+        cur = MagicMock()
+        cur.fetchone.return_value = (1.0,)
+        _fetch_mstock_kpi_informativo(cur, "2026-08-01", "2026-10-31", [3, 4], [9])
+        self._assert_sql_params_format_ok(cur)
+        _, params = cur.execute.call_args[0]
+        self.assertEqual(params[0], "2026-08-01")
+        self.assertEqual(params[1], "2026-10-31")
+        self.assertEqual(params[2:], [3, 4, 9])
 
     def test_expresiones_via_contienen_like_escapado(self):
         via = sql_via_trazabilidad_salidas()

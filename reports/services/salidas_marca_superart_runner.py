@@ -77,9 +77,10 @@ def run_salidas_marca_superart(report, payload: Dict, user) -> QueryResult:
         + ".",
     ]
     if abs(mstock) > 0.0001:
+        mstock_txt = f"{mstock:.4f}".replace(".", ",")
         notes.append(
-            f"Nota: movimientos internos MSTOCK en Terminado en el período (no incluidos en salidas): "
-            f"{mstock:,.4f} packs netos.".replace(",", "X").replace(".", ",").replace("X", ".")
+            "Nota: movimientos internos MSTOCK en Terminado en el período (no incluidos en salidas): "
+            f"{mstock_txt} packs netos."
         )
 
     return QueryResult(

@@ -96,19 +96,38 @@ def _fetch_mstock_kpi_informativo(
     cursor,
     desde: str,
     hasta: str,
+    marcas_incluidos: Optional[Sequence[int]],
+    marcas_excluidos: Optional[Sequence[int]],
 ) -> float:
-    """Movimientos MSTOCK en Terminado (no suman al total de salidas)."""
+    """MSTOCK en Terminado, mismo universo de marcas Best Sox que el informe (no suma al total)."""
+    where = [
+        "COALESCE(st.anulado, 'No') = 'No'",
+        "COALESCE(st.Comprobante, '') = 'MSTOCK'",
+        f"st.CodDeposito = {DEPOSITO_TERMINADO}",
+        "st.Fecha >= %s",
+        "st.Fecha <= %s",
+        sql_excluir_tipo_art_gasto("a"),
+        sql_marcas_compras_universo("m"),
+    ]
+    params: List[Any] = [desde, hasta]
+    if marcas_incluidos:
+        ph = ",".join(["%s"] * len(marcas_incluidos))
+        where.append(f"a.CodigoMarca IN ({ph})")
+        params.extend(list(marcas_incluidos))
+    if marcas_excluidos:
+        ph = ",".join(["%s"] * len(marcas_excluidos))
+        where.append(f"(a.CodigoMarca IS NULL OR a.CodigoMarca NOT IN ({ph}))")
+        params.extend(list(marcas_excluidos))
+
     sql = f"""
         SELECT COALESCE(SUM(COALESCE(st.Salida, 0) - COALESCE(st.Entrada, 0)), 0) AS packs_mstock
         FROM stock st
-        WHERE COALESCE(st.anulado, 'No') = 'No'
-          AND COALESCE(st.Comprobante, '') = 'MSTOCK'
-          AND st.CodDeposito = {DEPOSITO_TERMINADO}
-          AND st.Fecha >= %s
-          AND st.Fecha <= %s
+        INNER JOIN articulo a ON a.IDArt = st.IDArt
+        LEFT JOIN marca m ON m.CodMarca = a.CodigoMarca
+        WHERE {" AND ".join(where)}
     """
     try:
-        cursor.execute(sql, [desde, hasta])
+        cursor.execute(sql, params)
         row = cursor.fetchone()
         return float(row[0] or 0) if row else 0.0
     except Exception as exc:
@@ -144,7 +163,13 @@ def reporte_salidas_marca_superart(
             marcas_ids or None,
             marcas_ex or None,
         )
-        mstock_kpi = _fetch_mstock_kpi_informativo(cursor, desde_iso, hasta_iso)
+        mstock_kpi = _fetch_mstock_kpi_informativo(
+            cursor,
+            desde_iso,
+            hasta_iso,
+            marcas_ids or None,
+            marcas_ex or None,
+        )
 
     out = agrupar_salidas_marca_superart(
         filas,
