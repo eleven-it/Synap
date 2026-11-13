@@ -242,7 +242,7 @@
         if (!filas.length) {
           if (emptyBox) {
             emptyBox.classList.remove("hidden");
-            emptyBox.textContent = "No se encontraron resultados.";
+            emptyBox.textContent = root.getAttribute("data-empty-message") || "No se encontraron resultados.";
           }
           if (wrap) wrap.classList.add("hidden");
           if (status) status.textContent = "0 resultados.";
@@ -344,9 +344,23 @@
     syncBuscarPor();
     var btn = el("botonBuscar");
     if (btn) btn.addEventListener("click", runSearch);
+    var form = el("listado-filters-form");
+    if (form) {
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        runSearch();
+      });
+      form.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" && !event.defaultPrevented && event.target.matches("input")) {
+          event.preventDefault();
+          runSearch();
+        }
+      });
+    }
     var ref = document.querySelector("[data-refresh-listado]");
     if (ref) ref.addEventListener("click", runSearch);
     var exp = document.querySelector("[data-export-excel-listado]");
     if (exp) exp.addEventListener("click", exportCsv);
+    if (root && root.getAttribute("data-slug") === "no-cancelados") runSearch();
   });
 })();
