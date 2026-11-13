@@ -285,7 +285,8 @@ export function fetchClientesMayoristapp(buscarUrl, limit) {
       q: query,
       limit: lim,
     });
-    const r = await fetch(`${buscarUrl}?${params}`, {
+    const separator = buscarUrl.includes("?") ? "&" : "?";
+    const r = await fetch(`${buscarUrl}${separator}${params}`, {
       credentials: "same-origin",
       headers: { Accept: "application/json" },
     });

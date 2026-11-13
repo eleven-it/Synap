@@ -3,20 +3,6 @@
 
 {% block title %}{{ page_title }} — Synap{% endblock %}
 
-{% block extra_css %}
-<style>
-  #clientes-app .tags-dropdown {
-    z-index: 60;
-  }
-  #clientes-app .tags-dropdown [data-value]:hover {
-    background-color: rgb(241 245 249);
-  }
-  .dark #clientes-app .tags-dropdown [data-value]:hover {
-    background-color: rgb(51 65 85);
-  }
-</style>
-{% endblock %}
-
 {% block content %}
 <section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
   <div class="w-full px-4 sm:px-6 lg:px-12 pt-6">
@@ -41,28 +27,20 @@
          data-seleccionado-url="{{ clientes_seleccionado_api }}"
          data-reporte-url="{{ reporte_url|default:'' }}"
          data-hub-url="{% url 'ecom:mayoristapp_hub' %}"
-         data-tags-filter-url="{% static 'reports/js/tags_filter.mjs' %}">
+         data-predictive-url="{% static 'ecom/js/ecom_predictive.mjs' %}?v=3">
       {% csrf_token %}
 
-      <div class="px-6 sm:px-10 py-8 border-b border-slate-100 dark:border-slate-800">
-        <label class="flex flex-col gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          <span>Cliente</span>
-          <div class="relative max-w-2xl">
-            <select id="ecom_cliente" multiple class="hidden" data-tags-field="ecom_cliente"></select>
-            <div id="ecom_cliente_tags_container"
-                 class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2.5 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl min-h-[2.75rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
-              <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
-              <input type="text"
-                     id="ecom_cliente_search"
-                     autocomplete="off"
-                     class="tags-input flex-1 min-w-[160px] bg-transparent border-none outline-none text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
-                     placeholder="Nombre, código o CUIT (mín. 2 caracteres)…" />
-              <div id="ecom_cliente_dropdown"
-                   class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
-            </div>
-          </div>
-          <p id="clientes-status" class="mt-1 min-h-[1rem] text-[11px] font-normal text-slate-500 dark:text-slate-400" role="status" aria-live="polite"></p>
-        </label>
+      <div class="px-4 sm:px-10 py-6 border-b border-slate-100 dark:border-slate-800">
+        <label for="ecom_cliente_search" class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">Cliente</label>
+        <div class="relative w-full max-w-2xl">
+          <input type="search" id="ecom_cliente_search" autocomplete="off" role="combobox"
+                 aria-autocomplete="list" aria-controls="ecom_cliente_dropdown"
+                 class="block w-full min-w-0 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-base text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                 placeholder="Buscar por nombre, código o CUIT" />
+          <div id="ecom_cliente_dropdown"
+               class="hidden absolute top-full left-0 right-0 z-50 mt-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg max-h-64 overflow-y-auto"></div>
+        </div>
+        <p id="clientes-status" class="mt-2 min-h-[1rem] text-xs text-slate-500 dark:text-slate-400" role="status" aria-live="polite">Escribí al menos 2 caracteres.</p>
       </div>
 
       <div id="cliente-seleccion-panel" class="hidden px-6 sm:px-10 py-6 bg-sky-50/80 dark:bg-sky-950/30 border-t border-sky-100 dark:border-sky-900/50">
@@ -90,5 +68,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=2"></script>
+<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=3"></script>
 {% endblock %}
