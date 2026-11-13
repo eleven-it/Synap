@@ -1,5 +1,5 @@
 /**
- * Listado de clientes mayoristapp — búsqueda predictiva (tags_filter Synap).
+ * Listado de clientes mayoristapp — búsqueda predictiva de selección única.
  */
 
 function getCookie(name) {
@@ -75,81 +75,54 @@ async function init() {
   const root = document.getElementById("clientes-app");
   if (!root) return;
 
-  const tagsUrl = root.getAttribute("data-tags-filter-url");
-  if (!tagsUrl) return;
-
-  const mod = await import(tagsUrl);
-  const initializeTagsFilter = mod.initializeTagsFilter;
-
   const buscarUrl = root.getAttribute("data-buscar-url");
   const seleccionarUrl = root.getAttribute("data-seleccionar-url");
   const statusEl = document.getElementById("clientes-status");
+  const input = document.getElementById("ecom_cliente_search");
+  const dropdown = document.getElementById("ecom_cliente_dropdown");
+  const predictiveUrl = root.getAttribute("data-predictive-url");
+  if (!buscarUrl || !seleccionarUrl || !input || !dropdown || !predictiveUrl) return;
 
-  initializeTagsFilter("ecom_cliente", "cliente", null, {
-    maxSelections: 1,
-    remoteSearch: {
-      minChars: 2,
-      fetchFn(q) {
-        const params = new URLSearchParams({
-          ajax: "1",
-          modoBus: "texto",
-          patron: q,
-          q: q,
-          limit: "15",
-        });
-        return fetch(`${buscarUrl}${buscarUrl.includes("?") ? "&" : "?"}${params}`, {
-          credentials: "same-origin",
-          headers: { Accept: "application/json" },
-        })
-          .then((res) => {
-            if (!res.ok) {
-              return res.json().then((err) => {
-                const msg = (err && err.detail) || "Error al buscar clientes.";
-                if (statusEl) statusEl.textContent = msg;
-                throw new Error(msg);
-              });
-            }
-            return res.json();
-          })
-          .then((data) => {
-            const rows = data.results || data.clientes || [];
-            if (statusEl) {
-              statusEl.textContent =
-                rows.length > 0
-                  ? `${rows.length} cliente(s) encontrado(s).`
-                  : "No se encontraron clientes para esa búsqueda.";
-            }
-            return rows.map((c) => {
-              const cod = c.id != null ? c.id : c.Codigo != null ? c.Codigo : c.codigo;
-              const nombre = c.text || c.nombre_cliente || c.nombre || "";
-              const label = nombre ? `${nombre} (#${cod})` : String(cod);
-              return { value: String(cod), label };
-            });
-          });
-      },
+  const { initPredictiveInput, fetchClientesMayoristapp } = await import(predictiveUrl);
+  let selecting = false;
+  const search = fetchClientesMayoristapp(buscarUrl, 15);
+  initPredictiveInput({
+    input,
+    dropdown,
+    minChars: 2,
+    emptyMessage: "No se encontraron clientes de tu cartera.",
+    async fetchItems(query) {
+      if (statusEl) statusEl.textContent = "Buscando clientes…";
+      try {
+        const items = await search(query);
+        if (statusEl) statusEl.textContent = items.length
+          ? `${items.length} cliente(s) encontrado(s).`
+          : "No se encontraron clientes de tu cartera.";
+        return items;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "No se pudo buscar clientes. Intentá de nuevo.";
+        throw error;
+      }
     },
-  });
-
-  const select = document.getElementById("ecom_cliente");
-  if (select) {
-    select.addEventListener("change", () => {
-      const cod = Array.from(select.selectedOptions)
-        .map((o) => o.value)
-        .find(Boolean);
-      if (!cod) return;
-      const opt = select.querySelector(`option[value="${CSS.escape(cod)}"]`);
-      const label = opt ? opt.textContent : cod;
-      seleccionarCliente(seleccionarUrl, cod, statusEl).then((ok) => {
+    async onPick(item) {
+      if (selecting || !item.value) return;
+      selecting = true;
+      input.disabled = true;
+      try {
+        const ok = await seleccionarCliente(seleccionarUrl, item.value, statusEl);
         if (!ok) return;
-        mostrarPanelSeleccion(label);
+        mostrarPanelSeleccion(item.label);
         const reporteUrl = root.getAttribute("data-reporte-url");
         if (reporteUrl) {
           statusEl.textContent = "Cargando reporte…";
           window.location.assign(reporteUrl);
         }
-      });
-    });
-  }
+      } finally {
+        selecting = false;
+        input.disabled = false;
+      }
+    },
+  });
 
   if (statusEl) {
     cargarClienteSesion(root, statusEl);
@@ -160,12 +133,12 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", function () {
     init().catch(function () {
       const statusEl = document.getElementById("clientes-status");
-      if (statusEl) statusEl.textContent = "No se pudo inicializar la búsqueda predictiva.";
+      if (statusEl) statusEl.textContent = "No se pudo inicializar la búsqueda de clientes.";
     });
   });
 } else {
   init().catch(function () {
     const statusEl = document.getElementById("clientes-status");
-    if (statusEl) statusEl.textContent = "No se pudo inicializar la búsqueda predictiva.";
+    if (statusEl) statusEl.textContent = "No se pudo inicializar la búsqueda de clientes.";
   });
 }
