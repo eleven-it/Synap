@@ -34,23 +34,26 @@ def listar_movimientos_ctacte_relay(
     """
     Listado movimientos cuenta corriente para ``Codigo`` = cliente en sesión.
 
-    Filtros: ``campoBusca`` = ``Fecha`` (``fechaDesde``, ``fechaHasta``) | ``NroComprobante`` (``numeroComp`` prefijo).
+    Filtros por fecha y número, combinables en los reportes de cliente.
     """
     where = ["cuentacliente.Codigo = %s"]
     params: List[Any] = [codigo_cliente]
 
     campo = (body.get("campoBusca") or "-").strip()
-    if campo == "Fecha":
+    if campo in ("-", "Fecha"):
         fd = (body.get("fechaDesde") or "").strip()
         fh = (body.get("fechaHasta") or "").strip()
-        if fd and fh:
-            where.append("cuentacliente.Fecha BETWEEN %s AND %s")
-            params.extend([fd, fh])
-    elif campo == "NroComprobante":
+        if fd:
+            where.append("cuentacliente.Fecha >= %s")
+            params.append(fd)
+        if fh:
+            where.append("cuentacliente.Fecha < DATE_ADD(%s, INTERVAL 1 DAY)")
+            params.append(fh)
+    if campo in ("-", "NroComprobante"):
         num = (body.get("numeroComp") or "").strip()
         if num:
-            where.append("CAST(cuentacliente.NroCompBusq AS CHAR) LIKE %s")
-            params.append(f"{num}%")
+            where.append("(cuentacliente.NroComprobante LIKE %s OR CAST(cuentacliente.NroCompBusq AS CHAR) LIKE %s)")
+            params.extend([f"%{num}%", f"{num}%"])
 
     lim = max(1, min(int(to_int_or_none(body.get("limit")) or limit), 2000))
 
@@ -96,24 +99,24 @@ def sugerencias_nro_ctacte_relay(
     codigo_cliente: int,
     limit: int = 10,
 ) -> List[str]:
-    """Autocomplete ``NroCompBusq`` (prefijo), mismo cliente que sesión."""
+    """Sugerencias con el número visible del comprobante del cliente."""
     q = (query_string or "").strip()
     if not q:
         return []
     lim = max(1, min(int(limit), 50))
     sql = """
-        SELECT cuentacliente.NroCompBusq AS n
+        SELECT DISTINCT cuentacliente.NroComprobante AS n
         FROM cuentacliente
         WHERE cuentacliente.Codigo = %s
-          AND CAST(cuentacliente.NroCompBusq AS CHAR) LIKE %s
-        ORDER BY cuentacliente.NroCompBusq DESC
+          AND (cuentacliente.NroComprobante LIKE %s OR CAST(cuentacliente.NroCompBusq AS CHAR) LIKE %s)
+        ORDER BY cuentacliente.NroComprobante DESC
         LIMIT %s
     """
     pool = get_mysql_pool()
     out: List[str] = []
     with pool.get_connection(base_empresa) as conn:
         cursor = conn.cursor()
-        cursor.execute(sql, [codigo_cliente, f"{q}%", lim])
+        cursor.execute(sql, [codigo_cliente, f"%{q}%", f"{q}%", lim])
         for row in cursor.fetchall():
             if row[0] is not None:
                 out.append(str(row[0]))

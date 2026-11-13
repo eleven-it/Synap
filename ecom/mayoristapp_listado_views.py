@@ -16,6 +16,7 @@ from ecom.mayoristapp_listado_config import (
 )
 from ecom.mayoristapp_web_views import MayoristappWebSessionMixin
 from ecom.services.cliente_relay import cliente_accesible_por_sesion
+from ecom.services.mayoristapp_session import leer_cliente_seleccionado, leer_idcliente_mayoristapp
 from ecom.services.viajantes_opciones import opciones_viajantes_para_filtro
 
 
@@ -101,6 +102,22 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 ),
             }
         )
+        if cfg.get("portal_cliente") and self.listado_slug in ("cuenta-corriente", "no-cancelados"):
+            cliente_guardado = leer_cliente_seleccionado(self.request)
+            cliente = cliente_guardado[0] if isinstance(cliente_guardado, list) and cliente_guardado else cliente_guardado
+            cliente = cliente if isinstance(cliente, dict) else {}
+            codigo = cliente.get("Codigo") or leer_idcliente_mayoristapp(self.request)
+            nombre = cliente.get("cliente") or cliente.get("nombre_cliente") or "Cliente seleccionado"
+            reporte = "cobrar" if self.listado_slug == "no-cancelados" else "ctacte"
+            context.update({
+                "cliente_reporte_nombre": nombre,
+                "cliente_reporte_codigo": codigo,
+                "cliente_reporte_cambiar_url": f"{reverse('ecom:mayoristapp_cobranzas_cartera')}?reporte={reporte}",
+                "listado_empty_message": (
+                    "Este cliente no tiene comprobantes pendientes de cobro."
+                    if reporte == "cobrar" else "Este cliente no tiene movimientos en cuenta corriente."
+                ),
+            })
         return context
 
 

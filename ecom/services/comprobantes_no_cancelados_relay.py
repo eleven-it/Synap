@@ -25,10 +25,9 @@ def _json_safe_row(item: Dict[str, Any]) -> Dict[str, Any]:
 
 def _where(body: Dict[str, Any], idcliente: int, prefijo_nro: bool) -> tuple[List[str], List[Any]]:
     if body.get("solo_cobranzas") is True:
-        # Reporte de cobranza: facturas pendientes y NC con saldo sin imputar.
-        # Las NC restan en SaldoSigned; ND y recibos pertenecen a cuenta corriente.
+        # Facturas pendientes; NC y recibos a cuenta sin imputar restan del saldo.
         where = [
-            "recibo_factura.TipoComprobante IN ('FA','FB','FC','FM','FE','NCA','NCB','NCC','NCM','NCE')",
+            "recibo_factura.TipoComprobante IN ('FA','FB','FC','FM','FE','NCA','NCB','NCC','NCM','NCE','REC')",
             "recibo_factura.Saldo > 0",
             "recibo_factura.Codigo = %s",
             "recibo_factura.Anulado = 'No'",
@@ -43,14 +42,17 @@ def _where(body: Dict[str, Any], idcliente: int, prefijo_nro: bool) -> tuple[Lis
             "recibo_factura.Estado = 'N/Canc'",
         ]
     params: List[Any] = [idcliente]
-    campo = (body.get("campoBusca") or "").strip()
-    if campo == "Fecha":
+    campo = (body.get("campoBusca") or "-").strip()
+    if campo in ("-", "Fecha"):
         fd = (body.get("fechaDesde") or "").strip()
         fh = (body.get("fechaHasta") or "").strip()
-        if fd and fh:
-            where.append("recibo_factura.Fecha BETWEEN %s AND %s")
-            params.extend([fd, fh])
-    elif campo == "NroComprobante":
+        if fd:
+            where.append("recibo_factura.Fecha >= %s")
+            params.append(fd)
+        if fh:
+            where.append("recibo_factura.Fecha < DATE_ADD(%s, INTERVAL 1 DAY)")
+            params.append(fh)
+    if campo in ("-", "NroComprobante"):
         num = (body.get("numeroComp") or "").strip()
         if num:
             where.append("recibo_factura.NroComprobante LIKE %s")
