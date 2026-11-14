@@ -1361,6 +1361,16 @@ def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optio
 
     if "url" not in item:
         return None
+    if request and item.get("menu_item_id") in {
+        "ventas_cb_precios_terminados", "ventas_cb_evolucion_precios", "ventas_obj_objetivos_venta",
+    }:
+        import unicodedata
+
+        session_user = (getattr(request, "session", None) or {}).get("user") or {}
+        puesto = str(session_user.get("nombre_puesto") or "").lower()
+        puesto = "".join(ch for ch in unicodedata.normalize("NFKD", puesto) if not unicodedata.combining(ch))
+        if "vendedor" in puesto or "preventista" in puesto:
+            return None
     if not _permiso_menu_ok(item.get("permission", ""), permisos_usuario):
         return None
     try:

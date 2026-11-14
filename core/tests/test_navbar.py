@@ -1,8 +1,28 @@
-from django.test import TestCase, Client
+from django.test import TestCase, Client, SimpleTestCase, RequestFactory
 from django.urls import reverse, NoReverseMatch
-from core.utils.utils import APPS_MENU, iter_menu_hojas_apps_menu
+from core.utils.utils import APPS_MENU, _resolver_url_item, iter_menu_hojas_apps_menu
 from core.models import UsuarioExtendido
 from django.contrib.auth.models import Permission
+
+
+class MenuVentasVendedorTest(SimpleTestCase):
+    def test_vendedor_no_ve_precios_ni_objetivos(self):
+        request = RequestFactory().get("/")
+        request.session = {"user": {"nombre_puesto": "Vendedores ecom"}}
+        for item_id in (
+            "ventas_cb_precios_terminados",
+            "ventas_cb_evolucion_precios",
+            "ventas_obj_objetivos_venta",
+        ):
+            with self.subTest(item_id=item_id):
+                item = {"url": "ecom:mayoristapp_pedidos_hub", "menu_item_id": item_id}
+                self.assertIsNone(_resolver_url_item(item, request, {"*"}))
+
+    def test_pedido_masivo_permanece_visible(self):
+        request = RequestFactory().get("/")
+        request.session = {"user": {"nombre_puesto": "Preventista"}}
+        item = {"url": "ecom:mayoristapp_pedidos_hub", "menu_item_id": "ventas_cb_pedido_masivo"}
+        self.assertIsNotNone(_resolver_url_item(item, request, {"*"}))
 
 class MenuItemIdsNavbarTest(TestCase):
     """Cada hoja de APPS_MENU debe tener menu_item_id único (visibilidad granular)."""
