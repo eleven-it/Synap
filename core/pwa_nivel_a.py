@@ -49,6 +49,8 @@ PWA_ECOM_MENU_ITEM_IDS = frozenset(
 # Deep links PWA e-com (rutas HTML Nivel A).
 PWA_ECOM_DEEP_LINKS = (
     "/ecom/mayoristapp/pedidos/",
+    "/ecom/mayoristapp/pedidos/pdf/",
+    "/ecom/mayoristapp/pedidos/exportar/",
     "/ecom/mayoristapp/pedido-masivo-sucursales/",
     "/ecom/mayoristapp/venta/",  # redirect legacy → masivo ?modo=simple
     "/ecom/mayoristapp/compra/",  # alias redirect legacy

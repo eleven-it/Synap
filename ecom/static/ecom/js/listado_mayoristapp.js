@@ -301,58 +301,21 @@
 
   function exportPdf() {
     var root = el("listado-app");
-    if (!root || !filasActuales.length) return;
-    var columns = parseJsonAttr(root, "data-columns", []);
-    var title = root.getAttribute("data-slug") === "cuenta-corriente" ?
-      "Cuenta corriente por cliente" : "Comprobantes a cobrar por cliente";
-    var empresa = root.getAttribute("data-empresa-nombre") || "administraNET";
-    var cliente = root.getAttribute("data-cliente-nombre") || "";
-    var clienteCodigo = root.getAttribute("data-cliente-codigo") || "";
-    var date = new Date().toLocaleString("es-AR");
-    var desde = el("fechaDesde")?.value || "—";
-    var hasta = el("fechaHasta")?.value || "—";
-    var saldo = root.getAttribute("data-slug") === "no-cancelados" ?
-      filasActuales.reduce(function (s, row) { return s + Number(row.SaldoSigned || 0); }, 0) :
-      Number(filasActuales[0]?.saldo || 0);
-    var logo = empresa.toLowerCase().includes("best sox") ?
-      '<img class="company-logo" src="' + esc(new URL(root.getAttribute("data-logo-empresa"), location.href).href) + '" alt="">' :
-      '<strong class="company-name">' + esc(empresa) + '</strong>';
-    var analytics = esc(new URL(root.getAttribute("data-logo-analytics"), location.href).href);
-    var headers = columns.map(function (c) { return "<th>" + esc(c.label) + "</th>"; }).join("");
-    var filasImpresion = root.getAttribute("data-slug") === "cuenta-corriente" ?
-      filasActuales.slice().reverse() : filasActuales;
-    var rows = filasImpresion.map(function (row) {
-      return "<tr>" + columns.map(function (c) {
-        var value = pick(row, c.key);
-        return "<td" + (c.fmt === "money" ? ' class="money"' : "") + ">" +
-          esc(c.fmt === "money" ? fmtMoney(value) : value) + "</td>";
-      }).join("") + "</tr>";
-    }).join("");
-    var printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-    printWindow.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' + esc(title) +
-      '</title><style>@page{size:A4 landscape;margin:13mm 10mm}body{font:10px Arial,sans-serif;color:#17233c;margin:0}header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #08336d;padding-bottom:8px;margin-bottom:10px}.company-logo{width:105px;height:55px;object-fit:contain}.company-name{color:#08336d;font-size:18px}h1{font-size:19px;margin:0 0 5px;color:#08336d}.subtitle{color:#4b5f76;margin:2px 0}.client{background:#e6eef8;border-left:4px solid #08336d;padding:8px;margin:10px 0 12px;font-weight:bold}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#08336d;color:#fff;text-align:left;font-size:9px;padding:5px 3px;overflow-wrap:anywhere}td{padding:5px 3px;border-bottom:1px solid #dbe4ee;overflow-wrap:anywhere}tr:nth-child(even){background:#f1f6fa}.money{text-align:right;white-space:nowrap}.total{margin:12px 0 0;text-align:right;font-size:13px;font-weight:bold;color:#08336d}footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #08336d;padding-top:5px;display:flex;justify-content:space-between;align-items:center;color:#526375;font-size:9px}footer img{height:19px;width:auto}@media print{thead{display:table-header-group}tr{break-inside:avoid}}</style></head><body>' +
-      '<header><div><h1>' + esc(title) + '</h1><p class="subtitle"><b>Empresa:</b> ' + esc(empresa) + ' · <b>CUIT:</b> ' + esc(root.getAttribute("data-empresa-cuit") || "—") + '</p><p class="subtitle"><b>Período:</b> ' + esc(desde) + ' a ' + esc(hasta) + ' · <b>Fecha de impresión:</b> ' + esc(date) + '</p></div>' + logo + '</header>' +
-      '<div class="client">Cliente: ' + esc(cliente) + ' · Código: ' + esc(clienteCodigo) +
-      ' · CUIT: ' + esc(root.getAttribute("data-cliente-cuit") || "—") +
-      '<br>Domicilio: ' + esc(root.getAttribute("data-cliente-domicilio") || "—") + '</div><table><thead><tr>' + headers +
-      '</tr></thead><tbody>' + rows + '</tbody></table><div class="total">Saldo final: ' + esc(fmtMoney(saldo)) +
-      '</div><footer><span>administraNET · Synap</span><img src="' + analytics + '" alt="NL Analytics"><span>' + esc(date) + '</span></footer></body></html>');
-    printWindow.document.close();
-    var imprimir = function () {
-      var images = Array.from(printWindow.document.images);
-      Promise.all(images.map(function (img) {
-        if (img.complete) return Promise.resolve();
-        return new Promise(function (resolve) {
-          img.addEventListener("load", resolve, { once: true });
-          img.addEventListener("error", resolve, { once: true });
-        });
-      })).then(function () { printWindow.focus(); printWindow.print(); });
-    };
-    if (printWindow.document.readyState === "complete") imprimir();
-    else printWindow.addEventListener("load", imprimir, { once: true });
+    if (!root || !root.getAttribute("data-pdf-url")) return;
+    var payload = buildPayload(root, parseJsonAttr(root, "data-payload-base", {}));
+    var params = new URLSearchParams();
+    ["campoBusca", "fechaDesde", "fechaHasta", "numeroComp"].forEach(function (key) {
+      if (payload[key]) params.set(key, payload[key]);
+    });
+    var url = root.getAttribute("data-pdf-url") + (params.toString() ? "?" + params.toString() : "");
+    var link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
-
   document.addEventListener("DOMContentLoaded", function () {
     var root = el("listado-app");
     var accCfg = pedidosAccionesCfg(root);
