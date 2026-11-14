@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import json
 
-from django.http import Http404
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.urls import reverse
+from django.views import View
 from django.views.generic import TemplateView
 from core.report_pdf import get_empresa_para_reporte
 
@@ -19,6 +20,9 @@ from ecom.mayoristapp_web_views import MayoristappWebSessionMixin
 from ecom.services.cliente_relay import cliente_accesible_por_sesion
 from ecom.services.mayoristapp_session import leer_cliente_seleccionado, leer_idcliente_mayoristapp
 from ecom.services.viajantes_opciones import opciones_viajantes_para_filtro
+from ecom.services.cartera_reportes_pdf import generar_pdf_cartera
+from ecom.services.comprobantes_no_cancelados_relay import listar_no_cancelados_relay
+from ecom.services.ctacte_relay import listar_movimientos_ctacte_relay
 
 
 class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
@@ -74,6 +78,8 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 "listado_results_key": cfg.get("results_key") or "filas",
                 "listado_columns": json.dumps(cfg.get("columns") or []),
                 "listado_slug": self.listado_slug,
+                "listado_pdf_url": reverse("ecom:mayoristapp_cartera_pdf", args=[self.listado_slug])
+                if cfg.get("portal_cliente") and self.listado_slug in ("cuenta-corriente", "no-cancelados") else "",
                 "show_vendedor_filter": cfg.get("filter_mode") != "promociones"
                 and not cfg.get("portal_cliente"),
                 "show_comprobante_filters": cfg.get("filter_mode") != "promociones",
@@ -209,6 +215,46 @@ class CobranzasCarteraMayoristappView(ClientesMayoristappView):
         context["reporte_url"] = reverse(destinos[reporte][1]) if reporte in destinos else ""
         context["clientes_buscar_api"] = f"{context['clientes_buscar_api']}?cartera=1"
         return context
+
+
+class CarteraReportePDFView(MayoristappWebSessionMixin, View):
+    """Entrega un PDF real limitado al cliente seleccionado y a la cartera del vendedor."""
+
+    def get(self, request, slug):
+        if slug not in ("cuenta-corriente", "no-cancelados"):
+            raise Http404("Reporte no disponible.")
+        sess = request.session.get("user") or {}
+        base = str(sess.get("base_empresa") or "").strip()
+        idc = leer_idcliente_mayoristapp(request)
+        if not idc or not cliente_accesible_por_sesion(base, idc, sess, solo_cartera=True):
+            return HttpResponseForbidden("Cliente fuera de tu cartera.")
+        filtros = {clave: request.GET.get(clave, "") for clave in
+                   ("campoBusca", "fechaDesde", "fechaHasta", "numeroComp")}
+        if slug == "no-cancelados":
+            filtros["solo_cobranzas"] = True
+            resultado = listar_no_cancelados_relay(base, filtros, idc, limit=5000)
+            filas = resultado["filas"]
+            saldo = resultado["saldo_al_dia"]
+        else:
+            filtros["limit"] = 2000
+            filas = listar_movimientos_ctacte_relay(base, filtros, idc, limit=2000)
+            saldo = filas[0].get("saldo") if filas else 0
+        cliente_guardado = leer_cliente_seleccionado(request)
+        cliente_raw = cliente_guardado[0] if isinstance(cliente_guardado, list) and cliente_guardado else cliente_guardado
+        cliente_raw = cliente_raw if isinstance(cliente_raw, dict) else {}
+        domicilios = (request.session.get("mayoristapp") or {}).get("domicilios_cliente") or []
+        domicilio = domicilios[0] if domicilios and isinstance(domicilios[0], dict) else {}
+        cliente = {
+            "nombre": cliente_raw.get("cliente") or cliente_raw.get("nombre_cliente") or "Cliente seleccionado",
+            "codigo": cliente_raw.get("Codigo") or idc,
+            "cuit": cliente_raw.get("CUIT") or "",
+            "domicilio": " ".join(str(domicilio.get(c) or "") for c in
+                                   ("Calle", "NroCalle", "Dpto", "NombreDistrito", "Provincia")).strip(),
+        }
+        pdf = generar_pdf_cartera(slug, filas, get_empresa_para_reporte(base), cliente, filtros, saldo)
+        respuesta = HttpResponse(pdf, content_type="application/pdf")
+        respuesta["Content-Disposition"] = f'inline; filename="{slug}-{idc}.pdf"'
+        return respuesta
 
 
 def listado_view_factory(slug: str, portal: bool = False):

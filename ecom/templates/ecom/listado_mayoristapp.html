@@ -150,6 +150,7 @@
       data-results-key="{{ listado_results_key }}"
       data-columns="{{ listado_columns }}"
       data-slug="{{ listado_slug }}"
+      data-pdf-url="{{ listado_pdf_url|default:'' }}"
       data-empresa-nombre="{{ empresa_reporte_nombre|default:'' }}"
       data-empresa-cuit="{{ empresa_reporte_cuit|default:'' }}"
       data-cliente-nombre="{{ cliente_reporte_nombre|default:'' }}"
@@ -299,7 +300,7 @@
 
 {% block extra_js %}
 {% if pedidos_acciones %}<script src="{% static 'ecom/js/repetir_pedido_modal.js' %}"></script>{% endif %}
-<script src="{% static 'ecom/js/listado_mayoristapp.js' %}?v=cartera4"></script>
+<script src="{% static 'ecom/js/listado_mayoristapp.js' %}?v=cartera5"></script>
 {% if cliente_reporte_cambiar_url %}<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=4"></script>{% endif %}
 <script type="module" src="{% static 'ecom/js/ecom_predictive_boot.mjs' %}"></script>
 {% endblock %}

@@ -162,6 +162,17 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
         self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/compra/'))
         self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/pedidos/'))
 
+    def test_pdf_pedidos_y_cartera_permitidos_en_movil(self):
+        for ruta in (
+            '/ecom/mayoristapp/pedidos/pdf/ped/123/',
+            '/ecom/mayoristapp/pedidos/pdf/lote/5/',
+            '/ecom/mayoristapp/pedidos/exportar/pdf/',
+            '/ecom/mayoristapp/portal/no-cancelados/pdf/',
+            '/ecom/mayoristapp/portal/cuenta-corriente/pdf/',
+        ):
+            self.assertTrue(mobile_path_allowed_for_level_a(ruta), ruta)
+        self.assertFalse(mobile_path_allowed_for_level_a('/ecom/mayoristapp/portal/otro/pdf/'))
+
     def test_ecom_api_mayoristapp_permitido(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/carrito/'))
         self.assertTrue(
