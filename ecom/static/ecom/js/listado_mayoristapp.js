@@ -149,6 +149,10 @@
           '<button type="button" class="text-xs font-semibold text-sky-600 hover:text-sky-500 mr-2" data-ver-pedido="' +
           esc(String(codMov || "")) +
           '">Ver</button>';
+        if (codMov && accCfg.urls.pdf_tpl) {
+          btns += '<a class="mr-2 text-xs font-semibold text-sky-700 hover:underline dark:text-sky-300" href="' +
+            esc(accCfg.urls.pdf_tpl.replace(/\/0\/pdf\/$/, "/" + codMov + "/pdf/")) + '" target="_blank" rel="noopener">PDF</a>';
+        }
         if (anul !== "si" && anul !== "sí" && codMov) {
           btns +=
             '<button type="button" class="text-xs font-semibold text-indigo-600 hover:text-indigo-500" data-repetir-pedido="' +
@@ -299,6 +303,34 @@
     a.click();
   }
 
+  function exportReport() {
+    var root = el("listado-app");
+    var pdfUrl = root && root.getAttribute("data-pdf-url");
+    if (!pdfUrl) return exportCsv();
+    var button = document.querySelector("[data-export-excel-listado]");
+    if (button) button.disabled = true;
+    fetch(pdfUrl, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": getCookie("csrftoken") },
+      body: JSON.stringify(buildPayload(root, parseJsonAttr(root, "data-payload-base", {}))),
+    }).then(function (response) {
+      if (!response.ok) throw new Error("No se pudo generar el PDF.");
+      return response.blob();
+    }).then(function (blob) {
+      var link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = (root.getAttribute("data-slug") || "reporte") + ".pdf";
+      link.click();
+      setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+    }).catch(function () {
+      var status = el("listado-status");
+      if (status) status.textContent = "No se pudo descargar el PDF.";
+    }).finally(function () {
+      if (button) button.disabled = false;
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     var root = el("listado-app");
     var accCfg = pedidosAccionesCfg(root);
@@ -360,7 +392,7 @@
     var ref = document.querySelector("[data-refresh-listado]");
     if (ref) ref.addEventListener("click", runSearch);
     var exp = document.querySelector("[data-export-excel-listado]");
-    if (exp) exp.addEventListener("click", exportCsv);
+    if (exp) exp.addEventListener("click", exportReport);
     if (root && ["no-cancelados", "cuenta-corriente"].includes(root.getAttribute("data-slug"))) runSearch();
   });
 })();

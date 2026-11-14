@@ -40,13 +40,16 @@ def _resolver_logo_empresa(nombre: str, cuit: str) -> Optional[str]:
     try:
         from core.models import Empresa
 
-        cuit_limpio = "".join(c for c in str(cuit or "")) if cuit else ""
+        cuit_limpio = "".join(c for c in str(cuit or "") if c.isdigit())
         empresa_django = None
 
-        if cuit_limpio and len(cuit_limpio) >= 11:
-            empresa_django = Empresa.objects.filter(
-                identificador_fiscal__icontains=cuit_limpio[:11], activa=True
-            ).first()
+        if len(cuit_limpio) == 11:
+            # El CUIT puede estar guardado con guiones en el catálogo de Synap.
+            empresa_django = next(
+                (empresa for empresa in Empresa.objects.filter(activa=True)
+                 if "".join(ch for ch in str(empresa.identificador_fiscal or "") if ch.isdigit()) == cuit_limpio),
+                None,
+            )
         if not empresa_django and (nombre or "").strip():
             empresa_django = Empresa.objects.filter(
                 nombre__iexact=(nombre or "").strip(), activa=True

@@ -45,15 +45,23 @@ class TestPromocionEtiqueta(TestCase):
 
 
 class TestPedidoPDFView(TestCase):
+    @patch("ecom.services.cliente_relay.cod_viajante_desde_sesion_usuario", return_value=7)
     @patch("ecom.pedido_gestion_views.cabecera_pedido_relay")
     @patch("ecom.pedido_gestion_views.generar_pedido_pdf")
-    def test_pdf_ok(self, mock_pdf, mock_cab):
+    def test_pdf_ok(self, mock_pdf, mock_cab, _mock_vendedor):
         mock_pdf.return_value = (True, None, b"%PDF-fake")
-        mock_cab.return_value = {"nro_comprobante": "0001-00001234"}
+        mock_cab.return_value = {"nro_comprobante": "0001-00001234", "cod_viajante": 7}
         req = _req_get("/ecom/api/mayoristapp/comprobantes/pedidos/5/pdf/")
         resp = PedidoComprobantePDFAPIView.as_view()(req, cod_mov=5)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp["Content-Type"], "application/pdf")
+
+    @patch("ecom.services.cliente_relay.cod_viajante_desde_sesion_usuario", return_value=7)
+    @patch("ecom.pedido_gestion_views.cabecera_pedido_relay", return_value={"cod_viajante": 8})
+    def test_pdf_rechaza_pedido_de_otro_vendedor(self, _mock_cab, _mock_vendedor):
+        req = _req_get("/ecom/api/mayoristapp/comprobantes/pedidos/5/pdf/")
+        resp = PedidoComprobantePDFAPIView.as_view()(req, cod_mov=5)
+        self.assertEqual(resp.status_code, 403)
 
 
 class TestCompraContextoAPI(TestCase):

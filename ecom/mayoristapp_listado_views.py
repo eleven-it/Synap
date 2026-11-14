@@ -92,6 +92,7 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
                         ),
                         "cargar_desde_pedido": reverse("ecom:mayoristapp_carrito_desde_pedido"),
                         "compra": reverse("ecom:mayoristapp_venta"),
+                        "pdf_tpl": reverse("ecom:mayoristapp_pedido_pdf", args=[0]),
                     }
                 )
                 if cfg.get("pedidos_acciones")
@@ -110,6 +111,7 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
             nombre = cliente.get("cliente") or cliente.get("nombre_cliente") or "Cliente seleccionado"
             reporte = "cobrar" if self.listado_slug == "no-cancelados" else "ctacte"
             context.update({
+                "listado_pdf_url": reverse("ecom:mayoristapp_cartera_reporte_pdf", args=[self.listado_slug]),
                 "cliente_reporte_nombre": nombre,
                 "cliente_reporte_codigo": codigo,
                 "cliente_reporte_cambiar_url": f"{reverse('ecom:mayoristapp_cobranzas_cartera')}?reporte={reporte}",

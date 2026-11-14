@@ -74,7 +74,7 @@
             <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span {% if not cliente_reporte_cambiar_url %}class="hidden sm:inline"{% endif %}>Descargar reporte</span>
+            <span {% if not cliente_reporte_cambiar_url %}class="hidden sm:inline"{% endif %}>{% if listado_pdf_url %}Descargar PDF{% else %}Descargar reporte{% endif %}</span>
           </button>
           {% if listado_slug != 'no-cancelados' and listado_slug != 'cuenta-corriente' %}
           <button type="button"
@@ -138,6 +138,7 @@
       id="listado-app"
       class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow"
       data-api-url="{{ listado_api_url }}"
+      data-pdf-url="{{ listado_pdf_url|default:'' }}"
       data-api-method="{{ listado_api_method }}"
       data-payload-base="{{ listado_payload_base }}"
       data-results-key="{{ listado_results_key }}"
