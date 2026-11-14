@@ -147,7 +147,8 @@ def buscar_clientes_relay(
     """
     Devuelve ``(filas, error)``. Si error, filas vacías.
 
-    ``modo_busqueda``: ``codigo`` | ``texto`` (paridad ``claseBusqueda`` / ``modoBus``).
+    ``modo_busqueda``: ``codigo`` | ``texto`` | ``lista``.
+    ``lista`` devuelve los primeros clientes accesibles para abrir el selector vacío.
     """
     modo = (modo_busqueda or "").strip().lower()
     usa_manual = _si_no(sess_user.get("usa_id_manual"), "No")
@@ -161,7 +162,7 @@ def buscar_clientes_relay(
     elif modo == "texto":
         if not pat:
             return [], "ingrese_busqueda"
-    else:
+    elif modo != "lista":
         return [], "modo_invalido"
 
     where_extra: List[str] = []
@@ -194,7 +195,7 @@ def buscar_clientes_relay(
 
     lim = max(1, min(int(limit), 50))
 
-    where_sql = " AND ".join(where_extra)
+    where_sql = "".join(f" AND {clause}" for clause in where_extra)
     sql = f"""
         SELECT
             cliente.nombre_cliente AS nombre_cliente,
@@ -214,7 +215,7 @@ def buscar_clientes_relay(
         LEFT JOIN contribuyentes ON contribuyentes.IDIva = cliente.IDIva
         WHERE cliente.Codigo <> 1
           AND cliente.Estado = 'Activo'
-          AND {where_sql}
+          {where_sql}
           {w_viaj}
         ORDER BY cliente.nombre_cliente
         LIMIT %s

@@ -3,7 +3,7 @@
 from django.test import SimpleTestCase
 from unittest.mock import MagicMock, patch
 
-from ecom.services.cliente_relay import _sesion_para_cartera
+from ecom.services.cliente_relay import _sesion_para_cartera, buscar_clientes_relay
 from ecom.services.comprobantes_no_cancelados_relay import _where, listar_no_cancelados_relay
 
 
@@ -36,6 +36,26 @@ class TestSesionParaCartera(SimpleTestCase):
             with self.subTest(puesto=puesto):
                 sesion = {"nombre_puesto": puesto, "todos_clientes": "Si"}
                 self.assertIs(_sesion_para_cartera(sesion, True), sesion)
+
+    @patch("ecom.services.cliente_relay.get_mysql_pool")
+    @patch("ecom.services.cliente_relay._where_viajante", return_value=("AND cliente.CodViajante = %s", [12]))
+    def test_lista_vacia_mantiene_filtro_de_cartera(self, _where_viajante, pool):
+        cursor = pool.return_value.get_connection.return_value.__enter__.return_value.cursor.return_value
+        cursor.description = [("codigo",), ("nombre_cliente",)]
+        cursor.fetchall.return_value = [(904, "Cliente de prueba")]
+
+        filas, error = buscar_clientes_relay(
+            "administranet2", modo_busqueda="lista", patron_texto="", codigo_cliente="",
+            sess_user={"nombre_puesto": "Vendedores ecom", "id_vendedor_usr": 12},
+            limit=15, solo_cartera=True,
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(filas[0]["codigo"], 904)
+        sql, params = cursor.execute.call_args.args
+        self.assertIn("AND cliente.CodViajante = %s", sql)
+        self.assertNotIn("AND \n", sql)
+        self.assertEqual(params, [12, 15])
 
 
 class TestComprobantesACobrar(SimpleTestCase):

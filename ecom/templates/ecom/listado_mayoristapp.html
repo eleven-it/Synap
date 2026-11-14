@@ -62,19 +62,19 @@
         <div class="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-end sm:gap-3">
           <button type="button"
                   data-refresh-listado
-                  class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-sky-500 hover:text-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400 transition-all duration-300">
+                  class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-sky-500 hover:text-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400 transition-all duration-300 {% if not cliente_reporte_cambiar_url %}sm:rounded-full sm:py-2 sm:text-xs{% endif %}">
             <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M10 14l2-2 2 2m-2-2v6m8-7a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span class="hidden sm:inline">Actualizar</span>
+            <span {% if not cliente_reporte_cambiar_url %}class="hidden sm:inline"{% endif %}>Actualizar</span>
           </button>
           <button type="button"
                   data-export-excel-listado
-                  class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
+                  class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300 {% if not cliente_reporte_cambiar_url %}sm:rounded-full sm:py-2 sm:text-xs{% endif %}">
             <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span class="hidden sm:inline">Exportar Excel</span>
+            <span {% if not cliente_reporte_cambiar_url %}class="hidden sm:inline"{% endif %}>Descargar reporte</span>
           </button>
           {% if listado_slug != 'no-cancelados' and listado_slug != 'cuenta-corriente' %}
           <button type="button"
@@ -116,12 +116,19 @@
 
   {% if cliente_reporte_cambiar_url %}
   <div class="w-full px-4 sm:px-6 lg:px-12 mt-4">
-    <div class="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40 sm:flex-row sm:items-center sm:justify-between">
+    <div id="clientes-app" data-buscar-url="{{ cliente_reporte_buscar_api }}" data-seleccionar-url="{{ cliente_reporte_seleccionar_api }}" data-seleccionado-url="{{ cliente_reporte_seleccionado_api }}" data-reporte-url="{{ cliente_reporte_url }}" data-predictive-url="{% static 'ecom/js/ecom_predictive.mjs' %}?v=4" class="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0">
         <p class="text-xs font-semibold text-sky-700 dark:text-sky-300">Cliente seleccionado</p>
         <p class="break-words text-base font-semibold text-slate-900 dark:text-white">{{ cliente_reporte_nombre }}{% if cliente_reporte_codigo %} · Código {{ cliente_reporte_codigo }}{% endif %}</p>
       </div>
-      <a href="{{ cliente_reporte_cambiar_url }}" class="inline-flex shrink-0 items-center justify-center rounded-xl border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100 dark:border-sky-700 dark:bg-slate-900 dark:text-sky-200 dark:hover:bg-slate-800">Buscar otro cliente</a>
+      <div class="w-full sm:max-w-md">
+        <label for="ecom_cliente_search" class="mb-1 block text-xs font-semibold text-sky-700 dark:text-sky-300">Buscar otro cliente</label>
+        <div class="relative">
+          <input type="search" id="ecom_cliente_search" role="combobox" autocomplete="off" aria-autocomplete="list" aria-controls="ecom_cliente_dropdown" class="block w-full min-w-0 rounded-xl border border-sky-300 bg-white px-4 py-3 text-base text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400 dark:border-sky-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400" placeholder="Nombre o código" />
+          <div id="ecom_cliente_dropdown" class="hidden absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800"></div>
+        </div>
+        <p id="clientes-status" class="mt-1 min-h-[1rem] text-xs text-slate-600 dark:text-slate-400" role="status" aria-live="polite">Tocá el campo para ver clientes de tu cartera.</p>
+      </div>
     </div>
   </div>
   {% endif %}
@@ -260,7 +267,7 @@
       <div class="px-6 sm:px-10 py-6">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">{{ listado_title }}</h2>
         <div id="listado-empty" class="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 py-16 text-center text-sm text-slate-500 dark:text-slate-400">
-          Use <strong class="text-slate-700 dark:text-slate-300">Actualizar</strong> o <strong class="text-slate-700 dark:text-slate-300">Buscar</strong> para cargar el listado.
+          {% if cliente_reporte_cambiar_url %}Cargando el reporte del cliente…{% else %}Use <strong class="text-slate-700 dark:text-slate-300">Actualizar</strong> o <strong class="text-slate-700 dark:text-slate-300">Buscar</strong> para cargar el listado.{% endif %}
         </div>
         <div id="listado-table-wrap" class="hidden ped-scroll">
           <table class="min-w-full text-sm text-left border-collapse" id="tabla-listado">
@@ -277,6 +284,7 @@
 
 {% block extra_js %}
 {% if pedidos_acciones %}<script src="{% static 'ecom/js/repetir_pedido_modal.js' %}"></script>{% endif %}
-<script src="{% static 'ecom/js/listado_mayoristapp.js' %}?v=cartera2"></script>
+<script src="{% static 'ecom/js/listado_mayoristapp.js' %}?v=cartera3"></script>
+{% if cliente_reporte_cambiar_url %}<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=4"></script>{% endif %}
 <script type="module" src="{% static 'ecom/js/ecom_predictive_boot.mjs' %}"></script>
 {% endblock %}

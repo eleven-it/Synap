@@ -86,11 +86,13 @@ async function init() {
   const { initPredictiveInput, fetchClientesMayoristapp } = await import(predictiveUrl);
   let selecting = false;
   const search = fetchClientesMayoristapp(buscarUrl, 15);
+  const searchExpanded = fetchClientesMayoristapp(buscarUrl, 50);
   initPredictiveInput({
     input,
     dropdown,
-    minChars: 2,
+    minChars: 0,
     emptyMessage: "No se encontraron clientes de tu cartera.",
+    fetchItemsExpanded: searchExpanded,
     async fetchItems(query) {
       if (statusEl) statusEl.textContent = "Buscando clientes…";
       try {
