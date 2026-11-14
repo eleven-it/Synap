@@ -228,12 +228,24 @@ class CarritoDesdePedidoAPIView(APIView):
 class PedidoComprobantePDFAPIView(APIView):
     """GET ``/ecom/api/mayoristapp/comprobantes/pedidos/<cod_mov>/pdf/`` — PDF del PED."""
 
-    permission_classes = [EcomComprobantesReadPermission]
+    permission_classes = [EcomComprobantesReadPermission | EcomPedidosVerPermission]
 
     def get(self, request: Request, cod_mov: int) -> HttpResponse:
         base = _session_base_empresa(request)
         if not base:
             return HttpResponse("No se encontró base_empresa en la sesión.", status=400)
+        cab = cabecera_pedido_relay(base, cod_mov)
+        if not cab:
+            return HttpResponse("Pedido no encontrado.", status=404)
+        session_user = _session_user(request)
+        if _es_cliente_sesion(request):
+            if to_int_or_none(cab.get("id_cliente")) != leer_idcliente_mayoristapp(request):
+                return HttpResponse("Pedido no disponible para esta sesión.", status=403)
+        elif not puede_ver_todos_pedidos(session_user):
+            from ecom.services.cliente_relay import cod_viajante_desde_sesion_usuario
+            vendedor = cod_viajante_desde_sesion_usuario(session_user)
+            if vendedor is None or str(cab.get("cod_viajante")) != str(vendedor):
+                return HttpResponse("Pedido no disponible para este vendedor.", status=403)
         sess = getattr(request, "session", None) or {}
         usa_manual = str(sess.get("usa_id_manual") or "").strip().lower() in (
             "si",
@@ -245,7 +257,6 @@ class PedidoComprobantePDFAPIView(APIView):
         if not ok or not pdf:
             return HttpResponse(err or "No se pudo generar el PDF.", status=404)
         nro = str(cod_mov)
-        cab = cabecera_pedido_relay(base, cod_mov)
         if cab and cab.get("nro_comprobante"):
             nro = str(cab.get("nro_comprobante")).replace("/", "-")
         resp = HttpResponse(pdf, content_type="application/pdf")

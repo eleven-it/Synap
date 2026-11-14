@@ -2,6 +2,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from ecom import views
+from ecom.cartera_report_pdf_views import CarteraReportPDFAPIView
 from ecom.logistica_legacy_redirects import redirect_api_remito_legacy
 from ecom.mayoristapp_web_views import (
     AltaReciboMayoristappView,
@@ -703,6 +704,11 @@ urlpatterns = [
         "api/mayoristapp/comprobantes/no-cancelados/",
         ComprobantesNoCanceladosRelayAPIView.as_view(),
         name="mayoristapp_comprobantes_no_cancelados",
+    ),
+    path(
+        "api/mayoristapp/reportes/<slug:tipo>/pdf/",
+        CarteraReportPDFAPIView.as_view(),
+        name="mayoristapp_cartera_reporte_pdf",
     ),
     path(
         "api/mayoristapp/comprobantes/no-cancelados-resumen/",
