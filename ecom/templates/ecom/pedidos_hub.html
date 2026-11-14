@@ -89,10 +89,10 @@
         </header>
       <div class="mt-2 flex flex-wrap items-end gap-2 border-t border-slate-600 pt-2 text-xs text-white">
         <label class="flex flex-col gap-1">Desde
-          <input type="date" x-model="fechaDesde" class="rounded-md border border-slate-500 bg-slate-900 px-2 py-1.5 text-white" aria-label="Fecha desde">
+          <input type="date" x-model="fechaDesde" style="color-scheme: dark" class="min-h-9 rounded-md border border-slate-400 bg-slate-900 px-2 py-1.5 text-white focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Fecha desde">
         </label>
         <label class="flex flex-col gap-1">Hasta
-          <input type="date" x-model="fechaHasta" class="rounded-md border border-slate-500 bg-slate-900 px-2 py-1.5 text-white" aria-label="Fecha hasta">
+          <input type="date" x-model="fechaHasta" style="color-scheme: dark" class="min-h-9 rounded-md border border-slate-400 bg-slate-900 px-2 py-1.5 text-white focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Fecha hasta">
         </label>
         <button type="button" x-show="fechaDesde || fechaHasta" @click="fechaDesde=''; fechaHasta=''" class="rounded-md border border-slate-500 px-2 py-1.5">Limpiar fechas</button>
         <div class="flex flex-wrap gap-x-3 font-semibold" aria-live="polite">
@@ -225,6 +225,11 @@
                 </div>
               </div>
             </template>
+            <a x-show="it.tipo==='ped' || it.tipo==='lote_masivo'"
+               :href="pdfPedidoUrl(it)" target="_blank" rel="noopener noreferrer"
+               class="mt-2 inline-flex min-h-10 items-center gap-1 rounded-lg border border-sky-300 px-3 py-2 text-xs font-semibold text-sky-700 dark:border-sky-600 dark:text-sky-300">
+              <span class="material-icons text-base leading-none" aria-hidden="true">picture_as_pdf</span>Abrir PDF
+            </a>
             <div x-show="it.meta && it.meta.puede_aprobar" class="mt-2 flex flex-wrap gap-2 border-t border-slate-100 pt-2 dark:border-slate-700">
               <button type="button" @click="aprobarPedido(it)"
                       class="inline-flex min-h-8 flex-1 items-center justify-center rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">
@@ -352,6 +357,11 @@
                     <button type="button" @click="rechazarPedido(it)"
                             class="flex-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 hover:bg-red-100">Rechazar</button>
                   </div>
+                  <a x-show="it.tipo==='ped' || it.tipo==='lote_masivo'"
+                     :href="pdfPedidoUrl(it)" target="_blank" rel="noopener noreferrer"
+                     class="mt-2 inline-flex items-center gap-1 rounded-md border border-sky-300 px-2 py-1 text-[11px] font-semibold text-sky-700 dark:border-sky-600 dark:text-sky-300">
+                    <span class="material-icons text-sm leading-none" aria-hidden="true">picture_as_pdf</span>PDF
+                  </a>
                   <div x-show="it.meta && it.meta.puede_aprobar_credito" class="mt-2 flex gap-1 border-t border-indigo-200 pt-2 dark:border-indigo-800">
                     <button type="button" @click="aprobarCredito(it)"
                             class="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-indigo-500">Crédito OK</button>
@@ -411,6 +421,9 @@
                   x-text="it.total_fmt || '—'"></td>
               <td class="px-3 py-2 tabular-nums text-slate-500" x-text="it.fecha"></td>
               <td class="px-3 py-2">
+                <a x-show="it.tipo==='ped' || it.tipo==='lote_masivo'"
+                   :href="pdfPedidoUrl(it)" target="_blank" rel="noopener noreferrer"
+                   class="inline-flex items-center gap-1 rounded-md border border-sky-300 px-2 py-1 text-xs font-semibold text-sky-700 dark:border-sky-600 dark:text-sky-300">PDF</a>
                 <button x-show="it.tipo==='masivo' && it.columna==='anulado'"
                         type="button"
                         @click.prevent.stop="eliminarBorradorAnulado(it)"
@@ -582,6 +595,12 @@ function pedidosHubApp() {
         return `/ecom/mayoristapp/pedido-masivo-sucursales/?draft=${id}&readonly=1`;
       }
       return (it && it.url) || '#';
+    },
+    pdfPedidoUrl(it) {
+      const tipo = it && it.tipo === 'lote_masivo' ? 'lote' : 'ped';
+      const ref = it && String(it.id_ref || '').match(tipo === 'lote' ? /^lote-(\d+)$/ : /^ped-(\d+)$/);
+      const tpl = this.urls && this.urls.item_pdf_tpl;
+      return ref && tpl ? String(tpl).replace('{tipo}', tipo).replace('{ref_id}', ref[1]) : '#';
     },
     coincideBusqueda(it) {
       const q = (this.busqueda || '').trim().toLowerCase();
