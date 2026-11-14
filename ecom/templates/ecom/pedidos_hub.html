@@ -80,13 +80,30 @@
                 </button>
               </div>
             </div>
-            <a :href="urls.kanban_deposito"
+            <a x-show="!ocultarDeposito" x-cloak :href="urls.kanban_deposito"
                class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600"
                title="Logística depósito (solo lectura)">
               Depósito
             </a>
           </div>
         </header>
+      <div class="mt-2 flex flex-wrap items-end gap-2 border-t border-slate-600 pt-2 text-xs text-white">
+        <label class="flex flex-col gap-1">Desde
+          <input type="date" x-model="fechaDesde" class="rounded-md border border-slate-500 bg-slate-900 px-2 py-1.5 text-white" aria-label="Fecha desde">
+        </label>
+        <label class="flex flex-col gap-1">Hasta
+          <input type="date" x-model="fechaHasta" class="rounded-md border border-slate-500 bg-slate-900 px-2 py-1.5 text-white" aria-label="Fecha hasta">
+        </label>
+        <button type="button" x-show="fechaDesde || fechaHasta" @click="fechaDesde=''; fechaHasta=''" class="rounded-md border border-slate-500 px-2 py-1.5">Limpiar fechas</button>
+        <div class="flex flex-wrap gap-x-3 font-semibold" aria-live="polite">
+          <span x-text="`Neto: ${moneda(totalNeto())}`"></span>
+          <span x-text="`Final: ${moneda(totalFinal())}`"></span>
+        </div>
+        <div class="ml-auto flex gap-2">
+          <button type="button" @click="exportar('pdf')" class="rounded-md border border-slate-500 px-3 py-1.5 hover:bg-slate-700">PDF</button>
+          <button type="button" @click="exportar('xlsx')" class="rounded-md border border-slate-500 px-3 py-1.5 hover:bg-slate-700">Excel</button>
+        </div>
+      </div>
       </div>
     </div>
 
@@ -513,6 +530,9 @@ function pedidosHubApp() {
     vista: 'kanban',
     columnaMovil: 'todas',
     busqueda: '',
+    fechaDesde: '',
+    fechaHasta: '',
+    ocultarDeposito: false,
     columnas: [],
     itemsPlanos: [],
     labels: {},
@@ -542,6 +562,7 @@ function pedidosHubApp() {
       const raw = document.getElementById('pedidos-hub-bootstrap');
       const data = raw ? JSON.parse(raw.textContent) : {};
       this.urls = data.urls || {};
+      this.ocultarDeposito = !!data.ocultar_deposito;
       this.labels = data.labels || {};
       this.aplicarPayload(data.hub || {});
       const saved = localStorage.getItem('synap_pedidos_hub_vista');
@@ -584,7 +605,29 @@ function pedidosHubApp() {
       return hay.includes(q);
     },
     itemsFiltrados() {
-      return this.itemsPlanos.filter((it) => this.coincideBusqueda(it));
+      return this.itemsPlanos.filter((it) => this.coincideBusqueda(it) && this.coincideFecha(it));
+    },
+    coincideFecha(it) {
+      const m = String(it.fecha || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!m) return !this.fechaDesde && !this.fechaHasta;
+      const iso = `${m[3]}-${m[2]}-${m[1]}`;
+      return (!this.fechaDesde || iso >= this.fechaDesde) && (!this.fechaHasta || iso <= this.fechaHasta);
+    },
+    itemsTotalizados() {
+      const items = window.matchMedia('(max-width: 1023px)').matches ? this.itemsMovilFiltrados() : this.itemsFiltrados();
+      return items.filter((it) => it.columna !== 'anulado' && (it.tipo === 'ped' || it.tipo === 'lote_masivo'));
+    },
+    totalNeto() { return this.itemsTotalizados().reduce((sum, it) => sum + Number(it.neto || 0), 0); },
+    totalFinal() { return this.itemsTotalizados().reduce((sum, it) => sum + Number(it.total || 0), 0); },
+    moneda(value) { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value); },
+    exportar(formato) {
+      if (!this.urls.exportar_tpl) return;
+      const params = new URLSearchParams();
+      if (this.busqueda.trim()) params.set('busqueda', this.busqueda.trim());
+      if (this.fechaDesde) params.set('fecha_desde', this.fechaDesde);
+      if (this.fechaHasta) params.set('fecha_hasta', this.fechaHasta);
+      if (window.matchMedia('(max-width: 1023px)').matches && this.columnaMovil !== 'todas') params.set('columna', this.columnaMovil);
+      window.location.href = `${this.urls.exportar_tpl.replace('{formato}', formato)}?${params}`;
     },
     itemsMovilFiltrados() {
       let items = this.itemsFiltrados();

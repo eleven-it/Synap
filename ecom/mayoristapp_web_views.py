@@ -178,11 +178,16 @@ class HubMayoristappView(MayoristappWebSessionMixin, TemplateView):
     template_name = "ecom/hub_mayoristapp.html"
 
     def get_context_data(self, **kwargs):
+        from ecom.services.pedidos_hub_pipeline import _es_vendedor_de_pedidos
+
         context = super().get_context_data(**kwargs)
+        es_vendedor = _es_vendedor_de_pedidos(self.request.session.get("user") or {})
         cards = []
         for card in _hub_cards():
             links = []
             for link in card["links"]:
+                if es_vendedor and link.get("url_name") == "ecom:mayoristapp_estado_pedidos_preparacion":
+                    continue
                 item = dict(link)
                 if item.get("enabled") and item.get("url_name"):
                     kwargs_url = item.pop("url_kwargs", None) or {}
@@ -190,7 +195,8 @@ class HubMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 else:
                     item["href"] = None
                 links.append(item)
-            cards.append({**card, "links": links})
+            if links:
+                cards.append({**card, "links": links})
         context.update(
             {
                 "page_title": "Portal mayorista",

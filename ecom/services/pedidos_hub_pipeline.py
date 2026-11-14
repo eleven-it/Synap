@@ -107,6 +107,7 @@ def _tarjeta(
     cliente: str = "",
     sucursal_nro: str = "",
     vendedor: str = "",
+    neto: Optional[float] = None,
     total: Optional[float] = None,
     total_fmt: str = "",
     meta: Optional[Dict[str, Any]] = None,
@@ -124,6 +125,7 @@ def _tarjeta(
         "cliente": cliente,
         "sucursal_nro": sucursal_nro,
         "vendedor": vendedor,
+        "neto": neto,
         "total": total,
         "total_fmt": total_fmt,
         "meta": meta or {},
@@ -536,6 +538,7 @@ def _drafts_lote_confirmados_alcance(
     filtros: Dict[str, Any] = {
         "base_empresa": base_empresa,
         "estado": EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+        "modo": EcomPedidoMasivoDraft.MODO_MASIVO,
     }
     limite = 200
     if dias is not None and int(dias) > 0:
@@ -891,6 +894,7 @@ def _pedidos_mysql(
             cp.Codigo AS id_cliente,
             COALESCE(c.nombre_cliente, '') AS nombre_cliente,
             cp.ImporteVenta,
+            cp.SubtotalDesc AS neto,
             (cp.SubtotalDesc + cp.IVA1 + cp.IVA2 + COALESCE(cp.total_percep, 0)) AS total_calc,
             cda.id_cliente_domicilio,
             COALESCE(cd.Calle, '') AS calle_domicilio,
@@ -1033,6 +1037,7 @@ def _pedidos_mysql(
                     cliente=cliente,
                     sucursal_nro=sucursal_nro,
                     vendedor=vendedor,
+                    neto=float(row.get("neto") or 0),
                     total=total,
                     total_fmt=_formato_total_pedido(total),
                     meta=meta,
@@ -1117,6 +1122,22 @@ def construir_hub_pedidos(
             mapa_lotes=mapa_lotes,
             contexto_lotes=contexto_lotes,
         )
+        importes_lote: Dict[int, Dict[str, float]] = {}
+        for ped in ped_items:
+            if ped.get("columna") == "anulado":
+                continue
+            draft_id = to_int_or_none((ped.get("meta") or {}).get("lote_draft_id"))
+            if draft_id is not None:
+                importes = importes_lote.setdefault(draft_id, {"neto": 0.0, "total": 0.0})
+                importes["neto"] += float(ped.get("neto") or 0)
+                importes["total"] += float(ped.get("total") or 0)
+        for item in items:
+            if item.get("tipo") == "lote_masivo":
+                importes = importes_lote.get(to_int_or_none((item.get("meta") or {}).get("draft_id")))
+                if importes:
+                    item["neto"] = round(importes["neto"], 2)
+                    item["total"] = round(importes["total"], 2)
+                    item["total_fmt"] = _formato_total_pedido(item["total"])
         items.extend(
             [
                 it

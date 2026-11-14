@@ -37,12 +37,16 @@ from ecom.services.lote_resumen import (
     reverse_matriz_readonly,
 )
 from ecom.services.pedidos_hub_pipeline import (
+    _es_vendedor_de_pedidos,
     archivar_borrador_masivo,
     archivar_carrito_legacy,
     construir_hub_pedidos,
     eliminar_borrador_masivo_definitivo,
     migrar_carrito_legacy_a_draft,
     url_pedido_masivo_modo_simple,
+)
+from ecom.services.pedidos_hub_export import (
+    filtrar_pedidos_hub, generar_excel_pedidos, generar_pdf_pedidos,
 )
 from ecom.services.ecom_config_mysql import aprobacion_pedidos_activa, credito_pedidos_activo
 from ecom.checkout_relay_views import _session_dias_no_laborables
@@ -534,10 +538,14 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
                 "hub_bootstrap": {
                     "vista": hub.get("vista"),
                     "hub": hub,
+                    "ocultar_deposito": _es_vendedor_de_pedidos(sess),
                     "labels": hub.get("labels") or {},
                     "urls": {
                         "nuevo_simple": url_pedido_masivo_modo_simple(),
                         "nuevo_masivo": reverse("ecom:mayoristapp_pedido_masivo_sucursales"),
+                        "exportar_tpl": reverse(
+                            "ecom:mayoristapp_pedidos_hub_exportar", kwargs={"formato": "pdf"}
+                        ).replace("/pdf/", "/{formato}/"),
                         "kanban_deposito": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
                         "api": reverse("ecom:mayoristapp_pedidos_hub_api"),
                         "archivar_draft": reverse("ecom:mayoristapp_pedidos_hub_archivar_draft"),
@@ -585,6 +593,41 @@ class PedidosHubAPIView(APIView):
         dias = to_int_or_none(request.query_params.get("dias"))
         hub = construir_hub_pedidos(base, sess, vista=vista, dias=dias)
         return Response({"ok": True, **hub})
+
+
+class PedidosHubExportarAPIView(APIView):
+    """Exporta exactamente el alcance comercial de la sesión y los filtros visibles."""
+
+    permission_classes = [EcomPedidosVerPermission]
+
+    def get(self, request: Request, formato: str) -> HttpResponse:
+        if formato not in ("pdf", "xlsx"):
+            return Response({"detail": "Formato no admitido."}, status=400)
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        if not base:
+            return Response({"detail": "Sin base_empresa."}, status=400)
+        params = request.query_params
+        try:
+            hub = construir_hub_pedidos(base, sess, vista="lista")
+            items = filtrar_pedidos_hub(
+                hub.get("items") or [],
+                busqueda=str(params.get("busqueda") or "")[:120],
+                fecha_desde=str(params.get("fecha_desde") or ""),
+                fecha_hasta=str(params.get("fecha_hasta") or ""),
+                columna=str(params.get("columna") or ""),
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        if formato == "pdf":
+            contenido = generar_pdf_pedidos(items, base)
+            mime = "application/pdf"
+        else:
+            contenido = generar_excel_pedidos(items, base)
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        response = HttpResponse(contenido, content_type=mime)
+        response["Content-Disposition"] = f'attachment; filename="pedidos.{formato}"'
+        return response
 
 
 class PedidosHubArchivarDraftAPIView(APIView):
