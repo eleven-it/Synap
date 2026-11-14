@@ -730,6 +730,31 @@ class TestConstruirHubLayoutMovil(TestCase):
 
 
 class TestCargasMasivasPipeline(TestCase):
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline._pedidos_mysql")
+    def test_pedido_simple_confirmado_se_muestra_como_ped(self, mock_pedidos, _apr):
+        draft = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_hub",
+            id_usuario=22,
+            id_cliente=5,
+            estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+            modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+            codigos_movimiento=[101],
+        )
+        mock_pedidos.return_value = [{
+            "tipo": "ped", "columna": "enviado", "titulo": "PED 0008-000000101",
+            "id_ref": "ped-101", "meta": {"codigo_movimiento": 101},
+        }]
+
+        hub = construir_hub_pedidos(
+            "emp_hub", {"id_usuario": 22, "todos_clientes": "Si"}
+        )
+
+        self.assertEqual([item["id_ref"] for item in hub["items"]], ["ped-101"])
+        self.assertFalse(any(item["tipo"] == "lote_masivo" for item in hub["items"]))
+        self.assertEqual(mock_pedidos.call_args.kwargs["mapa_lotes"], {})
+        self.assertEqual(draft.modo, EcomPedidoMasivoDraft.MODO_SIMPLE)
+
     def _draft_confirmado(self, *, id_usuario=22, codigos=None, estado_lote="-"):
         d = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_hub",

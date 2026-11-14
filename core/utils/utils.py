@@ -1361,6 +1361,11 @@ def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optio
 
     if "url" not in item:
         return None
+    if item.get("menu_item_id") == "ecom_estado_pedidos" and request:
+        from ecom.services.pedidos_hub_pipeline import _es_vendedor_de_pedidos
+
+        if _es_vendedor_de_pedidos(request.session.get("user") or {}):
+            return None
     if not _permiso_menu_ok(item.get("permission", ""), permisos_usuario):
         return None
     try:
