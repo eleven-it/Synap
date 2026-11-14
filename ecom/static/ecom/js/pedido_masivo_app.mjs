@@ -1570,10 +1570,7 @@ function pedidoMasivoCore() {
     _textoBusquedaArticulo(a) {
       return [
         a?.id_manual,
-        a?.codigo,
         a?.nombre,
-        a?.descripcion,
-        a?.id_articulo != null ? String(a.id_articulo) : '',
       ]
         .map((x) => String(x || '').trim())
         .filter(Boolean)
