@@ -361,6 +361,6 @@
     if (ref) ref.addEventListener("click", runSearch);
     var exp = document.querySelector("[data-export-excel-listado]");
     if (exp) exp.addEventListener("click", exportCsv);
-    if (root && root.getAttribute("data-slug") === "no-cancelados") runSearch();
+    if (root && ["no-cancelados", "cuenta-corriente"].includes(root.getAttribute("data-slug"))) runSearch();
   });
 })();
