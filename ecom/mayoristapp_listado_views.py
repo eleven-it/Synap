@@ -9,6 +9,7 @@ import json
 from django.http import Http404
 from django.urls import reverse
 from django.views.generic import TemplateView
+from core.report_pdf import get_empresa_para_reporte
 
 from ecom.mayoristapp_listado_config import (
     MAYORISTAPP_LISTADOS,
@@ -103,15 +104,28 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
             }
         )
         if cfg.get("portal_cliente") and self.listado_slug in ("cuenta-corriente", "no-cancelados"):
+            try:
+                empresa_reporte = get_empresa_para_reporte(base)
+            except Exception:
+                empresa_reporte = {}
             cliente_guardado = leer_cliente_seleccionado(self.request)
             cliente = cliente_guardado[0] if isinstance(cliente_guardado, list) and cliente_guardado else cliente_guardado
             cliente = cliente if isinstance(cliente, dict) else {}
             codigo = cliente.get("Codigo") or leer_idcliente_mayoristapp(self.request)
             nombre = cliente.get("cliente") or cliente.get("nombre_cliente") or "Cliente seleccionado"
+            domicilios = (self.request.session.get("mayoristapp") or {}).get("domicilios_cliente") or []
+            primer_domicilio = domicilios[0] if domicilios and isinstance(domicilios[0], dict) else {}
+            domicilio_texto = " ".join(str(primer_domicilio.get(campo) or "") for campo in (
+                "Calle", "NroCalle", "Dpto", "NombreDistrito", "Provincia"
+            )).strip()
             reporte = "cobrar" if self.listado_slug == "no-cancelados" else "ctacte"
             context.update({
                 "cliente_reporte_nombre": nombre,
                 "cliente_reporte_codigo": codigo,
+                "cliente_reporte_cuit": cliente.get("CUIT") or "",
+                "cliente_reporte_domicilio": domicilio_texto,
+                "empresa_reporte_nombre": empresa_reporte.get("razon_social") or "",
+                "empresa_reporte_cuit": empresa_reporte.get("cuit_formateado") or "",
                 "cliente_reporte_cambiar_url": f"{reverse('ecom:mayoristapp_cobranzas_cartera')}?reporte={reporte}",
                 "cliente_reporte_buscar_api": f"{reverse('ecom:mayoristapp_clientes_buscar')}?cartera=1",
                 "cliente_reporte_seleccionar_api": reverse('ecom:mayoristapp_clientes_seleccionar'),

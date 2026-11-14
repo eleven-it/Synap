@@ -4,9 +4,11 @@ APIs y vistas HTML de gestión comercial de pedidos (PED).
 
 from __future__ import annotations
 
+from io import BytesIO
 from typing import Any, Dict, Optional
 
 from django.http import HttpResponse
+from pypdf import PdfReader, PdfWriter
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.views import View
@@ -255,6 +257,57 @@ class PedidoComprobantePDFAPIView(APIView):
         resp = HttpResponse(pdf, content_type="application/pdf")
         resp["Content-Disposition"] = f'inline; filename="pedido-{nro}.pdf"'
         return resp
+
+
+class PedidosHubItemPDFAPIView(APIView):
+    """PDF individual o del lote confirmado, limitado a los pedidos visibles del usuario."""
+
+    permission_classes = [EcomPedidosVerPermission]
+
+    def get(self, request: Request, tipo: str, ref_id: int) -> HttpResponse:
+        if tipo not in ("ped", "lote"):
+            return HttpResponse("Pedido no encontrado.", status=404)
+        base = _session_base_empresa(request)
+        sess_user = _session_user(request)
+        if not base:
+            return HttpResponse("No se encontró la empresa en la sesión.", status=400)
+        hub = construir_hub_pedidos(base, sess_user, vista="lista")
+        visible = any(
+            item.get("id_ref") == f"{tipo}-{ref_id}"
+            and item.get("tipo") == ("ped" if tipo == "ped" else "lote_masivo")
+            for item in hub.get("items") or []
+        )
+        if not visible:
+            return HttpResponse("Pedido no disponible para este usuario.", status=404)
+
+        if tipo == "ped":
+            codigos = [ref_id]
+        else:
+            try:
+                resumen = construir_resumen_lote(base, ref_id, sess_user)
+            except LoteResumenError:
+                return HttpResponse("Lote no disponible.", status=404)
+            codigos = [
+                int(row["cod_mov"])
+                for row in resumen.get("sucursales") or []
+                if row.get("presente") and row.get("cod_mov") is not None
+            ]
+        if not codigos:
+            return HttpResponse("No hay pedidos confirmados para exportar.", status=404)
+
+        sess = getattr(request, "session", None) or {}
+        usa_manual = str(sess.get("usa_id_manual") or "").strip().lower() in ("si", "sí", "1", "true")
+        writer = PdfWriter()
+        for cod_mov in codigos:
+            ok, err, pdf = generar_pedido_pdf(base, cod_mov, usa_id_manual=usa_manual)
+            if not ok or not pdf:
+                return HttpResponse(err or "No se pudo generar el PDF.", status=404)
+            writer.append(PdfReader(BytesIO(pdf)))
+        output = BytesIO()
+        writer.write(output)
+        response = HttpResponse(output.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="pedido-{tipo}-{ref_id}.pdf"'
+        return response
 
 
 class CompraMayoristaContextoAPIView(APIView):
@@ -546,6 +599,10 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
                         "exportar_tpl": reverse(
                             "ecom:mayoristapp_pedidos_hub_exportar", kwargs={"formato": "pdf"}
                         ).replace("/pdf/", "/{formato}/"),
+                        "item_pdf_tpl": reverse(
+                            "ecom:mayoristapp_pedidos_hub_item_pdf",
+                            kwargs={"tipo": "ped", "ref_id": 0},
+                        ).replace("/ped/0/", "/{tipo}/{ref_id}/"),
                         "kanban_deposito": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
                         "api": reverse("ecom:mayoristapp_pedidos_hub_api"),
                         "archivar_draft": reverse("ecom:mayoristapp_pedidos_hub_archivar_draft"),

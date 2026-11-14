@@ -26,6 +26,7 @@ from ecom.pedido_gestion_views import (
     LoteResumenView,
     PedidoCabeceraV1APIView,
     PedidoComprobantePDFAPIView,
+    PedidosHubItemPDFAPIView,
     PedidoDetalleView,
     PedidosHubAPIView,
     PedidosHubExportarAPIView,
@@ -225,6 +226,11 @@ urlpatterns = [
         "mayoristapp/pedidos/exportar/<str:formato>/",
         PedidosHubExportarAPIView.as_view(),
         name="mayoristapp_pedidos_hub_exportar",
+    ),
+    path(
+        "mayoristapp/pedidos/pdf/<str:tipo>/<int:ref_id>/",
+        PedidosHubItemPDFAPIView.as_view(),
+        name="mayoristapp_pedidos_hub_item_pdf",
     ),
     path(
         "api/mayoristapp/pedidos/hub/archivar-draft/",

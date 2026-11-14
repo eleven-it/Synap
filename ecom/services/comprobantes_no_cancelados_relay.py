@@ -83,7 +83,7 @@ def listar_no_cancelados_relay(
             recibo_factura.Importe AS Importe,
             recibo_factura.CondVenta AS CondVenta,
             DATE_FORMAT(recibo_factura.Vencimiento,'%%d/%%m/%%Y') AS FechaVto,
-            DATEDIFF(CURDATE(), recibo_factura.Vencimiento) AS DiasVto,
+            GREATEST(0, DATEDIFF(CURDATE(), recibo_factura.Vencimiento)) AS DiasVto,
             recibo_factura.Saldo AS Saldo
         FROM recibo_factura
         WHERE {" AND ".join(where)}
@@ -125,7 +125,7 @@ def listar_no_cancelados_resumen_relay(
             recibo_factura.Importe AS Importe,
             recibo_factura.CondVenta AS CondVenta,
             DATE_FORMAT(recibo_factura.Vencimiento,'%%d/%%m/%%Y') AS FechaVto,
-            DATEDIFF(CURDATE(), recibo_factura.Vencimiento) AS DiasVto,
+            GREATEST(0, DATEDIFF(CURDATE(), recibo_factura.Vencimiento)) AS DiasVto,
             recibo_factura.Saldo AS Saldo
         FROM recibo_factura
         WHERE {" AND ".join(where)}
