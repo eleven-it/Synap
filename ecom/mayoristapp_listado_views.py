@@ -113,6 +113,10 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 "cliente_reporte_nombre": nombre,
                 "cliente_reporte_codigo": codigo,
                 "cliente_reporte_cambiar_url": f"{reverse('ecom:mayoristapp_cobranzas_cartera')}?reporte={reporte}",
+                "cliente_reporte_buscar_api": f"{reverse('ecom:mayoristapp_clientes_buscar')}?cartera=1",
+                "cliente_reporte_seleccionar_api": reverse('ecom:mayoristapp_clientes_seleccionar'),
+                "cliente_reporte_seleccionado_api": reverse('ecom:mayoristapp_clientes_seleccionado'),
+                "cliente_reporte_url": self.request.path,
                 "listado_empty_message": (
                     "Este cliente no tiene comprobantes pendientes de cobro."
                     if reporte == "cobrar" else "Este cliente no tiene movimientos en cuenta corriente."

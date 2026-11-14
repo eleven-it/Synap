@@ -27,7 +27,7 @@
          data-seleccionado-url="{{ clientes_seleccionado_api }}"
          data-reporte-url="{{ reporte_url|default:'' }}"
          data-hub-url="{% url 'ecom:mayoristapp_hub' %}"
-         data-predictive-url="{% static 'ecom/js/ecom_predictive.mjs' %}?v=3">
+         data-predictive-url="{% static 'ecom/js/ecom_predictive.mjs' %}?v=4">
       {% csrf_token %}
 
       <div class="px-4 sm:px-10 py-6 border-b border-slate-100 dark:border-slate-800">
@@ -36,11 +36,11 @@
           <input type="search" id="ecom_cliente_search" autocomplete="off" role="combobox"
                  aria-autocomplete="list" aria-controls="ecom_cliente_dropdown"
                  class="block w-full min-w-0 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-base text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                 placeholder="Buscar por nombre, código o CUIT" />
+                 placeholder="Buscar por nombre o código" />
           <div id="ecom_cliente_dropdown"
                class="hidden absolute top-full left-0 right-0 z-50 mt-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg max-h-64 overflow-y-auto"></div>
         </div>
-        <p id="clientes-status" class="mt-2 min-h-[1rem] text-xs text-slate-500 dark:text-slate-400" role="status" aria-live="polite">Escribí al menos 2 caracteres.</p>
+        <p id="clientes-status" class="mt-2 min-h-[1rem] text-xs text-slate-500 dark:text-slate-400" role="status" aria-live="polite">Tocá el campo para ver clientes de tu cartera.</p>
       </div>
 
       <div id="cliente-seleccion-panel" class="hidden px-6 sm:px-10 py-6 bg-sky-50/80 dark:bg-sky-950/30 border-t border-sky-100 dark:border-sky-900/50">
@@ -68,5 +68,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=3"></script>
+<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=4"></script>
 {% endblock %}

@@ -49,6 +49,7 @@ export function initPredictiveInput(opts) {
   let highlight = -1;
   let lastItems = [];
   let expandedOnce = false;
+  let requestId = 0;
 
   dropdown.setAttribute("role", "listbox");
   input.setAttribute("aria-expanded", "false");
@@ -114,6 +115,7 @@ export function initPredictiveInput(opts) {
 
   function pick(item) {
     const n = normalizeItem(item);
+    requestId += 1;
     input.value = n.label;
     hide();
     if (typeof opts.onPick === "function") opts.onPick(n);
@@ -121,15 +123,18 @@ export function initPredictiveInput(opts) {
   }
 
   async function runSearch(query, expanded) {
+    const currentRequest = ++requestId;
     try {
       const fetchFn =
         expanded && typeof opts.fetchItemsExpanded === "function"
           ? opts.fetchItemsExpanded
           : opts.fetchItems;
       const items = await fetchFn(query);
+      if (currentRequest !== requestId) return;
       if (expanded) expandedOnce = true;
       render(Array.isArray(items) ? items : [], query);
     } catch {
+      if (currentRequest !== requestId) return;
       render([], query);
     }
   }
@@ -144,6 +149,7 @@ export function initPredictiveInput(opts) {
 
   function onInput() {
     const q = input.value.trim();
+    requestId += 1;
     highlight = -1;
     expandedOnce = false;
     if (q.length < minChars) {
@@ -280,7 +286,7 @@ export function fetchClientesMayoristapp(buscarUrl, limit) {
   return async function (query) {
     const params = new URLSearchParams({
       ajax: "1",
-      modoBus: "texto",
+      modoBus: query.trim() ? "texto" : "lista",
       patron: query,
       q: query,
       limit: lim,
