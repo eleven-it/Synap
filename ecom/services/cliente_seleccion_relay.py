@@ -40,6 +40,7 @@ def construir_payload_cliente_seleccionado(
             cliente.id_sucursal AS id_sucursal,
             cliente.saldo AS saldo,
             cliente.Codigo AS Codigo,
+            cliente.CUIT AS CUIT,
             cliente.TipoCliente AS TipoCliente,
             cliente.Descuento AS descPie,
             cliente.Email AS email,

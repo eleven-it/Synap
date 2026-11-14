@@ -7,6 +7,7 @@ from io import BytesIO
 import os
 from typing import Any
 
+from django.conf import settings
 from core.report_pdf import get_empresa_para_reporte
 
 ESTADOS = {
@@ -68,6 +69,12 @@ def _texto_excel(valor: Any) -> str:
     return "'" + texto if texto.startswith(("=", "+", "-", "@")) else texto
 
 
+def _domicilio_adicional(item: dict[str, Any]) -> str:
+    if item.get("tipo") == "lote_masivo":
+        return "Varios domicilios"
+    return str((item.get("meta") or {}).get("sucursal") or item.get("sucursal") or "")
+
+
 def generar_excel_pedidos(items: list[dict[str, Any]], base_empresa: str) -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -81,7 +88,7 @@ def generar_excel_pedidos(items: list[dict[str, Any]], base_empresa: str) -> byt
     ws["A1"].font = Font(size=16, bold=True, color="123B70")
     ws.merge_cells("A2:H2")
     ws["A2"] = "administraNET · Generado el " + datetime.now().strftime("%d/%m/%Y %H:%M")
-    headers = ("Fecha", "Pedido", "Cliente", "Sucursal", "Estado", "Vendedor", "Neto", "Final")
+    headers = ("Fecha", "Pedido", "Cliente", "Domicilio adicional", "Estado", "Vendedor", "Neto", "Final")
     for col, value in enumerate(headers, 1):
         c = ws.cell(4, col, value)
         c.fill = PatternFill("solid", fgColor="123B70")
@@ -90,7 +97,7 @@ def generar_excel_pedidos(items: list[dict[str, Any]], base_empresa: str) -> byt
     for row, item in enumerate(items, 5):
         vals = (
             item.get("fecha"), item.get("titulo"), item.get("cliente"),
-            item.get("sucursal"), ESTADOS.get(item.get("columna"), item.get("columna")), item.get("vendedor"),
+            _domicilio_adicional(item), ESTADOS.get(item.get("columna"), item.get("columna")), item.get("vendedor"),
             float(item.get("neto") or 0), float(item.get("total") or 0),
         )
         for col, value in enumerate(vals, 1):
@@ -126,10 +133,10 @@ def generar_pdf_pedidos(items: list[dict[str, Any]], base_empresa: str) -> bytes
                             topMargin=87, bottomMargin=40)
     styles = getSampleStyleSheet()
     tiny = ParagraphStyle("PedidoCelda", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=10)
-    data = [["Fecha", "Pedido", "Cliente", "Sucursal", "Estado", "Vendedor", "Neto", "Final"]]
+    data = [["Fecha", "Pedido", "Cliente", "Domicilio adicional", "Estado", "Vendedor", "Neto", "Final"]]
     for item in items:
         texts = (item.get("fecha"), item.get("titulo"), item.get("cliente"),
-                 item.get("sucursal"), ESTADOS.get(item.get("columna"), item.get("columna")), item.get("vendedor"))
+                 _domicilio_adicional(item), ESTADOS.get(item.get("columna"), item.get("columna")), item.get("vendedor"))
         data.append([Paragraph(escape(str(value or "")), tiny) for value in texts] + [
             _dinero(item.get("neto") or 0), _dinero(item.get("total") or 0),
         ])
@@ -138,7 +145,7 @@ def generar_pdf_pedidos(items: list[dict[str, Any]], base_empresa: str) -> bytes
     widths = [58, 103, 125, 125, 65, 105, 100, 100]
     table = Table(data, colWidths=widths, repeatRows=1, hAlign="LEFT")
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#123B70")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#08336D")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 8),
@@ -155,26 +162,40 @@ def generar_pdf_pedidos(items: list[dict[str, Any]], base_empresa: str) -> bytes
         canvas.saveState()
         page_w, page_h = landscape(A4)
         logo = empresa.get("logo_path")
+        if not logo and "best sox" in str(empresa.get("razon_social") or "").lower():
+            logo = os.path.join(settings.BASE_DIR, "ecom", "static", "ecom", "img", "best_sox_logo.jpg")
         if logo and os.path.isfile(logo):
             try:
                 image = ImageReader(logo)
                 iw, ih = image.getSize()
-                canvas.drawImage(image, 31, page_h - 67, width=min(115, 43 * iw / ih),
-                                 height=43, preserveAspectRatio=True, mask="auto")
+                w = min(105, 45 * iw / ih)
+                h = w * ih / iw
+                canvas.drawImage(image, 31, page_h - 22 - h, width=w,
+                                 height=h, preserveAspectRatio=True, mask="auto")
             except Exception:
                 pass
-        canvas.setFillColor(colors.HexColor("#123B70"))
+        canvas.setFillColor(colors.HexColor("#08336D"))
         canvas.setFont("Helvetica-Bold", 17)
         canvas.drawString(160, page_h - 37, "Listado de pedidos")
         canvas.setFont("Helvetica", 10)
         canvas.drawString(160, page_h - 53, str(empresa.get("razon_social") or ""))
         canvas.setFont("Helvetica-Bold", 9)
         canvas.drawRightString(page_w - 30, page_h - 37, "administraNET")
-        canvas.setStrokeColor(colors.HexColor("#11A3D4"))
+        canvas.setStrokeColor(colors.HexColor("#1560A8"))
         canvas.line(30, page_h - 75, page_w - 30, page_h - 75)
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.HexColor("#526375"))
         canvas.drawString(30, 22, datetime.now().strftime("Generado el %d/%m/%Y %H:%M"))
+        analytics = os.path.join(settings.BASE_DIR, "ecom", "static", "ecom", "img", "nl_analytics.png")
+        if os.path.isfile(analytics):
+            try:
+                image = ImageReader(analytics)
+                iw, ih = image.getSize()
+                w = min(33, 22 * iw / ih)
+                canvas.drawImage(image, (page_w - w) / 2, 12, width=w, height=w * ih / iw,
+                                 preserveAspectRatio=True, mask="auto")
+            except Exception:
+                pass
         canvas.drawRightString(page_w - 30, 22, f"Página {document.page}")
         canvas.restoreState()
 

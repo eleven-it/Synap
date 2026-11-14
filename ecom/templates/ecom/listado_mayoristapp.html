@@ -70,12 +70,19 @@
           </button>
           <button type="button"
                   data-export-excel-listado
-                  class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300 {% if not cliente_reporte_cambiar_url %}sm:rounded-full sm:py-2 sm:text-xs{% endif %}">
+                  class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-400/60 px-4 py-3 text-sm font-semibold text-emerald-200 hover:bg-emerald-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-all duration-300">
             <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span {% if not cliente_reporte_cambiar_url %}class="hidden sm:inline"{% endif %}>Descargar reporte</span>
+            <span>Excel</span>
           </button>
+          {% if listado_slug == 'no-cancelados' or listado_slug == 'cuenta-corriente' %}
+          <button type="button" data-export-pdf-listado
+                  class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-sky-400/60 px-4 py-3 text-sm font-semibold text-sky-100 hover:bg-sky-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 transition-all duration-300">
+            <span class="material-icons text-lg leading-none" aria-hidden="true">picture_as_pdf</span>
+            <span>PDF</span>
+          </button>
+          {% endif %}
           {% if listado_slug != 'no-cancelados' and listado_slug != 'cuenta-corriente' %}
           <button type="button"
                   data-realtime-toggle
@@ -143,6 +150,14 @@
       data-results-key="{{ listado_results_key }}"
       data-columns="{{ listado_columns }}"
       data-slug="{{ listado_slug }}"
+      data-empresa-nombre="{{ empresa_reporte_nombre|default:'' }}"
+      data-empresa-cuit="{{ empresa_reporte_cuit|default:'' }}"
+      data-cliente-nombre="{{ cliente_reporte_nombre|default:'' }}"
+      data-cliente-codigo="{{ cliente_reporte_codigo|default:'' }}"
+      data-cliente-cuit="{{ cliente_reporte_cuit|default:'' }}"
+      data-cliente-domicilio="{{ cliente_reporte_domicilio|default:'' }}"
+      data-logo-empresa="{% static 'ecom/img/best_sox_logo.jpg' %}"
+      data-logo-analytics="{% static 'ecom/img/nl_analytics.png' %}"
       data-detalle-comprobante="{% if detalle_comprobante %}1{% else %}0{% endif %}"
       data-filter-mode="{{ filter_mode }}"
       data-empty-message="{{ listado_empty_message|default:'No se encontraron resultados.' }}"
@@ -284,7 +299,7 @@
 
 {% block extra_js %}
 {% if pedidos_acciones %}<script src="{% static 'ecom/js/repetir_pedido_modal.js' %}"></script>{% endif %}
-<script src="{% static 'ecom/js/listado_mayoristapp.js' %}?v=cartera3"></script>
+<script src="{% static 'ecom/js/listado_mayoristapp.js' %}?v=cartera4"></script>
 {% if cliente_reporte_cambiar_url %}<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=4"></script>{% endif %}
 <script type="module" src="{% static 'ecom/js/ecom_predictive_boot.mjs' %}"></script>
 {% endblock %}
