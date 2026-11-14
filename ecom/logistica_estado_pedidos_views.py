@@ -4,6 +4,7 @@ Vista web + API JSON — Estado de pedidos (pantalla preparación / logística).
 
 from __future__ import annotations
 
+from django.http import HttpResponseForbidden
 from django.urls import reverse
 from django.views.generic import TemplateView
 from rest_framework.request import Request
@@ -12,6 +13,7 @@ from rest_framework.views import APIView
 
 from ecom.mayoristapp_web_views import MayoristappWebSessionMixin
 from ecom.permissions import EcomMayoristappSessionPermission
+from ecom.services.pedidos_hub_pipeline import _es_vendedor_de_pedidos
 from ecom.services.logistica_estado_pedidos_relay import (
     estado_pedidos_kanban_json,
     listar_sucursales_tv,
@@ -31,6 +33,11 @@ class EstadoPedidosPreparacionView(MayoristappWebSessionMixin, TemplateView):
     """
 
     template_name = "ecom/estado_pedidos_preparacion.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if _es_vendedor_de_pedidos(request.session.get("user") or {}):
+            return HttpResponseForbidden("Este tablero no está disponible para el puesto Vendedor.")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -54,6 +61,8 @@ class EstadoPedidosKanbanAPIView(APIView):
     permission_classes = [EcomMayoristappSessionPermission]
 
     def get(self, request: Request) -> Response:
+        if _es_vendedor_de_pedidos((request.session or {}).get("user") or {}):
+            return Response({"detail": "Este tablero no está disponible para el puesto Vendedor."}, status=403)
         base = _session_base_empresa(request)
         if not base:
             return Response({"detail": "No se encontró base_empresa en la sesión."}, status=400)
