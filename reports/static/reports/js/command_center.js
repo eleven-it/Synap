@@ -1304,6 +1304,12 @@
         { label: "Cartera a pagar", urlKey: "financiero_v45", vista: "cartera_pagar" },
         { label: "Vencido a cobrar", urlKey: "financiero_v45", vista: "vencido_cobrar" },
         { label: "Vencido a pagar", urlKey: "financiero_v45", vista: "vencido_pagar" },
+        { label: "Efectivo", urlKey: "financiero_v45", vista: "efectivo", exact: true },
+        { label: "Tarjetas", urlKey: "financiero_v45", vista: "tarjetas", exact: true },
+        { label: "Cheques en cartera", urlKey: "financiero_v45", vista: "cheques_cartera", exact: true },
+        { label: "Cheques emitidos", urlKey: "financiero_v45", vista: "cheques_emitidos", exact: true },
+        { label: "Cheques rechazados", urlKey: "financiero_v45", vista: "cheques_rechazados", exact: true },
+        { label: "Bancos", urlKey: "financiero_v45", vista: "bancos", exact: true },
       ],
     },
     {
@@ -1575,7 +1581,7 @@
   const V45_RELATED_VIEWS = {
     preparacion_pedidos: ["pedidos", "pedidos", "pendientes", "pendientes", "en_preparacion", "preparados", "backorder", "backorder", "en_remito", "facturados", "cerrados", "anulados", "pendientes", null, "facturados", "en_remito"],
     compras: ["comprobantes", "comprobantes", "comprobantes", "comprobantes", "ordenes", "ordenes", "ordenes_abiertas", "ordenes_abiertas", "ordenes_abiertas", "remitos", "remitos", "ordenes_abiertas", "proveedores", null],
-    financiero: ["cobranzas", "pagos", null, "cartera_cobrar", "cartera_pagar", "vencido_cobrar", "vencido_pagar", null, null, null, null, null, null, "vencido_cobrar", "vencido_pagar"],
+    financiero: ["cobranzas", "pagos", null, "cartera_cobrar", "cartera_pagar", "vencido_cobrar", "vencido_pagar", "efectivo", "tarjetas", "cheques_cartera", "cheques_emitidos", "cheques_rechazados", "bancos", "vencido_cobrar", "vencido_pagar"],
     gestion_contable: ["asientos", "asientos", "asientos", "asientos", "asientos", "asientos", "asientos", "asientos", "impuestos", "impuestos", "impuestos", "impuestos", "periodos", "ejercicios"],
     impositivo: ["posicion_iva", "ventas", "compras", "percepciones", "percepciones", "retenciones", "ventas", "compras", "ventas", "percepciones", "percepciones", "retenciones", "determinados", "pagados"],
     libros_contables: ["diario", "diario", "diario", "diario", "mayor", "mayor", "balance", "balance", "resultados", "resultados", "resultados", "balance", "balance", "balance"],
@@ -1593,9 +1599,9 @@
     const related = kpi ? null : relatedMetricDetail(def, index);
     if (!kpi && !related) return "";
     const attrs = related
-      ? `data-url-key="${related.urlKey}" data-vista="${related.vista}" data-title="${escHtml(label)} · datos relacionados"`
+      ? `data-url-key="${related.urlKey}" data-vista="${related.vista}" data-title="${escHtml(label)}${related.exact ? "" : " · datos relacionados"}"`
       : `data-kpi="${kpi}" data-title="${escHtml(label)}"`;
-    const text = related ? "Ver datos ›" : "Ver detalle ›";
+    const text = related && !related.exact ? "Ver datos ›" : "Ver detalle ›";
     return `<button type="button" class="cc-v45-kpi-detail ${compact ? "ml-1 align-middle" : ""} text-xs font-semibold text-blue-700 underline dark:text-blue-300" data-area="${def.key}" ${attrs}>${text}</button>`;
   }
 
@@ -1636,7 +1642,7 @@
     const barWidth = Math.max(1, Math.min(15, step * (second ? .36 : .55)));
     const labelEvery = Math.max(1, Math.ceil(items.length / 9));
     const bars = items.map((row, index) => {
-      const metrics = [[first, firstLabel, "#ef1717", 0], ...(second ? [[second, secondLabel, "#16d61c", barWidth]] : [])];
+      const metrics = [[first, firstLabel, "#2563eb", 0], ...(second ? [[second, secondLabel, "#7c3aed", barWidth]] : [])];
       const x = plot.x + index * step + (step - metrics.length * barWidth) / 2;
       const category = String(row.fecha || row.estado || row.nombre || "");
       const day = category.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -1647,12 +1653,12 @@
         const y = Math.min(yFor(value), zeroY);
         const height = Math.abs(yFor(value) - zeroY);
         const original = unit === "money" ? fmtMoney.format(row[key] || 0) : fmtNum.format(row[key] || 0);
-        return `<rect x="${(x + offset).toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${height.toFixed(1)}" fill="${color}"><title>${escHtml(category)} · ${escHtml(label)}: ${original}</title></rect>`;
+        return `<rect x="${(x + offset).toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${height.toFixed(1)}" rx="2" fill="${color}"><title>${escHtml(category)} · ${escHtml(label)}: ${original}</title></rect>`;
       }).join("");
       return rects + (index % labelEvery === 0 || index === items.length - 1
         ? `<text x="${(plot.x + (index + .5) * step).toFixed(1)}" y="202" text-anchor="middle" class="cc-chart-axis">${escHtml(shown.length > 11 ? shown.slice(0, 10) + "…" : shown)}</text>` : "");
     }).join("");
-    const legend = `<rect x="485" y="74" width="10" height="10" fill="#ef1717" /><text x="499" y="83" class="cc-chart-axis">${escHtml(firstLabel)}</text>${second ? `<rect x="485" y="94" width="10" height="10" fill="#16d61c" /><text x="499" y="103" class="cc-chart-axis">${escHtml(secondLabel)}</text>` : ""}`;
+    const legend = `<rect x="485" y="74" width="10" height="10" rx="2" fill="#2563eb" /><text x="499" y="83" class="cc-chart-axis">${escHtml(firstLabel)}</text>${second ? `<rect x="485" y="94" width="10" height="10" rx="2" fill="#7c3aed" /><text x="499" y="103" class="cc-chart-axis">${escHtml(secondLabel)}</text>` : ""}`;
     return `<svg viewBox="0 0 600 217" role="img" aria-label="${escHtml(firstLabel)}${second ? ` y ${escHtml(secondLabel)}` : ""} por ${unit === "money" ? "millones" : "cantidad"}" class="cc-v45-chart-svg">
       ${grid}<line x1="${plot.x}" y1="${zeroY.toFixed(1)}" x2="${plot.x + plot.width}" y2="${zeroY.toFixed(1)}" class="cc-chart-zero" />${bars}
       <text x="12" y="108" transform="rotate(-90 12 108)" text-anchor="middle" class="cc-chart-axis">${unit === "money" ? "Importe (millones)" : "Cantidad"}</text>${legend}
@@ -1821,13 +1827,20 @@
     </div>`).join("");
     const seriesRows = rows.map((row) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th scope="row" class="px-2 py-1.5 text-left">${escHtml(row.fecha)}</th><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.cobranzas)}</td><td class="px-2 py-1.5 text-right tabular-nums">${fmtMoney.format(row.pagos)}</td></tr>`).join("");
     const compared = areaData.comparacion?.kpis || {};
+    const checks = [
+      ["De terceros en cartera", "cheques_cartera", "bg-sky-500"],
+      ["Propios emitidos", "cheques_emitidos", "bg-indigo-600"],
+      ["Rechazados", "cheques_rechazados", "bg-rose-500"],
+    ];
+    const checkMax = Math.max(1, ...checks.map(([, key]) => Number(areaData.kpis?.[key] || 0)));
+    const checkChart = checks.every(([, key]) => areaData.kpis?.[key] == null) ? "" : `<section class="cc-summary-chart lg:col-span-2"><h3 class="cc-summary-chart-title">Situación de cheques</h3><div class="space-y-3">${checks.map(([label, key, color]) => `<div class="grid grid-cols-[minmax(8rem,1fr)_minmax(0,2fr)_auto] items-center gap-3 text-xs"><span>${label}</span><div class="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div class="h-full rounded-full ${color}" style="width:${Math.max(0, Number(areaData.kpis?.[key] || 0)) / checkMax * 100}%"></div></div><strong class="min-w-[6rem] text-right tabular-nums">${areaData.kpis?.[key] == null ? "N/D" : fmtMoney.format(areaData.kpis[key])}</strong></div>`).join("")}</div><p class="mt-3 text-[11px] text-slate-500 dark:text-slate-400">Un cheque rechazado puede figurar también en la cartera de terceros.</p></section>`;
     const comparisonRows = [["Cobranzas", "cobranzas"], ["Pagos", "pagos"], ["Flujo neto", "flujo_neto"]]
       .map(([label, key]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><th class="p-2 text-left">${label}</th><td class="p-2 text-right tabular-nums">${fmtMoney.format(areaData.kpis?.[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(compared[key] || 0)}</td><td class="p-2 text-right tabular-nums">${fmtMoney.format(areaData.comparacion?.diferencias?.[key] || 0)}</td></tr>`).join("");
     return `<div class="mt-4 grid gap-3 lg:grid-cols-2">
       <div class="cc-summary-chart"><h3 class="cc-summary-chart-title">Cobranzas vs Pagos</h3>${renderV45GroupedChart(rows, "cobranzas", "pagos", "Cobranzas", "Pagos")}
         <details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver serie completa</summary><div class="mt-2 max-h-60 overflow-auto"><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="px-2 py-2 text-left">Fecha</th><th class="px-2 py-2 text-right">Cobranzas</th><th class="px-2 py-2 text-right">Pagos</th></tr></thead><tbody>${seriesRows}</tbody></table></div></details>
       </div>
-      <div class="cc-summary-chart"><h3 class="cc-summary-chart-title">Antigüedad de saldos</h3>${renderV45GroupedChart(buckets.map(([name, key]) => ({ estado: name, cobrar: receivable[key] || 0, pagar: payable[key] || 0 })), "cobrar", "pagar", "A cobrar", "A pagar")}<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver importes por tramo</summary>${agingRows}</details></div>
+      <div class="cc-summary-chart"><h3 class="cc-summary-chart-title">Antigüedad de saldos</h3>${renderV45GroupedChart(buckets.map(([name, key]) => ({ estado: name, cobrar: receivable[key] || 0, pagar: payable[key] || 0 })), "cobrar", "pagar", "A cobrar", "A pagar")}<details class="mt-2"><summary class="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Ver importes por tramo</summary>${agingRows}</details></div>${checkChart}
     </div><div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"><h3 class="text-xs font-semibold">Flujo comparado con ${escHtml(comparisonPeriodLabel(areaData))}</h3><table class="w-full min-w-[28rem] text-xs"><thead><tr><th class="p-2 text-left">Indicador</th><th class="p-2 text-right">Actual</th><th class="p-2 text-right">Comparación</th><th class="p-2 text-right">Variación</th></tr></thead><tbody>${comparisonRows}</tbody></table></div>`;
   }
 
@@ -1981,11 +1994,11 @@
       const labelEvery = Math.max(1, Math.ceil(series.length / 10));
       const bars = series.map((row, index) => {
         const x = plot.x + index * step + (step - 2 * barWidth) / 2;
-        const rectangles = [[left, "#ef1717", 0], [right, "#16d61c", barWidth]].map(([key, color, offset]) => {
+        const rectangles = [[left, "#2563eb", 0], [right, "#7c3aed", barWidth]].map(([key, color, offset]) => {
           const amount = Number(row[key] || 0) / 1000000;
           const y = Math.min(yFor(amount), zeroY);
           const height = Math.max(0, Math.abs(yFor(amount) - zeroY));
-          return `<rect x="${(x + offset).toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${height.toFixed(1)}" fill="${color}"><title>${escHtml(row.fecha)} · ${escHtml(key === left ? leftLabel : rightLabel)}: ${fmtMoney.format(row[key] || 0)}</title></rect>`;
+          return `<rect x="${(x + offset).toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${height.toFixed(1)}" rx="2" fill="${color}"><title>${escHtml(row.fecha)} · ${escHtml(key === left ? leftLabel : rightLabel)}: ${fmtMoney.format(row[key] || 0)}</title></rect>`;
         }).join("");
         const label = index % labelEvery === 0 || index === series.length - 1
           ? `<text x="${(plot.x + (index + .5) * step).toFixed(1)}" y="202" text-anchor="middle" class="cc-chart-axis">${escHtml(chartDate(row.fecha))}</text>` : "";
@@ -1993,11 +2006,11 @@
       }).join("");
       return `<section class="cc-summary-chart" aria-label="${escHtml(title)}">
         <h3 class="cc-summary-chart-title">${escHtml(title)}</h3>
-        <svg viewBox="0 0 600 217" role="img" aria-label="${escHtml(title)}: importes en millones">
+        <svg viewBox="0 0 600 217" role="img" aria-label="${escHtml(title)}: importes en millones" class="cc-v45-chart-svg">
           ${grid}<line x1="${plot.x}" y1="${zeroY.toFixed(1)}" x2="${plot.x + plot.width}" y2="${zeroY.toFixed(1)}" class="cc-chart-zero" />${bars}
           <text x="12" y="108" transform="rotate(-90 12 108)" text-anchor="middle" class="cc-chart-axis">Importe (millones)</text>
-          <rect x="485" y="74" width="10" height="10" fill="#ef1717" /><text x="499" y="83" class="cc-chart-axis">${escHtml(leftLabel)}</text>
-          <rect x="485" y="94" width="10" height="10" fill="#16d61c" /><text x="499" y="103" class="cc-chart-axis">${escHtml(rightLabel)}</text>
+          <rect x="485" y="74" width="10" height="10" rx="2" fill="#2563eb" /><text x="499" y="83" class="cc-chart-axis">${escHtml(leftLabel)}</text>
+          <rect x="485" y="94" width="10" height="10" rx="2" fill="#7c3aed" /><text x="499" y="103" class="cc-chart-axis">${escHtml(rightLabel)}</text>
         </svg>
       </section>`;
     };
@@ -2852,10 +2865,22 @@
         <div class="aspect-square w-48 shrink-0 rounded-full shadow-inner sm:w-60" role="img" aria-label="Participación de los importes positivos" style="background:conic-gradient(${stops.join(",")})"></div>
         <ul class="min-w-0 space-y-1 text-xs">${top.map((row, index) => `<li class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded-sm" style="background:${colors[index]}"></span><span class="truncate">${escHtml(row.etiqueta)}</span><strong class="tabular-nums">${fmtNum.format(Number(row.importe) / chartTotal * 100)} %</strong></li>`).join("")}${others ? `<li class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded-sm" style="background:${colors[7]}"></span>Otros</li>` : ""}</ul>
       </div>`;
+    } else if (chartCandidates.length && ["linea", "area"].includes(chartMode)) {
+      const chartRows = chartCandidates.slice(0, 12);
+      const amounts = chartRows.map((row) => Number(row.importe || 0));
+      const min = Math.min(0, ...amounts);
+      const max = Math.max(1, ...amounts);
+      const xFor = (index) => 40 + index * 520 / Math.max(1, chartRows.length - 1);
+      const yFor = (value) => 170 - (value - min) * 135 / (max - min);
+      const points = amounts.map((value, index) => `${xFor(index).toFixed(1)},${yFor(value).toFixed(1)}`).join(" ");
+      const baseline = yFor(0).toFixed(1);
+      const area = chartMode === "area" ? `<polygon points="40,${baseline} ${points} ${xFor(chartRows.length - 1).toFixed(1)},${baseline}" fill="#2563eb" fill-opacity=".17" />` : "";
+      const marks = chartRows.map((row, index) => `<circle cx="${xFor(index).toFixed(1)}" cy="${yFor(amounts[index]).toFixed(1)}" r="3.5" fill="#2563eb"><title>${escHtml(row.etiqueta)}: ${escHtml(format(row.importe))}</title></circle>${index % Math.max(1, Math.ceil(chartRows.length / 5)) === 0 ? `<text x="${xFor(index).toFixed(1)}" y="205" text-anchor="middle" class="cc-chart-axis">${escHtml(String(row.etiqueta).slice(0, 11))}</text>` : ""}`).join("");
+      chart = `<svg viewBox="0 0 600 220" role="img" aria-label="${chartMode === "area" ? "Área" : "Línea"} de importes por agrupación" class="w-full">${area}<line x1="40" y1="${baseline}" x2="560" y2="${baseline}" class="cc-chart-zero" /><polyline points="${points}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linejoin="round" />${marks}</svg>`;
     } else if (chartCandidates.length) {
       const chartRows = chartCandidates.slice(0, compare ? 12 : 7);
       const max = Math.max(1, ...chartRows.flatMap((row) => [Math.abs(Number(row.importe || 0)), compare ? Math.abs(Number(row.anterior || 0)) : 0]));
-      chart = `<div class="space-y-3">${chartRows.map((row) => `<div class="grid grid-cols-[minmax(5rem,8rem)_1fr] items-center gap-2 text-xs"><span class="truncate" title="${escHtml(row.etiqueta)}">${escHtml(row.etiqueta)}</span><div class="space-y-1"><div class="h-4 rounded-sm bg-blue-600" style="width:${Math.max(1, Math.abs(Number(row.importe || 0)) / max * 100).toFixed(1)}%" title="Actual: ${escHtml(format(row.importe))}"></div>${compare ? `<div class="h-4 rounded-sm bg-green-500" style="width:${Math.max(1, Math.abs(Number(row.anterior || 0)) / max * 100).toFixed(1)}%" title="Comparación: ${escHtml(format(row.anterior))}"></div>` : ""}</div></div>`).join("")}</div>${compare ? '<p class="mt-3 text-xs text-slate-500"><span class="text-blue-600">■</span> Período 1 &nbsp; <span class="text-green-500">■</span> Período 2</p>' : ""}`;
+      chart = `<div class="space-y-3">${chartRows.map((row) => `<div class="grid grid-cols-[minmax(5rem,8rem)_1fr] items-center gap-2 text-xs"><span class="truncate" title="${escHtml(row.etiqueta)}">${escHtml(row.etiqueta)}</span><div class="space-y-1"><div class="h-4 rounded-sm bg-blue-600" style="width:${Math.max(1, Math.abs(Number(row.importe || 0)) / max * 100).toFixed(1)}%" title="Actual: ${escHtml(format(row.importe))}"></div>${compare ? `<div class="h-4 rounded-sm bg-violet-600" style="width:${Math.max(1, Math.abs(Number(row.anterior || 0)) / max * 100).toFixed(1)}%" title="Comparación: ${escHtml(format(row.anterior))}"></div>` : ""}</div></div>`).join("")}</div>${compare ? '<p class="mt-3 text-xs text-slate-500"><span class="text-blue-600">■</span> Período 1 &nbsp; <span class="text-violet-600">■</span> Período 2</p>' : ""}`;
     }
     const period = data.periodo ? `${data.periodo.inicio} a ${data.periodo.fin}` : "";
     const compPeriod = data.comparacion ? `${data.comparacion.inicio} a ${data.comparacion.fin}` : "";
@@ -2894,7 +2919,7 @@
       return;
     }
     const extra = { vista: state.vista, limit: "100", offset: String(state.offset) };
-    if (state.resumen) {
+    if (state.resumen || state.financeChecks) {
       extra.modo = state.mode;
       if (state.mode !== "documentos") extra.agrupar_por = el("cc-v45-group")?.value || "entidad";
     }
@@ -2917,7 +2942,7 @@
         return;
       }
       genericV45DetailData = data;
-      if (state.resumen && state.mode !== "documentos") {
+      if ((state.resumen || state.financeChecks) && state.mode !== "documentos") {
         renderResumenRanking(data, state);
         return;
       }
@@ -2974,23 +2999,30 @@
     clearDetailContent();
     if (["resumen_v45", "libros_v45", "gastos_v45", "contable_v45", "impositivo_v45", "logistica_v45", "compras_v45", "preparacion_v45", "financiero_v45"].includes(urlKey) && vista) {
       const resumen = urlKey === "resumen_v45";
-      genericV45Detail = { base, vista, offset: 0, resumen, mode: resumen ? "ranking" : "documentos" };
+      const financeChecks = urlKey === "financiero_v45" && ["cheques_cartera", "cheques_emitidos", "cheques_rechazados"].includes(vista);
+      const ranked = resumen || financeChecks;
+      genericV45Detail = { base, vista, offset: 0, resumen, financeChecks, mode: ranked ? "ranking" : "documentos" };
       const controls = el("cc-v45-detail-controls");
       controls?.classList.remove("hidden");
       controls?.classList.add("flex");
       if (el("cc-v45-search")) el("cc-v45-search").value = "";
       el("cc-v45-order")?.classList.add("hidden");
       for (const id of ["cc-v45-view", "cc-v45-group", "cc-v45-chart-mode"]) {
-        el(id)?.classList.toggle("hidden", !resumen);
+        el(id)?.classList.toggle("hidden", !ranked);
       }
-      if (resumen) {
+      if (ranked) {
         el("cc-v45-view").value = "ranking";
-        el("cc-v45-group").value = vista === "ventas" ? "vendedor" : "entidad";
+        const group = el("cc-v45-group");
+        const scopeDimensions = ["ventas", "cobranzas", "facturas", "compras_netas", "pagos", "presupuestos", "pedidos", "remitos"].includes(vista);
+        const globalDimensions = RESUMEN_GLOBAL_KPIS.has(vista);
+        const salesGroups = vista === "ventas" ? `<optgroup label="Comercial"><option value="vendedor">Vendedor</option><option value="condicion_venta">Condición de venta</option><option value="usuario">Usuario</option><option value="medio_cobro">Medio de cobro</option><option value="tipo_entrega">Tipo de entrega</option></optgroup><optgroup label="Producto"><option value="marca">Marca</option><option value="articulo">Artículo</option><option value="proveedor_habitual">Proveedor habitual</option><option value="rubro">Rubro</option><option value="subrubro">Subrubro</option><option value="categoria">Categoría</option><option value="actividad_iibb">Actividad IIBB (RPT)</option></optgroup><optgroup label="Territorio"><option value="zona">Zona</option><option value="provincia">Provincia</option><option value="departamento">Departamento</option><option value="distrito">Distrito</option><option value="jurisdiccion_iibb">Jurisdicción IIBB</option></optgroup>` : "";
+        const purchaseGroups = vista === "compras_netas" ? '<optgroup label="Producto"><option value="articulo">Artículo</option><option value="marca">Marca</option><option value="rubro">Rubro</option><option value="subrubro">Subrubro</option><option value="categoria">Categoría</option></optgroup>' : "";
+        group.innerHTML = financeChecks
+          ? `<option value="entidad">${vista === "cheques_emitidos" ? "Proveedor" : "Cliente / librador"}</option><option value="banco">Banco</option><option value="fecha">Fecha de cobro o pago</option><option value="vencimiento">Rango de vencimiento</option>${vista === "cheques_rechazados" ? '<option value="tipo">Tercero / propio</option>' : ""}`
+          : `<option value="entidad">${["compras_netas", "pagos", "compra_cuenta_corriente", "vencimiento_pagar"].includes(vista) ? "Proveedor" : "Cliente / entidad"}</option>${salesGroups}${purchaseGroups}${globalDimensions ? "" : '<option value="fecha">Fecha</option>'}<option value="tipo">Tipo de comprobante</option>${scopeDimensions ? '<option value="sucursal">Sucursal</option><option value="punto_venta">Punto de venta</option>' : ""}`;
+        group.value = resumen && vista === "ventas" ? "vendedor" : vista === "cheques_rechazados" ? "tipo" : "entidad";
         el("cc-v45-chart-mode").value = "auto";
-        for (const option of el("cc-v45-group").options) {
-          if (["vendedor", "marca"].includes(option.value)) option.hidden = vista !== "ventas";
-        }
-        el("cc-v45-view").querySelector('option[value="comparacion"]').hidden = RESUMEN_GLOBAL_KPIS.has(vista);
+        el("cc-v45-view").querySelector('option[value="comparacion"]').hidden = financeChecks || RESUMEN_GLOBAL_KPIS.has(vista);
       }
       void loadGenericV45Detail();
       return;
@@ -3225,7 +3257,7 @@
       comercialSearchTimer = setTimeout(() => void (genericV45Detail ? loadGenericV45Detail() : stockDetail ? loadStockDetail() : loadComercialDetail()), 300);
     });
     el("cc-v45-view")?.addEventListener("change", () => {
-      if (!genericV45Detail?.resumen) return;
+      if (!genericV45Detail?.resumen && !genericV45Detail?.financeChecks) return;
       genericV45Detail.mode = el("cc-v45-view").value;
       genericV45Detail.offset = 0;
       const ranking = genericV45Detail.mode !== "documentos";
@@ -3234,10 +3266,10 @@
       void loadGenericV45Detail();
     });
     el("cc-v45-group")?.addEventListener("change", () => {
-      if (genericV45Detail?.resumen && genericV45Detail.mode !== "documentos") void loadGenericV45Detail();
+      if ((genericV45Detail?.resumen || genericV45Detail?.financeChecks) && genericV45Detail.mode !== "documentos") void loadGenericV45Detail();
     });
     el("cc-v45-chart-mode")?.addEventListener("change", () => {
-      if (genericV45Detail?.resumen && genericV45Detail.mode !== "documentos" && genericV45DetailData) {
+      if ((genericV45Detail?.resumen || genericV45Detail?.financeChecks) && genericV45Detail.mode !== "documentos" && genericV45DetailData) {
         renderResumenRanking(genericV45DetailData, genericV45Detail);
       }
     });

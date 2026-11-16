@@ -44,8 +44,8 @@ assert.match(kpis, /data-kpi="ventas"/);
 const charts = renderResumenV45Charts(payload);
 assert.match(charts, /Gestión comercial · Ventas vs Compras/);
 assert.match(charts, /Tesorería · Cobranzas vs Pagos/);
-assert.match(charts, /fill="#ef1717"/);
-assert.match(charts, /fill="#16d61c"/);
+assert.match(charts, /fill="#2563eb"/);
+assert.match(charts, /fill="#7c3aed"/);
 assert.match(charts, /200,0 %/);
 assert.match(charts, />01\/10<\/text>/);
 assert.match(charts, /Ver serie completa/);
@@ -64,9 +64,19 @@ for (const key of ["preparacion_pedidos", "inventario", "compras", "financiero",
   assert.match(html, /cc-summary-kpis/, `${key} should show the compact KPI grid`);
   assert.match(html, /cc-v45-chart-svg/, `${key} should render its chart panel`);
 }
+const finance = areaCard(AREA_DEFS.find((def) => def.key === "financiero"),
+  { kpis: { efectivo: 30, tarjetas: 20, bancos: 80,
+    cheques_cartera: 120, cheques_emitidos: 50, cheques_rechazados: 10 } }, 0);
+assert.match(finance, /Situación de cheques/);
+assert.match(finance, /data-vista="cheques_cartera"/);
+assert.match(finance, /data-vista="cheques_emitidos"/);
+assert.match(finance, /data-vista="cheques_rechazados"/);
+assert.match(finance, /data-vista="efectivo"/);
+assert.match(finance, /data-vista="tarjetas"/);
+assert.match(finance, /data-vista="bancos"/);
 const sharedChart = renderV45GroupedChart([{ fecha: "2026-10-01", actual: -2_000_000, anterior: 1_000_000 }], "actual", "anterior", "Actual", "Anterior");
-assert.match(sharedChart, /fill="#ef1717"/);
-assert.match(sharedChart, /fill="#16d61c"/);
+assert.match(sharedChart, /fill="#2563eb"/);
+assert.match(sharedChart, /fill="#7c3aed"/);
 assert.match(sharedChart, /-\$&nbsp;|-$|2000000|2\.000\.000/);
 
 const elements = {};

@@ -51,7 +51,9 @@ from .services.executive_dashboard.manufacturing_metrics import fetch_manufactur
 from .services.executive_dashboard.compras_v45 import fetch_compras_v45
 from .services.executive_dashboard.compras_v45_detail import COMPRAS_V45_VIEWS, list_compras_v45_detail
 from .services.executive_dashboard.financiero_v45 import fetch_financiero_v45
-from .services.executive_dashboard.financiero_v45_detail import FINANCIERO_V45_VIEWS, list_financiero_v45_detail
+from .services.executive_dashboard.financiero_v45_detail import (
+    CHEQUE_GROUPS, CHEQUE_VIEWS, FINANCIERO_V45_VIEWS, list_financiero_v45_detail,
+)
 from .services.executive_dashboard.contable_v45 import fetch_contable_v45
 from .services.executive_dashboard.contable_v45_detail import CONTABLE_V45_VIEWS, list_contable_v45_detail
 from .services.executive_dashboard.impositivo_v45 import fetch_impositivo_v45
@@ -609,9 +611,14 @@ class ExecutiveDashboardFinancieroV45DetailAPIView(ExecutiveDashboardMixin, APIV
         view = request.query_params.get("vista", "")
         if view not in FINANCIERO_V45_VIEWS:
             return Response({"detail": "Vista financiera inválida."}, status=status.HTTP_400_BAD_REQUEST)
+        mode = request.query_params.get("modo", "documentos")
+        group = request.query_params.get("agrupar_por", "entidad")
+        if view in CHEQUE_VIEWS and (mode not in {"ranking", "documentos"} or
+                                     (mode == "ranking" and group not in CHEQUE_GROUPS[view])):
+            return Response({"detail": "Vista o agrupador de cheques inválido."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
-                payload = list_financiero_v45_detail(cursor, filters, view=view)
+                payload = list_financiero_v45_detail(cursor, filters, view=view, mode=mode, group=group)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         except Exception as exc:

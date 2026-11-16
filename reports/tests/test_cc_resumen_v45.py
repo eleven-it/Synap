@@ -11,7 +11,8 @@ from reports.services.executive_dashboard.resumen_v45 import (
     _snapshots,
 )
 from reports.services.executive_dashboard.resumen_v45_detail import (
-    _ranking_source, _source, list_resumen_v45_detail, list_resumen_v45_ranking,
+    _allowed_dimensions, _ranking_source, _source,
+    list_resumen_v45_detail, list_resumen_v45_ranking,
 )
 
 
@@ -40,6 +41,31 @@ class ResumenV45ScopeTests(SimpleTestCase):
             self.assertIn("importe_final", documents)
             self.assertIn("cc.id_pv punto_venta", documents)
             self.assertIn("viajantes", required)
+
+    def test_agrupadores_corresponden_a_columnas_reales(self):
+        filters = DashboardFilters(
+            "best_sox", date(2026, 10, 13), date(2026, 10, 1), date(2026, 10, 13),
+        )
+        self.assertIn("condicion_venta", _allowed_dimensions("ventas"))
+        self.assertNotIn("condicion_venta", _allowed_dimensions("compras_netas"))
+        self.assertNotIn("fecha", _allowed_dimensions("bancos_actual"))
+        for key, dimension, fragment in (
+            ("ventas", "sucursal", "q.sucursal"),
+            ("ventas", "condicion_venta", "q.condicion_venta"),
+            ("ventas", "proveedor_habitual", "a.CodigoProveedor"),
+            ("ventas", "actividad_iibb", "a.cod_act_iibb"),
+            ("ventas", "distrito", "c.IDDistrito"),
+            ("ventas", "medio_cobro", "resumen_venta_cv"),
+            ("ventas", "tipo_entrega", "ped_fact"),
+            ("compras_netas", "punto_venta", "q.punto_venta"),
+            ("compras_netas", "categoria", "rc.nombre_categoria"),
+            ("pedidos", "fecha", "DATE_FORMAT(q.fecha"),
+        ):
+            source, _, _, _ = _ranking_source(None, filters, key, False, dimension)
+            self.assertIn(fragment, source)
+        for dimension in ("medio_cobro", "tipo_entrega"):
+            source, params, _, _ = _ranking_source(None, filters, "ventas", False, dimension)
+            source % tuple(params)
 
     def test_ranking_comparacion_usa_periodo_anterior_y_conserva_negativos(self):
         filters = DashboardFilters(
