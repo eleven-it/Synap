@@ -883,7 +883,6 @@ class InventarioMprView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
         from stock.services.inventario_tabla import (
             build_inventario_query_string,
-            build_orden_terminado_toggle_qs,
             consultar_inventario_tabla,
             etapas_para_ambito,
             listar_marcas_catalogo,
@@ -918,7 +917,6 @@ class InventarioMprView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
                 "inventario_query_base": build_inventario_query_string(
                     filtros, clear_search=True
                 ),
-                "orden_terminado_toggle_qs": build_orden_terminado_toggle_qs(filtros),
             }
         )
 
