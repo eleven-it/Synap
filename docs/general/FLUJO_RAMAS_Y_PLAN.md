@@ -103,6 +103,8 @@ Reglas de la rama de trabajo:
 8. No commitear `tmp_exports/`, `__pycache__/`, Excel de análisis ni secretos (`.env`).
 9. Tests y `manage.py` siempre en contenedor: `docker exec Synap_app ...`.
 10. Cada cambio de comportamiento actualiza `docs/` en el mismo PR ([POLITICA_DOCUMENTACION.md](POLITICA_DOCUMENTACION.md)).
+11. No cambiar `git config` (`user.name`, `user.email` ni remotos) para resolver una entrega.
+12. No commitear copias llamadas ` 2.py` o ` 2.html` ni medios de análisis.
 
 ---
 
@@ -213,9 +215,19 @@ En Linux se puede añadir `-r` a `xargs` (`xargs -r`) para no fallar si no hay `
 
 **No usar** la forma legacy (merge completo + segundo commit `git rm`): deja un tip intermedio con documentación.
 
+Antes de promover, actualizar el worktree de Staging con
+`git pull --ff-only origin Staging`; si falla, detenerse. Después de retirar
+la documentación, comprobar que el índice no contiene `docs/`, `openspec/`
+ni `.md` de raíz antes de crear el único commit de merge. Si un worktree
+ubicado bajo Documents queda bloqueado por iCloud o `index.lock`, crear
+otro en `/tmp`.
+
 Los SQL operativos (DDL de runtime) van en la app (`mpr/sql/`, `self_checkout/sql/`, catálogo `core/services/legacy_mysql_schema/`), no en `docs/`.
 
 Staging validado → merge **Staging → Produccion** (fast-forward si Staging es ancestro; si no, merge commit) y deploy. No cherry-pick a mano a Produccion salvo hotfix.
+No promover a Produccion sin pedido explícito. Al terminar una promoción,
+informar los SHA de `origin/Desarrollo` y `origin/Staging` y confirmar que
+Staging no contiene `docs/`, `openspec/` ni `.md` de raíz.
 
 ---
 

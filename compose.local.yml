@@ -1,0 +1,78 @@
+# Entorno independiente de Odoo. Usar siempre este archivo y el .env local.
+name: synap-local-codex
+
+services:
+  app:
+    build: .
+    container_name: Synap_app
+    env_file: .env
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      SYNAP_AFIP_STORAGE: /var/lib/synap/afip
+    ports:
+      - "127.0.0.1:18080:8000"
+    volumes:
+      - .:/app
+      - staticfiles:/app/staticfiles
+      - afip_secrets:/var/lib/synap/afip
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  db:
+    image: postgres:13
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  redis:
+    image: redis:6-alpine
+    command: redis-server --appendonly yes --stop-writes-on-bgsave-error no
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mysql:
+    image: mysql:5.7
+    platform: linux/amd64
+    environment:
+      MYSQL_ROOT_PASSWORD: ${LOCAL_MYSQL_ROOT_PASSWORD:?Definir LOCAL_MYSQL_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: ${DB_NAME:?Definir DB_NAME en .env}
+      MYSQL_USER: ${DB_USER:?Definir DB_USER en .env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Definir DB_PASSWORD en .env}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+volumes:
+  postgres_data:
+  mysql_data:
+  redis_data:
+  staticfiles:
+  afip_secrets:
