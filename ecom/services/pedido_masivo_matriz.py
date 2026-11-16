@@ -862,13 +862,9 @@ def buscar_articulos_filtrados_ternas(
     if q:
         like = f"%{q}%"
         where.append(
-            "(articulo.id_manual LIKE %s OR articulo.NombreArticulo LIKE %s "
-            "OR articulo.CodigoArticuloT LIKE %s OR CAST(articulo.IDArt AS CHAR) LIKE %s "
-            "OR articulo.NroCodBarra = %s OR articulo.NroCodBarra LIKE %s "
-            "OR articulo.NroCodBarraF = %s OR articulo.NroCodBarraF LIKE %s "
-            "OR articulo.CodArtProv LIKE %s)"
+            "(articulo.id_manual LIKE %s OR articulo.NombreArticulo LIKE %s)"
         )
-        params.extend([like, like, like, like, q, like, q, like, like])
+        params.extend([like, like])
 
     select_cols = """
             articulo.IDArt,
@@ -911,17 +907,16 @@ def buscar_articulos_filtrados_ternas(
         ORDER BY
             CASE
                 WHEN articulo.id_manual = %s THEN 0
-                WHEN articulo.NroCodBarra = %s THEN 1
-                WHEN articulo.NroCodBarraF = %s THEN 2
-                WHEN articulo.id_manual LIKE %s THEN 3
-                ELSE 4
+                WHEN articulo.id_manual LIKE %s THEN 1
+                WHEN articulo.NombreArticulo LIKE %s THEN 2
+                ELSE 3
             END,
             articulo.NombreArticulo
         LIMIT %s OFFSET %s
         """
         q_exact = q
         q_prefix = f"{q}%"
-        params_order = params + [q_exact, q_exact, q_exact, q_prefix, lim, offset]
+        params_order = params + [q_exact, q_prefix, q_prefix, lim, offset]
     else:
         sql = f"""
         SELECT {select_cols}
