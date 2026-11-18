@@ -7,7 +7,7 @@ import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from core.mysql_pool import mysql_cursor
 from core.utils.administranet_types import (
@@ -639,6 +639,22 @@ def calcular_neto_movimientos_post_snapshot(
     return total
 
 
+def calcular_diferencia_real_saldo_actual(
+    cantidad_contada: Any,
+    mov_post_conteo: Any,
+    saldo_actual: Any,
+) -> Optional[Decimal]:
+    """Delta para que el depósito quede en ``contado + Mov.B`` partiendo del saldo real.
+
+    No depende de ``saldo_snapshot``. None si no hay conteo o no se conoce el saldo actual.
+    """
+    contado = to_decimal_or_none(cantidad_contada)
+    actual = to_decimal_or_none(saldo_actual)
+    if contado is None or actual is None:
+        return None
+    return contado + (to_decimal_or_none(mov_post_conteo) or Decimal("0")) - actual
+
+
 def calcular_ajuste_sistema_linea(
     cantidad_contada: Any,
     movimientos: Sequence[Dict[str, Any]],
@@ -986,6 +1002,7 @@ def _row_campana(row: Dict[str, Any]) -> Dict[str, Any]:
         "contadores": parse_contadores_json(row.get("contadores_json")),
         "id_usuario_alta": to_int_or_none(row.get("id_usuario_alta")),
         "fecha_snapshot": row.get("fecha_snapshot"),
+        "id_movimiento_mstock": to_int_or_none(row.get("id_movimiento_mstock")),
     }
 
 
@@ -1116,7 +1133,7 @@ def obtener_campana(base_empresa: str, id_campana: int) -> Optional[Dict[str, An
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(
                 "SELECT id_campana, fecha, estado, depositos_json, catalogo_version, "
-                "contadores_json, id_usuario_alta, fecha_snapshot, created_at "
+                "contadores_json, id_usuario_alta, fecha_snapshot, id_movimiento_mstock, created_at "
                 "FROM inv_fisico_campana WHERE id_campana = %s",
                 [cid],
             )
@@ -1202,7 +1219,7 @@ def crear_campana(
                         "INSERT INTO inv_fisico_linea "
                         "(id_campana, id_articulo, id_deposito, saldo_snapshot, estado_linea) "
                         "VALUES (%s, %s, %s, %s, 'Pendiente') "
-                        "ON DUPLICATE KEY UPDATE saldo_snapshot = VALUES(saldo_snapshot)",
+                        "ON DUPLICATE KEY UPDATE id_linea = id_linea",
                         [id_campana, id_art, did, saldo],
                     )
                     lineas += 1
@@ -1626,6 +1643,7 @@ ACCION_AUDIT_OVERRIDE_GUARDADO = "override_guardado"
 ACCION_AUDIT_OVERRIDE_QUITADO = "override_quitado"
 ACCION_AUDIT_OVERRIDE_PISADO = "override_pisado"
 ACCION_AUDIT_AUTORIZACION = "autorizacion"
+ACCION_AUDIT_DESCUADRE_ACEPTADO = "descuadre_aceptado"
 ACCION_AUDIT_CONTADO_CERO_MASIVO = "contado_cero_masivo"
 
 MOTIVO_CONTADO_CERO_SUPERVISOR = "Supervisor: no encontrado / contado 0"
@@ -2069,14 +2087,39 @@ def _fetch_saldos_deposito(
     return out
 
 
+def _fetch_saldo_kardex(cursor, id_articulo: int, id_deposito: int) -> Optional[Decimal]:
+    """Saldo actual según kardex: Σ(Entrada − Salida) de filas de ``stock`` que movieron
+    el depósito (misma regla que el kardex, ``_filtro_movimiento_efectivo_deposito``)."""
+    tbl_stock = _nombre_tabla(cursor, "stock")
+    if not tbl_stock:
+        return None
+    ts = tbl_stock.replace("`", "``")
+    filtro = _filtro_movimiento_efectivo_deposito(cursor, tbl_stock)
+    cursor.execute(
+        f"SELECT COALESCE(SUM(COALESCE(s.Entrada, 0)) - SUM(COALESCE(s.Salida, 0)), 0) AS saldo "
+        f"FROM `{ts}` s WHERE s.IDArt = %s AND s.CodDeposito = %s {filtro}",
+        [id_articulo, id_deposito],
+    )
+    row = cursor.fetchone() or {}
+    return to_decimal_or_none(row.get("saldo")) or Decimal("0")
+
+
 def recalcular_ajuste_post_snapshot(
     base_empresa: str,
     id_campana: int,
     *,
     id_usuario: int,
     pisar_overrides: bool = False,
+    base_saldo_actual: bool = False,
 ) -> Tuple[bool, Dict[str, Any]]:
     """Persiste ajuste_sistema, saldo_actual_ref y diferencia_real por línea.
+
+    ``base_saldo_actual=True`` (lo usa la autorización): para líneas contadas sin
+    override manual, ``diferencia_real = contado + Mov.B − saldo_kardex_actual`` donde Mov.B
+    son los movimientos efectivos posteriores al conteo y el saldo sale del kardex
+    (no de ``stock_deposito``). Tras el MSTOCK el kardex queda en ``contado + Mov.B``
+    aunque ``saldo_snapshot`` esté descuadrado (el snapshot no se toca). Las líneas donde
+    ``stock_deposito`` ≠ kardex se informan en ``lineas_sd_distinto_kardex``.
 
     Líneas contadas: neto de movimientos entre snapshot y t_conteo (momento del conteo).
     Líneas sin contar: neto post-snapshot hasta ahora (informativo); diferencia_real NULL.
@@ -2098,6 +2141,7 @@ def recalcular_ajuste_post_snapshot(
     lineas_actualizadas = 0
     overrides_pisados = 0
     sin_ts_conteo = 0
+    sd_distinto_kardex: List[Dict[str, Any]] = []
 
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
@@ -2167,6 +2211,29 @@ def recalcular_ajuste_post_snapshot(
                 ajuste_eff = ajuste_efectivo(ajuste_sys, ajuste_manual)
                 disp_ajust = calcular_disponible_ajustado(saldo_snap, ajuste_eff)
                 diff_real = calcular_diferencia_real(linea.get("cantidad_contada"), disp_ajust)
+                if base_saldo_actual and ajuste_manual is None:
+                    mov_b = Decimal("0")
+                    if not fallback_sin_ts:
+                        mov_b = calcular_neto_movimientos_post_snapshot(movs) - ajuste_sys
+                    saldo_kardex = _fetch_saldo_kardex(cursor, id_art, id_dep)
+                    if (
+                        saldo_kardex is not None
+                        and saldo_actual is not None
+                        and saldo_kardex != saldo_actual
+                    ):
+                        sd_distinto_kardex.append(
+                            {
+                                "id_articulo": id_art,
+                                "id_deposito": id_dep,
+                                "stock_deposito": str(saldo_actual),
+                                "kardex": str(saldo_kardex),
+                            }
+                        )
+                    diff_base = calcular_diferencia_real_saldo_actual(
+                        linea.get("cantidad_contada"), mov_b, saldo_kardex
+                    )
+                    if diff_base is not None:
+                        diff_real = diff_base
 
                 if pisar_overrides:
                     cursor.execute(
@@ -2193,6 +2260,8 @@ def recalcular_ajuste_post_snapshot(
         }
         if sin_ts_conteo:
             resultado["lineas_sin_ts_conteo"] = sin_ts_conteo
+        if sd_distinto_kardex:
+            resultado["lineas_sd_distinto_kardex"] = sd_distinto_kardex
         return True, resultado
     except Exception as exc:
         logger.exception("recalcular_ajuste_post_snapshot %s: %s", id_campana, exc)
@@ -3055,6 +3124,169 @@ def _agrupar_lineas_mstock(
     return [(dep, motivo, rengs) for (dep, motivo), rengs in sorted(grupos.items())]
 
 
+# --- Snapshot inmutable / control pre-autorización / idempotencia ---
+
+CAMPOS_INMUTABLES_LINEA = frozenset({"saldo_snapshot"})
+
+
+class SnapshotInmutableError(ValueError):
+    """Intento de modificar ``saldo_snapshot`` después de crear la campaña."""
+
+
+def validar_campos_update_linea(campos: Iterable[str]) -> None:
+    """Guarda de capa de servicio: ``saldo_snapshot`` sólo se escribe en ``crear_campana``.
+
+    Todo UPDATE de ``inv_fisico_linea`` debe pasar sus columnas por acá. Si alguna es
+    inmutable, levanta :class:`SnapshotInmutableError`.
+    """
+    prohibidos = sorted({str(c).strip().lower() for c in campos} & CAMPOS_INMUTABLES_LINEA)
+    if prohibidos:
+        raise SnapshotInmutableError(
+            "saldo_snapshot es inmutable después de crear la campaña "
+            f"(campos rechazados: {', '.join(prohibidos)})."
+        )
+
+
+def comparar_snapshot_vs_kardex(
+    lineas: Sequence[Dict[str, Any]],
+    kardex: Dict[Tuple[int, int], Decimal],
+) -> List[Dict[str, Any]]:
+    """Diferencias entre ``saldo_snapshot`` y el kardex efectivo a ``fecha_snapshot``."""
+    diffs: List[Dict[str, Any]] = []
+    for linea in lineas:
+        id_art = to_int_or_none(linea.get("id_articulo"))
+        id_dep = to_int_or_none(linea.get("id_deposito"))
+        if id_art is None or id_dep is None:
+            continue
+        snap = to_decimal_or_none(linea.get("saldo_snapshot")) or Decimal("0")
+        kdx = kardex.get((id_art, id_dep), Decimal("0"))
+        if snap != kdx:
+            diffs.append(
+                {
+                    "id_linea": to_int_or_none(linea.get("id_linea")),
+                    "id_articulo": id_art,
+                    "id_deposito": id_dep,
+                    "saldo_snapshot": snap,
+                    "kardex_a_snapshot": kdx,
+                    "diferencia": snap - kdx,
+                }
+            )
+    return diffs
+
+
+def verificar_snapshot_vs_kardex(
+    base_empresa: str,
+    id_campana: int,
+    fecha_snapshot: Any,
+    depositos: Sequence[int],
+) -> Tuple[bool, List[Dict[str, Any]]]:
+    """Reconstruye el kardex (filas que movieron depósito) a ``fecha_snapshot`` y compara.
+
+    Devuelve (ok, diferencias). Si no se puede verificar, devuelve (False, [{"error": ...}]).
+    """
+    deps = [d for d in (to_int_or_none(x) for x in depositos) if d is not None]
+    if not fecha_snapshot or not deps:
+        return False, [{"error": "Campaña sin fecha_snapshot o depósitos."}]
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            if not tbl_stock:
+                return False, [{"error": "Tabla stock no encontrada."}]
+            ts = tbl_stock.replace("`", "``")
+            ph = ",".join(["%s"] * len(deps))
+            filtro_efecto = _filtro_movimiento_efectivo_deposito(cursor, tbl_stock)
+            cursor.execute(
+                "SELECT id_linea, id_articulo, id_deposito, saldo_snapshot "
+                "FROM inv_fisico_linea WHERE id_campana = %s",
+                [id_campana],
+            )
+            lineas = [dict(r) for r in cursor.fetchall()]
+            cursor.execute(
+                f"SELECT s.IDArt AS id_articulo, s.CodDeposito AS id_deposito, "
+                f"SUM(COALESCE(s.Entrada, 0)) - SUM(COALESCE(s.Salida, 0)) AS saldo "
+                f"FROM `{ts}` s "
+                f"INNER JOIN inv_fisico_linea l "
+                f"  ON l.id_campana = %s AND l.id_articulo = s.IDArt AND l.id_deposito = s.CodDeposito "
+                f"WHERE s.CodDeposito IN ({ph}) AND s.FechaControl < %s {filtro_efecto}"
+                f"GROUP BY s.IDArt, s.CodDeposito",
+                [id_campana, *deps, fecha_snapshot],
+            )
+            kardex: Dict[Tuple[int, int], Decimal] = {}
+            for row in cursor.fetchall():
+                a = to_int_or_none(row.get("id_articulo"))
+                d = to_int_or_none(row.get("id_deposito"))
+                if a is not None and d is not None:
+                    kardex[(a, d)] = to_decimal_or_none(row.get("saldo")) or Decimal("0")
+    except Exception as exc:
+        logger.warning("verificar_snapshot_vs_kardex %s/%s: %s", base_empresa, id_campana, exc)
+        return False, [{"error": "No se pudo reconstruir el kardex a fecha_snapshot."}]
+    diffs = comparar_snapshot_vs_kardex(lineas, kardex)
+    return not diffs, diffs
+
+
+def _serializar_diffs(diffs: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Decimal → str para JSON."""
+    return [
+        {k: (str(v) if isinstance(v, Decimal) else v) for k, v in d.items()} for d in diffs
+    ]
+
+
+def registrar_aceptacion_descuadre(
+    base_empresa: str,
+    id_campana: int,
+    diffs: Sequence[Dict[str, Any]],
+    *,
+    id_usuario: int,
+) -> bool:
+    """Una fila de auditoría por diferencia aceptada (quién = id_usuario, cuándo = created_at).
+
+    ``ajuste_anterior`` = saldo_snapshot, ``ajuste_nuevo`` = kardex a fecha_snapshot,
+    ``diferencia_real`` = snapshot − kardex. Si no se pudo verificar, una fila con
+    id_linea/id_articulo/id_deposito = 0.
+    """
+    uid = to_int_or_none(id_usuario) or 0
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            for d in diffs or [{}]:
+                _insert_auditoria_ajuste(
+                    cursor,
+                    id_campana=id_campana,
+                    id_linea=to_int_or_none(d.get("id_linea")) or 0,
+                    id_articulo=to_int_or_none(d.get("id_articulo")) or 0,
+                    id_deposito=to_int_or_none(d.get("id_deposito")) or 0,
+                    accion=ACCION_AUDIT_DESCUADRE_ACEPTADO,
+                    id_usuario=uid,
+                    ajuste_anterior=to_decimal_or_none(d.get("saldo_snapshot")),
+                    ajuste_nuevo=to_decimal_or_none(d.get("kardex_a_snapshot")),
+                    diferencia_real=to_decimal_or_none(d.get("diferencia")),
+                )
+        return True
+    except Exception as exc:
+        logger.exception("registrar_aceptacion_descuadre %s/%s: %s", base_empresa, id_campana, exc)
+        return False
+
+
+def mstock_existente_campana(base_empresa: str, id_campana: int) -> Optional[int]:
+    """Código de un MSTOCK vigente ya emitido por la campaña (detalle 'campaña #N'), o None."""
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_ms = _nombre_tabla(cursor, "movimiento_stock")
+            if not tbl_ms:
+                return None
+            tms = tbl_ms.replace("`", "``")
+            cursor.execute(
+                f"SELECT codigo_movimiento FROM `{tms}` "
+                f"WHERE detalle = %s AND COALESCE(anulado, 'No') <> 'Si' "
+                f"ORDER BY codigo_movimiento DESC LIMIT 1",
+                [f"Inventario físico campaña #{id_campana}"],
+            )
+            row = cursor.fetchone()
+            return to_int_or_none(row.get("codigo_movimiento")) if row else None
+    except Exception as exc:
+        logger.warning("mstock_existente_campana %s/%s: %s", base_empresa, id_campana, exc)
+        return None
+
+
 def autorizar_y_aplicar_campana(
     base_empresa: str,
     id_campana: int,
@@ -3063,12 +3295,32 @@ def autorizar_y_aplicar_campana(
     id_puesto: Optional[int],
     pendientes_cliente: int = 0,
     id_punto_venta: int = 1,
+    aceptar_descuadre: bool = False,
 ) -> Tuple[bool, Dict[str, Any]]:
+    """Autoriza y emite MSTOCK.
+
+    Si el snapshot no coincide con el kardex a ``fecha_snapshot`` (o no se puede verificar)
+    bloquea con ``snapshot_descuadrado`` salvo ``aceptar_descuadre=True``; en ese caso
+    registra la aceptación en auditoría y continúa. El ajuste siempre se calcula contra el
+    saldo actual real del depósito (``base_saldo_actual``), no contra el snapshot.
+    """
     from core.services.administranet_stock import alta_movimiento
 
     campana = obtener_campana(base_empresa, id_campana)
     if not campana:
         return False, {"error": "Campaña no encontrada."}
+
+    # Idempotencia: una campaña con MSTOCK emitido no vuelve a generar otro.
+    mstock_previo = to_int_or_none(campana.get("id_movimiento_mstock")) or mstock_existente_campana(
+        base_empresa, id_campana
+    )
+    if mstock_previo:
+        return False, {
+            "bloqueado": True,
+            "codigo": "ya_aplicada",
+            "error": f"La campaña ya tiene MSTOCK {mstock_previo}; no se genera otro.",
+            "codigo_movimiento": mstock_previo,
+        }
 
     conflictos = contar_conflictos_sync(base_empresa, id_campana)
     bloqueado, codigo, mensaje = evaluar_bloqueo_autorizacion(
@@ -3087,11 +3339,39 @@ def autorizar_y_aplicar_campana(
             payload["conflictos_sync"] = conflictos
         return False, payload
 
+    ok_snap, diffs_snap = verificar_snapshot_vs_kardex(
+        base_empresa,
+        id_campana,
+        campana.get("fecha_snapshot"),
+        campana.get("depositos") or [],
+    )
+    descuadre_aceptado = 0
+    if not ok_snap:
+        if not aceptar_descuadre:
+            return False, {
+                "bloqueado": True,
+                "codigo": "snapshot_descuadrado",
+                "puede_aceptar": True,
+                "error": (
+                    "El saldo_snapshot no coincide con el kardex reconstruido a fecha_snapshot "
+                    f"en {len(diffs_snap)} línea(s). Podés aceptar el descuadre: el ajuste se "
+                    "calcula contra el saldo actual del depósito."
+                ),
+                "diferencias_snapshot": _serializar_diffs(diffs_snap),
+            }
+        ok_aud = registrar_aceptacion_descuadre(
+            base_empresa, id_campana, diffs_snap, id_usuario=id_usuario
+        )
+        if not ok_aud:
+            return False, {"error": "No se pudo registrar la aceptación del descuadre en auditoría."}
+        descuadre_aceptado = len(diffs_snap)
+
     ok_recalc, recalc_info = recalcular_ajuste_post_snapshot(
         base_empresa,
         id_campana,
         id_usuario=id_usuario,
         pisar_overrides=False,
+        base_saldo_actual=True,
     )
     if not ok_recalc:
         return False, {"error": recalc_info.get("error", "No se pudo recalcular ajustes.")}
@@ -3185,5 +3465,7 @@ def autorizar_y_aplicar_campana(
         "movimientos_mstock": movimientos_ok,
         "lineas_ajustadas": len(lineas_ajustar),
         "codigo_movimiento": ultimo_codigo,
+        "descuadre_aceptado": descuadre_aceptado,
+        "lineas_sd_distinto_kardex": recalc_info.get("lineas_sd_distinto_kardex", []),
     }
 
