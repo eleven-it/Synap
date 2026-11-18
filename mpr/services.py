@@ -18571,6 +18571,7 @@ def _registrar_parte_produccion_planilla(
                             id_articulo=aid,
                             delta=delta,
                             deposito_id=deposito_produccion,
+                            fecha=_fecha_parte_date(parte),
                         )
                 parte.movimiento_fisico_ok = True
                 parte.save(update_fields=["movimiento_fisico_ok"])
@@ -18789,6 +18790,7 @@ def agregar_ajuste_parte(
                 id_articulo=id_art_int,
                 delta=delta_dec,
                 deposito_id=deposito_produccion,
+                fecha=_fecha_parte_date(parte),
             )
             ajuste.ajuste_fisico_ok = True
             ajuste.save(update_fields=["ajuste_fisico_ok"])
@@ -19189,7 +19191,10 @@ def _registrar_asiento_fisico_opp_parte(
 
     id_ref_movstock = 1
     id_pv = 1
-    fecha_mov = date.today().isoformat()
+    # El asiento se fecha con la fecha de producción del parte (igual que las
+    # transiciones), no con la fecha de aprobación. Fallback: hoy.
+    fecha_mov_date = _fecha_parte_date(parte) or date.today()
+    fecha_mov = fecha_mov_date.isoformat()
     incluir_hora = False
     try:
         from mpr.repositories.parte import contar_partes_fecha_turno
@@ -19204,7 +19209,7 @@ def _registrar_asiento_fisico_opp_parte(
         incluir_hora = False
     detalle_mov = texto_detalle_parte_produccion(
         parte,
-        fecha_movimiento=date.today(),
+        fecha_movimiento=fecha_mov_date,
         incluir_hora=incluir_hora,
     )
 
@@ -19379,8 +19384,12 @@ def _registrar_delta_stock_ajuste(
     id_articulo: int,
     delta: Decimal,
     deposito_id: int,
+    fecha: Optional[date] = None,
 ) -> None:
     """Registra el delta físico de un ajuste en el depósito indicado (normalmente Producción).
+
+    ``fecha``: fecha de producción del parte; el movimiento se fecha con ella
+    (no con la fecha de aprobación/ajuste). Si es None se usa ``date.today()``.
 
     - delta > 0: Entrada al stock.
     - delta < 0: Salida del stock; valida que el saldo no quede negativo.
@@ -19396,7 +19405,7 @@ def _registrar_delta_stock_ajuste(
 
     id_ref_movstock = 1
     id_pv = 1
-    fecha_mov = date.today().isoformat()
+    fecha_mov = (fecha or date.today()).isoformat()
     detalle_mov = "Ajuste de parte de producción"
 
     with get_connection(base_empresa) as conn:
