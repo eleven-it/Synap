@@ -6,30 +6,25 @@ from decimal import Decimal
 from typing import Any
 
 from core.mysql_pool import mysql_cursor
-from ecom.services.alcance_comercial import alcance_viajantes_comercial
-from ecom.services.pedido_permisos import puede_ver_todos_pedidos
+from ecom.services.cliente_relay import _sesion_para_cartera
+from ecom.services.vendedor_asignacion_sql import where_vendedor_cliente
 
 
 def listar_saldos_clientes(base_empresa: str, sess_user: dict[str, Any]) -> list[dict[str, Any]]:
     """Usa el saldo consolidado de ``cliente``; acota por vendedor cuando corresponde."""
     if not base_empresa:
         return []
-    params: list[Any] = []
-    filtro_cartera = ""
-    if not puede_ver_todos_pedidos(sess_user):
-        viajantes = alcance_viajantes_comercial(base_empresa, sess_user)
-        if not viajantes:
-            return []
-        filtro_cartera = f"AND c.CodViajante IN ({','.join(['%s'] * len(viajantes))})"
-        params.extend(viajantes)
+    filtro_cartera, params = where_vendedor_cliente(
+        base_empresa, _sesion_para_cartera(sess_user, True)
+    )
     sql = f"""
-        SELECT c.Codigo, COALESCE(c.nombre_cliente, '') AS nombre_cliente,
-               COALESCE(c.CUIT, '') AS cuit,
-               COALESCE(c.saldo, 0) AS saldo,
-               c.CodViajante, COALESCE(v.Nombre, '') AS vendedor
-        FROM cliente AS c
-        LEFT JOIN viajantes AS v ON v.CodViajante = c.CodViajante
-        WHERE COALESCE(c.Estado, 'Activo') = 'Activo'
+        SELECT cliente.Codigo, COALESCE(cliente.nombre_cliente, '') AS nombre_cliente,
+               COALESCE(cliente.CUIT, '') AS cuit,
+               COALESCE(cliente.saldo, 0) AS saldo,
+               cliente.CodViajante, COALESCE(v.Nombre, '') AS vendedor
+        FROM cliente AS cliente
+        LEFT JOIN viajantes AS v ON v.CodViajante = cliente.CodViajante
+        WHERE COALESCE(cliente.Estado, 'Activo') = 'Activo'
           {filtro_cartera}
         ORDER BY c.nombre_cliente, c.Codigo
     """

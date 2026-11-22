@@ -191,12 +191,15 @@ class ClientesMayoristappView(MayoristappWebSessionMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        sess_user = self.request.session.get("user") or {}
         context.update(
             {
                 "page_title": "Listado de clientes",
                 "clientes_buscar_api": reverse("ecom:mayoristapp_clientes_buscar"),
                 "clientes_seleccionar_api": reverse("ecom:mayoristapp_clientes_seleccionar"),
                 "clientes_seleccionado_api": reverse("ecom:mayoristapp_clientes_seleccionado"),
+                "clientes_transporte_api": reverse("ecom:mayoristapp_clientes_transporte"),
+                "puede_editar_transporte": str(sess_user.get("tipousuario") or "").strip().lower() != "cliente",
             }
         )
         return context

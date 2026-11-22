@@ -85,6 +85,7 @@ from ecom.cliente_relay_views import (
     ClienteRapidoRelayAPIView,
     ClienteSeleccionadoRelayAPIView,
     ClienteSeleccionarRelayAPIView,
+    ClienteTransporteAPIView,
 )
 from ecom.precio_relay_views import (
     CondicionesVentaRelayAPIView,
@@ -641,6 +642,7 @@ urlpatterns = [
         ClienteBuscarRelayAPIView.as_view(),
         name="mayoristapp_clientes_buscar",
     ),
+    path("api/mayoristapp/clientes/transporte/", ClienteTransporteAPIView.as_view(), name="mayoristapp_clientes_transporte"),
     path(
         "api/mayoristapp/clientes/seleccionado/",
         ClienteSeleccionadoRelayAPIView.as_view(),

@@ -25,6 +25,7 @@
          data-buscar-url="{{ clientes_buscar_api }}"
          data-seleccionar-url="{{ clientes_seleccionar_api }}"
          data-seleccionado-url="{{ clientes_seleccionado_api }}"
+         data-transporte-url="{{ clientes_transporte_api }}"
          data-reporte-url="{{ reporte_url|default:'' }}"
          data-hub-url="{% url 'ecom:mayoristapp_hub' %}"
          data-predictive-url="{% static 'ecom/js/ecom_predictive.mjs' %}?v=4">
@@ -56,6 +57,22 @@
         <p class="text-sm text-slate-700 dark:text-slate-200">
           Cliente activo en sesión: <strong id="cliente-seleccion-label"></strong>
         </p>
+        {% if not reporte_destino and puede_editar_transporte %}
+        <div id="cliente-transporte-panel" class="mt-4 hidden rounded-xl border border-sky-200 bg-white p-4 dark:border-sky-800 dark:bg-slate-900">
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Transporte fijo por domicilio</h2>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-300">El transporte elegido quedará guardado en la ficha del cliente para futuros pedidos.</p>
+          <div class="mt-3 flex flex-wrap items-end gap-3">
+            <label class="min-w-44 flex-1 text-xs font-medium text-slate-700 dark:text-slate-200">Domicilio
+              <select id="cliente-transporte-domicilio" class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"></select>
+            </label>
+            <label class="min-w-44 flex-1 text-xs font-medium text-slate-700 dark:text-slate-200">Transporte
+              <select id="cliente-transporte-elegido" class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"></select>
+            </label>
+            <button id="cliente-transporte-guardar" type="button" class="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800">Guardar transporte</button>
+          </div>
+          <p id="cliente-transporte-status" class="mt-2 text-xs text-slate-600 dark:text-slate-300" role="status"></p>
+        </div>
+        {% endif %}
         <div class="mt-4 flex flex-wrap gap-3">
           {% if not reporte_destino %}<a href="{% url 'ecom:mayoristapp_hub' %}"
              class="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
@@ -77,5 +94,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=4"></script>
+<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=5"></script>
 {% endblock %}

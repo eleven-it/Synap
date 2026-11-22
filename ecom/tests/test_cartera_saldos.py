@@ -9,9 +9,8 @@ from ecom.services.cartera_saldos import listar_saldos_clientes
 
 class TestCarteraSaldos(SimpleTestCase):
     @patch("ecom.services.cartera_saldos.mysql_cursor")
-    @patch("ecom.services.cartera_saldos.alcance_viajantes_comercial", return_value=[7, 8])
-    @patch("ecom.services.cartera_saldos.puede_ver_todos_pedidos", return_value=False)
-    def test_vendedor_solo_su_cartera(self, _todos, _alcance, mysql_cursor):
+    @patch("ecom.services.cartera_saldos.where_vendedor_cliente", return_value=(" AND cliente.CodViajante IN (%s,%s) ", [7, 8]))
+    def test_vendedor_solo_su_cartera(self, _alcance, mysql_cursor):
         cursor = mysql_cursor.return_value.__enter__.return_value
         cursor.fetchall.return_value = [{
             "Codigo": 904, "nombre_cliente": "Tutuca", "cuit": "30-123",
@@ -20,15 +19,16 @@ class TestCarteraSaldos(SimpleTestCase):
         filas = listar_saldos_clientes("bestsox", {"id_usuario": 1})
         self.assertEqual(filas[0]["saldo"], Decimal("2354.25"))
         sql, params = cursor.execute.call_args.args
-        self.assertIn("c.CodViajante IN (%s,%s)", sql)
+        self.assertIn("cliente.CodViajante IN (%s,%s)", sql)
         self.assertEqual(params, [7, 8])
 
     @patch("ecom.services.cartera_saldos.mysql_cursor")
-    @patch("ecom.services.cartera_saldos.alcance_viajantes_comercial", return_value=[])
-    @patch("ecom.services.cartera_saldos.puede_ver_todos_pedidos", return_value=False)
-    def test_sin_cartera_no_consulta_todos(self, _todos, _alcance, mysql_cursor):
+    @patch("ecom.services.cartera_saldos.where_vendedor_cliente", return_value=(" AND 1=0 ", []))
+    def test_sin_cartera_no_consulta_todos(self, _alcance, mysql_cursor):
+        cursor = mysql_cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = []
         self.assertEqual(listar_saldos_clientes("bestsox", {}), [])
-        mysql_cursor.assert_not_called()
+        self.assertIn("AND 1=0", cursor.execute.call_args.args[0])
 
     def test_csv_contiene_saldo_y_cabecera(self):
         request = RequestFactory().get("/ecom/mayoristapp/cartera/saldos/?formato=csv")
