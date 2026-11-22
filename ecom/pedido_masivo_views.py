@@ -1111,7 +1111,9 @@ class PedidoMasivoPlantillaExcelAPIView(APIView):
         marca_id = to_int_or_none(marca_raw) if marca_raw else None
         if marca_raw and (marca_id is None or marca_id not in marcas_plantilla_vcm(draft)):
             return _err("La marca no está disponible para este cliente.", "marca_no_disponible", 400)
-        raw = generar_plantilla_excel(draft, marca_id=marca_id)
+        raw = generar_plantilla_excel(
+            draft, marca_id=marca_id, site_url=request.build_absolute_uri("/").rstrip("/")
+        )
         nombre = nombre_archivo_plantilla(draft)
         resp = HttpResponse(
             raw,

@@ -481,6 +481,7 @@ def generar_plantilla_excel(
     *,
     articulos: Optional[Sequence[Dict[str, Any]]] = None,
     marca_id: Optional[int] = None,
+    site_url: str = "",
 ) -> bytes:
     """Plantilla VCM: SuperArt + nombre + precio + cantidades. Identifica al cliente."""
     sucursales, _marcas = _territorio(draft)
@@ -490,6 +491,7 @@ def generar_plantilla_excel(
             draft.base_empresa,
             [art.get("id_articulo") for art in articulos],
             max_ids=MAX_ARTICULOS_PLANTILLA,
+            site_url=site_url,
         )
     else:
         fotos = {}
