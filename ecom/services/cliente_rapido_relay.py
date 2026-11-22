@@ -38,6 +38,12 @@ def inicio_payload(base_empresa: str) -> Dict[str, Any]:
         "tipoCliente": tipo_cliente_dict(base_empresa),
         "ivaCliente": tipo_iva_dict(base_empresa),
         "provincia": list_provincias(base_empresa, None),
+        "transporte": _id_nombre_map(
+            base_empresa,
+            "SELECT id_transporte, nombre_transporte FROM transporte "
+            "WHERE anulado = 'No' ORDER BY nombre_transporte",
+            [],
+        ),
     }
 
 

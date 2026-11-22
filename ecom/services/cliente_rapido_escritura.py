@@ -118,6 +118,7 @@ def alta_cliente_rapido(
     id_sucursal = to_int_or_none(sess_user.get("id_sucursal")) or 1
     id_iva = to_int_or_none(p.get("ivaCliente")) or 1
     tipo_cli = to_int_or_none(p.get("tipoCliente")) or 1
+    id_transporte = to_int_or_none(p.get("idTransporte"))
 
     sql_ins = """
         INSERT INTO cliente (
@@ -156,28 +157,42 @@ def alta_cliente_rapido(
     pool = get_mysql_pool()
     nuevo_cod: int = 0
     with pool.get_connection(base_empresa) as conn:
-        cursor = conn.cursor()
-        cursor.execute(sql_ins, params_ins)
-        nuevo_cod = int(cursor.lastrowid)
+        conn.autocommit(False)
+        try:
+            cursor = conn.cursor()
+            if id_transporte is not None:
+                cursor.execute(
+                    "SELECT 1 FROM transporte WHERE id_transporte = %s AND anulado = 'No' LIMIT 1",
+                    [id_transporte],
+                )
+                if cursor.fetchone() is None:
+                    conn.rollback()
+                    return {"estado": "error", "cartel": "El transporte no está disponible."}
+            cursor.execute(sql_ins, params_ins)
+            nuevo_cod = int(cursor.lastrowid)
 
-        sql_dom = """
-            INSERT INTO cliente_domicilio (
-                Calle, NroCalle, Dpto, IDDistrito, CodProvincia, IDDepartamento,
-                id_zona, id_cliente, anulado
-            ) VALUES (%s, %s, %s, %s, %s, %s, 1, %s, 'No')
-        """
-        cursor.execute(
-            sql_dom,
-            [
-                str_or_default(p.get("calleCliente"), "-"),
-                str_or_default(p.get("numeroCliente"), "-"),
-                str_or_default(p.get("deptoCliente"), "-"),
-                to_int_or_none(p.get("distritoCliente")) or 1,
-                to_int_or_none(p.get("provinciaCliente")) or 1,
-                to_int_or_none(p.get("departamentoCliente")) or 1,
-                float(nuevo_cod),
-            ],
-        )
+            cursor.execute(
+                "INSERT INTO cliente_domicilio ("
+                "Calle, NroCalle, Dpto, IDDistrito, CodProvincia, IDDepartamento, "
+                "id_zona, id_cliente, id_transporte, anulado) "
+                "VALUES (%s, %s, %s, %s, %s, %s, 1, %s, %s, 'No')",
+                [
+                    str_or_default(p.get("calleCliente"), "-"),
+                    str_or_default(p.get("numeroCliente"), "-"),
+                    str_or_default(p.get("deptoCliente"), "-"),
+                    to_int_or_none(p.get("distritoCliente")) or 1,
+                    to_int_or_none(p.get("provinciaCliente")) or 1,
+                    to_int_or_none(p.get("departamentoCliente")) or 1,
+                    float(nuevo_cod),
+                    id_transporte,
+                ],
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.autocommit(True)
 
     return nuevo_cod
 
@@ -195,78 +210,58 @@ def edita_cliente_rapido(
     if id_cli is None:
         return {"estado": "error", "cartel": "codCliente inválido"}
 
-    permiso = _si_no(sess_user.get("permiso_alta_cliente"), "No")
-    tipo_doc_c = str_or_default(p.get("tipoDocCliente"), "CUIT")
-    nombre_c = str_or_default(p.get("nombreCliente"), "-")
-    cuit_c = str_or_default(p.get("nroCuitCliente"), "")
-    dni_c = str_or_default(p.get("nroDocCliente"), "")
+    permiso = _si_no(sess_user.get("permiso_alta_cliente"), "No") == "Si"
+    campos = {
+        "telefonoCliente": ("telefono", str_or_default),
+        "emailCliente": ("Email", str_or_default),
+        "calleCliente": ("Calle", str_or_default),
+        "numeroCliente": ("NroCalle", str_or_default),
+        "deptoCliente": ("Dpto", str_or_default),
+        "provinciaCliente": ("CodProvincia", to_int_or_none),
+        "departamentoCliente": ("IDDepartamento", to_int_or_none),
+        "distritoCliente": ("IDDistrito", to_int_or_none),
+    }
+    if permiso:
+        campos.update({
+            "nombreCliente": ("nombre_cliente", str_or_default),
+            "tipoDocCliente": ("tipo_doc", str_or_default),
+            "ivaCliente": ("IDIva", to_int_or_none),
+            "tipoCliente": ("TipoCliente", to_int_or_none),
+            "faxCliente": ("Fax", str_or_default),
+        })
+        if "nroCuitCliente" in p or "nroDocCliente" in p:
+            tipo = str_or_default(p.get("tipoDocCliente"), "CUIT")
+            campos["nroCuitCliente" if tipo == "CUIT" else "nroDocCliente"] = ("CUIT", str_or_default)
 
-    if permiso == "Si":
-        err = valida_cliente_existe(base_empresa, tipo_doc_c, nombre_c, cuit_c, dni_c, id_cli)
+    cambios = []
+    params: List[Any] = []
+    for clave, (columna, convertir) in campos.items():
+        if clave not in p:
+            continue
+        valor = convertir(p[clave])
+        if valor is None or (columna in ("nombre_cliente", "CUIT", "tipo_doc") and not str(valor).strip()):
+            return {"estado": "error", "cartel": f"{clave} inválido"}
+        cambios.append(f"{columna} = %s")
+        params.append(valor)
+    if not cambios:
+        return {"estado": "error", "cartel": "No se indicaron datos para editar."}
+
+    if permiso and any(k in p for k in ("nombreCliente", "nroCuitCliente", "nroDocCliente", "tipoDocCliente")):
+        from ecom.services.cliente_rapido_relay import obtiene_cliente_fila
+        actual = obtiene_cliente_fila(base_empresa, id_cli)
+        if not actual:
+            return {"estado": "error", "cartel": "Cliente no encontrado."}
+        tipo = str_or_default(p.get("tipoDocCliente") or actual.get("tipo_doc"), "CUIT")
+        nombre = str_or_default(p.get("nombreCliente") or actual.get("nombre_cliente"), "-")
+        documento = str_or_default(
+            p.get("nroCuitCliente" if tipo == "CUIT" else "nroDocCliente") or actual.get("CUIT"), "-"
+        )
+        err = valida_cliente_existe(base_empresa, tipo, nombre, documento, documento, id_cli)
         if err:
             return {"estado": "error", "cartel": " | ".join(err)}
-        docu = str_or_default(cuit_c if tipo_doc_c == "CUIT" else dni_c, "-")
-        id_iva = to_int_or_none(p.get("ivaCliente")) or 1
-        tipo_cli = to_int_or_none(p.get("tipoCliente")) or 1
-        sql = """
-            UPDATE cliente SET
-                TipoCliente = %s,
-                nombre_cliente = %s,
-                CUIT = %s,
-                tipo_doc = %s,
-                IDIva = %s,
-                telefono = %s,
-                Fax = %s,
-                Email = %s,
-                Calle = %s,
-                NroCalle = %s,
-                Dpto = %s,
-                CodProvincia = %s,
-                IDDepartamento = %s,
-                IDDistrito = %s
-            WHERE cliente.Codigo = %s
-        """
-        params = [
-            tipo_cli,
-            nombre_c,
-            docu,
-            tipo_doc_c,
-            id_iva,
-            str_or_default(p.get("telefonoCliente"), "-"),
-            str_or_default(p.get("faxCliente"), "-"),
-            str_or_default(p.get("emailCliente"), "-"),
-            str_or_default(p.get("calleCliente"), "-"),
-            str_or_default(p.get("numeroCliente"), "-"),
-            str_or_default(p.get("deptoCliente"), "-"),
-            to_int_or_none(p.get("provinciaCliente")) or 1,
-            to_int_or_none(p.get("departamentoCliente")) or 1,
-            to_int_or_none(p.get("distritoCliente")) or 1,
-            id_cli,
-        ]
-    else:
-        sql = """
-            UPDATE cliente SET
-                telefono = %s,
-                Email = %s,
-                Calle = %s,
-                NroCalle = %s,
-                Dpto = %s,
-                CodProvincia = %s,
-                IDDepartamento = %s,
-                IDDistrito = %s
-            WHERE cliente.Codigo = %s
-        """
-        params = [
-            str_or_default(p.get("telefonoCliente"), "-"),
-            str_or_default(p.get("emailCliente"), "-"),
-            str_or_default(p.get("calleCliente"), "-"),
-            str_or_default(p.get("numeroCliente"), "-"),
-            str_or_default(p.get("deptoCliente"), "-"),
-            to_int_or_none(p.get("provinciaCliente")) or 1,
-            to_int_or_none(p.get("departamentoCliente")) or 1,
-            to_int_or_none(p.get("distritoCliente")) or 1,
-            id_cli,
-        ]
+
+    sql = "UPDATE cliente SET " + ", ".join(cambios) + " WHERE cliente.Codigo = %s"
+    params.append(id_cli)
 
     pool = get_mysql_pool()
     with pool.get_connection(base_empresa) as conn:

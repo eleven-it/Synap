@@ -1,0 +1,37 @@
+{% extends "base_app.html" %}
+
+{% block title %}Saldos de clientes — Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 px-4 pb-20 pt-6 dark:bg-slate-950 sm:px-6 lg:px-12">
+  {% include "ecom/includes/ventas_breadcrumb.html" with current_label="Saldos de clientes" %}
+  <div class="mt-4 rounded-2xl bg-slate-800 p-6 text-white sm:p-8">
+    <p class="text-xs font-semibold uppercase tracking-widest text-sky-300">Cartera comercial</p>
+    <h1 class="mt-2 text-3xl font-semibold">Saldos de clientes</h1>
+    <p class="mt-2 text-sm text-slate-300">Saldo actual de los clientes a los que tenés acceso.</p>
+  </div>
+  <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <label class="min-w-52 flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+        Buscar cliente, código o CUIT
+        <input name="q" type="search" value="{{ buscar }}" class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+      </label>
+      <button class="rounded-lg bg-sky-700 px-4 py-2 font-semibold text-white hover:bg-sky-800" type="submit">Buscar</button>
+      <a href="?q={{ buscar|urlencode }}&amp;formato=csv" class="rounded-lg border border-sky-700 px-4 py-2 font-semibold text-sky-700 dark:text-sky-300">Descargar CSV</a>
+    </form>
+    <p class="mt-4 text-sm font-medium text-slate-700 dark:text-slate-200">{{ cantidad }} clientes · Saldo total: $ {{ saldo_total|floatformat:2 }}</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full min-w-[650px] border-collapse text-left text-sm text-slate-800 dark:text-slate-100">
+        <thead class="bg-slate-100 text-xs uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          <tr><th class="px-3 py-2">Código</th><th class="px-3 py-2">Cliente</th><th class="px-3 py-2">CUIT</th><th class="px-3 py-2">Vendedor</th><th class="px-3 py-2 text-right">Saldo</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+          {% for fila in filas %}
+          <tr><td class="px-3 py-2">{{ fila.codigo }}</td><td class="px-3 py-2 font-medium">{{ fila.nombre }}</td><td class="px-3 py-2">{{ fila.cuit }}</td><td class="px-3 py-2">{{ fila.vendedor }}</td><td class="px-3 py-2 text-right tabular-nums">$ {{ fila.saldo|floatformat:2 }}</td></tr>
+          {% empty %}<tr><td colspan="5" class="px-3 py-8 text-center text-slate-500">No se encontraron clientes.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

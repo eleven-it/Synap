@@ -5,6 +5,8 @@ Vista genérica de listados mayoristapp (F1/F2).
 from __future__ import annotations
 
 import json
+import csv
+from decimal import Decimal
 
 from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.urls import reverse
@@ -23,6 +25,7 @@ from ecom.services.viajantes_opciones import opciones_viajantes_para_filtro
 from ecom.services.cartera_reportes_pdf import generar_pdf_cartera
 from ecom.services.comprobantes_no_cancelados_relay import listar_no_cancelados_relay
 from ecom.services.ctacte_relay import listar_movimientos_ctacte_relay
+from ecom.services.cartera_saldos import listar_saldos_clientes
 
 
 class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
@@ -187,13 +190,22 @@ class ClientesMayoristappView(MayoristappWebSessionMixin, TemplateView):
     template_name = "ecom/clientes_mayoristapp.html"
 
     def get_context_data(self, **kwargs):
+        from ecom.permissions import _user_has_perm
         context = super().get_context_data(**kwargs)
+        sess_user = self.request.session.get("user") or {}
+        es_cliente = str(sess_user.get("tipousuario") or "").strip().lower() == "cliente"
         context.update(
             {
                 "page_title": "Listado de clientes",
                 "clientes_buscar_api": reverse("ecom:mayoristapp_clientes_buscar"),
                 "clientes_seleccionar_api": reverse("ecom:mayoristapp_clientes_seleccionar"),
                 "clientes_seleccionado_api": reverse("ecom:mayoristapp_clientes_seleccionado"),
+                "clientes_transporte_api": reverse("ecom:mayoristapp_clientes_transporte"),
+                "clientes_rapido_api": reverse("ecom:mayoristapp_clientes_rapido"),
+                "puede_crear_cliente": not es_cliente and _user_has_perm(self.request, "clientes.crear"),
+                "puede_editar_cliente": not es_cliente and (_user_has_perm(self.request, "clientes.editar") or _user_has_perm(self.request, "ecom.clientes.editar")),
+                "puede_editar_identidad_cliente": str(sess_user.get("permiso_alta_cliente") or "").strip().lower() in ("si", "sí", "1", "true"),
+                "puede_editar_transporte": not es_cliente,
             }
         )
         return context
@@ -214,6 +226,48 @@ class CobranzasCarteraMayoristappView(ClientesMayoristappView):
         context["reporte_destino"] = reporte if reporte in destinos else ""
         context["reporte_url"] = reverse(destinos[reporte][1]) if reporte in destinos else ""
         context["clientes_buscar_api"] = f"{context['clientes_buscar_api']}?cartera=1"
+        return context
+
+
+class SaldosClientesMayoristappView(MayoristappWebSessionMixin, TemplateView):
+    """Listado de saldos actuales, limitado a la cartera visible del usuario."""
+
+    template_name = "ecom/saldos_clientes_mayoristapp.html"
+
+    def _filas(self):
+        sess_user = self.request.session.get("user") or {}
+        base = str(sess_user.get("base_empresa") or "").strip()
+        filas = listar_saldos_clientes(base, sess_user)
+        buscar = str(self.request.GET.get("q") or "").strip().casefold()
+        if buscar:
+            filas = [f for f in filas if buscar in f["nombre"].casefold()
+                     or buscar in str(f["codigo"]) or buscar in f["cuit"].casefold()]
+        return filas
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("formato") == "csv":
+            filas = self._filas()
+            resp = HttpResponse(content_type="text/csv; charset=utf-8")
+            resp["Content-Disposition"] = 'attachment; filename="saldos_clientes.csv"'
+            resp.write("\ufeff")
+            writer = csv.writer(resp, delimiter=";")
+            writer.writerow(["Código", "Cliente", "CUIT", "Vendedor", "Saldo"])
+            for fila in filas:
+                writer.writerow([fila["codigo"], fila["nombre"], fila["cuit"],
+                                 fila["vendedor"], f'{fila["saldo"]:.2f}'.replace(".", ",")])
+            return resp
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        filas = self._filas()
+        context.update({
+            "page_title": "Saldos de clientes",
+            "filas": filas,
+            "buscar": str(self.request.GET.get("q") or "").strip(),
+            "cantidad": len(filas),
+            "saldo_total": sum((f["saldo"] for f in filas), Decimal("0")),
+        })
         return context
 
 

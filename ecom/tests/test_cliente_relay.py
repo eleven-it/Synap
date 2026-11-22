@@ -296,7 +296,12 @@ class TestClienteRapidoRelayView(unittest.TestCase):
         factory = APIRequestFactory()
         req = factory.post(
             "/ecom/api/mayoristapp/clientes/rapido/?ajax=1",
-            {"accion": "altaCliente", "nombreCliente": "Nuevo"},
+            {
+                "accion": "altaCliente", "nombreCliente": "Nuevo", "tipoDocCliente": "CUIT",
+                "nroCuitCliente": "30-12345678-9", "ivaCliente": 1, "tipoCliente": 1,
+                "calleCliente": "San Juan", "numeroCliente": "123", "provinciaCliente": 1,
+                "departamentoCliente": 1, "distritoCliente": 1,
+            },
             format="json",
         )
         middleware = SessionMiddleware(lambda r: HttpResponse())

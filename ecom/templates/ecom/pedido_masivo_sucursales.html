@@ -397,6 +397,16 @@
 
       <div class="pm-simple-mobile-extras mt-2 flex flex-wrap items-center gap-2" x-show="puedeImportarExcel || (draftId && sucursales.length)" x-cloak>
         <div x-show="puedeImportarExcel" x-cloak class="flex flex-wrap items-center gap-2">
+          <label class="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+            Marca de plantilla
+            <select x-model="marcaPlantilla" @focus="cargarMarcasPlantilla()"
+                    class="min-h-8 max-w-[11rem] rounded-lg border border-slate-300 bg-white px-2 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+              <option value="">Todas</option>
+              <template x-for="m in facetasCatalogo.marcas" :key="'plantilla-' + m.id">
+                <option :value="m.id" x-text="m.nombre"></option>
+              </template>
+            </select>
+          </label>
           <button type="button"
                   @click="descargarPlantillaExcel()"
                   class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
@@ -927,6 +937,10 @@
                            class="pointer-events-none"
                            :checked="estaSeleccionado(a)"
                            :aria-label="'Seleccionar ' + (a.nombre || a.id_manual)"/>
+                    <span x-show="a.foto_url" x-cloak class="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-white dark:bg-slate-700">
+                      <img :src="a.foto_url || ''" :alt="'Foto de ' + a.nombre" loading="lazy"
+                           @error="a.foto_url = ''" class="h-full w-full object-contain">
+                    </span>
                     <span class="min-w-0 flex-1">
                       <span x-show="!modoSimple" class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
                       <span x-show="!modoSimple" class="text-slate-500"> — </span>
@@ -1560,5 +1574,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple54"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=simple55"></script>
 {% endblock %}

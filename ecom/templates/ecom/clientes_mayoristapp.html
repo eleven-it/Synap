@@ -25,10 +25,66 @@
          data-buscar-url="{{ clientes_buscar_api }}"
          data-seleccionar-url="{{ clientes_seleccionar_api }}"
          data-seleccionado-url="{{ clientes_seleccionado_api }}"
+         data-transporte-url="{{ clientes_transporte_api }}"
+         data-rapido-url="{{ clientes_rapido_api }}"
+         data-editar-identidad="{{ puede_editar_identidad_cliente|yesno:'1,0' }}"
          data-reporte-url="{{ reporte_url|default:'' }}"
          data-hub-url="{% url 'ecom:mayoristapp_hub' %}"
          data-predictive-url="{% static 'ecom/js/ecom_predictive.mjs' %}?v=4">
       {% csrf_token %}
+
+      {% if not reporte_destino %}
+      <div class="px-4 pt-5 sm:px-10">
+        <a href="{% url 'ecom:mayoristapp_saldos_clientes' %}"
+           class="inline-flex rounded-lg border border-sky-300 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-50 dark:border-sky-700 dark:text-sky-200">
+          Ver saldos de mi cartera
+        </a>
+        {% if puede_crear_cliente %}
+        <button id="cliente-nuevo-abrir" type="button" class="ml-2 rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800">Nuevo cliente</button>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if not reporte_destino and puede_crear_cliente or not reporte_destino and puede_editar_cliente %}
+      <form id="cliente-gestion-form" class="hidden mx-4 sm:mx-10 mt-5 rounded-xl border border-sky-200 p-4 dark:border-sky-800" autocomplete="off">
+        <h2 id="cliente-gestion-titulo" class="mb-3 text-lg font-semibold text-slate-900 dark:text-white">Cliente</h2>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label class="text-sm text-slate-700 dark:text-slate-200">Nombre o razón social
+            <input name="nombreCliente" required maxlength="160" class="mt-1 w-full rounded-lg border p-2 text-slate-900" /></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Tipo de documento
+            <select name="tipoDocCliente" class="mt-1 w-full rounded-lg border p-2 text-slate-900"><option value="CUIT">CUIT</option><option value="DNI">DNI</option></select></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">CUIT o DNI
+            <input name="documentoCliente" required maxlength="25" class="mt-1 w-full rounded-lg border p-2 text-slate-900" /></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Condición IVA
+            <select name="ivaCliente" required class="mt-1 w-full rounded-lg border p-2 text-slate-900"></select></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Tipo de cliente
+            <select name="tipoCliente" required class="mt-1 w-full rounded-lg border p-2 text-slate-900"></select></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Teléfono
+            <input name="telefonoCliente" maxlength="80" class="mt-1 w-full rounded-lg border p-2 text-slate-900" /></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Correo electrónico
+            <input name="emailCliente" type="email" maxlength="160" class="mt-1 w-full rounded-lg border p-2 text-slate-900" /></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Calle
+            <input name="calleCliente" required maxlength="160" class="mt-1 w-full rounded-lg border p-2 text-slate-900" /></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Número
+            <input name="numeroCliente" required maxlength="30" class="mt-1 w-full rounded-lg border p-2 text-slate-900" /></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Departamento / piso
+            <input name="deptoCliente" maxlength="80" class="mt-1 w-full rounded-lg border p-2 text-slate-900" /></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Provincia
+            <select name="provinciaCliente" required class="mt-1 w-full rounded-lg border p-2 text-slate-900"></select></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Departamento / partido
+            <select name="departamentoCliente" required class="mt-1 w-full rounded-lg border p-2 text-slate-900"></select></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Localidad
+            <select name="distritoCliente" required class="mt-1 w-full rounded-lg border p-2 text-slate-900"></select></label>
+          <label class="text-sm text-slate-700 dark:text-slate-200">Transporte habitual
+            <select name="idTransporte" class="mt-1 w-full rounded-lg border p-2 text-slate-900"></select></label>
+        </div>
+        <p id="cliente-gestion-status" class="mt-3 text-sm text-slate-600 dark:text-slate-300" role="status"></p>
+        <div class="mt-3 flex gap-2">
+          <button type="submit" class="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white">Guardar cliente</button>
+          <button id="cliente-gestion-cancelar" type="button" class="rounded-lg border px-4 py-2 text-sm dark:text-white">Cancelar</button>
+        </div>
+      </form>
+      {% endif %}
 
       <div class="px-4 sm:px-10 py-6 border-b border-slate-100 dark:border-slate-800">
         <label for="ecom_cliente_search" class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">Cliente</label>
@@ -47,6 +103,25 @@
         <p class="text-sm text-slate-700 dark:text-slate-200">
           Cliente activo en sesión: <strong id="cliente-seleccion-label"></strong>
         </p>
+        {% if not reporte_destino and puede_editar_cliente %}
+        <button id="cliente-editar-abrir" type="button" class="mt-3 rounded-lg border border-sky-400 px-4 py-2 text-sm font-semibold text-sky-800 dark:text-sky-200">Editar datos del cliente</button>
+        {% endif %}
+        {% if not reporte_destino and puede_editar_transporte %}
+        <div id="cliente-transporte-panel" class="mt-4 hidden rounded-xl border border-sky-200 bg-white p-4 dark:border-sky-800 dark:bg-slate-900">
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Transporte fijo por domicilio</h2>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-300">El transporte elegido quedará guardado en la ficha del cliente para futuros pedidos.</p>
+          <div class="mt-3 flex flex-wrap items-end gap-3">
+            <label class="min-w-44 flex-1 text-xs font-medium text-slate-700 dark:text-slate-200">Domicilio
+              <select id="cliente-transporte-domicilio" class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"></select>
+            </label>
+            <label class="min-w-44 flex-1 text-xs font-medium text-slate-700 dark:text-slate-200">Transporte
+              <select id="cliente-transporte-elegido" class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"></select>
+            </label>
+            <button id="cliente-transporte-guardar" type="button" class="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800">Guardar transporte</button>
+          </div>
+          <p id="cliente-transporte-status" class="mt-2 text-xs text-slate-600 dark:text-slate-300" role="status"></p>
+        </div>
+        {% endif %}
         <div class="mt-4 flex flex-wrap gap-3">
           {% if not reporte_destino %}<a href="{% url 'ecom:mayoristapp_hub' %}"
              class="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
@@ -68,5 +143,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=4"></script>
+<script type="module" src="{% static 'ecom/js/clientes_mayoristapp.js' %}?v=6"></script>
 {% endblock %}

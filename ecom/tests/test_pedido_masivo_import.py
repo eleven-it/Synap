@@ -1080,7 +1080,8 @@ class TestPlantillaExcel(TestCase):
         raw = generar_plantilla_excel(
             d,
             articulos=[
-                {"id_articulo": 101, "id_manual": "2401", "nombre": "Media pack"}
+                {"id_articulo": 101, "id_manual": "2401", "nombre": "Media pack",
+                 "foto_url": "https://ejemplo.test/fotos/2401.jpg"}
             ],
         )
         from openpyxl import load_workbook
@@ -1107,6 +1108,7 @@ class TestPlantillaExcel(TestCase):
         self.assertEqual(ws.cell(2, 1).value, "2401")
         self.assertEqual(ws.cell(2, 2).value, "Media pack")
         self.assertEqual(ws.cell(2, 3).value, 101)
+        self.assertEqual(ws.cell(2, 2).hyperlink.target, "https://ejemplo.test/fotos/2401.jpg")
         ws_m = wb[HOJA_META]
         claves = {ws_m.cell(i, 1).value: ws_m.cell(i, 2).value for i in range(1, 8)}
         self.assertEqual(claves.get("id_cliente"), 368)
@@ -1392,3 +1394,20 @@ class TestApiImportExcel(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("spreadsheetml", resp["Content-Type"])
         self.assertIn(".xlsx", resp["Content-Disposition"])
+
+        req_invalid = factory.get(
+            f"/ecom/api/mayoristapp/pedido-masivo/plantilla-excel/?draft_id={d.pk}&marca_id=99"
+        )
+        req_invalid.session = {"user": {"base_empresa": "emp_m", "id_usuario": 55}}
+        force_authenticate(req_invalid, user=_User())
+        resp_invalid = PedidoMasivoPlantillaExcelAPIView.as_view()(req_invalid)
+        self.assertEqual(resp_invalid.status_code, 400)
+
+        req_valid = factory.get(
+            f"/ecom/api/mayoristapp/pedido-masivo/plantilla-excel/?draft_id={d.pk}&marca_id=5"
+        )
+        req_valid.session = {"user": {"base_empresa": "emp_m", "id_usuario": 55}}
+        force_authenticate(req_valid, user=_User())
+        resp_valid = PedidoMasivoPlantillaExcelAPIView.as_view()(req_valid)
+        self.assertEqual(resp_valid.status_code, 200)
+        self.assertEqual(_a.call_args.kwargs["marca_id"], 5)

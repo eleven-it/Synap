@@ -198,6 +198,7 @@ function pedidoMasivoCore() {
     filtrosAvanzadosAbiertos: false,
     facetasCatalogo: { marcas: [], rubros: [], subrubros: [] },
     marcaFiltro: '',
+    marcaPlantilla: '',
     rubroFiltro: '',
     subrubroFiltro: '',
     carritoAbierto: false,
@@ -743,6 +744,7 @@ function pedidoMasivoCore() {
       this._aplicarListaDesdeCliente(c);
       this.facetasCatalogo = { marcas: [], rubros: [], subrubros: [] };
       this.marcaFiltro = '';
+      this.marcaPlantilla = '';
       this.rubroFiltro = '';
       this.subrubroFiltro = '';
       this.filtrosAvanzadosAbiertos = false;
@@ -875,8 +877,24 @@ function pedidoMasivoCore() {
     },
     descargarPlantillaExcel() {
       if (!this.draftId || !this.urls.plantilla_excel) return;
-      const u = `${this.urls.plantilla_excel}?draft_id=${encodeURIComponent(this.draftId)}`;
+      const params = new URLSearchParams({ draft_id: String(this.draftId) });
+      if (this.marcaPlantilla) params.set('marca_id', String(this.marcaPlantilla));
+      const u = `${this.urls.plantilla_excel}?${params.toString()}`;
       window.location.href = u;
+    },
+    async cargarMarcasPlantilla() {
+      if (!this.idCliente || !this.urls.articulos || this.facetasCatalogo.marcas.length) return;
+      try {
+        const url = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}&facetas=1`
+          + this.parametroDomicilioCatalogo();
+        const data = await this.getJson(url);
+        if (!data.ok) throw new Error(data.error || 'No se pudieron cargar las marcas.');
+        this.facetasCatalogo = {
+          marcas: data.marcas || [], rubros: data.rubros || [], subrubros: data.subrubros || [],
+        };
+      } catch (error) {
+        this.mostrarAviso(error.message || 'No se pudieron cargar las marcas.', 'error');
+      }
     },
     async ejecutarImportarExcel() {
       if (!this.draftId || !this.urls.importar || !this.importArchivo || this.importando) return;
@@ -1296,6 +1314,7 @@ function pedidoMasivoCore() {
       // Cliente nuevo elegido a mano: no arrastra PED cargado previo.
       this._resetPedidoCargado();
       this.aplicarMatriz(data.matriz);
+      if (this.puedeImportarExcel) void this.cargarMarcasPlantilla();
       const c = this.clientes.find(x => String(x.id_cliente) === String(this.clienteSel));
       if (c) {
         this.clienteNombre = this._nombreClienteVisible(c.nombre || c.etiqueta || this.clienteNombre);
@@ -1313,6 +1332,7 @@ function pedidoMasivoCore() {
       this.abriendo = false;
       if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo recuperar el borrador.', 'error'); return; }
       this.aplicarMatriz(data.matriz);
+      if (this.puedeImportarExcel) void this.cargarMarcasPlantilla();
     },
     /** Reemplaza la URL preservando modo=simple + draft para F5/bookmark. */
     _replaceHistoryDraft() {
@@ -2507,7 +2527,7 @@ function pedidoMasivoCore() {
         + '&tam=' + encodeURIComponent(String(tam))
         + '&pagina=' + encodeURIComponent(String(pagina))
         + this.parametroDomicilioCatalogo();
-      if (this.modoSimple && this.vistaCatalogoSimple === 'galeria') u += '&fotos=1';
+      if (tam <= 24) u += '&fotos=1';
       if (todos) u += '&todos=1';
       if (q) u += '&q=' + encodeURIComponent(q);
       const filtros = this.parametrosFiltrosCatalogo();

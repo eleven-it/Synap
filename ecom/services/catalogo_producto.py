@@ -8,10 +8,15 @@ vía self_checkout.StockService.
 from __future__ import annotations
 
 import math
+import json
 from contextlib import contextmanager
 from decimal import Decimal
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
+
+from django.conf import settings
 
 from core.mysql_pool import get_connection
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
@@ -53,7 +58,55 @@ def _s(v: Any, default: str = "") -> str:
     return str_or_default(v, default)
 
 
-def _foto_url_articulo(cur: Any, id_articulo: int) -> str:
+@lru_cache(maxsize=16)
+def _es_empresa_bestsox(base_empresa: str) -> bool:
+    try:
+        from core.report_pdf import get_empresa_para_reporte
+        empresa = get_empresa_para_reporte(base_empresa)
+        nombre = str(empresa.get("razon_social") or "").strip().casefold()
+        return "best sox" in nombre
+    except Exception:
+        return False
+
+
+@lru_cache(maxsize=1)
+def _fotos_locales_bestsox() -> Dict[str, str]:
+    archivo = Path(settings.BASE_DIR) / "ecom" / "static" / "ecom" / "data" / "bestsox_productos.json"
+    try:
+        return json.loads(archivo.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _foto_local_para_articulo(fila: tuple, *, site_url: str = "") -> str:
+    mapa = _fotos_locales_bestsox()
+    codigos = sorted(
+        ((sku.upper(), ruta) for sku, ruta in mapa.items()),
+        key=lambda item: -len(item[0]),
+    )
+    for campo in fila[1:]:
+        valor = str(campo or "").strip().upper().replace("/", "-")
+        for sku, ruta in codigos:
+            if valor == sku or valor.startswith((sku + " ", sku + "-")):
+                static = str(settings.STATIC_URL).strip("/")
+                path = f"/{static}/{ruta}"
+                return f"{site_url.rstrip('/')}{path}" if site_url else path
+    return ""
+
+
+def _foto_local_por_id(cur: Any, base_empresa: str, id_articulo: int) -> str:
+    if not _es_empresa_bestsox(base_empresa):
+        return ""
+    cur.execute(
+        "SELECT IDArt, id_manual, CodArtProv, CodigoArticuloT, NombreArticulo "
+        "FROM articulo WHERE IDArt = %s LIMIT 1",
+        [id_articulo],
+    )
+    fila = cur.fetchone()
+    return _foto_local_para_articulo(fila) if fila else ""
+
+
+def _foto_url_articulo(cur: Any, id_articulo: int, base_empresa: str = "") -> str:
     """URL HTTP(S) de la foto principal, si la tabla opcional tiene una."""
     try:
         cur.execute(
@@ -71,7 +124,7 @@ def _foto_url_articulo(cur: Any, id_articulo: int) -> str:
         )
         rows = cur.fetchall()
     except Exception:
-        return ""
+        rows = []
     for row in rows:
         for raw in row:
             url = _s(raw).strip()
@@ -81,39 +134,62 @@ def _foto_url_articulo(cur: Any, id_articulo: int) -> str:
                 continue
             if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
                 return url
-    return ""
+    try:
+        return _foto_local_por_id(cur, base_empresa, id_articulo) if base_empresa else ""
+    except Exception:
+        return ""
 
 
-def fotos_urls_articulos(base_empresa: str, ids_articulos: List[int]) -> Dict[int, str]:
-    """Fotos de la primera página de galería. La tabla es opcional en instalaciones viejas."""
-    ids = list(dict.fromkeys(int(i) for i in ids_articulos if i is not None and str(i).isdigit() and int(i) > 0))[:24]
+def fotos_urls_articulos(
+    base_empresa: str, ids_articulos: List[int], *, max_ids: int = 24,
+    site_url: str = "",
+) -> Dict[int, str]:
+    """Fotos principales por artículo; consulta por lotes para plantillas grandes."""
+    ids = list(dict.fromkeys(int(i) for i in ids_articulos if i is not None and str(i).isdigit() and int(i) > 0))[:max_ids]
     if not ids:
         return {}
     try:
         with _mysql_conn(base_empresa) as conn:
             cur = conn.cursor()
-            placeholders = ",".join(["%s"] * len(ids))
-            cur.execute(
-                f"SELECT idArt, url_externo, url_interno FROM articulo_foto "
-                f"WHERE idArt IN ({placeholders}) "
-                "ORDER BY idArt, CASE WHEN LOWER(TRIM(COALESCE(foto_principal, ''))) "
-                "IN ('si', 's', '1', 'true') THEN 0 ELSE 1 END, id_articulo_foto DESC",
-                ids,
-            )
             fotos: Dict[int, str] = {}
-            for id_art, externa, interna in cur.fetchall():
-                key = int(id_art)
-                if key in fotos:
-                    continue
-                for raw in (externa, interna):
-                    url = _s(raw).strip()
-                    try:
-                        parsed = urlsplit(url)
-                    except ValueError:
+            for inicio in range(0, len(ids), 400):
+                lote = ids[inicio:inicio + 400]
+                placeholders = ",".join(["%s"] * len(lote))
+                cur.execute(
+                    f"SELECT idArt, url_externo, url_interno FROM articulo_foto "
+                    f"WHERE idArt IN ({placeholders}) "
+                    "ORDER BY idArt, CASE WHEN LOWER(TRIM(COALESCE(foto_principal, ''))) "
+                    "IN ('si', 's', '1', 'true') THEN 0 ELSE 1 END, id_articulo_foto DESC",
+                    lote,
+                )
+                for id_art, externa, interna in cur.fetchall():
+                    key = int(id_art)
+                    if key in fotos:
                         continue
-                    if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
-                        fotos[key] = url
-                        break
+                    for raw in (externa, interna):
+                        url = _s(raw).strip()
+                        try:
+                            parsed = urlsplit(url)
+                        except ValueError:
+                            continue
+                        if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
+                            fotos[key] = url
+                            break
+            if len(fotos) < len(ids) and _es_empresa_bestsox(base_empresa):
+                for inicio in range(0, len(ids), 400):
+                    pendientes = [i for i in ids[inicio:inicio + 400] if i not in fotos]
+                    if not pendientes:
+                        continue
+                    placeholders = ",".join(["%s"] * len(pendientes))
+                    cur.execute(
+                        "SELECT IDArt, id_manual, CodArtProv, CodigoArticuloT, NombreArticulo "
+                        f"FROM articulo WHERE IDArt IN ({placeholders})",
+                        pendientes,
+                    )
+                    for fila in cur.fetchall():
+                        url = _foto_local_para_articulo(fila, site_url=site_url)
+                        if url:
+                            fotos[int(fila[0])] = url
             return fotos
     except Exception:
         return {}
@@ -715,7 +791,7 @@ def obtener_detalle_articulo(
                 }
             )
 
-        foto_url = _foto_url_articulo(cur, id_art)
+        foto_url = _foto_url_articulo(cur, id_art, base_empresa)
 
         promo_data = None
         if _s(art_dict.get("promocion"), "No").strip().lower() == "si":

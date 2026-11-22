@@ -26,6 +26,7 @@ from ecom.pedido_gestion_views import (
     LoteResumenView,
     PedidoCabeceraV1APIView,
     PedidoComprobantePDFAPIView,
+    PedidoCierreParcialAPIView,
     PedidosHubItemPDFAPIView,
     PedidoDetalleView,
     PedidosHubAPIView,
@@ -85,6 +86,7 @@ from ecom.cliente_relay_views import (
     ClienteRapidoRelayAPIView,
     ClienteSeleccionadoRelayAPIView,
     ClienteSeleccionarRelayAPIView,
+    ClienteTransporteAPIView,
 )
 from ecom.precio_relay_views import (
     CondicionesVentaRelayAPIView,
@@ -547,6 +549,11 @@ urlpatterns = [
         name="v1_comprobantes_pedidos_detalle",
     ),
     path(
+        "api/mayoristapp/comprobantes/pedidos/<int:cod_mov>/cierre-parcial/",
+        PedidoCierreParcialAPIView.as_view(),
+        name="mayoristapp_pedido_cierre_parcial",
+    ),
+    path(
         "api/mayoristapp/articulo-remito/listado/",
         ArticuloRemitoListadoRelayAPIView.as_view(),
         name="mayoristapp_articulo_remito_listado",
@@ -641,6 +648,7 @@ urlpatterns = [
         ClienteBuscarRelayAPIView.as_view(),
         name="mayoristapp_clientes_buscar",
     ),
+    path("api/mayoristapp/clientes/transporte/", ClienteTransporteAPIView.as_view(), name="mayoristapp_clientes_transporte"),
     path(
         "api/mayoristapp/clientes/seleccionado/",
         ClienteSeleccionadoRelayAPIView.as_view(),

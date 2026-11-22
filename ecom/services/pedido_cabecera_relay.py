@@ -4,9 +4,10 @@ Cabecera, pedidos recientes y vínculos de un PED (gestión comercial Synap).
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.utils.administranet_types import to_int_or_none
+from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
 
 from ecom.services.cliente_relay import cod_viajante_desde_sesion_usuario
 from ecom.services.comprobantes_relay import _fetch_all
@@ -150,7 +151,7 @@ def pedidos_recientes_relay(
 
 
 def vinculos_pedido_relay(base_empresa: str, cod_mov: int) -> List[Dict[str, Any]]:
-    """Remitos vinculados al pedido vía ``rem_ped``."""
+    """Remitos del pedido y facturas asociadas vía ``rem_fact``."""
     cod = to_int_or_none(cod_mov)
     if cod is None:
         return []
@@ -165,7 +166,86 @@ def vinculos_pedido_relay(base_empresa: str, cod_mov: int) -> List[Dict[str, Any
         WHERE rp.codmov_pedido = %s AND rp.Anulado = 'No'
         ORDER BY rem.Fecha ASC
     """
-    return _fetch_all(base_empresa, sql, [cod])
+    remitos = _fetch_all(base_empresa, sql, [cod])
+    if not remitos:
+        return []
+    ids = [to_int_or_none(r.get("codigo_movimiento_remito")) for r in remitos]
+    ids = sorted({i for i in ids if i is not None})
+    for remito in remitos:
+        remito["facturas"] = []
+    if not ids:
+        return remitos
+    placeholders = ",".join(["%s"] * len(ids))
+    sql_facturas = f"""
+        SELECT rf.CodigoMovimientoR AS codigo_movimiento_remito,
+               fact.CodigoMovimiento AS codigo_movimiento_factura,
+               fact.NroComprobante AS nro_comprobante,
+               fact.TipoComprobante AS tipo_comprobante,
+               DATE_FORMAT(fact.Fecha, '%%d/%%m/%%Y') AS fecha
+        FROM rem_fact AS rf
+        INNER JOIN cuentacliente AS fact
+            ON fact.CodigoMovimiento = rf.CodigoMovimientoF
+        WHERE rf.CodigoMovimientoR IN ({placeholders})
+          AND COALESCE(rf.Anulado, 'No') = 'No'
+          AND COALESCE(fact.Anulado, 'No') = 'No'
+        ORDER BY rf.CodigoMovimientoR, fact.Fecha, fact.CodigoMovimiento
+    """
+    facturas = _fetch_all(base_empresa, sql_facturas, ids)
+    por_remito = {to_int_or_none(r["codigo_movimiento_remito"]): r for r in remitos}
+    for factura in facturas:
+        remito = por_remito.get(to_int_or_none(factura.get("codigo_movimiento_remito")))
+        if remito is not None:
+            remito["facturas"].append(factura)
+    return remitos
+
+
+def entrega_renglones_pedido(
+    base_empresa: str, cod_mov: int, renglones: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Anota cantidades remitas y pendientes sin alterar el PED ni sus remitos."""
+    cod = to_int_or_none(cod_mov)
+    if cod is None or not renglones:
+        return renglones, {"estado": "sin_entrega", "pedido": 0, "entregado": 0, "pendiente": 0}
+    sql = """
+        SELECT s.IDArt AS id_articulo, SUM(ABS(COALESCE(s.Salida, 0))) AS entregado
+        FROM stock AS s
+        INNER JOIN comp_ped AS rem ON rem.CodigoMovimiento = s.codmov_remito
+        WHERE s.codmov_pedido = %s
+          AND rem.TipoComprobante = 'REM'
+          AND COALESCE(s.Anulado, 'No') = 'No'
+          AND COALESCE(rem.Anulado, 'No') = 'No'
+        GROUP BY s.IDArt
+    """
+    entregas = _fetch_all(base_empresa, sql, [cod])
+    disponible = {
+        to_int_or_none(f.get("id_articulo")): to_decimal_or_none(f.get("entregado")) or Decimal("0")
+        for f in entregas
+    }
+    salida = []
+    total_pedido = Decimal("0")
+    total_entregado = Decimal("0")
+    for original in renglones:
+        fila = dict(original)
+        art = to_int_or_none(fila.get("IDArt"))
+        pedido = max(to_decimal_or_none(fila.get("Salida")) or Decimal("0"), Decimal("0"))
+        restante = max(disponible.get(art, Decimal("0")), Decimal("0"))
+        entregado = min(pedido, restante)
+        disponible[art] = restante - entregado
+        pendiente = pedido - entregado
+        fila["cantidad_entregada"] = entregado
+        fila["cantidad_pendiente"] = pendiente
+        salida.append(fila)
+        total_pedido += pedido
+        total_entregado += entregado
+    estado = "total" if total_pedido and total_entregado >= total_pedido else (
+        "parcial" if total_entregado else "sin_entrega"
+    )
+    return salida, {
+        "estado": estado,
+        "pedido": total_pedido,
+        "entregado": total_entregado,
+        "pendiente": total_pedido - total_entregado,
+    }
 
 
 def puede_anular_pedido_relay(base_empresa: str, cod_mov: int) -> Tuple[bool, str]:

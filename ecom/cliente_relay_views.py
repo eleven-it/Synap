@@ -11,7 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ecom.permissions import EcomMayoristappSessionPermission
+from ecom.permissions import EcomMayoristappSessionPermission, _user_has_perm
 from ecom.services.cliente_contacto_relay import alta_contacto_relay, lista_contactos_cliente
 from ecom.services.cliente_domicilio_relay import (
     alta_domicilio_relay,
@@ -44,6 +44,7 @@ from ecom.services.cliente_relay import (
     resolver_url_formulario_comprobante,
 )
 from ecom.services.cliente_seleccion_relay import construir_payload_cliente_seleccionado
+from ecom.services.cliente_transporte import consultar_transportes_cliente, fijar_transporte_cliente
 from ecom.services.mayoristapp_session import (
     guardar_cliente_rapido_lista_sesion,
     guardar_cliente_seleccion_mayoristapp,
@@ -229,6 +230,40 @@ class ClienteSeleccionadoRelayAPIView(APIView):
         if isinstance(data, dict):
             return Response(data)
         return Response({"cliente": data})
+
+
+class ClienteTransporteAPIView(APIView):
+    """Consulta y fija el transporte predeterminado por domicilio de un cliente accesible."""
+
+    permission_classes = [EcomMayoristappSessionPermission]
+
+    def _cliente(self, request: Request):
+        base = _session_base_empresa(request)
+        codigo = to_int_or_none(
+            request.query_params.get("codigo") if request.method == "GET" else request.data.get("codigo")
+        )
+        sess = _session_user(request)
+        if not base or codigo is None or not cliente_accesible_por_sesion(base, codigo, sess, solo_cartera=True):
+            return None, None, sess
+        return base, codigo, sess
+
+    def get(self, request: Request) -> Response:
+        base, codigo, _sess = self._cliente(request)
+        if base is None:
+            return Response({"detail": "Cliente no disponible."}, status=403)
+        return Response(consultar_transportes_cliente(base, codigo))
+
+    def post(self, request: Request) -> Response:
+        base, codigo, sess = self._cliente(request)
+        if base is None or str(sess.get("tipousuario") or "").strip().lower() == "cliente":
+            return Response({"detail": "Cliente no disponible."}, status=403)
+        domicilio = to_int_or_none(request.data.get("id_domicilio"))
+        transporte = to_int_or_none(request.data.get("id_transporte"))
+        if domicilio is None or transporte is None:
+            return Response({"detail": "Domicilio y transporte requeridos."}, status=400)
+        if not fijar_transporte_cliente(base, codigo, domicilio, transporte):
+            return Response({"detail": "Domicilio o transporte no disponible."}, status=400)
+        return Response({"ok": True, **consultar_transportes_cliente(base, codigo)})
 
 
 class ClienteComprobanteFormularioRelayAPIView(APIView):
@@ -489,7 +524,33 @@ class ClienteRapidoRelayAPIView(APIView):
             return Response({"detail": "Parámetro ajax requerido."}, status=400)
         accion = (request.data.get("accion") or "").strip().lower()
         sess_user = _session_user(request)
+        if accion in ("altacliente", "editacliente"):
+            codigo_permiso = "clientes.crear" if accion == "altacliente" else "clientes.editar"
+            if str(sess_user.get("tipousuario") or "").strip().lower() == "cliente" or not (
+                _user_has_perm(request, codigo_permiso)
+                or (accion == "editacliente" and _user_has_perm(request, "ecom.clientes.editar"))
+            ):
+                return Response({"detail": "Sin permiso para gestionar clientes."}, status=403)
         if accion == "altacliente":
+            if str(request.data.get("tipoDocCliente") or "").upper() not in ("CUIT", "DNI"):
+                return Response({"detail": "Tipo de documento inválido."}, status=400)
+            obligatorios = {
+                "nombreCliente": "nombre del cliente",
+                "tipoDocCliente": "tipo de documento",
+                "ivaCliente": "condición de IVA",
+                "tipoCliente": "tipo de cliente",
+                "calleCliente": "calle",
+                "numeroCliente": "número de domicilio",
+                "provinciaCliente": "provincia",
+                "departamentoCliente": "departamento o partido",
+                "distritoCliente": "localidad",
+            }
+            for clave, etiqueta in obligatorios.items():
+                if not str(request.data.get(clave) or "").strip():
+                    return Response({"detail": f"Ingresá {etiqueta}."}, status=400)
+            clave_doc = "nroDocCliente" if str(request.data.get("tipoDocCliente")).upper() == "DNI" else "nroCuitCliente"
+            if not str(request.data.get(clave_doc) or "").strip():
+                return Response({"detail": "Ingresá el CUIT o DNI."}, status=400)
             resultado = alta_cliente_rapido(base, dict(request.data), sess_user)
             if isinstance(resultado, dict):
                 return Response(resultado, status=400)

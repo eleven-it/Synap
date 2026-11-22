@@ -219,6 +219,7 @@ HUB_LISTADO_URLS: dict[str, str] = {
     "Promociones": "ecom:mayoristapp_listado_promociones",
     "Devoluciones": "ecom:mayoristapp_listado_devoluciones",
     "Listado de clientes": "ecom:mayoristapp_clientes",
+    "Saldos de clientes": "ecom:mayoristapp_saldos_clientes",
     "Consumos cliente": "ecom:mayoristapp_portal_consumos",
     "Cuenta corriente": "ecom:mayoristapp_portal_cuenta_corriente",
     "Comprobantes no cancelados": "ecom:mayoristapp_portal_no_cancelados",
