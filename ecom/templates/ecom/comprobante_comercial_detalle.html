@@ -7,6 +7,7 @@
 
 {% block pedidos_json_script %}
 {{ urls|json_script:"comprobante-detalle-urls" }}
+{% csrf_token %}
 {% endblock %}
 
 {% block pedidos_breadcrumb %}
@@ -22,6 +23,9 @@
 {% block pedidos_hero_actions %}
 <a :href="urls.compra" class="pedidos-btn pedidos-btn-outline-hero">Nuevo comprobante</a>
 <a :href="listadoUrl" class="pedidos-btn pedidos-btn-outline-hero" x-text="listadoLabel"></a>
+{% if puede_cerrar_parcial %}
+<button type="button" class="pedidos-btn pedidos-btn-secondary-hero" x-show="puedeCerrarParcial" @click="cerrarParcial()">Cerrar pendiente</button>
+{% endif %}
 {% endblock %}
 
 {% block pedidos_content %}
@@ -41,11 +45,12 @@
         <div><span class="text-slate-500">Cliente</span><p class="font-semibold" x-text="cabecera.nombre_cliente || '—'"></p></div>
         <div><span class="text-slate-500">Estado</span><p class="font-semibold" x-text="cabecera.estado || '—'"></p></div>
         <div><span class="text-slate-500">Total</span><p class="font-semibold tabular-nums" x-text="money(cabecera.total)"></p></div>
+        <div x-show="entrega"><span class="text-slate-500">Entrega</span><p class="font-semibold" x-text="entrega?.estado === 'total' ? 'Total' : entrega?.estado === 'parcial' ? (String(cabecera.estado || '').toLowerCase() === 'cerrado' ? 'Cierre parcial; saldo no entregado' : 'Parcial') : 'Sin entrega'"></p></div>
       </div>
       <div class="pedidos-table-shell overflow-x-auto">
         <table class="pedidos-table min-w-[520px]">
           <thead>
-            <tr><th>Código</th><th>Descripción</th><th class="text-right">Cant.</th><th class="text-right">Precio</th></tr>
+            <tr><th>Código</th><th>Descripción</th><th class="text-right">Cant.</th><th class="text-right" x-show="entrega">Entregado</th><th class="text-right" x-show="entrega">Pendiente</th><th class="text-right">Precio</th></tr>
           </thead>
           <tbody>
             <template x-for="r in renglones" :key="r.IDArt + '-' + r.Descripcion">
@@ -53,6 +58,8 @@
                 <td x-text="r.CodigoArticulo || r.IDArt"></td>
                 <td x-text="r.Descripcion"></td>
                 <td class="text-right tabular-nums" x-text="r.Salida"></td>
+                <td class="text-right tabular-nums" x-show="entrega" x-text="r.cantidad_entregada ?? 0"></td>
+                <td class="text-right tabular-nums" x-show="entrega" x-text="r.cantidad_pendiente ?? 0"></td>
                 <td class="text-right tabular-nums" x-text="money(r.PrecioNetoxR || r.PrecioNetoxU)"></td>
               </tr>
             </template>
@@ -72,8 +79,15 @@ document.addEventListener('alpine:init', () => {
     codMov: {{ cod_mov|default:"null" }},
     cabecera: null,
     renglones: [],
+    entrega: null,
+    cerrando: false,
     cargando: true,
     error: '',
+    get puedeCerrarParcial() {
+      return {{ puede_cerrar_parcial|yesno:"true,false" }} && this.cabecera?.tipo_comprobante === 'PED'
+        && this.entrega?.estado === 'parcial'
+        && !['cerrado', 'facturado'].includes(String(this.cabecera?.estado || '').toLowerCase());
+    },
     get titulo() {
       const t = (this.cabecera && this.cabecera.tipo_comprobante) || '';
       const map = { PED: 'Detalle de pedido', PRE: 'Detalle de presupuesto', DEV: 'Detalle de devolución' };
@@ -109,11 +123,31 @@ document.addEventListener('alpine:init', () => {
         if (!cabR.ok) throw new Error(cabR.error || 'Comprobante no encontrado');
         this.cabecera = cabR.cabecera;
         this.renglones = detR.results || [];
+        this.entrega = detR.entrega || null;
       } catch (e) {
         this.error = e.message || 'Error al cargar';
       } finally {
         this.cargando = false;
       }
+    },
+    async cerrarParcial() {
+      if (this.cerrando) return;
+      const motivo = prompt('Motivo del cierre parcial (obligatorio):');
+      if (!motivo?.trim()) return;
+      if (!confirm('Se cerrará el pedido y se liberará la reserva de los artículos no entregados. ¿Continuar?')) return;
+      this.cerrando = true;
+      try {
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const response = await fetch(this.urls.cierre_parcial, {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+          body: JSON.stringify({ motivo: motivo.trim() }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || 'No se pudo cerrar el pedido.');
+        await this.cargar();
+      } catch (error) { alert(error.message || 'No se pudo cerrar el pedido.'); }
+      finally { this.cerrando = false; }
     },
   }));
 });

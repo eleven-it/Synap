@@ -190,8 +190,10 @@ class ClientesMayoristappView(MayoristappWebSessionMixin, TemplateView):
     template_name = "ecom/clientes_mayoristapp.html"
 
     def get_context_data(self, **kwargs):
+        from ecom.permissions import _user_has_perm
         context = super().get_context_data(**kwargs)
         sess_user = self.request.session.get("user") or {}
+        es_cliente = str(sess_user.get("tipousuario") or "").strip().lower() == "cliente"
         context.update(
             {
                 "page_title": "Listado de clientes",
@@ -199,7 +201,11 @@ class ClientesMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 "clientes_seleccionar_api": reverse("ecom:mayoristapp_clientes_seleccionar"),
                 "clientes_seleccionado_api": reverse("ecom:mayoristapp_clientes_seleccionado"),
                 "clientes_transporte_api": reverse("ecom:mayoristapp_clientes_transporte"),
-                "puede_editar_transporte": str(sess_user.get("tipousuario") or "").strip().lower() != "cliente",
+                "clientes_rapido_api": reverse("ecom:mayoristapp_clientes_rapido"),
+                "puede_crear_cliente": not es_cliente and _user_has_perm(self.request, "clientes.crear"),
+                "puede_editar_cliente": not es_cliente and (_user_has_perm(self.request, "clientes.editar") or _user_has_perm(self.request, "ecom.clientes.editar")),
+                "puede_editar_identidad_cliente": str(sess_user.get("permiso_alta_cliente") or "").strip().lower() in ("si", "sí", "1", "true"),
+                "puede_editar_transporte": not es_cliente,
             }
         )
         return context

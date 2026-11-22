@@ -190,6 +190,8 @@ def _render_pdf(cab: Dict[str, Any], renglones: List[Dict[str, Any]], *, base_em
 
     estado_entrega = (entrega or {}).get("estado")
     etiqueta_entrega = {"total": "Entrega total", "parcial": "Entrega parcial", "sin_entrega": "Sin entregas"}.get(estado_entrega, "")
+    if estado_entrega == "parcial" and str(cab.get("estado") or "").strip().lower() == "cerrado":
+        etiqueta_entrega = "Cierre parcial: saldo pendiente no entregado"
     elementos = [Paragraph("Detalle de comprobante", estilo_tot),
                  Paragraph(etiqueta_entrega, estilo) if etiqueta_entrega else Spacer(1, 1),
                  Spacer(1, 5), tabla,

@@ -11,7 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ecom.permissions import EcomMayoristappSessionPermission
+from ecom.permissions import EcomMayoristappSessionPermission, _user_has_perm
 from ecom.services.cliente_contacto_relay import alta_contacto_relay, lista_contactos_cliente
 from ecom.services.cliente_domicilio_relay import (
     alta_domicilio_relay,
@@ -524,7 +524,33 @@ class ClienteRapidoRelayAPIView(APIView):
             return Response({"detail": "Parámetro ajax requerido."}, status=400)
         accion = (request.data.get("accion") or "").strip().lower()
         sess_user = _session_user(request)
+        if accion in ("altacliente", "editacliente"):
+            codigo_permiso = "clientes.crear" if accion == "altacliente" else "clientes.editar"
+            if str(sess_user.get("tipousuario") or "").strip().lower() == "cliente" or not (
+                _user_has_perm(request, codigo_permiso)
+                or (accion == "editacliente" and _user_has_perm(request, "ecom.clientes.editar"))
+            ):
+                return Response({"detail": "Sin permiso para gestionar clientes."}, status=403)
         if accion == "altacliente":
+            if str(request.data.get("tipoDocCliente") or "").upper() not in ("CUIT", "DNI"):
+                return Response({"detail": "Tipo de documento inválido."}, status=400)
+            obligatorios = {
+                "nombreCliente": "nombre del cliente",
+                "tipoDocCliente": "tipo de documento",
+                "ivaCliente": "condición de IVA",
+                "tipoCliente": "tipo de cliente",
+                "calleCliente": "calle",
+                "numeroCliente": "número de domicilio",
+                "provinciaCliente": "provincia",
+                "departamentoCliente": "departamento o partido",
+                "distritoCliente": "localidad",
+            }
+            for clave, etiqueta in obligatorios.items():
+                if not str(request.data.get(clave) or "").strip():
+                    return Response({"detail": f"Ingresá {etiqueta}."}, status=400)
+            clave_doc = "nroDocCliente" if str(request.data.get("tipoDocCliente")).upper() == "DNI" else "nroCuitCliente"
+            if not str(request.data.get(clave_doc) or "").strip():
+                return Response({"detail": "Ingresá el CUIT o DNI."}, status=400)
             resultado = alta_cliente_rapido(base, dict(request.data), sess_user)
             if isinstance(resultado, dict):
                 return Response(resultado, status=400)

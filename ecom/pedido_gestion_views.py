@@ -69,6 +69,7 @@ from ecom.services.pedido_cabecera_relay import (
     vinculos_pedido_relay,
 )
 from ecom.services.pedido_comprobante_pdf import generar_pedido_pdf
+from ecom.services.pedido_cierre_parcial import cerrar_pedido_parcial
 from ecom.services.pedido_plantilla_service import cargar_desde_pedido, preview_desde_pedido
 from core.services.administranet_stock import get_config_unidad_bulto_display
 from ecom.services.presentacion_articulo import _fetch_utiliza_embalaje
@@ -891,21 +892,41 @@ class ComprobanteComercialDetalleAPIView(APIView):
         return Response({"ok": True, "results": rows, "entrega": entrega})
 
 
+class PedidoCierreParcialAPIView(APIView):
+    """POST cierra un PED parcialmente entregado y libera solo el pendiente."""
+
+    permission_classes = [EcomPedidosAprobarPermission]
+
+    def post(self, request: Request, cod_mov: int) -> Response:
+        base = _session_base_empresa(request)
+        sess = _session_user(request)
+        if not base or _es_cliente_sesion(request):
+            return _error("Operación no permitida.", "sin_permiso", 403)
+        visible = construir_hub_pedidos(base, sess, vista="lista")
+        if not any(i.get("id_ref") == f"ped-{cod_mov}" for i in visible.get("items") or []):
+            return _error("Pedido no disponible para este usuario.", "no_encontrado", 404)
+        resultado = cerrar_pedido_parcial(base, cod_mov, str(request.data.get("motivo") or ""))
+        return Response(resultado, status=200 if resultado.get("ok") else 400)
+
+
 class ComprobanteComercialDetalleView(MayoristappWebSessionMixin, TemplateView):
     """Detalle read-only de PED/PRE/DEV — ``/ecom/mayoristapp/comprobantes/<cod_mov>/``."""
 
     template_name = "ecom/comprobante_comercial_detalle.html"
 
     def get_context_data(self, **kwargs):
+        from ecom.permissions import _user_has_perm
         context = super().get_context_data(**kwargs)
         cod_mov = to_int_or_none(kwargs.get("cod_mov"))
         context.update(
             {
                 "page_title": "Detalle de comprobante",
                 "cod_mov": cod_mov,
+                "puede_cerrar_parcial": not _es_cliente_sesion(self.request) and _user_has_perm(self.request, "ecom.pedidos.aprobar"),
                 "urls": {
                     "cabecera": reverse("ecom:mayoristapp_comprobante_cabecera", args=[cod_mov or 0]),
                     "detalle": reverse("ecom:mayoristapp_comprobante_detalle_api", args=[cod_mov or 0]),
+                    "cierre_parcial": reverse("ecom:mayoristapp_pedido_cierre_parcial", args=[cod_mov or 0]),
                     "compra": reverse("ecom:mayoristapp_venta"),
                     "hub": reverse("ecom:mayoristapp_pedidos_hub"),
                     "listado_pedidos": reverse("ecom:mayoristapp_pedidos_vendedor"),

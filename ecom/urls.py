@@ -26,6 +26,7 @@ from ecom.pedido_gestion_views import (
     LoteResumenView,
     PedidoCabeceraV1APIView,
     PedidoComprobantePDFAPIView,
+    PedidoCierreParcialAPIView,
     PedidosHubItemPDFAPIView,
     PedidoDetalleView,
     PedidosHubAPIView,
@@ -546,6 +547,11 @@ urlpatterns = [
         "api/v1/mayoristapp/comprobantes/pedidos/<int:cod_mov>/detalle/",
         PedidosDetalleV1APIView.as_view(),
         name="v1_comprobantes_pedidos_detalle",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/pedidos/<int:cod_mov>/cierre-parcial/",
+        PedidoCierreParcialAPIView.as_view(),
+        name="mayoristapp_pedido_cierre_parcial",
     ),
     path(
         "api/mayoristapp/articulo-remito/listado/",
