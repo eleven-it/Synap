@@ -99,6 +99,7 @@ def _hub_cards():
             "icon": "groups",
             "links": [
                 _hub_link("Listado de clientes"),
+                _hub_link("Saldos de clientes"),
                 _hub_link("Consumos cliente"),
                 _hub_link("Cuenta corriente"),
                 _hub_link("Comprobantes a cobrar"),
