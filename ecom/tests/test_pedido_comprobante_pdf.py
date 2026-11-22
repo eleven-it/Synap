@@ -33,6 +33,6 @@ class PedidoComprobantePDFTests(TestCase):
 
         for esperado in (
             "0008-00001124", "Empresa de prueba", "Cliente de prueba",
-            "Artículo de prueba", "$121,00", "Entregar por la mañana",
+            "Artículo de prueba", "$121,00", "Entregar por la mañana", "Pend.",
         ):
             self.assertIn(esperado, contenido)

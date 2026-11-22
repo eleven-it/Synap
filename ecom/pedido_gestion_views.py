@@ -61,6 +61,7 @@ from ecom.services.mayoristapp_session import leer_cliente_seleccionado, leer_id
 from ecom.services.pedido_cabecera_relay import (
     cabecera_comp_ped_relay,
     cabecera_pedido_relay,
+    entrega_renglones_pedido,
     pedidos_kpis_relay,
     pedidos_recientes_relay,
     puede_anular_pedido_relay,
@@ -881,11 +882,13 @@ class ComprobanteComercialDetalleAPIView(APIView):
             "true",
         )
         rows = detalle_pedido_relay(base, cod_mov, usa_id_manual=usa_manual)
-        if not rows:
-            cab = cabecera_comp_ped_relay(base, cod_mov)
-            if not cab:
-                return _error("Comprobante no encontrado.", "no_encontrado", 404)
-        return Response({"ok": True, "results": rows})
+        cab = cabecera_comp_ped_relay(base, cod_mov)
+        if not cab:
+            return _error("Comprobante no encontrado.", "no_encontrado", 404)
+        entrega = None
+        if str(cab.get("tipo_comprobante") or "").strip().upper() == "PED":
+            rows, entrega = entrega_renglones_pedido(base, cod_mov, rows)
+        return Response({"ok": True, "results": rows, "entrega": entrega})
 
 
 class ComprobanteComercialDetalleView(MayoristappWebSessionMixin, TemplateView):

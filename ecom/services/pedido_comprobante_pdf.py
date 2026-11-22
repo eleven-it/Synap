@@ -13,7 +13,7 @@ from core.report_pdf import get_empresa_para_reporte
 from django.conf import settings
 from core.utils.administranet_types import to_decimal_or_none
 from ecom.services.comprobantes_relay import detalle_pedido_relay
-from ecom.services.pedido_cabecera_relay import cabecera_pedido_relay
+from ecom.services.pedido_cabecera_relay import cabecera_pedido_relay, entrega_renglones_pedido
 
 
 def _fmt_money(v: Any) -> str:
@@ -43,6 +43,7 @@ def generar_pedido_pdf(
     if not cab:
         return False, "Pedido no encontrado.", None
     renglones = detalle_pedido_relay(base_empresa, cod_mov, usa_id_manual=usa_id_manual)
+    renglones, entrega = entrega_renglones_pedido(base_empresa, cod_mov, renglones)
     domicilio = None
     if cab.get("id_cliente_domicilio"):
         from ecom.services.cliente_domicilio_relay import trae_domicilio_completo
@@ -51,14 +52,16 @@ def generar_pedido_pdf(
         except Exception:
             domicilio = None
     try:
-        pdf = _render_pdf(cab, renglones, base_empresa=base_empresa, domicilio=domicilio)
+        pdf = _render_pdf(cab, renglones, base_empresa=base_empresa, domicilio=domicilio,
+                          entrega=entrega)
     except Exception as exc:  # pragma: no cover
         return False, f"No se pudo generar el PDF: {exc}", None
     return True, None, pdf
 
 
 def _render_pdf(cab: Dict[str, Any], renglones: List[Dict[str, Any]], *, base_empresa: str,
-                domicilio: Optional[Dict[str, Any]] = None) -> bytes:
+                domicilio: Optional[Dict[str, Any]] = None,
+                entrega: Optional[Dict[str, Any]] = None) -> bytes:
     from datetime import datetime
 
     from reportlab.lib import colors
@@ -66,7 +69,7 @@ def _render_pdf(cab: Dict[str, Any], renglones: List[Dict[str, Any]], *, base_em
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.lib.utils import ImageReader
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle
 
     empresa = get_empresa_para_reporte(base_empresa)
     page_size = A4
@@ -78,7 +81,7 @@ def _render_pdf(cab: Dict[str, Any], renglones: List[Dict[str, Any]], *, base_em
     estilo_head = ParagraphStyle("head", fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=colors.white)
     estilo_tot = ParagraphStyle("tot", fontName="Helvetica-Bold", fontSize=9, leading=11)
 
-    headers = ["Cód.", "Descripción", "Cant.", "IVA %", "Neto x U", "Precio total"]
+    headers = ["Cód.", "Descripción", "Cant.", "Entreg.", "Pend.", "IVA %", "Neto x U", "Precio total"]
     data: List[List[Any]] = [[Paragraph(h, estilo_head) for h in headers]]
     for r in renglones:
         cod = r.get("CodigoArticulo") or r.get("IDArt")
@@ -91,12 +94,14 @@ def _render_pdf(cab: Dict[str, Any], renglones: List[Dict[str, Any]], *, base_em
             Paragraph(_esc(str(cod or "")), estilo),
             Paragraph(_esc(str(r.get("Descripcion") or "")), estilo),
             Paragraph(str(cant), ParagraphStyle("c", parent=estilo, alignment=2)),
+            Paragraph(str(r.get("cantidad_entregada", 0)), ParagraphStyle("e", parent=estilo, alignment=2)),
+            Paragraph(str(r.get("cantidad_pendiente", cant)), ParagraphStyle("pd", parent=estilo, alignment=2)),
             Paragraph(str(iva if iva is not None else ""), ParagraphStyle("iva", parent=estilo, alignment=2)),
             Paragraph(_fmt_money(neto_u), ParagraphStyle("p", parent=estilo, alignment=2)),
             Paragraph(_fmt_money(total_r), ParagraphStyle("t", parent=estilo, alignment=2)),
         ])
 
-    col_widths = [ancho_util * p for p in (0.10, 0.43, 0.09, 0.07, 0.14, 0.17)]
+    col_widths = [ancho_util * p for p in (0.09, 0.34, 0.08, 0.09, 0.09, 0.07, 0.11, 0.13)]
     tabla = Table(data, colWidths=col_widths, repeatRows=1)
     tabla.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), azul),
@@ -124,13 +129,11 @@ def _render_pdf(cab: Dict[str, Any], renglones: List[Dict[str, Any]], *, base_em
 
     buf = io.BytesIO()
     ctx = {"empresa": empresa, "cab": cab}
-    doc = SimpleDocTemplate(
+    doc = BaseDocTemplate(
         buf,
         pagesize=page_size,
         leftMargin=margin,
         rightMargin=margin,
-        topMargin=70 * mm,
-        bottomMargin=22 * mm,
         title=f"Pedido {cab.get('nro_comprobante') or ''}",
     )
 
@@ -185,10 +188,20 @@ def _render_pdf(cab: Dict[str, Any], renglones: List[Dict[str, Any]], *, base_em
         canvas.drawRightString(w - margin, 10 * mm, f"Página {canvas.getPageNumber()}")
         canvas.restoreState()
 
-    elementos = [Paragraph("Detalle de comprobante", estilo_tot), Spacer(1, 5), tabla,
+    estado_entrega = (entrega or {}).get("estado")
+    etiqueta_entrega = {"total": "Entrega total", "parcial": "Entrega parcial", "sin_entrega": "Sin entregas"}.get(estado_entrega, "")
+    elementos = [Paragraph("Detalle de comprobante", estilo_tot),
+                 Paragraph(etiqueta_entrega, estilo) if etiqueta_entrega else Spacer(1, 1),
+                 Spacer(1, 5), tabla,
                  Spacer(1, 9), resumen, Spacer(1, 9),
                  Paragraph(f"Total de renglones: {len(renglones)}", estilo)]
     if cab.get("observaciones"):
         elementos.extend([Spacer(1, 6), Paragraph("Detalle: " + _esc(str(cab["observaciones"])), estilo)])
-    doc.build(elementos, onFirstPage=_marco, onLaterPages=_marco)
+    marco = Frame(
+        margin, 22 * mm, page_size[0] - 2 * margin,
+        page_size[1] - 70 * mm - 22 * mm,
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+    )
+    doc.addPageTemplates(PageTemplate(id="pedido", frames=[marco], onPage=_marco))
+    doc.build(elementos)
     return buf.getvalue()
