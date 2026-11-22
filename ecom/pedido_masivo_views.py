@@ -47,6 +47,7 @@ from ecom.services.catalogo_producto import obtener_detalle_articulo, fotos_urls
 from ecom.services.pedido_masivo_import import (
     generar_plantilla_excel,
     importar_matriz_excel,
+    marcas_plantilla_vcm,
     nombre_archivo_plantilla,
 )
 from ecom.services.pedido_cabecera_relay import (
@@ -1106,7 +1107,11 @@ class PedidoMasivoPlantillaExcelAPIView(APIView):
         draft, _base = _draft_usuario(request, request.query_params.get("draft_id"))
         if not draft:
             return _err("Borrador no encontrado.", "no_encontrado", 404)
-        raw = generar_plantilla_excel(draft)
+        marca_raw = str(request.query_params.get("marca_id") or "").strip()
+        marca_id = to_int_or_none(marca_raw) if marca_raw else None
+        if marca_raw and (marca_id is None or marca_id not in marcas_plantilla_vcm(draft)):
+            return _err("La marca no está disponible para este cliente.", "marca_no_disponible", 400)
+        raw = generar_plantilla_excel(draft, marca_id=marca_id)
         nombre = nombre_archivo_plantilla(draft)
         resp = HttpResponse(
             raw,

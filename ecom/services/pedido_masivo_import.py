@@ -31,6 +31,7 @@ from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
 from ecom.services.catalogo_producto import (
     SQL_TIPOS_ARTICULO_VENDIBLES_PEDIDO,
     es_tipo_articulo_vendible_pedido,
+    fotos_urls_articulos,
 )
 from ecom.services.multiplo_empaque import (
     cantidad_respeta_multiplo,
@@ -396,12 +397,22 @@ def _territorio(
     return sucursales, marcas_map
 
 
-def listar_articulos_plantilla_vcm(draft: EcomPedidoMasivoDraft) -> List[Dict[str, Any]]:
-    """Artículos vendibles/ecommerce de la unión de marcas VCM (sin precio ni stock)."""
+def marcas_plantilla_vcm(draft: EcomPedidoMasivoDraft) -> Set[int]:
+    """Marcas permitidas por el territorio de las sucursales del borrador."""
     _sucursales, marcas_map = _territorio(draft)
     marcas: Set[int] = set()
     for ms in marcas_map.values():
         marcas.update(ms)
+    return marcas
+
+
+def listar_articulos_plantilla_vcm(
+    draft: EcomPedidoMasivoDraft, *, marca_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """Artículos vendibles/ecommerce de las marcas VCM, opcionalmente una marca."""
+    marcas = marcas_plantilla_vcm(draft)
+    if marca_id is not None:
+        marcas.intersection_update({marca_id})
     marcas_l = sorted(m for m in marcas if m is not None)
     if not marcas_l:
         return []
@@ -469,11 +480,19 @@ def generar_plantilla_excel(
     draft: EcomPedidoMasivoDraft,
     *,
     articulos: Optional[Sequence[Dict[str, Any]]] = None,
+    marca_id: Optional[int] = None,
 ) -> bytes:
     """Plantilla VCM: SuperArt + nombre + precio + cantidades. Identifica al cliente."""
     sucursales, _marcas = _territorio(draft)
     if articulos is None:
-        articulos = listar_articulos_plantilla_vcm(draft)
+        articulos = listar_articulos_plantilla_vcm(draft, marca_id=marca_id)
+        fotos = fotos_urls_articulos(
+            draft.base_empresa,
+            [art.get("id_articulo") for art in articulos],
+            max_ids=MAX_ARTICULOS_PLANTILLA,
+        )
+    else:
+        fotos = {}
     nombre_cli = _nombre_cliente(draft.base_empresa, draft.id_cliente)
     id_cli = to_int_or_none(draft.id_cliente) or 0
     cv = to_int_or_none(draft.cod_viajante)
@@ -504,6 +523,7 @@ def generar_plantilla_excel(
         "",
         "Al importar se reemplaza todo el borrador. Usá la plantilla de este mismo pedido.",
         "Hay una fila por color/SKU. No borres la columna oculta (identifica el artículo).",
+        "Si el nombre del artículo aparece azul y subrayado, abrí ese enlace para ver la foto.",
     ]
     for i, texto in enumerate(instrucciones, start=1):
         ws_i.cell(i, 1, texto)
@@ -569,7 +589,12 @@ def generar_plantilla_excel(
         ca.alignment = Alignment(vertical="center")
         cn = ws.cell(fila, 2, str_or_default(art.get("nombre"), ""))
         cn.fill = _FILL_LOCK
-        cn.font = _FONT_ART
+        foto_url = str_or_default(art.get("foto_url"), "") or fotos.get(aid, "")
+        if foto_url.startswith(("https://", "http://")):
+            cn.hyperlink = foto_url
+            cn.font = Font(size=10, color="0876B9", underline="single")
+        else:
+            cn.font = _FONT_ART
         cn.alignment = Alignment(wrap_text=True, vertical="center")
         cid = ws.cell(fila, 3, aid)
         cid.fill = _FILL_LOCK

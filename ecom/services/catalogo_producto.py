@@ -84,36 +84,40 @@ def _foto_url_articulo(cur: Any, id_articulo: int) -> str:
     return ""
 
 
-def fotos_urls_articulos(base_empresa: str, ids_articulos: List[int]) -> Dict[int, str]:
-    """Fotos de la primera página de galería. La tabla es opcional en instalaciones viejas."""
-    ids = list(dict.fromkeys(int(i) for i in ids_articulos if i is not None and str(i).isdigit() and int(i) > 0))[:24]
+def fotos_urls_articulos(
+    base_empresa: str, ids_articulos: List[int], *, max_ids: int = 24
+) -> Dict[int, str]:
+    """Fotos principales por artículo; consulta por lotes para plantillas grandes."""
+    ids = list(dict.fromkeys(int(i) for i in ids_articulos if i is not None and str(i).isdigit() and int(i) > 0))[:max_ids]
     if not ids:
         return {}
     try:
         with _mysql_conn(base_empresa) as conn:
             cur = conn.cursor()
-            placeholders = ",".join(["%s"] * len(ids))
-            cur.execute(
-                f"SELECT idArt, url_externo, url_interno FROM articulo_foto "
-                f"WHERE idArt IN ({placeholders}) "
-                "ORDER BY idArt, CASE WHEN LOWER(TRIM(COALESCE(foto_principal, ''))) "
-                "IN ('si', 's', '1', 'true') THEN 0 ELSE 1 END, id_articulo_foto DESC",
-                ids,
-            )
             fotos: Dict[int, str] = {}
-            for id_art, externa, interna in cur.fetchall():
-                key = int(id_art)
-                if key in fotos:
-                    continue
-                for raw in (externa, interna):
-                    url = _s(raw).strip()
-                    try:
-                        parsed = urlsplit(url)
-                    except ValueError:
+            for inicio in range(0, len(ids), 400):
+                lote = ids[inicio:inicio + 400]
+                placeholders = ",".join(["%s"] * len(lote))
+                cur.execute(
+                    f"SELECT idArt, url_externo, url_interno FROM articulo_foto "
+                    f"WHERE idArt IN ({placeholders}) "
+                    "ORDER BY idArt, CASE WHEN LOWER(TRIM(COALESCE(foto_principal, ''))) "
+                    "IN ('si', 's', '1', 'true') THEN 0 ELSE 1 END, id_articulo_foto DESC",
+                    lote,
+                )
+                for id_art, externa, interna in cur.fetchall():
+                    key = int(id_art)
+                    if key in fotos:
                         continue
-                    if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
-                        fotos[key] = url
-                        break
+                    for raw in (externa, interna):
+                        url = _s(raw).strip()
+                        try:
+                            parsed = urlsplit(url)
+                        except ValueError:
+                            continue
+                        if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
+                            fotos[key] = url
+                            break
             return fotos
     except Exception:
         return {}
