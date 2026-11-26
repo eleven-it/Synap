@@ -61,6 +61,8 @@ MENU_CONFIG = [
                 "label": "Clientes",
                 "url": "ecom:mayoristapp_clientes",
                 "permission": "ecom.clientes.ver",
+                "nivel_a": True,
+                "deep_link": "/ecom/mayoristapp/clientes/",
             },
             {
                 "name": "ecom_cobranzas_cartera",

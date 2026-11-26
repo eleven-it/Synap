@@ -90,7 +90,7 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]['id'], 'ecom')
         ids = {i['menu_item_id'] for i in out[0]['submenus'][0]['items']}
-        self.assertEqual(ids, {'ecom_compra', 'ecom_pedidos', 'ecom_pedido_masivo'})
+        self.assertEqual(ids, {'ecom_compra', 'ecom_pedidos', 'ecom_pedido_masivo', 'ecom_clientes'})
 
     def test_movil_vendedor_con_ventas_conserva_solo_pedidos(self):
         request = _req(MOBILE_UA)
@@ -199,7 +199,7 @@ class SidebarPwaTests(SimpleTestCase):
     def test_sidebar_mpr_sin_modulo(self, _mock):
         self.assertFalse(sidebar_visible_en_pwa('mpr'))
 
-    def test_filtrar_submenus_ecom_solo_hub_venta_masivo(self):
+    def test_filtrar_submenus_ecom_incluye_clientes(self):
         submenus = [
             {
                 'seccion': 'Portal',
@@ -226,6 +226,7 @@ class SidebarPwaTests(SimpleTestCase):
             {'menu_item_id': 'ventas_cb_pedidos'},
             {'menu_item_id': 'ventas_cb_nuevo_pedido'},
             {'menu_item_id': 'ventas_cb_pedido_masivo'},
+            {'menu_item_id': 'ventas_cb_clientes'},
             {'menu_item_id': 'ventas_rep_comprobantes_cobrar'},
             {'menu_item_id': 'ventas_rep_cuenta_corriente'},
             {'menu_item_id': 'ventas_cb_precios'},

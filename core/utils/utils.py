@@ -168,6 +168,18 @@ APPS_MENU = [
                 ]
             },
             {
+                "seccion": _("Clientes"),
+                "items": [
+                    {
+                        "label": _("Clientes"),
+                        "url": "ecom:mayoristapp_clientes",
+                        "icon": "groups",
+                        "permission": ["ecom.clientes.ver", "clientes.crear", "clientes.editar", "ecom.clientes.editar"],
+                        "menu_item_id": "ventas_cb_clientes",
+                    },
+                ],
+            },
+            {
                 "seccion": _("Reportes"),
                 "items": [
                     {

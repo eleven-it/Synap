@@ -396,7 +396,7 @@
       </div>
 
       <div class="pm-simple-mobile-extras mt-2 flex flex-wrap items-center gap-2" x-show="puedeImportarExcel || (draftId && sucursales.length)" x-cloak>
-        <div x-show="puedeImportarExcel" x-cloak class="flex flex-wrap items-center gap-2">
+        <div x-show="puedeImportarExcel" x-cloak class="pm-excel-actions flex flex-wrap items-center gap-2">
           <label class="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
             Marca de plantilla
             <select x-model="marcaPlantilla" @focus="cargarMarcasPlantilla()"
@@ -421,7 +421,7 @@
           </button>
         </div>
         <div x-show="draftId && sucursales.length" x-cloak
-             class="relative min-w-[12rem] flex-1 sm:max-w-md"
+             class="pm-table-jump relative min-w-[12rem] flex-1 sm:max-w-md"
              @click.outside="panelTabla = false">
           <label class="sr-only" for="pm-tabla-buscar">Ubicar en la tabla</label>
           <span class="material-icons pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
