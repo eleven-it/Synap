@@ -52,6 +52,7 @@
   .cc-filter-field .tags-input { width: auto; min-width: 4rem; text-align: left; }
   .cc-filter-search-icon { flex: none; font-size: 1.05rem; color: #64748b; }
   .cc-hero-toolbar .tags-input::placeholder { color: #64748b; opacity: 1; }
+  .cc-hero-toolbar select option { color: #0f172a; background-color: #fff; }
   .cc-hero-toolbar .tags-dropdown { background: #fff; border-color: #cbd5e1; }
   .cc-hero #cc-btn-areas-config { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
   .cc-hero .cc-report-link { background: #f8fafc; color: #1e40af; border-color: #cbd5e1; }
@@ -79,6 +80,7 @@
   .dark .cc-hero-toolbar .tags-input { color: #fff !important; }
   .dark .cc-filter-search-icon { color: #94a3b8; }
   .dark .cc-hero-toolbar .tags-input::placeholder { color: #94a3b8; }
+  .dark .cc-hero-toolbar select option { color: #f8fafc; background-color: #0f172a; }
   .dark .cc-hero-toolbar .tags-dropdown { background: #0f172a; border-color: #475569; }
   .dark .cc-hero #cc-btn-areas-config { background: rgba(120, 53, 15, .4); color: #fef3c7; border-color: rgba(245, 158, 11, .5); }
   .dark .cc-hero .cc-report-link { background: rgba(15, 23, 42, .5); color: #bae6fd; border-color: rgba(71, 85, 105, .7); }
@@ -106,7 +108,7 @@
   .cc-summary-kpi { min-width: 0; min-height: 5.1rem; padding: .4rem .55rem; border: 1px solid var(--cc-kpi-accent); border-radius: .45rem; background: #fff; }
   .cc-summary-kpi-head { display: flex; align-items: baseline; justify-content: space-between; gap: .25rem; }
   .cc-summary-kpi-title { color: var(--cc-kpi-accent); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .025em; line-height: 1.15; }
-  .cc-summary-kpi-value { font-size: clamp(1rem, 1.5vw, 1.32rem); line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .cc-summary-kpi-value { color: #0f172a; font-size: clamp(1rem, 1.5vw, 1.32rem); line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .cc-summary-kpi-middle { display: flex; align-items: center; justify-content: space-between; gap: .25rem; }
   .cc-summary-kpi-note { font-size: .67rem; line-height: 1.2; color: #64748b; }
   .cc-trend { display: inline-flex; align-items: center; gap: .25rem; flex: none; font-size: .68rem; font-weight: 600; }
@@ -128,13 +130,32 @@
   .cc-chart-grid { stroke: #64748b; stroke-width: .75; }
   .cc-chart-zero { stroke: #334155; stroke-width: 1.1; }
   .cc-chart-axis { fill: #334155; font-size: 9px; }
-  .cc-summary-readout { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem 1rem; padding: .8rem .3rem; font-size: .83rem; font-weight: 600; }
+  .cc-summary-readout { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem 1rem; padding: .8rem .3rem; color: #334155; font-size: .83rem; font-weight: 600; }
   .dark .cc-summary-kpi, .dark .cc-summary-chart { background: #0f172a; }
+  .dark .cc-summary-kpi-title { color: color-mix(in srgb, var(--cc-kpi-accent) 50%, white); }
+  .dark .cc-summary-kpi-value { color: #f8fafc; }
   .dark .cc-summary-kpi-note { color: #cbd5e1; }
   .dark .cc-summary-legend, .dark .cc-summary-chart-title { color: #cbd5e1; }
+  .dark .cc-summary-readout { color: #e2e8f0; }
   .dark .cc-chart-grid { stroke: #64748b; }
   .dark .cc-chart-zero { stroke: #cbd5e1; }
   .dark .cc-chart-axis { fill: #cbd5e1; }
+  #cc-v45-detail-controls input, #cc-v45-detail-controls select {
+    color: #0f172a;
+    background-color: #fff;
+    color-scheme: light;
+  }
+  #cc-v45-detail-controls input::placeholder { color: #64748b; opacity: 1; }
+  #cc-v45-detail-controls select option { color: #0f172a; background-color: #fff; }
+  .dark #cc-v45-detail-controls input, .dark #cc-v45-detail-controls select {
+    color: #f8fafc;
+    background-color: #1e293b;
+    color-scheme: dark;
+  }
+  .dark #cc-v45-detail-controls input::placeholder { color: #94a3b8; }
+  .dark #cc-v45-detail-controls select option { color: #f8fafc; background-color: #1e293b; }
+  #cc-v45-visual { color: #0f172a; }
+  .dark #cc-v45-visual { color: #e2e8f0; }
   @media (max-width: 1100px) { .cc-summary-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 700px) { .cc-summary-charts { grid-template-columns: 1fr; } }
   @media (max-width: 520px) { .cc-summary-kpis { grid-template-columns: 1fr; } }
