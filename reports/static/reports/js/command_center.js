@@ -2820,7 +2820,45 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function renderVentasMarcaConciliada(data, state) {
+    const visual = el("cc-v45-visual");
+    if (!visual) return;
+    const compare = state.mode === "comparacion";
+    const term = (el("cc-v45-search")?.value || "").trim().toLocaleLowerCase();
+    const rows = (data.filas || []).filter((row) => !term || String(row.etiqueta || "").toLocaleLowerCase().includes(term));
+    const brands = rows.filter((row) => row.tipo_fila === "marca");
+    const adjustments = rows.filter((row) => row.tipo_fila === "conciliacion");
+    const max = Math.max(1, ...brands.map((row) => Math.max(0, Number(row.importe || 0))));
+    const chart = brands.filter((row) => Number(row.importe) > 0).slice(0, 10).map((row) =>
+      `<div class="grid grid-cols-[minmax(5rem,8rem)_1fr] items-center gap-2 text-xs"><span class="truncate" title="${escHtml(row.etiqueta)}">${escHtml(row.etiqueta)}</span><div class="h-4 rounded-sm bg-blue-600" style="width:${Math.max(1, Number(row.importe) / max * 100).toFixed(1)}%"></div></div>`
+    ).join("") || '<p class="text-xs text-slate-500">Sin importes positivos.</p>';
+    const head = compare
+      ? "<th>Marca / conciliación</th><th>Actual</th><th>Anterior</th><th>Variación</th>"
+      : "<th>Marca / conciliación</th><th>Neto artículos</th><th>NC</th><th>ND</th><th>Total</th><th>Cantidad</th>";
+    const brandRows = brands.map((row) => `<tr class="border-b border-slate-100 dark:border-slate-800"><td>${escHtml(row.etiqueta)}</td>${compare
+      ? `<td>${fmtMoney.format(Number(row.importe || 0))}</td><td>${fmtMoney.format(Number(row.anterior || 0))}</td><td>${fmtMoney.format(Number(row.variacion || 0))}</td>`
+      : `<td>${fmtMoney.format(Number(row.neto || 0))}</td><td>${fmtMoney.format(Number(row.nc || 0))}</td><td>${fmtMoney.format(Number(row.nd || 0))}</td><td>${fmtMoney.format(Number(row.importe || 0))}</td><td>${fmtNum.format(Number(row.cantidad || 0))}</td>`}</tr>`).join("");
+    const subtotal = data.conciliacion || {};
+    const subtotalRow = !term && !compare ? `<tr class="border-t font-semibold bg-slate-50 dark:bg-slate-800"><td>Subtotal marcas con NC/ND</td><td colspan="3"></td><td>${fmtMoney.format(Number(subtotal.subtotal_marcas || 0))}</td><td></td></tr>` : "";
+    const adjustmentRows = adjustments.map((row) => `<tr class="border-b border-slate-100 text-slate-600 dark:border-slate-800 dark:text-slate-300"><td>${escHtml(row.etiqueta)}</td>${compare
+      ? `<td>${fmtMoney.format(Number(row.importe || 0))}</td><td>${fmtMoney.format(Number(row.anterior || 0))}</td><td>${fmtMoney.format(Number(row.variacion || 0))}</td>`
+      : `<td colspan="3"></td><td>${fmtMoney.format(Number(row.importe || 0))}</td><td></td>`}</tr>`).join("");
+    const totalRow = !term ? `<tr class="font-bold text-amber-800 dark:text-amber-300"><td>Ventas netas (KPI)</td>${compare
+      ? `<td>${fmtMoney.format(Number(data.total_importe || 0))}</td><td>${fmtMoney.format(Number(data.total_anterior || 0))}</td><td>${fmtMoney.format(Number(data.total_importe || 0) - Number(data.total_anterior || 0))}</td>`
+      : `<td colspan="3"></td><td>${fmtMoney.format(Number(data.total_importe || 0))}</td><td></td>`}</tr>` : "";
+    visual.innerHTML = `<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]"><section class="min-w-0 rounded-lg border border-slate-200 p-3 dark:border-slate-700"><h3 class="mb-3 text-sm font-semibold">Ventas netas por marca</h3><div class="space-y-2">${chart}</div></section><section class="min-w-0 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700"><table class="w-full min-w-[38rem] text-xs [&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2 [&_th]:py-2 [&_th]:text-left"><thead class="bg-slate-100 dark:bg-slate-800"><tr>${head}</tr></thead><tbody>${brandRows}${subtotalRow}${adjustmentRows}${totalRow}</tbody></table></section></div><p class="mt-3 text-xs text-slate-500 dark:text-slate-300">${escHtml(data.nota || "")}</p>`;
+    visual.classList.remove("hidden");
+    el("cc-detail-table-wrap")?.classList.add("hidden");
+    el("cc-detail-cards")?.classList.add("hidden");
+    el("cc-v45-pagination")?.classList.add("hidden");
+    el("cc-detail-summary").textContent = `${brands.length} marca(s) · Ventas netas: ${fmtMoney.format(Number(data.total_importe || 0))}`;
+  }
+
   function renderResumenRanking(data, state) {
+    if (state.vista === "ventas" && data.dimension === "marca" && data.conciliacion) {
+      renderVentasMarcaConciliada(data, state);
+      return;
+    }
     const visual = el("cc-v45-visual");
     if (!visual) return;
     const rows = data.filas || [];
@@ -2913,6 +2951,7 @@
         el("cc-detail-summary").textContent = data.motivo === "sin_alcance_territorial"
           ? "Este origen fiscal no tiene sucursal ni punto de venta. Quitá el filtro para consultar sus documentos generales."
           : data.motivo === "saldo_sin_periodo" ? "Este saldo es una foto actual y no tiene comparación entre períodos."
+          : data.motivo === "campo_id_marca_faltante" ? "La base no tiene cuentacliente.id_marca; se requiere ese campo para conciliar las NC y ND por marca."
           : "Detalle no disponible para esta empresa.";
         return;
       }

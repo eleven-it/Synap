@@ -273,6 +273,10 @@ def list_resumen_v45_ranking(cursor, filters: DashboardFilters, *, key: str,
         return {"disponible": False, "motivo": "sin_alcance_territorial", "filas": []}
     if compare and key in GLOBAL_KEYS:
         return {"disponible": False, "motivo": "saldo_sin_periodo", "filas": []}
+    if key == "ventas" and dimension == "marca":
+        from .ventas_marca_conciliacion import list_ventas_marca_conciliada
+
+        return list_ventas_marca_conciliada(cursor, filters, gross=gross, compare=compare)
 
     def grouped(period_filters):
         source, params, required, note = _ranking_source(
