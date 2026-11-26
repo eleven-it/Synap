@@ -17,6 +17,7 @@ PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom", "ventas", "stock", "mpr",
 PWA_VENTAS_PEDIDOS_MENU_ITEM_IDS = frozenset(
     {
         "ventas_cb_pedidos", "ventas_cb_nuevo_pedido", "ventas_cb_pedido_masivo",
+        "ventas_cb_clientes",
         "ventas_rep_comprobantes_cobrar", "ventas_rep_cuenta_corriente",
     }
 )
@@ -43,6 +44,7 @@ PWA_ECOM_MENU_ITEM_IDS = frozenset(
         "ecom_compra",  # Pedido simple → /mayoristapp/pedido-masivo-sucursales/?modo=simple
         "ecom_pedidos",  # Hub pedidos → /mayoristapp/pedidos/
         "ecom_pedido_masivo",  # Pedido masivo → /mayoristapp/pedido-masivo-sucursales/
+        "ecom_clientes",  # Gestión de clientes → /mayoristapp/clientes/
     }
 )
 
@@ -52,6 +54,7 @@ PWA_ECOM_DEEP_LINKS = (
     "/ecom/mayoristapp/pedidos/pdf/",
     "/ecom/mayoristapp/pedidos/exportar/",
     "/ecom/mayoristapp/pedido-masivo-sucursales/",
+    "/ecom/mayoristapp/clientes/",
     "/ecom/mayoristapp/venta/",  # redirect legacy → masivo ?modo=simple
     "/ecom/mayoristapp/compra/",  # alias redirect legacy
     "/ecom/mayoristapp/cobranzas-cartera/",
@@ -215,7 +218,7 @@ def filtrar_submenus_stock_para_pwa_movil(
 def filtrar_submenus_ecom_para_pwa_movil(
     submenus: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Deja solo entradas hub, venta y pedido masivo del sidebar e-com en móvil."""
+    """Deja pedidos y clientes del sidebar e-com en móvil."""
     resultado: List[Dict[str, Any]] = []
     for seccion in submenus or []:
         items = [
@@ -233,7 +236,7 @@ def filtrar_submenus_ecom_para_pwa_movil(
 def filtrar_submenus_ventas_pedidos_para_pwa_movil(
     submenus: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """En móvil, Ventas expone pedidos y las consultas de cobranzas habilitadas."""
+    """En móvil, Ventas expone pedidos, clientes y cobranzas habilitados."""
     resultado: List[Dict[str, Any]] = []
     for seccion in submenus or []:
         items = [

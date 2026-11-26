@@ -161,6 +161,7 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
         self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/venta/'))
         self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/compra/'))
         self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/pedidos/'))
+        self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/clientes/'))
 
     def test_pdf_pedidos_y_cartera_permitidos_en_movil(self):
         for ruta in (
